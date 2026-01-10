@@ -147,7 +147,7 @@ const EventsScreen: React.FC = () => {
             tintColor={colors.accent}
           />
         }>
-        {filteredEvents.map(event => (
+        {(filteredEvents || []).map(event => (
           <TouchableOpacity key={event.id} style={styles.eventCard}>
             <View style={styles.eventHeader}>
               <View

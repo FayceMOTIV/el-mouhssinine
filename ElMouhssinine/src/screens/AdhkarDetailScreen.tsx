@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { AdhkarCategory, Dhikr } from '../data/adhkar';
+import { useLanguage } from '../context/LanguageContext';
 
 interface AdhkarDetailScreenProps {
   route: any;
@@ -19,6 +20,7 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
   route,
   navigation,
 }) => {
+  const { t, isRTL } = useLanguage();
   const { category } = route.params as { category: AdhkarCategory };
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
@@ -56,8 +58,8 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
   };
 
   const completedCount = completedIds.size;
-  const totalCount = category.adhkar.length;
-  const progress = (completedCount / totalCount) * 100;
+  const totalCount = category?.adhkar?.length || 0;
+  const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   return (
     <View style={styles.container}>
@@ -65,29 +67,35 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={[styles.backButton, isRTL && styles.backButtonRTL]}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>{'<'} Retour</Text>
+            <Text style={[styles.backButtonText, isRTL && styles.rtlText]}>
+              {isRTL ? `${t('back')} >` : `< ${t('back')}`}
+            </Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
-            <Text style={styles.title}>{category.name}</Text>
-            <Text style={styles.arabicTitle}>{category.nameAr}</Text>
+            <Text style={[styles.title, isRTL && styles.rtlText]}>
+              {isRTL ? category.nameAr : category.name}
+            </Text>
+            <Text style={styles.arabicTitle}>
+              {isRTL ? category.name : category.nameAr}
+            </Text>
             {category.description && (
-              <Text style={styles.description}>{category.description}</Text>
+              <Text style={[styles.description, isRTL && styles.rtlText]}>{category.description}</Text>
             )}
           </View>
         </View>
 
         {/* Progress */}
         <View style={styles.progressSection}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressText}>
-              {completedCount}/{totalCount} completes
+          <View style={[styles.progressHeader, isRTL && styles.progressHeaderRTL]}>
+            <Text style={[styles.progressText, isRTL && styles.rtlText]}>
+              {completedCount}/{totalCount} {t('completed')}
             </Text>
             {completedCount > 0 && (
               <TouchableOpacity onPress={resetProgress}>
-                <Text style={styles.resetButton}>Reinitialiser</Text>
+                <Text style={[styles.resetButton, isRTL && styles.rtlText]}>{t('reset')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -98,7 +106,7 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
 
         {/* Adhkar List */}
         <View style={styles.adhkarList}>
-          {category.adhkar.map((dhikr, index) => {
+          {(category?.adhkar || []).map((dhikr, index) => {
             const isExpanded = expandedId === dhikr.id;
             const isCompleted = completedIds.has(dhikr.id);
             const currentReps = repetitionCounts[dhikr.id] || 0;
@@ -115,18 +123,18 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
                 activeOpacity={0.7}
               >
                 {/* Header */}
-                <View style={styles.dhikrHeader}>
+                <View style={[styles.dhikrHeader, isRTL && styles.dhikrHeaderRTL]}>
                   <View style={styles.dhikrNumber}>
                     <Text style={styles.dhikrNumberText}>{index + 1}</Text>
                   </View>
-                  <View style={styles.dhikrMeta}>
+                  <View style={[styles.dhikrMeta, isRTL && styles.dhikrMetaRTL]}>
                     <Text style={styles.dhikrRepetitions}>
                       {dhikr.repetitions > 1
-                        ? `${dhikr.repetitions} fois`
-                        : '1 fois'}
+                        ? `${dhikr.repetitions} ${t('times')}`
+                        : `1 ${t('times')}`}
                     </Text>
                     {isCompleted && (
-                      <Text style={styles.completedBadge}>Fait</Text>
+                      <Text style={styles.completedBadge}>{t('done')}</Text>
                     )}
                   </View>
                 </View>
@@ -139,34 +147,34 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
                   <View style={styles.expandedContent}>
                     {/* Transliteration */}
                     <View style={styles.translitSection}>
-                      <Text style={styles.sectionLabel}>Translitteration</Text>
-                      <Text style={styles.transliteration}>
+                      <Text style={[styles.sectionLabel, isRTL && styles.rtlText]}>{t('transliteration')}</Text>
+                      <Text style={[styles.transliteration, isRTL && styles.rtlText]}>
                         {dhikr.transliteration}
                       </Text>
                     </View>
 
                     {/* Translation */}
                     <View style={styles.translationSection}>
-                      <Text style={styles.sectionLabel}>Traduction</Text>
-                      <Text style={styles.translation}>{dhikr.translation}</Text>
+                      <Text style={[styles.sectionLabel, isRTL && styles.rtlText]}>{t('translationLabel')}</Text>
+                      <Text style={[styles.translation, isRTL && styles.rtlText]}>{dhikr.translation}</Text>
                     </View>
 
                     {/* Source */}
                     <View style={styles.sourceSection}>
-                      <Text style={styles.sectionLabel}>Source</Text>
-                      <Text style={styles.source}>{dhikr.source}</Text>
+                      <Text style={[styles.sectionLabel, isRTL && styles.rtlText]}>{t('source')}</Text>
+                      <Text style={[styles.source, isRTL && styles.rtlText]}>{dhikr.source}</Text>
                     </View>
 
                     {/* Benefit */}
                     {dhikr.benefit && (
-                      <View style={styles.benefitSection}>
+                      <View style={[styles.benefitSection, isRTL && styles.benefitSectionRTL]}>
                         <Text style={styles.benefitIcon}>✨</Text>
-                        <Text style={styles.benefit}>{dhikr.benefit}</Text>
+                        <Text style={[styles.benefit, isRTL && styles.rtlText]}>{dhikr.benefit}</Text>
                       </View>
                     )}
 
                     {/* Actions */}
-                    <View style={styles.actions}>
+                    <View style={[styles.actions, isRTL && styles.actionsRTL]}>
                       <TouchableOpacity
                         style={[
                           styles.countButton,
@@ -177,17 +185,17 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
                       >
                         <Text style={styles.countButtonText}>
                           {isCompleted
-                            ? 'Termine'
+                            ? t('finished')
                             : `${currentReps}/${dhikr.repetitions}`}
                         </Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.shareButton}
+                        style={[styles.shareButton, isRTL && styles.shareButtonRTL]}
                         onPress={() => handleShare(dhikr)}
                       >
                         <Text style={styles.shareButtonIcon}>📤</Text>
-                        <Text style={styles.shareButtonText}>Partager</Text>
+                        <Text style={styles.shareButtonText}>{t('share')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -195,8 +203,8 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
 
                 {/* Expand indicator */}
                 {!isExpanded && (
-                  <Text style={styles.expandIndicator}>
-                    Appuyez pour voir plus
+                  <Text style={[styles.expandIndicator, isRTL && styles.rtlText]}>
+                    {t('tapToSeeMore')}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -208,10 +216,9 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
         {completedCount === totalCount && totalCount > 0 && (
           <View style={styles.completionCard}>
             <Text style={styles.completionIcon}>🎉</Text>
-            <Text style={styles.completionTitle}>Felicitations !</Text>
-            <Text style={styles.completionText}>
-              Vous avez complete toutes les invocations de cette categorie.
-              Qu'Allah accepte vos invocations.
+            <Text style={[styles.completionTitle, isRTL && styles.rtlText]}>{t('congratulations')}</Text>
+            <Text style={[styles.completionText, isRTL && styles.rtlText]}>
+              {t('completionMessage')}
             </Text>
           </View>
         )}
@@ -471,6 +478,32 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 100,
+  },
+  // RTL Styles
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  backButtonRTL: {
+    alignSelf: 'flex-end',
+  },
+  progressHeaderRTL: {
+    flexDirection: 'row-reverse',
+  },
+  dhikrHeaderRTL: {
+    flexDirection: 'row-reverse',
+  },
+  dhikrMetaRTL: {
+    flexDirection: 'row-reverse',
+  },
+  benefitSectionRTL: {
+    flexDirection: 'row-reverse',
+  },
+  actionsRTL: {
+    flexDirection: 'row-reverse',
+  },
+  shareButtonRTL: {
+    flexDirection: 'row-reverse',
   },
 });
 

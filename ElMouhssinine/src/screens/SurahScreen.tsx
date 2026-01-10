@@ -8,11 +8,12 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
-  Linking,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { QuranAPI, surahsInfo, reciters, SurahData, getAudioUrl } from '../services/quranApi';
+import { playAudio, pauseAudio, stopAudio, getIsPlaying } from '../services/audioPlayer';
+import { useLanguage } from '../context/LanguageContext';
 
 interface SurahScreenProps {
   route: any;
@@ -20,6 +21,7 @@ interface SurahScreenProps {
 }
 
 const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
+  const { t, isRTL } = useLanguage();
   const { surahNumber } = route.params;
   const [loading, setLoading] = useState(true);
   const [surahData, setSurahData] = useState<{
@@ -32,28 +34,69 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   const [selectedAyah, setSelectedAyah] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [playingAyah, setPlayingAyah] = useState<number | null>(null);
+  const [isPlayingSurah, setIsPlayingSurah] = useState(false);
 
   const surahInfo = surahsInfo.find((s) => s.number === surahNumber);
 
-  // Jouer l'audio d'un verset
+  // URL pour la SOURATE COMPLÈTE
+  const surahAudioUrl = `https://cdn.islamic.network/quran/audio-surah/128/${selectedReciter.id}/${surahNumber}.mp3`;
+
+  // Jouer/Pause la sourate complète
+  const handlePlaySurah = async () => {
+    try {
+      if (isPlayingSurah) {
+        await pauseAudio();
+        setIsPlayingSurah(false);
+        setPlayingAyah(null);
+      } else {
+        // Arrêter tout audio en cours
+        await stopAudio();
+        setPlayingAyah(null);
+
+        await playAudio(
+          surahAudioUrl,
+          `Sourate ${surahInfo?.englishName || surahNumber}`,
+          selectedReciter.name
+        );
+        setIsPlayingSurah(true);
+      }
+    } catch (error) {
+      console.error('Erreur audio sourate:', error);
+      Alert.alert(t('audioError'), t('cannotPlaySurah'));
+      setIsPlayingSurah(false);
+    }
+  };
+
+  // Jouer l'audio d'un verset spécifique
   const handlePlayAudio = async (ayahNumber: number) => {
     const globalAyahNumber = surahData?.arabic.ayahs[ayahNumber - 1]?.number;
     if (!globalAyahNumber) return;
+
+    // Si on clique sur le même verset en cours de lecture, on pause
+    if (playingAyah === ayahNumber) {
+      await pauseAudio();
+      setPlayingAyah(null);
+      return;
+    }
+
+    // Arrêter la lecture de sourate complète si en cours
+    if (isPlayingSurah) {
+      await stopAudio();
+      setIsPlayingSurah(false);
+    }
 
     const audioUrl = `https://cdn.islamic.network/quran/audio/128/${selectedReciter.id}/${globalAyahNumber}.mp3`;
 
     try {
       setPlayingAyah(ayahNumber);
-      // Ouvrir dans le navigateur ou lecteur audio externe
-      const supported = await Linking.canOpenURL(audioUrl);
-      if (supported) {
-        await Linking.openURL(audioUrl);
-      } else {
-        Alert.alert('Audio', `Verset ${ayahNumber}\nRecitateur: ${selectedReciter.name}`);
-      }
+      await playAudio(
+        audioUrl,
+        `Verset ${ayahNumber} - Sourate ${surahNumber}`,
+        selectedReciter.name
+      );
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de lire l\'audio');
-    } finally {
+      console.error('Erreur audio:', error);
+      Alert.alert(t('audioError'), t('cannotPlayAudio'));
       setPlayingAyah(null);
     }
   };
@@ -65,10 +108,10 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
       const newFavorites = new Set(prev);
       if (newFavorites.has(key)) {
         newFavorites.delete(key);
-        Alert.alert('Favori retiré', `Verset ${ayahNumber} retiré des favoris`);
+        Alert.alert(t('favoriteRemoved'), `${t('verse')} ${ayahNumber} ${t('verseRemovedFromFavorites')}`);
       } else {
         newFavorites.add(key);
-        Alert.alert('Favori ajouté', `Verset ${ayahNumber} ajouté aux favoris`);
+        Alert.alert(t('favoriteAdded'), `${t('verse')} ${ayahNumber} ${t('verseAddedToFavorites')}`);
       }
       return newFavorites;
     });
@@ -77,12 +120,12 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   // Copier le verset
   const handleCopyAyah = (ayahNumber: number) => {
     const ayah = surahData?.arabic.ayahs[ayahNumber - 1];
-    const translation = surahData?.translation.ayahs[ayahNumber - 1];
+    const translationText = surahData?.translation.ayahs[ayahNumber - 1];
 
     if (ayah) {
-      const textToCopy = `${ayah.text}\n\n${translation?.text || ''}\n\n— Sourate ${surahInfo?.englishName}, Verset ${ayahNumber}`;
+      const textToCopy = `${ayah.text}\n\n${translationText?.text || ''}\n\n— ${t('surah')} ${surahInfo?.englishName}, ${t('verse')} ${ayahNumber}`;
       Clipboard.setString(textToCopy);
-      Alert.alert('Copié !', 'Le verset a été copié dans le presse-papiers');
+      Alert.alert(t('copied'), t('verseCopied'));
     }
   };
 
@@ -91,6 +134,13 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   useEffect(() => {
     loadSurah();
   }, [surahNumber]);
+
+  // Cleanup: arrêter l'audio quand on quitte l'écran
+  useEffect(() => {
+    return () => {
+      stopAudio();
+    };
+  }, []);
 
   const loadSurah = async () => {
     try {
@@ -127,7 +177,7 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Chargement de la sourate...</Text>
+        <Text style={[styles.loadingText, isRTL && styles.rtlText]}>{t('loadingSurah')}</Text>
       </View>
     );
   }
@@ -138,51 +188,66 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={[styles.backButton, isRTL && styles.backButtonRTL]}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>{'<'} Retour</Text>
+            <Text style={[styles.backButtonText, isRTL && styles.rtlText]}>
+              {isRTL ? `${t('back')} >` : `< ${t('back')}`}
+            </Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
-            <Text style={styles.surahNumber}>Sourate {surahNumber}</Text>
+            <Text style={[styles.surahNumber, isRTL && styles.rtlText]}>{t('surah')} {surahNumber}</Text>
             <Text style={styles.surahArabicName}>{surahInfo?.name}</Text>
-            <Text style={styles.surahEnglishName}>{surahInfo?.englishName}</Text>
-            <Text style={styles.surahTranslation}>{surahInfo?.translation}</Text>
-            <View style={styles.surahMeta}>
-              <Text style={styles.metaText}>{surahInfo?.ayahs} versets</Text>
+            <Text style={[styles.surahEnglishName, isRTL && styles.rtlText]}>{surahInfo?.englishName}</Text>
+            <Text style={[styles.surahTranslation, isRTL && styles.rtlText]}>{surahInfo?.translation}</Text>
+            <View style={[styles.surahMeta, isRTL && styles.surahMetaRTL]}>
+              <Text style={styles.metaText}>{surahInfo?.ayahs} {t('verses')}</Text>
               <Text style={styles.metaDot}>•</Text>
-              <Text style={styles.metaText}>{surahInfo?.type}</Text>
+              <Text style={styles.metaText}>
+                {surahInfo?.type === 'Mecquoise' ? t('meccan') : t('medinan')}
+              </Text>
             </View>
           </View>
         </View>
 
         {/* Options */}
-        <View style={styles.optionsBar}>
+        <View style={[styles.optionsBar, isRTL && styles.optionsBarRTL]}>
           <TouchableOpacity
-            style={[styles.optionButton, showTranslation && styles.optionButtonActive]}
+            style={[styles.optionButton, showTranslation && styles.optionButtonActive, isRTL && styles.optionButtonRTL]}
             onPress={() => setShowTranslation(!showTranslation)}
           >
             <Text style={styles.optionIcon}>📖</Text>
             <Text style={[styles.optionText, showTranslation && styles.optionTextActive]}>
-              Traduction
+              {t('translation')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.optionButton}
+            style={[styles.optionButton, isRTL && styles.optionButtonRTL]}
             onPress={() => setShowReciterModal(true)}
           >
             <Text style={styles.optionIcon}>🎧</Text>
-            <Text style={styles.optionText}>Recitateur</Text>
+            <Text style={styles.optionText}>{t('reciter')}</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* LECTEUR SOURATE COMPLÈTE */}
+        <View style={[styles.audioPlayer, isRTL && styles.audioPlayerRTL]}>
+          <TouchableOpacity onPress={handlePlaySurah} style={styles.playButton}>
+            <Text style={styles.playIcon}>{isPlayingSurah ? '⏸️' : '▶️'}</Text>
+          </TouchableOpacity>
+          <View style={styles.playerInfo}>
+            <Text style={[styles.playerTitle, isRTL && styles.rtlText]}>{t('listenFullSurah')}</Text>
+            <Text style={[styles.playerReciter, isRTL && styles.rtlText]}>{selectedReciter.name}</Text>
+          </View>
         </View>
 
         {/* Bismillah */}
         {surahNumber !== 9 && surahNumber !== 1 && (
           <View style={styles.bismillahContainer}>
             <Text style={styles.bismillah}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</Text>
-            {showTranslation && (
+            {showTranslation && !isRTL && (
               <Text style={styles.bismillahTranslation}>
-                Au nom d'Allah, le Tout Misericordieux, le Tres Misericordieux
+                {t('bismillahTranslation')}
               </Text>
             )}
           </View>
@@ -190,8 +255,8 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
 
         {/* Versets */}
         <View style={styles.ayahsContainer}>
-          {surahData?.arabic.ayahs.map((ayah, index) => {
-            const translation = surahData.translation.ayahs[index];
+          {(surahData?.arabic?.ayahs || []).map((ayah, index) => {
+            const translation = surahData?.translation?.ayahs?.[index];
             const isSelected = selectedAyah === ayah.numberInSurah;
 
             return (
@@ -240,20 +305,24 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         </View>
 
         {/* Navigation entre sourates */}
-        <View style={styles.navigationContainer}>
+        <View style={[styles.navigationContainer, isRTL && styles.navigationContainerRTL]}>
           <TouchableOpacity
             style={[styles.navButton, surahNumber === 1 && styles.navButtonDisabled]}
             onPress={handlePreviousSurah}
             disabled={surahNumber === 1}
           >
-            <Text style={styles.navButtonText}>{'<'} Sourate precedente</Text>
+            <Text style={[styles.navButtonText, isRTL && styles.rtlText]}>
+              {isRTL ? `${t('previousSurah')} >` : `< ${t('previousSurah')}`}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.navButton, surahNumber === 114 && styles.navButtonDisabled]}
             onPress={handleNextSurah}
             disabled={surahNumber === 114}
           >
-            <Text style={styles.navButtonText}>Sourate suivante {'>'}</Text>
+            <Text style={[styles.navButtonText, isRTL && styles.rtlText]}>
+              {isRTL ? `< ${t('nextSurah')}` : `${t('nextSurah')} >`}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -266,15 +335,16 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
               style={styles.closeButton}
               onPress={() => setShowReciterModal(false)}
             >
-              <Text style={styles.closeButtonText}>x</Text>
+              <Text style={styles.closeButtonText}>×</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Choisir un recitateur</Text>
+            <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>{t('chooseReciter')}</Text>
             {reciters.map((reciter) => (
               <TouchableOpacity
                 key={reciter.id}
                 style={[
                   styles.reciterOption,
                   selectedReciter.id === reciter.id && styles.reciterOptionSelected,
+                  isRTL && styles.reciterOptionRTL,
                 ]}
                 onPress={() => {
                   setSelectedReciter(reciter);
@@ -282,11 +352,11 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
                 }}
               >
                 <View style={styles.reciterInfo}>
-                  <Text style={styles.reciterName}>{reciter.name}</Text>
-                  <Text style={styles.reciterNameAr}>{reciter.nameAr}</Text>
+                  <Text style={[styles.reciterName, isRTL && styles.rtlText]}>{reciter.name}</Text>
+                  <Text style={[styles.reciterNameAr, isRTL && styles.rtlText]}>{reciter.nameAr}</Text>
                 </View>
                 {selectedReciter.id === reciter.id && (
-                  <Text style={styles.checkmark}>OK</Text>
+                  <Text style={styles.checkmark}>✓</Text>
                 )}
               </TouchableOpacity>
             ))}
@@ -387,6 +457,42 @@ const styles = StyleSheet.create({
   optionTextActive: {
     color: '#ffffff',
     fontWeight: '600',
+  },
+  audioPlayer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(201,162,39,0.15)',
+    borderRadius: 16,
+    padding: 15,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.3)',
+  },
+  playButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#c9a227',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 15,
+  },
+  playIcon: {
+    fontSize: 24,
+  },
+  playerInfo: {
+    flex: 1,
+  },
+  playerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  playerReciter: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 2,
   },
   bismillahContainer: {
     alignItems: 'center',
@@ -556,6 +662,32 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: 'bold',
     color: colors.accent,
+  },
+  // RTL Styles
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  backButtonRTL: {
+    alignSelf: 'flex-end',
+  },
+  surahMetaRTL: {
+    flexDirection: 'row-reverse',
+  },
+  optionsBarRTL: {
+    flexDirection: 'row-reverse',
+  },
+  optionButtonRTL: {
+    flexDirection: 'row-reverse',
+  },
+  audioPlayerRTL: {
+    flexDirection: 'row-reverse',
+  },
+  navigationContainerRTL: {
+    flexDirection: 'row-reverse',
+  },
+  reciterOptionRTL: {
+    flexDirection: 'row-reverse',
   },
 });
 

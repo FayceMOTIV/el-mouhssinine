@@ -13,8 +13,10 @@ import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { subscribeToProjects, getMosqueeInfo, createDonation } from '../services/firebase';
 import { Project, MosqueeInfo } from '../types';
 import Clipboard from '@react-native-clipboard/clipboard';
+import { useLanguage } from '../context/LanguageContext';
 
 const DonationsScreen = () => {
+  const { t, isRTL } = useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectType, setProjectType] = useState<'interne' | 'externe'>('interne');
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -143,35 +145,35 @@ const DonationsScreen = () => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Faire un Don</Text>
-          <Text style={styles.subtitle}>Contribuez aux projets de notre communauté</Text>
+          <Text style={[styles.title, isRTL && styles.rtlText]}>{t('donateAmount')}</Text>
+          <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('contributeMessage')}</Text>
         </View>
 
         <View style={styles.content}>
           {/* Toggle */}
-          <View style={styles.tabToggle}>
+          <View style={[styles.tabToggle, isRTL && styles.tabToggleRTL]}>
             <TouchableOpacity
               style={[styles.tabBtn, projectType === 'interne' && styles.tabBtnActive]}
               onPress={() => { setProjectType('interne'); setSelectedProject(null); }}
             >
-              <Text style={[styles.tabBtnText, projectType === 'interne' && styles.tabBtnTextActive]}>
-                🕌 Notre Mosquée
+              <Text style={[styles.tabBtnText, projectType === 'interne' && styles.tabBtnTextActive, isRTL && styles.rtlText]}>
+                🕌 {t('ourMosque')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.tabBtn, projectType === 'externe' && styles.tabBtnActive]}
               onPress={() => { setProjectType('externe'); setSelectedProject(null); }}
             >
-              <Text style={[styles.tabBtnText, projectType === 'externe' && styles.tabBtnTextActive]}>
-                🌍 Autres Causes
+              <Text style={[styles.tabBtnText, projectType === 'externe' && styles.tabBtnTextActive, isRTL && styles.rtlText]}>
+                🌍 {t('otherCauses')}
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Projets */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              {projectType === 'interne' ? 'Choisir un projet' : 'Aider d\'autres causes'}
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+              {projectType === 'interne' ? t('chooseProject') : t('helpOtherCauses')}
             </Text>
             {displayProjects.map((project) => (
               <TouchableOpacity
@@ -199,9 +201,9 @@ const DonationsScreen = () => {
                 <View style={styles.progressBar}>
                   <View style={[styles.progressFill, { width: `${getProgress(project.raised, project.goal)}%` }]} />
                 </View>
-                <View style={styles.progressInfo}>
+                <View style={[styles.progressInfo, isRTL && styles.progressInfoRTL]}>
                   <Text style={styles.progressRaised}>{project.raised.toLocaleString()}€</Text>
-                  <Text style={styles.progressGoal}>Objectif: {project.goal.toLocaleString()}€</Text>
+                  <Text style={styles.progressGoal}>{t('goal')}: {project.goal.toLocaleString()}€</Text>
                 </View>
 
                 {/* Bouton Voir le projet si fichiers disponibles */}
@@ -210,7 +212,7 @@ const DonationsScreen = () => {
                     style={styles.voirProjetBtn}
                     onPress={() => handleViewProject(project.id)}
                   >
-                    <Text style={styles.voirProjetBtnText}>📄 Voir le projet</Text>
+                    <Text style={[styles.voirProjetBtnText, isRTL && styles.rtlText]}>📄 {t('viewProject')}</Text>
                   </TouchableOpacity>
                 )}
               </TouchableOpacity>
@@ -219,7 +221,7 @@ const DonationsScreen = () => {
 
           {/* Montants */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>💰 Montant du don</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>💰 {t('donationAmount')}</Text>
             <View style={styles.amountsGrid}>
               {amounts.map((amount) => (
                 <TouchableOpacity
@@ -241,11 +243,11 @@ const DonationsScreen = () => {
             </View>
 
             {/* Montant libre */}
-            <Text style={styles.customAmountLabel}>Ou saisissez un montant libre :</Text>
-            <View style={[styles.customAmountWrapper, customAmount ? styles.customAmountWrapperActive : null]}>
+            <Text style={[styles.customAmountLabel, isRTL && styles.rtlText]}>{t('customAmountLabel')}</Text>
+            <View style={[styles.customAmountWrapper, customAmount ? styles.customAmountWrapperActive : null, isRTL && styles.customAmountWrapperRTL]}>
               <TextInput
-                style={styles.customAmountInput}
-                placeholder="Autre montant"
+                style={[styles.customAmountInput, isRTL && styles.rtlText]}
+                placeholder={t('otherAmount')}
                 placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
                 value={customAmount}
@@ -261,24 +263,24 @@ const DonationsScreen = () => {
             onPress={() => setShowPaymentModal(true)}
             disabled={!selectedProject || getFinalAmount() <= 0}
           >
-            <Text style={styles.primaryBtnText}>
-              💳 Payer {getFinalAmount() > 0 ? `${getFinalAmount()}€` : ''}
+            <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>
+              💳 {t('payButton')} {getFinalAmount() > 0 ? `${getFinalAmount()}€` : ''}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => setShowRIBModal(true)}>
-            <Text style={styles.secondaryBtnText}>🏦 Faire un virement</Text>
+            <Text style={[styles.secondaryBtnText, isRTL && styles.rtlText]}>🏦 {t('bankTransfer')}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.secondaryBtn, styles.zakatBtn]} 
+          <TouchableOpacity
+            style={[styles.secondaryBtn, styles.zakatBtn]}
             onPress={() => setShowZakatModal(true)}
           >
-            <Text style={[styles.secondaryBtnText, styles.zakatBtnText]}>🧮 Calculer ma Zakat</Text>
+            <Text style={[styles.secondaryBtnText, styles.zakatBtnText, isRTL && styles.rtlText]}>🧮 {t('calculateZakat')}</Text>
           </TouchableOpacity>
 
-          <Text style={styles.disclaimer}>
-            Les dons sont sécurisés et peuvent être déductibles d'impôts selon la réglementation en vigueur.
+          <Text style={[styles.disclaimer, isRTL && styles.rtlText]}>
+            {t('donationDisclaimer')}
           </Text>
         </View>
       </ScrollView>
@@ -290,22 +292,22 @@ const DonationsScreen = () => {
             <TouchableOpacity style={styles.closeBtn} onPress={() => setShowRIBModal(false)}>
               <Text style={styles.closeBtnText}>×</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>🏦 Virement bancaire</Text>
-            
+            <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>🏦 {t('bankTransferTitle')}</Text>
+
             <View style={styles.ribCard}>
               <View style={styles.ribHeader}>
                 <Text style={styles.ribIcon}>🕌</Text>
-                <Text style={styles.ribTitulaire}>
+                <Text style={[styles.ribTitulaire, isRTL && styles.rtlText]}>
                   {mosqueeInfo?.accountHolder || 'Association El Mouhssinine'}
                 </Text>
-                <Text style={styles.ribBanque}>
+                <Text style={[styles.ribBanque, isRTL && styles.rtlText]}>
                   {mosqueeInfo?.bankName || 'Crédit Agricole'}
                 </Text>
               </View>
-              
-              <View style={styles.ribRow}>
+
+              <View style={[styles.ribRow, isRTL && styles.ribRowRTL]}>
                 <View>
-                  <Text style={styles.ribLabel}>IBAN</Text>
+                  <Text style={[styles.ribLabel, isRTL && styles.rtlText]}>IBAN</Text>
                   <Text style={styles.ribValue}>
                     {mosqueeInfo?.iban || 'FR76 1234 5678 9012 3456 7890 123'}
                   </Text>
@@ -317,10 +319,10 @@ const DonationsScreen = () => {
                   <Text style={styles.copyBtnText}>{copied === 'iban' ? '✓' : '📋'}</Text>
                 </TouchableOpacity>
               </View>
-              
-              <View style={[styles.ribRow, styles.ribRowLast]}>
+
+              <View style={[styles.ribRow, styles.ribRowLast, isRTL && styles.ribRowRTL]}>
                 <View>
-                  <Text style={styles.ribLabel}>BIC</Text>
+                  <Text style={[styles.ribLabel, isRTL && styles.rtlText]}>BIC</Text>
                   <Text style={styles.ribValue}>{mosqueeInfo?.bic || 'AGRIFRPP'}</Text>
                 </View>
                 <TouchableOpacity
@@ -332,8 +334,8 @@ const DonationsScreen = () => {
               </View>
             </View>
 
-            <Text style={styles.modalDisclaimer}>
-              Indiquez votre email en référence pour recevoir votre reçu fiscal
+            <Text style={[styles.modalDisclaimer, isRTL && styles.rtlText]}>
+              {t('taxReceiptNote')}
             </Text>
           </View>
         </View>
@@ -346,15 +348,15 @@ const DonationsScreen = () => {
             <TouchableOpacity style={styles.closeBtn} onPress={() => setShowPaymentModal(false)}>
               <Text style={styles.closeBtnText}>×</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>💳 Don de {getFinalAmount()}€</Text>
+            <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>💳 {t('donationOf')} {getFinalAmount()}€</Text>
 
             {getSelectedProjectData() && (
-              <View style={styles.paymentProjectInfo}>
+              <View style={[styles.paymentProjectInfo, isRTL && styles.paymentProjectInfoRTL]}>
                 <Text style={styles.paymentProjectIcon}>{getSelectedProjectData()?.icon}</Text>
                 <View>
-                  <Text style={styles.paymentProjectName}>{getSelectedProjectData()?.name}</Text>
+                  <Text style={[styles.paymentProjectName, isRTL && styles.rtlText]}>{getSelectedProjectData()?.name}</Text>
                   {getSelectedProjectData()?.lieu && (
-                    <Text style={styles.paymentProjectLieu}>📍 {getSelectedProjectData()?.lieu}</Text>
+                    <Text style={[styles.paymentProjectLieu, isRTL && styles.rtlText]}>📍 {getSelectedProjectData()?.lieu}</Text>
                   )}
                 </View>
               </View>
@@ -363,18 +365,18 @@ const DonationsScreen = () => {
             {['card', 'apple', 'google'].map((method) => (
               <TouchableOpacity
                 key={method}
-                style={[styles.paymentOption, paymentMethod === method && styles.paymentOptionSelected]}
+                style={[styles.paymentOption, paymentMethod === method && styles.paymentOptionSelected, isRTL && styles.paymentOptionRTL]}
                 onPress={() => setPaymentMethod(method)}
               >
                 <Text style={styles.paymentIcon}>
                   {method === 'card' ? '💳' : method === 'apple' ? '🍎' : '🟢'}
                 </Text>
                 <View style={styles.paymentInfo}>
-                  <Text style={styles.paymentTitle}>
-                    {method === 'card' ? 'Carte bancaire' : method === 'apple' ? 'Apple Pay' : 'Google Pay'}
+                  <Text style={[styles.paymentTitle, isRTL && styles.rtlText]}>
+                    {method === 'card' ? t('cardPayment') : method === 'apple' ? 'Apple Pay' : 'Google Pay'}
                   </Text>
-                  <Text style={styles.paymentDesc}>
-                    {method === 'card' ? 'Visa, Mastercard, CB' : 'Paiement rapide et sécurisé'}
+                  <Text style={[styles.paymentDesc, isRTL && styles.rtlText]}>
+                    {method === 'card' ? t('visaMastercard') : t('fastSecurePayment')}
                   </Text>
                 </View>
                 {paymentMethod === method && (
@@ -390,11 +392,11 @@ const DonationsScreen = () => {
               onPress={handlePayment}
               disabled={!paymentMethod}
             >
-              <Text style={styles.primaryBtnText}>🔒 Payer {getFinalAmount()}€</Text>
+              <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>🔒 {t('payButton')} {getFinalAmount()}€</Text>
             </TouchableOpacity>
 
-            <Text style={styles.modalDisclaimer}>
-              Paiement sécurisé par Stripe • Reçu fiscal envoyé par email
+            <Text style={[styles.modalDisclaimer, isRTL && styles.rtlText]}>
+              {t('securePayment')}
             </Text>
           </View>
         </View>
@@ -407,23 +409,23 @@ const DonationsScreen = () => {
             <TouchableOpacity style={styles.closeBtn} onPress={() => setShowFilesModal(false)}>
               <Text style={styles.closeBtnText}>×</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>📁 {selectedProjectName}</Text>
-            <Text style={styles.filesSubtitle}>Documents du projet</Text>
+            <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>📁 {selectedProjectName}</Text>
+            <Text style={[styles.filesSubtitle, isRTL && styles.rtlText]}>{t('projectDocuments')}</Text>
 
             {selectedProjectFiles.map((fichier) => (
               <TouchableOpacity
                 key={fichier.id}
-                style={styles.fichierItem}
+                style={[styles.fichierItem, isRTL && styles.fichierItemRTL]}
                 onPress={() => Alert.alert('Fichier', `Ouverture de: ${fichier.nom}`)}
               >
                 <Text style={styles.fichierIcon}>
                   {fichier.type === 'pdf' ? '📄' : fichier.type === 'image' ? '🖼️' : '📎'}
                 </Text>
                 <View style={styles.fichierInfo}>
-                  <Text style={styles.fichierNom}>{fichier.nom}</Text>
-                  <Text style={styles.fichierType}>{fichier.type.toUpperCase()}</Text>
+                  <Text style={[styles.fichierNom, isRTL && styles.rtlText]}>{fichier.nom}</Text>
+                  <Text style={[styles.fichierType, isRTL && styles.rtlText]}>{fichier.type.toUpperCase()}</Text>
                 </View>
-                <Text style={styles.fichierArrow}>→</Text>
+                <Text style={styles.fichierArrow}>{isRTL ? '←' : '→'}</Text>
               </TouchableOpacity>
             ))}
 
@@ -431,7 +433,7 @@ const DonationsScreen = () => {
               style={styles.secondaryBtn}
               onPress={() => setShowFilesModal(false)}
             >
-              <Text style={styles.secondaryBtnText}>Fermer</Text>
+              <Text style={[styles.secondaryBtnText, isRTL && styles.rtlText]}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -445,37 +447,37 @@ const DonationsScreen = () => {
               <TouchableOpacity style={styles.closeBtn} onPress={() => setShowZakatModal(false)}>
                 <Text style={styles.closeBtnText}>×</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>🧮 Calculateur de Zakat</Text>
+              <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>🧮 {t('zakatCalculator')}</Text>
 
               <View style={styles.nisabInfo}>
-                <Text style={styles.nisabText}>
-                  <Text style={styles.nisabBold}>📌 Nisab actuel : </Text>
+                <Text style={[styles.nisabText, isRTL && styles.rtlText]}>
+                  <Text style={styles.nisabBold}>📌 {t('currentNisab')} : </Text>
                   ~{nisab.toLocaleString()}€
                 </Text>
-                <Text style={styles.nisabSubtext}>(Valeur de 85g d'or ou 595g d'argent)</Text>
+                <Text style={[styles.nisabSubtext, isRTL && styles.rtlText]}>{t('goldSilverValue')}</Text>
               </View>
 
-              <Text style={styles.inputLabel}>💰 Épargne (comptes bancaires)</Text>
+              <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>💰 {t('savingsLabel')}</Text>
               <TextInput
-                style={styles.zakatInput}
+                style={[styles.zakatInput, isRTL && styles.rtlText]}
                 placeholder="0"
                 keyboardType="numeric"
                 value={zakatEpargne}
                 onChangeText={setZakatEpargne}
               />
 
-              <Text style={styles.inputLabel}>🥇 Valeur de l'or possédé</Text>
+              <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>🥇 {t('goldValueLabel')}</Text>
               <TextInput
-                style={styles.zakatInput}
+                style={[styles.zakatInput, isRTL && styles.rtlText]}
                 placeholder="0"
                 keyboardType="numeric"
                 value={zakatOr}
                 onChangeText={setZakatOr}
               />
 
-              <Text style={styles.inputLabel}>🥈 Valeur de l'argent possédé</Text>
+              <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>🥈 {t('silverValueLabel')}</Text>
               <TextInput
-                style={styles.zakatInput}
+                style={[styles.zakatInput, isRTL && styles.rtlText]}
                 placeholder="0"
                 keyboardType="numeric"
                 value={zakatArgent}
@@ -483,16 +485,16 @@ const DonationsScreen = () => {
               />
 
               <View style={[styles.zakatResult, isZakatEligible && styles.zakatResultEligible]}>
-                <Text style={styles.zakatTotalLabel}>Total des biens : {totalWealth.toLocaleString()}€</Text>
+                <Text style={[styles.zakatTotalLabel, isRTL && styles.rtlText]}>{t('totalAssets')} : {totalWealth.toLocaleString()}€</Text>
                 {isZakatEligible ? (
                   <>
-                    <Text style={styles.zakatEligibleText}>✓ Vous êtes redevable de la Zakat</Text>
+                    <Text style={[styles.zakatEligibleText, isRTL && styles.rtlText]}>✓ {t('zakatEligible')}</Text>
                     <Text style={styles.zakatAmountText}>{zakatAmount.toFixed(2)}€</Text>
-                    <Text style={styles.zakatPercent}>(2.5% de vos biens)</Text>
+                    <Text style={[styles.zakatPercent, isRTL && styles.rtlText]}>{t('ofYourAssets')}</Text>
                   </>
                 ) : (
-                  <Text style={styles.zakatNotEligible}>
-                    Vos biens n'atteignent pas le Nisab.{'\n'}La Zakat n'est pas obligatoire.
+                  <Text style={[styles.zakatNotEligible, isRTL && styles.rtlText]}>
+                    {t('zakatNotEligible')}
                   </Text>
                 )}
               </View>
@@ -505,12 +507,12 @@ const DonationsScreen = () => {
                     setShowZakatModal(false);
                   }}
                 >
-                  <Text style={styles.primaryBtnText}>💝 Donner ma Zakat ({zakatAmount.toFixed(0)}€)</Text>
+                  <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>💝 {t('giveMyZakat')} ({zakatAmount.toFixed(0)}€)</Text>
                 </TouchableOpacity>
               )}
 
-              <Text style={styles.modalDisclaimer}>
-                Ce calcul est une estimation. Consultez un savant pour plus de précision.
+              <Text style={[styles.modalDisclaimer, isRTL && styles.rtlText]}>
+                {t('zakatDisclaimer')}
               </Text>
             </View>
           </ScrollView>
@@ -1037,6 +1039,32 @@ const styles = StyleSheet.create({
   fichierArrow: {
     fontSize: fontSize.lg,
     color: colors.accent,
+  },
+  // RTL Styles
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  tabToggleRTL: {
+    flexDirection: 'row-reverse',
+  },
+  progressInfoRTL: {
+    flexDirection: 'row-reverse',
+  },
+  customAmountWrapperRTL: {
+    flexDirection: 'row-reverse',
+  },
+  ribRowRTL: {
+    flexDirection: 'row-reverse',
+  },
+  paymentProjectInfoRTL: {
+    flexDirection: 'row-reverse',
+  },
+  paymentOptionRTL: {
+    flexDirection: 'row-reverse',
+  },
+  fichierItemRTL: {
+    flexDirection: 'row-reverse',
   },
 });
 

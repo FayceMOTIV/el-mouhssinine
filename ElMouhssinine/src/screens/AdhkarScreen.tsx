@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { adhkarCategories, AdhkarCategory } from '../data/adhkar';
+import { useLanguage } from '../context/LanguageContext';
 
 interface AdhkarScreenProps {
   navigation: any;
@@ -28,6 +29,7 @@ const categoryIcons: Record<string, string> = {
 };
 
 const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
+  const { t, isRTL } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredCategories = adhkarCategories.filter((category) =>
@@ -49,23 +51,24 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Invocations</Text>
-          <Text style={styles.arabicTitle}>الأذكار</Text>
-          <Text style={styles.subtitle}>
-            {adhkarCategories.length} categories - {getTotalAdhkar()} invocations
+          <Text style={[styles.title, isRTL && styles.rtlText]}>{t('invocations')}</Text>
+          <Text style={styles.arabicTitle}>{t('invocationsArabic')}</Text>
+          <Text style={[styles.subtitle, isRTL && styles.rtlText]}>
+            {adhkarCategories.length} {t('categoriesCount')} - {getTotalAdhkar()} {t('invocationsCount')}
           </Text>
         </View>
 
         <View style={styles.content}>
           {/* Barre de recherche */}
-          <View style={styles.searchContainer}>
+          <View style={[styles.searchContainer, isRTL && styles.searchContainerRTL]}>
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
-              style={styles.searchInput}
-              placeholder="Rechercher une categorie..."
+              style={[styles.searchInput, isRTL && styles.rtlText]}
+              placeholder={t('searchCategory')}
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
+              textAlign={isRTL ? 'right' : 'left'}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -76,8 +79,8 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
 
           {/* Acces rapide */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Acces rapide</Text>
-            <View style={styles.quickAccessGrid}>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('quickAccess')}</Text>
+            <View style={[styles.quickAccessGrid, isRTL && styles.quickAccessGridRTL]}>
               {['morning', 'evening', 'afterPrayer', 'sleep'].map((id) => {
                 const category = adhkarCategories.find((c) => c.id === id);
                 if (!category) return null;
@@ -90,9 +93,11 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
                     <Text style={styles.quickAccessIcon}>
                       {categoryIcons[id]}
                     </Text>
-                    <Text style={styles.quickAccessName}>{category.name}</Text>
-                    <Text style={styles.quickAccessCount}>
-                      {category.adhkar.length} invocations
+                    <Text style={[styles.quickAccessName, isRTL && styles.rtlText]}>
+                      {isRTL ? category.nameAr : category.name}
+                    </Text>
+                    <Text style={[styles.quickAccessCount, isRTL && styles.rtlText]}>
+                      {category?.adhkar?.length || 0} {t('invocationsCount')}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -102,14 +107,14 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
 
           {/* Toutes les categories */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Toutes les categories ({filteredCategories.length})
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+              {t('allCategories')} ({filteredCategories.length})
             </Text>
 
-            {filteredCategories.map((category) => (
+            {(filteredCategories || []).map((category) => (
               <TouchableOpacity
                 key={category.id}
-                style={styles.categoryCard}
+                style={[styles.categoryCard, isRTL && styles.categoryCardRTL]}
                 onPress={() => handleCategoryPress(category)}
               >
                 <View style={styles.categoryIcon}>
@@ -118,33 +123,37 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
                   </Text>
                 </View>
                 <View style={styles.categoryInfo}>
-                  <View style={styles.categoryNames}>
-                    <Text style={styles.categoryName}>{category.name}</Text>
-                    <Text style={styles.categoryNameAr}>{category.nameAr}</Text>
+                  <View style={[styles.categoryNames, isRTL && styles.categoryNamesRTL]}>
+                    <Text style={[styles.categoryName, isRTL && styles.rtlText]}>
+                      {isRTL ? category.nameAr : category.name}
+                    </Text>
+                    <Text style={styles.categoryNameAr}>
+                      {isRTL ? category.name : category.nameAr}
+                    </Text>
                   </View>
                   {category.description && (
-                    <Text style={styles.categoryDescription} numberOfLines={2}>
+                    <Text style={[styles.categoryDescription, isRTL && styles.rtlText]} numberOfLines={2}>
                       {category.description}
                     </Text>
                   )}
-                  <Text style={styles.categoryCount}>
-                    {category.adhkar.length} invocations
+                  <Text style={[styles.categoryCount, isRTL && styles.rtlText]}>
+                    {category.adhkar.length} {t('invocationsCount')}
                   </Text>
                 </View>
-                <Text style={styles.chevron}>{'>'}</Text>
+                <Text style={styles.chevron}>{isRTL ? '<' : '>'}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           {/* Info */}
-          <View style={styles.infoCard}>
+          <View style={[styles.infoCard, isRTL && styles.infoCardRTL]}>
             <Text style={styles.infoIcon}>💡</Text>
             <View style={styles.infoContent}>
-              <Text style={styles.infoTitle}>Le merite du dhikr</Text>
-              <Text style={styles.infoText}>
-                Le Prophete (paix et benedictions sur lui) a dit : "Les paroles les plus aimees d'Allah sont quatre : SubhanAllah, Alhamdulillah, La ilaha illa Allah et Allahou Akbar."
+              <Text style={[styles.infoTitle, isRTL && styles.rtlText]}>{t('dhikrMerit')}</Text>
+              <Text style={[styles.infoText, isRTL && styles.rtlText]}>
+                {t('dhikrHadith')}
               </Text>
-              <Text style={styles.infoSource}>Rapporte par Muslim</Text>
+              <Text style={[styles.infoSource, isRTL && styles.rtlText]}>{t('reportedByMuslim')}</Text>
             </View>
           </View>
         </View>
@@ -325,6 +334,27 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontStyle: 'italic',
     marginTop: spacing.sm,
+  },
+  // RTL Styles
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  searchContainerRTL: {
+    flexDirection: 'row-reverse',
+  },
+  quickAccessGridRTL: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+  },
+  categoryCardRTL: {
+    flexDirection: 'row-reverse',
+  },
+  categoryNamesRTL: {
+    flexDirection: 'row-reverse',
+  },
+  infoCardRTL: {
+    flexDirection: 'row-reverse',
   },
 });
 

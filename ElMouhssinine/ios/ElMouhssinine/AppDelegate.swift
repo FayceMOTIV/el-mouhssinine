@@ -3,6 +3,7 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import FirebaseCore
+import AVFoundation
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -17,6 +18,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   ) -> Bool {
     // Initialize Firebase FIRST before any other setup
     FirebaseApp.configure()
+
+    // Configure audio session for background playback
+    do {
+      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+      try AVAudioSession.sharedInstance().setActive(true)
+    } catch {
+      print("Failed to set audio session category: \(error)")
+    }
 
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)

@@ -10,12 +10,14 @@ import {
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { QuranAPI, surahsInfo } from '../services/quranApi';
+import { useLanguage } from '../context/LanguageContext';
 
 interface QuranScreenProps {
   navigation: any;
 }
 
 const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
+  const { t, isRTL } = useLanguage();
   const [surahs, setSurahs] = useState(surahsInfo);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,21 +68,22 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Le Saint Coran</Text>
-          <Text style={styles.arabicTitle}>القرآن الكريم</Text>
-          <Text style={styles.subtitle}>114 sourates</Text>
+          <Text style={[styles.title, isRTL && styles.rtlText]}>{t('quranTitle')}</Text>
+          <Text style={styles.arabicTitle}>{t('quranArabicTitle')}</Text>
+          <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('surahsCount')}</Text>
         </View>
 
         <View style={styles.content}>
           {/* Barre de recherche */}
-          <View style={styles.searchContainer}>
+          <View style={[styles.searchContainer, isRTL && styles.searchContainerRTL]}>
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
-              style={styles.searchInput}
-              placeholder="Rechercher une sourate..."
+              style={[styles.searchInput, isRTL && styles.rtlText]}
+              placeholder={t('searchSurah')}
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
+              textAlign={isRTL ? 'right' : 'left'}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -90,11 +93,11 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
           </View>
 
           {/* Filtres */}
-          <View style={styles.filterContainer}>
+          <View style={[styles.filterContainer, isRTL && styles.filterContainerRTL]}>
             {[
-              { id: 'all', label: 'Toutes' },
-              { id: 'meccan', label: 'Mecquoises' },
-              { id: 'medinan', label: 'Medinoises' },
+              { id: 'all', labelKey: 'allFilter' },
+              { id: 'meccan', labelKey: 'meccanFilter' },
+              { id: 'medinan', labelKey: 'medinanFilter' },
             ].map((filter) => (
               <TouchableOpacity
                 key={filter.id}
@@ -110,7 +113,7 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
                     filterType === filter.id && styles.filterButtonTextActive,
                   ]}
                 >
-                  {filter.label}
+                  {t(filter.labelKey as any)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -118,11 +121,11 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
 
           {/* Acces rapide aux sourates populaires */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sourates populaires</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('popularSurahs')}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={styles.popularScroll}
+              style={[styles.popularScroll, isRTL && { transform: [{ scaleX: -1 }] }]}
             >
               {[1, 36, 55, 56, 67, 112, 113, 114].map((num) => {
                 const surah = surahs.find((s) => s.number === num);
@@ -130,12 +133,12 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
                 return (
                   <TouchableOpacity
                     key={num}
-                    style={styles.popularCard}
+                    style={[styles.popularCard, isRTL && { transform: [{ scaleX: -1 }] }]}
                     onPress={() => handleSurahPress(num)}
                   >
                     <Text style={styles.popularNumber}>{num}</Text>
                     <Text style={styles.popularName}>{surah.name}</Text>
-                    <Text style={styles.popularEnglish}>{surah.englishName}</Text>
+                    <Text style={[styles.popularEnglish, isRTL && styles.rtlText]}>{surah.englishName}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -144,12 +147,12 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
 
           {/* Liste des sourates */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
               {filterType === 'all'
-                ? 'Toutes les sourates'
+                ? t('allSurahsList')
                 : filterType === 'meccan'
-                ? 'Sourates mecquoises'
-                : 'Sourates medinoises'}
+                ? t('meccanSurahsList')
+                : t('medinanSurahsList')}
               {` (${filteredSurahs.length})`}
             </Text>
 
@@ -161,10 +164,10 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
               />
             )}
 
-            {filteredSurahs.map((surah) => (
+            {(filteredSurahs || []).map((surah) => (
               <TouchableOpacity
                 key={surah.number}
-                style={styles.surahCard}
+                style={[styles.surahCard, isRTL && styles.surahCardRTL]}
                 onPress={() => handleSurahPress(surah.number)}
               >
                 <View style={styles.surahNumber}>
@@ -172,11 +175,11 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
                 </View>
                 <View style={styles.surahInfo}>
                   <View style={styles.surahNames}>
-                    <Text style={styles.surahEnglish}>{surah.englishName}</Text>
-                    <Text style={styles.surahTranslation}>{surah.translation}</Text>
+                    <Text style={[styles.surahEnglish, isRTL && styles.rtlText]}>{surah.englishName}</Text>
+                    <Text style={[styles.surahTranslation, isRTL && styles.rtlText]}>{surah.translation}</Text>
                   </View>
-                  <View style={styles.surahMeta}>
-                    <Text style={styles.surahAyahs}>{surah.ayahs} versets</Text>
+                  <View style={[styles.surahMeta, isRTL && styles.surahMetaRTL]}>
+                    <Text style={styles.surahAyahs}>{surah.ayahs} {t('verses')}</Text>
                     <View
                       style={[
                         styles.surahTypeBadge,
@@ -185,7 +188,9 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
                           : styles.medinanBadge,
                       ]}
                     >
-                      <Text style={styles.surahTypeText}>{surah.type}</Text>
+                      <Text style={styles.surahTypeText}>
+                        {surah.type === 'Mecquoise' ? t('meccan') : t('medinan')}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -375,6 +380,23 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: colors.accent,
     marginLeft: spacing.md,
+  },
+  // RTL Styles
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  searchContainerRTL: {
+    flexDirection: 'row-reverse',
+  },
+  filterContainerRTL: {
+    flexDirection: 'row-reverse',
+  },
+  surahCardRTL: {
+    flexDirection: 'row-reverse',
+  },
+  surahMetaRTL: {
+    flexDirection: 'row-reverse',
   },
 });
 

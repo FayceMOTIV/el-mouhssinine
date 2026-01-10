@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "public",
+    "public": "el-mouhssinine-backoffice/dist",
     "ignore": [
       "firebase.json",
       "**/.*",

@@ -6,17 +6,32 @@ node_modules/
 ios/Pods/
 ios/build/
 *.xcarchive
+*.ipa
 
 # Android
+.gradle/
 android/.gradle/
 android/build/
 android/app/build/
+*.jks
 
 # React Native
 .metro-health-check*
 
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Firebase
+.firebase/
+*/.firebase/
+
+# Build outputs
+dist/
+build/
+
 # Misc
 .DS_Store
 *.log
-.env
-dist/
+*.tgz

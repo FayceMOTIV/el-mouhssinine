@@ -106,7 +106,7 @@ const AppNavigator = () => {
           component={MemberScreen}
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon focused={focused} icon="👤" label="Adhérent" />
+              <TabBarIcon focused={focused} icon="👤" label="Membre" />
             ),
           }}
         />
@@ -155,8 +155,9 @@ const styles = StyleSheet.create({
   },
   tabIconActive: {},
   tabLabel: {
-    fontSize: 9,
+    fontSize: 10,
     color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
   },
   tabLabelActive: {
     color: colors.accent,

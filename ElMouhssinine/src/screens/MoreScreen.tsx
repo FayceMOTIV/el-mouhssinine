@@ -13,6 +13,12 @@ import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { subscribeToMosqueeInfo } from '../services/firebase';
 import { MosqueeInfo, NotificationSettings } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import {
+  requestNotificationPermission,
+  scheduleJumuaReminder,
+  cancelJumuaReminder,
+  isJumuaReminderEnabled,
+} from '../services/notifications';
 
 const MoreScreen = () => {
   const { language, setLanguage, t, isRTL } = useLanguage();
@@ -38,6 +44,7 @@ const MoreScreen = () => {
   });
 
   const [copied, setCopied] = useState('');
+  const [jumuaReminderEnabled, setJumuaReminderEnabled] = useState(false);
   const qiblaDirection = 119; // Direction Qibla pour Bourg-en-Bresse
 
   useEffect(() => {
@@ -46,6 +53,38 @@ const MoreScreen = () => {
     });
     return () => unsub?.();
   }, []);
+
+  // Charger l'état du rappel Jumu'a au démarrage
+  useEffect(() => {
+    isJumuaReminderEnabled().then(setJumuaReminderEnabled);
+  }, []);
+
+  // Gérer le toggle du rappel Jumu'a
+  const handleJumuaToggle = async () => {
+    if (!jumuaReminderEnabled) {
+      const hasPermission = await requestNotificationPermission();
+      if (hasPermission) {
+        await scheduleJumuaReminder(language);
+        setJumuaReminderEnabled(true);
+        Alert.alert(
+          language === 'ar' ? 'تم التفعيل' : 'Activé',
+          language === 'ar'
+            ? 'ستتلقى تذكيراً كل جمعة الساعة 12:30'
+            : 'Vous recevrez un rappel chaque vendredi à 12h30'
+        );
+      } else {
+        Alert.alert(
+          language === 'ar' ? 'الإذن مطلوب' : 'Permission requise',
+          language === 'ar'
+            ? 'فعّل الإشعارات في إعدادات هاتفك'
+            : 'Activez les notifications dans les réglages de votre téléphone.'
+        );
+      }
+    } else {
+      await cancelJumuaReminder();
+      setJumuaReminderEnabled(false);
+    }
+  };
 
   const copyToClipboard = (text: string, field: string) => {
     Clipboard.setString(text.replace(/\s/g, ''));
@@ -111,9 +150,9 @@ const MoreScreen = () => {
                 </View>
               </View>
 
-              <Text style={styles.qiblaDirection}>{qiblaDirection}° Sud-Est</Text>
-              <Text style={styles.qiblaCity}>
-                Direction de La Mecque depuis {mosqueeInfo.city}
+              <Text style={[styles.qiblaDirection, isRTL && styles.textRTL]}>{qiblaDirection}° {t('southEast')}</Text>
+              <Text style={[styles.qiblaCity, isRTL && styles.textRTL]}>
+                {t('qiblaDirectionFrom')} {mosqueeInfo.city}
               </Text>
             </View>
           </View>
@@ -294,11 +333,8 @@ const MoreScreen = () => {
                       <Text style={styles.settingLabel}>{t('jumuaFriday')}</Text>
                     </View>
                     <Switch
-                      active={notifications.jumuaReminder}
-                      onToggle={() => setNotifications({
-                        ...notifications,
-                        jumuaReminder: !notifications.jumuaReminder
-                      })}
+                      active={jumuaReminderEnabled}
+                      onToggle={handleJumuaToggle}
                     />
                   </View>
                 </>

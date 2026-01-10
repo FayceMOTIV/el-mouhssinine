@@ -15,8 +15,10 @@ import { getMember, updateMember, createMember } from '../services/firebase';
 import { AuthService, MemberProfile } from '../services/auth';
 import { StripeService, cotisationPrices } from '../services/stripe';
 import { Member } from '../types';
+import { useLanguage } from '../context/LanguageContext';
 
 const MemberScreen = () => {
+  const { t, isRTL } = useLanguage();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
@@ -208,7 +210,7 @@ const MemberScreen = () => {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={{ color: colors.textMuted, marginTop: spacing.md }}>Chargement...</Text>
+        <Text style={{ color: colors.textMuted, marginTop: spacing.md }}>{t('loading')}</Text>
       </View>
     );
   }
@@ -219,45 +221,45 @@ const MemberScreen = () => {
       <View style={styles.container}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
           <View style={styles.header}>
-            <Text style={styles.title}>Espace Adhérent</Text>
-            <Text style={styles.subtitle}>Gérez votre adhésion</Text>
+            <Text style={[styles.title, isRTL && styles.rtlText]}>{t('memberArea')}</Text>
+            <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('manageSubscription')}</Text>
           </View>
 
           <View style={styles.content}>
             <View style={styles.notLoggedInCard}>
             <Text style={styles.notLoggedInIcon}>👤</Text>
-            <Text style={styles.notLoggedInTitle}>Connectez-vous</Text>
-            <Text style={styles.notLoggedInText}>
-              Accédez à votre espace adhérent pour gérer votre cotisation et voir votre historique.
+            <Text style={[styles.notLoggedInTitle, isRTL && styles.rtlText]}>{t('connectYourself')}</Text>
+            <Text style={[styles.notLoggedInText, isRTL && styles.rtlText]}>
+              {t('accessMemberArea')}
             </Text>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.primaryBtn}
               onPress={() => { setIsRegistering(false); setShowLoginModal(true); }}
             >
-              <Text style={styles.primaryBtnText}>Se connecter</Text>
+              <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>{t('login')}</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.secondaryBtn}
               onPress={() => { setIsRegistering(true); setShowLoginModal(true); }}
             >
-              <Text style={styles.secondaryBtnText}>Créer un compte</Text>
+              <Text style={[styles.secondaryBtnText, isRTL && styles.rtlText]}>{t('createAccount')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Avantages */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>✨ Avantages adhérents</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>✨ {t('memberBenefits')}</Text>
             {[
-              { icon: '📧', text: 'Reçu fiscal automatique' },
-              { icon: '🎓', text: 'Tarifs réduits cours & activités' },
-              { icon: '🗳️', text: 'Droit de vote en AG' },
-              { icon: '🔔', text: 'Notifications prioritaires' },
+              { icon: '📧', textKey: 'taxReceipt' },
+              { icon: '🎓', textKey: 'reducedRates' },
+              { icon: '🗳️', textKey: 'votingRights' },
+              { icon: '🔔', textKey: 'priorityNotifications' },
             ].map((item, index) => (
-              <View key={index} style={styles.advantageItem}>
+              <View key={index} style={[styles.advantageItem, isRTL && styles.advantageItemRTL]}>
                 <Text style={styles.advantageIcon}>{item.icon}</Text>
-                <Text style={styles.advantageText}>{item.text}</Text>
+                <Text style={[styles.advantageText, isRTL && styles.rtlText]}>{t(item.textKey as any)}</Text>
               </View>
             ))}
           </View>
@@ -271,26 +273,26 @@ const MemberScreen = () => {
               <TouchableOpacity style={styles.closeBtn} onPress={() => setShowLoginModal(false)}>
                 <Text style={styles.closeBtnText}>×</Text>
               </TouchableOpacity>
-              
-              <Text style={styles.modalTitle}>
-                {isRegistering ? '📝 Créer un compte' : '🔐 Connexion'}
+
+              <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>
+                {isRegistering ? `📝 ${t('createAccount')}` : `🔐 ${t('login')}`}
               </Text>
 
               {isRegistering && (
                 <>
-                  <Text style={styles.inputLabel}>Nom complet</Text>
+                  <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>{t('fullName')}</Text>
                   <TextInput
-                    style={styles.input}
-                    placeholder="Votre nom"
+                    style={[styles.input, isRTL && styles.rtlText]}
+                    placeholder={t('yourName')}
                     value={registerName}
                     onChangeText={setRegisterName}
                   />
                 </>
               )}
 
-              <Text style={styles.inputLabel}>Email</Text>
+              <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>{t('email')}</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, isRTL && styles.rtlText]}
                 placeholder="votre@email.com"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -298,29 +300,27 @@ const MemberScreen = () => {
                 onChangeText={setLoginEmail}
               />
 
-              <Text style={styles.inputLabel}>Mot de passe</Text>
+              <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>{t('password')}</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, isRTL && styles.rtlText]}
                 placeholder="••••••••"
                 secureTextEntry
                 value={loginPassword}
                 onChangeText={setLoginPassword}
               />
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.primaryBtn}
                 onPress={isRegistering ? handleRegister : handleLogin}
               >
-                <Text style={styles.primaryBtnText}>
-                  {isRegistering ? 'Créer mon compte' : 'Se connecter'}
+                <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>
+                  {isRegistering ? t('createMyAccount') : t('login')}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity onPress={() => setIsRegistering(!isRegistering)}>
-                <Text style={styles.switchAuthText}>
-                  {isRegistering 
-                    ? 'Déjà un compte ? Se connecter' 
-                    : 'Pas de compte ? S\'inscrire'}
+                <Text style={[styles.switchAuthText, isRTL && styles.rtlText]}>
+                  {isRegistering ? t('alreadyAccount') : t('noAccount')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -335,52 +335,52 @@ const MemberScreen = () => {
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>Espace Adhérent</Text>
-          <Text style={styles.subtitle}>Bienvenue, {member?.name?.split(' ')[0]}</Text>
+          <Text style={[styles.title, isRTL && styles.rtlText]}>{t('memberArea')}</Text>
+          <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('welcomeUser')} {member?.name?.split(' ')[0]}</Text>
         </View>
 
         <View style={styles.content}>
           {/* Carte membre */}
           <View style={styles.memberCard}>
-            <View style={styles.memberHeader}>
+            <View style={[styles.memberHeader, isRTL && styles.memberHeaderRTL]}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
                   {member?.name?.split(' ').map(n => n[0]).join('').toUpperCase()}
                 </Text>
               </View>
               <View style={styles.memberInfo}>
-                <Text style={styles.memberName}>{member?.name}</Text>
-                <Text style={styles.memberEmail}>{member?.email}</Text>
+                <Text style={[styles.memberName, isRTL && styles.rtlText]}>{member?.name}</Text>
+                <Text style={[styles.memberEmail, isRTL && styles.rtlText]}>{member?.email}</Text>
               </View>
               <View style={[
-                styles.statusBadge, 
+                styles.statusBadge,
                 isPaid ? styles.statusBadgeActive : styles.statusBadgeExpired
               ]}>
                 <Text style={[
                   styles.statusBadgeText,
                   isPaid ? styles.statusBadgeTextActive : styles.statusBadgeTextExpired
                 ]}>
-                  {isPaid ? '✓ À jour' : '✗ Expiré'}
+                  {isPaid ? `✓ ${t('upToDate')}` : `✗ ${t('expired')}`}
                 </Text>
               </View>
             </View>
 
             <View style={styles.memberDetails}>
-              <View style={styles.memberDetailRow}>
-                <Text style={styles.memberDetailLabel}>N° Adhérent</Text>
+              <View style={[styles.memberDetailRow, isRTL && styles.memberDetailRowRTL]}>
+                <Text style={[styles.memberDetailLabel, isRTL && styles.rtlText]}>{t('memberNumber')}</Text>
                 <Text style={styles.memberDetailValue}>{member?.memberId}</Text>
               </View>
-              <View style={styles.memberDetailRow}>
-                <Text style={styles.memberDetailLabel}>Type</Text>
-                <Text style={styles.memberDetailValue}>
-                  {member?.cotisationType === 'mensuel' ? 'Mensuel (10€/mois)' : 'Annuel (100€/an)'}
+              <View style={[styles.memberDetailRow, isRTL && styles.memberDetailRowRTL]}>
+                <Text style={[styles.memberDetailLabel, isRTL && styles.rtlText]}>{t('type')}</Text>
+                <Text style={[styles.memberDetailValue, isRTL && styles.rtlText]}>
+                  {member?.cotisationType === 'mensuel' ? `${t('monthly')} (10€${t('perMonth')})` : `${t('yearly')} (100€${t('perYear')})`}
                 </Text>
               </View>
               {isPaid && member?.nextPaymentDate && (
-                <View style={styles.memberDetailRow}>
-                  <Text style={styles.memberDetailLabel}>Prochain paiement</Text>
+                <View style={[styles.memberDetailRow, isRTL && styles.memberDetailRowRTL]}>
+                  <Text style={[styles.memberDetailLabel, isRTL && styles.rtlText]}>{t('nextPaymentDate')}</Text>
                   <Text style={styles.memberDetailValue}>
-                    {member.nextPaymentDate.toLocaleDateString('fr-FR')}
+                    {member.nextPaymentDate.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}
                   </Text>
                 </View>
               )}
@@ -389,12 +389,12 @@ const MemberScreen = () => {
 
           {/* Alerte si non payé */}
           {!isPaid && (
-            <View style={styles.alertCard}>
+            <View style={[styles.alertCard, isRTL && styles.alertCardRTL]}>
               <Text style={styles.alertIcon}>⚠️</Text>
               <View style={styles.alertContent}>
-                <Text style={styles.alertTitle}>Cotisation expirée</Text>
-                <Text style={styles.alertText}>
-                  Renouvelez votre adhésion pour continuer à bénéficier des avantages.
+                <Text style={[styles.alertTitle, isRTL && styles.rtlText]}>{t('cotisationExpired')}</Text>
+                <Text style={[styles.alertText, isRTL && styles.rtlText]}>
+                  {t('renewMessage')}
                 </Text>
               </View>
             </View>
@@ -402,32 +402,32 @@ const MemberScreen = () => {
 
           {/* Boutons cotisation */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              {isPaid ? '💳 Ma cotisation' : '💳 Renouveler'}
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+              {isPaid ? `💳 ${t('myCotisation')}` : `💳 ${t('renew')}`}
             </Text>
-            
+
             {!isPaid ? (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.primaryBtn}
                 onPress={() => setShowCotisationModal(true)}
               >
-                <Text style={styles.primaryBtnText}>Payer ma cotisation</Text>
+                <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>{t('payCotisation')}</Text>
               </TouchableOpacity>
             ) : (
               <>
                 {member?.cotisationType === 'mensuel' && (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.cancelBtn}
                     onPress={() => setShowCancelModal(true)}
                   >
-                    <Text style={styles.cancelBtnText}>Annuler mon abonnement</Text>
+                    <Text style={[styles.cancelBtnText, isRTL && styles.rtlText]}>{t('cancelSubscription')}</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.secondaryBtn}
                   onPress={() => setShowCotisationModal(true)}
                 >
-                  <Text style={styles.secondaryBtnText}>Changer de formule</Text>
+                  <Text style={[styles.secondaryBtnText, isRTL && styles.rtlText]}>{t('changeFormula')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -457,7 +457,7 @@ const MemberScreen = () => {
             style={styles.logoutBtn}
             onPress={handleLogout}
           >
-            <Text style={styles.logoutBtnText}>Se deconnecter</Text>
+            <Text style={[styles.logoutBtnText, isRTL && styles.rtlText]}>{t('logout')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -469,11 +469,11 @@ const MemberScreen = () => {
             <TouchableOpacity style={styles.closeBtn} onPress={() => setShowCotisationModal(false)}>
               <Text style={styles.closeBtnText}>×</Text>
             </TouchableOpacity>
-            
-            <Text style={styles.modalTitle}>💳 Cotisation annuelle</Text>
+
+            <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>💳 {t('annualCotisation')}</Text>
 
             {/* Options */}
-            <Text style={styles.inputLabel}>Choisir une formule</Text>
+            <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>{t('chooseFormula')}</Text>
             {cotisationOptions.map((option) => (
               <TouchableOpacity
                 key={option.id}
@@ -497,32 +497,33 @@ const MemberScreen = () => {
             ))}
 
             {cotisationType === 'mensuel' && (
-              <Text style={styles.mensuelNote}>
-                ✓ Sans engagement - Annulable à tout moment depuis l'application
+              <Text style={[styles.mensuelNote, isRTL && styles.rtlText]}>
+                ✓ {t('noCommitment')}
               </Text>
             )}
 
             {/* Méthodes de paiement */}
-            <Text style={[styles.inputLabel, { marginTop: spacing.lg }]}>Mode de paiement</Text>
+            <Text style={[styles.inputLabel, isRTL && styles.rtlText, { marginTop: spacing.lg }]}>{t('paymentMethod')}</Text>
             {[
-              { id: 'card', icon: '💳', label: 'Carte bancaire', desc: 'Visa, Mastercard, CB' },
-              { id: 'apple', icon: '🍎', label: 'Apple Pay', desc: 'Paiement rapide' },
+              { id: 'card', icon: '💳', labelKey: 'cardPayment', descKey: 'visaMastercard' },
+              { id: 'apple', icon: '🍎', label: 'Apple Pay', descKey: 'fastPayment' },
               ...(cotisationType === 'mensuel' ? [
-                { id: 'sepa', icon: '🏦', label: 'Prélèvement SEPA', desc: 'Compte bancaire' }
+                { id: 'sepa', icon: '🏦', labelKey: 'bankTransfer', descKey: 'bankAccount' }
               ] : [])
             ].map((method) => (
               <TouchableOpacity
                 key={method.id}
                 style={[
                   styles.paymentOption,
-                  paymentMethod === method.id && styles.paymentOptionSelected
+                  paymentMethod === method.id && styles.paymentOptionSelected,
+                  isRTL && styles.paymentOptionRTL
                 ]}
                 onPress={() => setPaymentMethod(method.id)}
               >
                 <Text style={styles.paymentIcon}>{method.icon}</Text>
                 <View style={styles.paymentInfo}>
-                  <Text style={styles.paymentTitle}>{method.label}</Text>
-                  <Text style={styles.paymentDesc}>{method.desc}</Text>
+                  <Text style={[styles.paymentTitle, isRTL && styles.rtlText]}>{(method as any).labelKey ? t((method as any).labelKey) : (method as any).label}</Text>
+                  <Text style={[styles.paymentDesc, isRTL && styles.rtlText]}>{t((method as any).descKey as any)}</Text>
                 </View>
                 {paymentMethod === method.id && (
                   <View style={styles.checkmark}>
@@ -532,21 +533,18 @@ const MemberScreen = () => {
               </TouchableOpacity>
             ))}
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.primaryBtn, { marginTop: spacing.lg }, !paymentMethod && styles.primaryBtnDisabled]}
               onPress={handlePayCotisation}
               disabled={!paymentMethod}
             >
-              <Text style={styles.primaryBtnText}>
-                🔒 Payer {cotisationType === 'mensuel' ? '10€/mois' : '100€'}
+              <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>
+                🔒 {t('payButton')} {cotisationType === 'mensuel' ? `10€${t('perMonth')}` : '100€'}
               </Text>
             </TouchableOpacity>
 
-            <Text style={styles.modalDisclaimer}>
-              {cotisationType === 'mensuel' 
-                ? 'Vous pouvez annuler à tout moment • Reçu fiscal annuel'
-                : 'Paiement sécurisé par Stripe • Reçu fiscal envoyé par email'
-              }
+            <Text style={[styles.modalDisclaimer, isRTL && styles.rtlText]}>
+              {cotisationType === 'mensuel' ? t('cancelAnytime') : t('securePayment')}
             </Text>
           </View>
         </View>
@@ -559,40 +557,40 @@ const MemberScreen = () => {
             <TouchableOpacity style={styles.closeBtn} onPress={() => setShowCancelModal(false)}>
               <Text style={styles.closeBtnText}>×</Text>
             </TouchableOpacity>
-            
+
             <View style={styles.cancelModalContent}>
               <Text style={styles.cancelIcon}>⚠️</Text>
-              <Text style={styles.cancelTitle}>Annuler l'abonnement ?</Text>
-              <Text style={styles.cancelText}>
-                Êtes-vous sûr de vouloir annuler votre abonnement mensuel ?
+              <Text style={[styles.cancelTitle, isRTL && styles.rtlText]}>{t('cancelSubscriptionConfirm')}</Text>
+              <Text style={[styles.cancelText, isRTL && styles.rtlText]}>
+                {t('cancelSubscriptionQuestion')}
               </Text>
 
               <View style={styles.cancelConsequences}>
                 {[
-                  'Annulation effective immédiatement',
-                  'Plus aucun prélèvement',
-                  'Statut actif jusqu\'au ' + (member?.nextPaymentDate?.toLocaleDateString('fr-FR') || '—'),
-                  'Réabonnement possible à tout moment',
+                  t('immediateCancel'),
+                  t('noMoreDebit'),
+                  `${t('activeUntil')} ${member?.nextPaymentDate?.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR') || '—'}`,
+                  t('resubscribePossible'),
                 ].map((item, index) => (
-                  <View key={index} style={styles.cancelConsequenceItem}>
+                  <View key={index} style={[styles.cancelConsequenceItem, isRTL && styles.cancelConsequenceItemRTL]}>
                     <Text style={styles.cancelConsequenceBullet}>•</Text>
-                    <Text style={styles.cancelConsequenceText}>{item}</Text>
+                    <Text style={[styles.cancelConsequenceText, isRTL && styles.rtlText]}>{item}</Text>
                   </View>
                 ))}
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.cancelConfirmBtn}
                 onPress={handleCancelSubscription}
               >
-                <Text style={styles.cancelConfirmBtnText}>Confirmer l'annulation</Text>
+                <Text style={[styles.cancelConfirmBtnText, isRTL && styles.rtlText]}>{t('confirmCancel')}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.keepSubscriptionBtn}
                 onPress={() => setShowCancelModal(false)}
               >
-                <Text style={styles.keepSubscriptionBtnText}>Garder mon abonnement</Text>
+                <Text style={[styles.keepSubscriptionBtnText, isRTL && styles.rtlText]}>{t('keepSubscription')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1068,6 +1066,29 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  // RTL Styles
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  advantageItemRTL: {
+    flexDirection: 'row-reverse',
+  },
+  memberHeaderRTL: {
+    flexDirection: 'row-reverse',
+  },
+  memberDetailRowRTL: {
+    flexDirection: 'row-reverse',
+  },
+  alertCardRTL: {
+    flexDirection: 'row-reverse',
+  },
+  paymentOptionRTL: {
+    flexDirection: 'row-reverse',
+  },
+  cancelConsequenceItemRTL: {
+    flexDirection: 'row-reverse',
   },
 });
 

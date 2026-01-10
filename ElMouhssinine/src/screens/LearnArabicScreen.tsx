@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,57 +9,59 @@ import {
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { arabicAlphabet } from '../data/alphabet';
 import { lessons, levels, getUserProgress } from '../data/lessons';
-import { vocabularyCategories, vocabulary } from '../data/vocabulary';
+import { vocabulary } from '../data/vocabulary';
 import ProgressBar from '../components/ProgressBar';
+import { useLanguage } from '../context/LanguageContext';
 
 interface LearnArabicScreenProps {
   navigation: any;
 }
 
 const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => {
-  const [userProgress, setUserProgress] = useState(getUserProgress());
+  const { t, isRTL } = useLanguage();
+  const [userProgress] = useState(getUserProgress());
 
   const modules = [
     {
       id: 'alphabet',
-      title: 'Alphabet Arabe',
-      titleAr: 'الحروف العربية',
-      description: 'Apprendre les 28 lettres de l\'alphabet arabe',
+      titleKey: 'alphabet',
+      titleArKey: 'alphabetArabic',
+      descriptionKey: 'alphabetDescription',
       icon: 'ا ب ت',
-      count: `${arabicAlphabet.length} lettres`,
+      count: `${arabicAlphabet.length} ${t('letters')}`,
       progress: 45,
       screen: 'Alphabet',
       color: colors.accent,
     },
     {
       id: 'lessons',
-      title: 'Lecons',
-      titleAr: 'الدروس',
-      description: 'Cours structures pour apprendre a lire et ecrire',
+      titleKey: 'lessons',
+      titleArKey: 'lessonsArabic',
+      descriptionKey: 'lessonsDescription',
       icon: '📚',
-      count: `${lessons.length} lecons`,
+      count: `${lessons.length} ${t('lessons')}`,
       progress: userProgress.lessonsCompleted.length / lessons.length * 100,
       screen: 'LessonsList',
       color: '#27ae60',
     },
     {
       id: 'vocabulary',
-      title: 'Vocabulaire',
-      titleAr: 'المفردات',
-      description: 'Mots et expressions essentiels',
+      titleKey: 'vocabulary',
+      titleArKey: 'vocabularyArabic',
+      descriptionKey: 'vocabularyDescription',
       icon: '📖',
-      count: `${Object.values(vocabulary).reduce((acc, words) => acc + words.length, 0)} mots`,
+      count: `${Object.values(vocabulary).reduce((acc, words) => acc + words.length, 0)} ${t('words')}`,
       progress: 20,
       screen: 'Vocabulary',
       color: '#3498db',
     },
     {
       id: 'practice',
-      title: 'Entrainement',
-      titleAr: 'التدريب',
-      description: 'Exercices de lecture et ecriture',
+      titleKey: 'training',
+      titleArKey: 'trainingArabic',
+      descriptionKey: 'trainingDescription',
       icon: '✍️',
-      count: 'Quiz & Exercices',
+      count: t('quizExercises'),
       progress: 0,
       screen: 'Practice',
       color: '#9b59b6',
@@ -73,23 +75,23 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Apprendre l'Arabe</Text>
-          <Text style={styles.arabicTitle}>تعلم العربية</Text>
-          <Text style={styles.subtitle}>
-            De l'alphabet a la lecture du Coran
+          <Text style={[styles.title, isRTL && styles.rtlText]}>{t('learnArabic')}</Text>
+          <Text style={styles.arabicTitle}>{t('learnArabicArabic')}</Text>
+          <Text style={[styles.subtitle, isRTL && styles.rtlText]}>
+            {t('learnArabicSubtitle')}
           </Text>
         </View>
 
         <View style={styles.content}>
           {/* Progress Card */}
           <View style={styles.progressCard}>
-            <View style={styles.progressHeader}>
+            <View style={[styles.progressHeader, isRTL && styles.progressHeaderRTL]}>
               <View>
-                <Text style={styles.progressLabel}>Votre niveau</Text>
-                <Text style={styles.levelName}>
-                  {currentLevel?.name || 'Debutant'}
+                <Text style={[styles.progressLabel, isRTL && styles.rtlText]}>{t('yourLevel')}</Text>
+                <Text style={[styles.levelName, isRTL && styles.rtlText]}>
+                  {currentLevel?.name || t('beginner')}
                 </Text>
-                <Text style={styles.levelNameAr}>
+                <Text style={[styles.levelNameAr, isRTL && styles.rtlText]}>
                   {currentLevel?.nameAr || 'مبتدئ'}
                 </Text>
               </View>
@@ -105,35 +107,35 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
                 showLabel
                 labelPosition="right"
               />
-              <Text style={styles.progressNote}>
-                {500 - (userProgress.totalXP % 500)} XP pour le niveau suivant
+              <Text style={[styles.progressNote, isRTL && styles.rtlText]}>
+                {500 - (userProgress.totalXP % 500)} {t('xpForNextLevel')}
               </Text>
             </View>
           </View>
 
           {/* Stats */}
-          <View style={styles.statsRow}>
+          <View style={[styles.statsRow, isRTL && styles.statsRowRTL]}>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>
                 {userProgress.lessonsCompleted.length}
               </Text>
-              <Text style={styles.statLabel}>Lecons</Text>
+              <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('lessons')}</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>
                 {userProgress.lettersLearned.length}
               </Text>
-              <Text style={styles.statLabel}>Lettres</Text>
+              <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('letters')}</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{userProgress.streak}</Text>
-              <Text style={styles.statLabel}>Serie</Text>
+              <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('streak')}</Text>
             </View>
           </View>
 
           {/* Modules */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Modules d'apprentissage</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('learningModules')}</Text>
 
             {modules.map((module) => (
               <TouchableOpacity
@@ -141,7 +143,7 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
                 style={styles.moduleCard}
                 onPress={() => navigation.navigate(module.screen)}
               >
-                <View style={styles.moduleContent}>
+                <View style={[styles.moduleContent, isRTL && styles.moduleContentRTL]}>
                   <View
                     style={[
                       styles.moduleIcon,
@@ -151,15 +153,15 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
                     <Text style={styles.moduleIconText}>{module.icon}</Text>
                   </View>
                   <View style={styles.moduleInfo}>
-                    <View style={styles.moduleHeader}>
-                      <Text style={styles.moduleTitle}>{module.title}</Text>
-                      <Text style={styles.moduleTitleAr}>{module.titleAr}</Text>
+                    <View style={[styles.moduleHeader, isRTL && styles.moduleHeaderRTL]}>
+                      <Text style={[styles.moduleTitle, isRTL && styles.rtlText]}>{t(module.titleKey as any)}</Text>
+                      <Text style={styles.moduleTitleAr}>{t(module.titleArKey as any)}</Text>
                     </View>
-                    <Text style={styles.moduleDescription}>
-                      {module.description}
+                    <Text style={[styles.moduleDescription, isRTL && styles.rtlText]}>
+                      {t(module.descriptionKey as any)}
                     </Text>
-                    <View style={styles.moduleFooter}>
-                      <Text style={styles.moduleCount}>{module.count}</Text>
+                    <View style={[styles.moduleFooter, isRTL && styles.moduleFooterRTL]}>
+                      <Text style={[styles.moduleCount, isRTL && styles.rtlText]}>{module.count}</Text>
                       {module.progress > 0 && (
                         <View style={styles.moduleProgress}>
                           <ProgressBar
@@ -171,7 +173,7 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
                       )}
                     </View>
                   </View>
-                  <Text style={styles.chevron}>{'>'}</Text>
+                  <Text style={styles.chevron}>{isRTL ? '<' : '>'}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -179,37 +181,36 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
 
           {/* Quick Start */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Demarrage rapide</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('quickStart')}</Text>
 
             <TouchableOpacity
               style={styles.quickStartCard}
               onPress={() => navigation.navigate('Alphabet')}
             >
-              <View style={styles.quickStartContent}>
+              <View style={[styles.quickStartContent, isRTL && styles.quickStartContentRTL]}>
                 <Text style={styles.quickStartIcon}>🎯</Text>
                 <View style={styles.quickStartInfo}>
-                  <Text style={styles.quickStartTitle}>
-                    Commencer par l'alphabet
+                  <Text style={[styles.quickStartTitle, isRTL && styles.rtlText]}>
+                    {t('startWithAlphabet')}
                   </Text>
-                  <Text style={styles.quickStartDescription}>
-                    La base de tout apprentissage de l'arabe
+                  <Text style={[styles.quickStartDescription, isRTL && styles.rtlText]}>
+                    {t('alphabetBaseInfo')}
                   </Text>
                 </View>
               </View>
               <View style={styles.quickStartButton}>
-                <Text style={styles.quickStartButtonText}>Commencer</Text>
+                <Text style={styles.quickStartButtonText}>{t('start')}</Text>
               </View>
             </TouchableOpacity>
           </View>
 
           {/* Tips */}
-          <View style={styles.tipsCard}>
+          <View style={[styles.tipsCard, isRTL && styles.tipsCardRTL]}>
             <Text style={styles.tipsIcon}>💡</Text>
             <View style={styles.tipsContent}>
-              <Text style={styles.tipsTitle}>Conseil du jour</Text>
-              <Text style={styles.tipsText}>
-                Pratiquez 10 minutes par jour pour un apprentissage efficace.
-                La regularite est plus importante que la duree !
+              <Text style={[styles.tipsTitle, isRTL && styles.rtlText]}>{t('dailyTip')}</Text>
+              <Text style={[styles.tipsText, isRTL && styles.rtlText]}>
+                {t('dailyTipText')}
               </Text>
             </View>
           </View>
@@ -459,6 +460,32 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+  // RTL Styles
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  progressHeaderRTL: {
+    flexDirection: 'row-reverse',
+  },
+  statsRowRTL: {
+    flexDirection: 'row-reverse',
+  },
+  moduleContentRTL: {
+    flexDirection: 'row-reverse',
+  },
+  moduleHeaderRTL: {
+    flexDirection: 'row-reverse',
+  },
+  moduleFooterRTL: {
+    flexDirection: 'row-reverse',
+  },
+  quickStartContentRTL: {
+    flexDirection: 'row-reverse',
+  },
+  tipsCardRTL: {
+    flexDirection: 'row-reverse',
   },
 });
 

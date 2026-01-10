@@ -41,7 +41,7 @@ const firebaseConfig = {
 }
 
 // Force demo mode for development (set to true to use mock data)
-const FORCE_DEMO_MODE = true
+const FORCE_DEMO_MODE = false
 
 // Demo mode flag
 export let isDemoMode = FORCE_DEMO_MODE

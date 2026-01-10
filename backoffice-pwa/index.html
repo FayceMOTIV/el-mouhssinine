@@ -179,6 +179,7 @@
       announcements: [],
       donations: [],
       notifications: [],
+      horaires: { iqama: { fajr: '', dhuhr: '', asr: '', maghrib: '', isha: '' }, jumua: { jumua1: '', jumua2: '' } },
       modal: null,
       editing: null,
       search: ''
@@ -204,6 +205,13 @@
       });
       db.collection('sentNotifications').onSnapshot(snap => {
         state.notifications = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(n => n.titre);
+        render();
+      });
+      // Écouter les horaires (iqama)
+      db.collection('settings').doc('horaires').onSnapshot(doc => {
+        if (doc.exists) {
+          state.horaires = doc.data();
+        }
         render();
       });
     }
@@ -314,6 +322,11 @@
       showToast(`Notification envoyée à ${dest} personnes !`);
     }
 
+    async function saveHoraires(data) {
+      await db.collection('settings').doc('horaires').set(data, { merge: true });
+      showToast('Horaires mis à jour !');
+    }
+
     function exportCSV() {
       const csv = [
         ['Nom', 'Prénom', 'Email', 'Téléphone', 'Statut', 'Paiement'],
@@ -331,6 +344,7 @@
     function renderSidebar() {
       const items = [
         { id: 'dashboard', icon: '📊', label: 'Tableau de bord' },
+        { id: 'horaires', icon: '🕌', label: 'Horaires de prières' },
         { id: 'members', icon: '👥', label: 'Adhérents' },
         { id: 'announcements', icon: '📢', label: 'Annonces' },
         { id: 'events', icon: '📅', label: 'Événements' },
@@ -416,6 +430,109 @@
           </div>
         </div>
       `;
+    }
+
+    function renderHoraires() {
+      const h = state.horaires || { iqama: {}, jumua: {} };
+      const iqama = h.iqama || {};
+      const jumua = h.jumua || {};
+      const lastUpdate = h.updatedAt ? new Date(h.updatedAt).toLocaleString('fr-FR') : 'Jamais';
+      return `
+        <div style="margin-bottom: 20px; padding: 16px; background: rgba(212,175,55,0.1); border-radius: 12px; border-left: 4px solid #d4af37;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 20px;">ℹ️</span>
+            <div>
+              <div style="font-weight: 600; color: #1a2744;">Synchronisation automatique</div>
+              <div style="font-size: 13px; color: #666;">Ces horaires seront affichés en temps réel dans l'application mobile El Mouhssinine.</div>
+              <div style="font-size: 12px; color: #888; margin-top: 4px;">Dernière mise à jour : ${lastUpdate}</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🕐 Horaires Iqama quotidiens</span>
+            <span class="badge badge-blue">5 prières</span>
+          </div>
+          <div class="card-body">
+            <p style="color: #666; margin-bottom: 20px; font-size: 13px;">
+              L'heure de l'Adhan est calculée automatiquement. Configurez uniquement les horaires d'Iqama de la mosquée.
+            </p>
+            <table class="table" style="margin: 0 -24px; width: calc(100% + 48px);">
+              <thead>
+                <tr>
+                  <th>Prière</th>
+                  <th>Iqama</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span style="font-size: 18px; margin-right: 8px;">🌅</span> Fajr</td>
+                  <td><input class="input" type="time" id="iqama-fajr" value="${iqama.fajr || ''}" style="max-width: 150px;"></td>
+                </tr>
+                <tr>
+                  <td><span style="font-size: 18px; margin-right: 8px;">☀️</span> Dhuhr</td>
+                  <td><input class="input" type="time" id="iqama-dhuhr" value="${iqama.dhuhr || ''}" style="max-width: 150px;"></td>
+                </tr>
+                <tr>
+                  <td><span style="font-size: 18px; margin-right: 8px;">🌤️</span> Asr</td>
+                  <td><input class="input" type="time" id="iqama-asr" value="${iqama.asr || ''}" style="max-width: 150px;"></td>
+                </tr>
+                <tr>
+                  <td><span style="font-size: 18px; margin-right: 8px;">🌅</span> Maghrib</td>
+                  <td><input class="input" type="time" id="iqama-maghrib" value="${iqama.maghrib || ''}" style="max-width: 150px;"></td>
+                </tr>
+                <tr>
+                  <td><span style="font-size: 18px; margin-right: 8px;">🌙</span> Isha</td>
+                  <td><input class="input" type="time" id="iqama-isha" value="${iqama.isha || ''}" style="max-width: 150px;"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🕌 Salat Jumu'a (Vendredi)</span>
+            <span class="badge badge-green">Hebdomadaire</span>
+          </div>
+          <div class="card-body">
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="label">1ère Jumu'a *</label>
+                <input class="input" type="time" id="jumua-1" value="${jumua.jumua1 || ''}">
+                <div style="font-size: 12px; color: #888; margin-top: 4px;">Horaire principal</div>
+              </div>
+              <div class="form-group">
+                <label class="label">2ème Jumu'a</label>
+                <input class="input" type="time" id="jumua-2" value="${jumua.jumua2 || ''}">
+                <div style="font-size: 12px; color: #888; margin-top: 4px;">Optionnel - si 2 sessions</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+          <button class="btn btn-primary" onclick="submitHoraires()">
+            💾 Enregistrer les horaires
+          </button>
+        </div>
+      `;
+    }
+
+    function submitHoraires() {
+      const data = {
+        iqama: {
+          fajr: document.getElementById('iqama-fajr').value,
+          dhuhr: document.getElementById('iqama-dhuhr').value,
+          asr: document.getElementById('iqama-asr').value,
+          maghrib: document.getElementById('iqama-maghrib').value,
+          isha: document.getElementById('iqama-isha').value
+        },
+        jumua: {
+          jumua1: document.getElementById('jumua-1').value,
+          jumua2: document.getElementById('jumua-2').value
+        },
+        updatedAt: new Date().toISOString()
+      };
+      saveHoraires(data);
     }
 
     function renderMembers() {
@@ -829,6 +946,7 @@
     function render() {
       const sections = {
         dashboard: { title: 'Tableau de bord', render: renderDashboard },
+        horaires: { title: 'Horaires de prières', render: renderHoraires },
         members: { title: 'Adhérents', render: renderMembers },
         announcements: { title: 'Annonces', render: renderAnnouncements },
         events: { title: 'Événements', render: renderEvents },
