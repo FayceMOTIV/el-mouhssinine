@@ -1,0 +1,167 @@
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { colors } from '../theme/colors';
+
+// Main Screens
+import HomeScreen from '../screens/HomeScreen';
+import DonationsScreen from '../screens/DonationsScreen';
+import MemberScreen from '../screens/MemberScreen';
+import SpiritualScreen from '../screens/SpiritualScreen';
+import MoreScreen from '../screens/MoreScreen';
+
+// Quran Screens
+import QuranScreen from '../screens/QuranScreen';
+import SurahScreen from '../screens/SurahScreen';
+
+// Adhkar Screens
+import AdhkarScreen from '../screens/AdhkarScreen';
+import AdhkarDetailScreen from '../screens/AdhkarDetailScreen';
+
+// Learn Arabic Screens
+import LearnArabicScreen from '../screens/LearnArabicScreen';
+import AlphabetScreen from '../screens/AlphabetScreen';
+import LetterDetailScreen from '../screens/LetterDetailScreen';
+import LessonsListScreen from '../screens/LessonsListScreen';
+import LessonScreen from '../screens/LessonScreen';
+
+const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+
+type TabBarIconProps = {
+  focused: boolean;
+  icon: string;
+  label: string;
+};
+
+const TabBarIcon = ({ focused, icon, label }: TabBarIconProps) => (
+  <View style={styles.tabItem}>
+    <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>{icon}</Text>
+    <Text
+      numberOfLines={1}
+      style={[styles.tabLabel, focused && styles.tabLabelActive]}
+    >
+      {label}
+    </Text>
+  </View>
+);
+
+// Spiritual Stack Navigator
+const SpiritualStack = () => {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="SpiritualHome" component={SpiritualScreen} />
+      {/* Quran */}
+      <Stack.Screen name="Quran" component={QuranScreen} />
+      <Stack.Screen name="Surah" component={SurahScreen} />
+      {/* Adhkar */}
+      <Stack.Screen name="Adhkar" component={AdhkarScreen} />
+      <Stack.Screen name="AdhkarDetail" component={AdhkarDetailScreen} />
+      {/* Learn Arabic */}
+      <Stack.Screen name="LearnArabic" component={LearnArabicScreen} />
+      <Stack.Screen name="Alphabet" component={AlphabetScreen} />
+      <Stack.Screen name="LetterDetail" component={LetterDetailScreen} />
+      <Stack.Screen name="LessonsList" component={LessonsListScreen} />
+      <Stack.Screen name="Lesson" component={LessonScreen} />
+    </Stack.Navigator>
+  );
+};
+
+const AppNavigator = () => {
+  return (
+    <NavigationContainer>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: styles.tabBar,
+          tabBarShowLabel: false,
+        }}
+      >
+        <Tab.Screen
+          name="Home"
+          component={HomeScreen}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabBarIcon focused={focused} icon="🕌" label="Accueil" />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Donations"
+          component={DonationsScreen}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabBarIcon focused={focused} icon="💝" label="Dons" />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Member"
+          component={MemberScreen}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabBarIcon focused={focused} icon="👤" label="Adhérent" />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Spiritual"
+          component={SpiritualStack}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabBarIcon focused={focused} icon="📖" label="Coran" />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="More"
+          component={MoreScreen}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabBarIcon focused={focused} icon="☰" label="Plus" />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+    </NavigationContainer>
+  );
+};
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: 'rgba(92,58,26,0.98)',
+    borderTopWidth: 0,
+    height: 85,
+    paddingBottom: 25,
+    paddingTop: 10,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIcon: {
+    fontSize: 22,
+    marginBottom: 4,
+  },
+  tabIconActive: {},
+  tabLabel: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  tabLabelActive: {
+    color: colors.accent,
+    fontWeight: '600',
+  },
+});
+
+export default AppNavigator;

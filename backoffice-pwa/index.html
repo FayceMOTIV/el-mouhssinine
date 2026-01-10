@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a2744">
+  <meta name="description" content="Backoffice Mosquée El Mouhssinine">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="El Mouhssinine Admin">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <title>El Mouhssinine - Administration</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; }
+    
+    /* Loading */
+    .loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; gap: 16px; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top: 3px solid #d4af37; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Layout */
+    .app { display: flex; min-height: 100vh; }
+    .sidebar { width: 260px; background: linear-gradient(180deg, #1a2744, #0d1829); position: fixed; height: 100vh; padding: 20px 0; overflow-y: auto; }
+    .main { margin-left: 260px; padding: 30px; flex: 1; min-height: 100vh; }
+    
+    /* Logo */
+    .logo { padding: 10px 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .logo-text { color: #d4af37; font-size: 18px; font-weight: 600; }
+    .logo-sub { color: #8b9dc3; font-size: 12px; margin-top: 4px; }
+    
+    /* Navigation */
+    .nav { padding: 20px 12px; }
+    .nav-btn { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #8b9dc3; background: transparent; border: none; border-radius: 10px; cursor: pointer; width: 100%; text-align: left; font-size: 14px; margin-bottom: 4px; transition: all 0.2s; }
+    .nav-btn:hover { background: rgba(255,255,255,0.05); }
+    .nav-btn.active { background: rgba(212,175,55,0.15); color: #d4af37; }
+    .nav-btn span { font-size: 18px; }
+    
+    /* Header */
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+    .title { font-size: 28px; font-weight: 600; color: #1a2744; }
+    
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+    .stat-card { background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+    .stat-icon { font-size: 24px; margin-bottom: 12px; }
+    .stat-value { font-size: 36px; font-weight: 700; color: #1a2744; }
+    .stat-label { font-size: 14px; color: #888; }
+    
+    /* Cards */
+    .card { background: #fff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden; margin-bottom: 20px; }
+    .card-header { padding: 20px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+    .card-title { font-size: 18px; font-weight: 600; color: #1a2744; }
+    .card-body { padding: 20px 24px; }
+    
+    /* Table */
+    .table { width: 100%; border-collapse: collapse; }
+    .table th { padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
+    .table td { padding: 16px 20px; font-size: 14px; color: #333; border-bottom: 1px solid #f5f5f5; }
+    .table tr:hover { background: #fafafa; }
+    
+    /* Badges */
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge-green { background: #e8f5e9; color: #2e7d32; }
+    .badge-red { background: #ffebee; color: #c62828; }
+    .badge-yellow { background: #fff8e1; color: #f57f17; }
+    .badge-blue { background: #e3f2fd; color: #1565c0; }
+    .badge-gray { background: #f5f5f5; color: #999; }
+    
+    /* Buttons */
+    .btn { padding: 12px 24px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+    .btn-primary { background: linear-gradient(135deg, #d4af37, #f4d03f); color: #1a2744; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-secondary { background: #fff; border: 2px solid #e0e0e0; color: #666; }
+    .btn-danger { background: #fee; border: 1px solid #fcc; color: #c00; padding: 8px 16px; font-size: 13px; }
+    .btn-success { background: #efe; border: 1px solid #cfc; color: #060; padding: 8px 16px; font-size: 13px; }
+    .btn-icon { padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; }
+    
+    /* Forms */
+    .form-group { margin-bottom: 20px; }
+    .label { display: block; font-size: 14px; font-weight: 500; color: #555; margin-bottom: 8px; }
+    .input, .textarea, .select { width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+    .input:focus, .textarea:focus, .select:focus { border-color: #d4af37; }
+    .textarea { min-height: 100px; resize: vertical; }
+    .select { background: #fff; }
+    
+    /* Grid */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    
+    /* Search */
+    .search { padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 14px; width: 300px; outline: none; }
+    .search:focus { border-color: #d4af37; }
+    
+    /* Actions */
+    .actions { display: flex; gap: 8px; }
+    
+    /* Modal */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 200; padding: 20px; }
+    .modal.active { display: flex; }
+    .modal-box { background: #fff; border-radius: 20px; padding: 32px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; position: relative; animation: modalIn 0.2s ease; }
+    @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    .modal-title { font-size: 22px; font-weight: 600; color: #1a2744; margin-bottom: 24px; }
+    .modal-close { position: absolute; top: 20px; right: 20px; background: transparent; border: none; font-size: 24px; color: #999; cursor: pointer; }
+    
+    /* Icons Grid */
+    .icons-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+    .icon-option { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 20px; border: 2px solid #e0e0e0; border-radius: 10px; cursor: pointer; transition: all 0.2s; }
+    .icon-option:hover { border-color: #d4af37; }
+    .icon-option.active { border-color: #d4af37; background: rgba(212,175,55,0.1); }
+    
+    /* Progress */
+    .progress { height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #d4af37, #f4d03f); border-radius: 4px; transition: width 0.3s; }
+    
+    /* Empty */
+    .empty { text-align: center; padding: 60px 20px; color: #888; }
+    
+    /* Firebase Badge */
+    .firebase-badge { background: rgba(39,174,96,0.1); color: #27ae60; padding: 6px 12px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; margin: 20px 24px; }
+    
+    /* Checkbox */
+    .checkbox-label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+    .checkbox-label input { width: 18px; height: 18px; }
+    
+    /* Toast */
+    .toast { position: fixed; bottom: 30px; right: 30px; background: #1a2744; color: #fff; padding: 16px 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 300; animation: toastIn 0.3s ease; }
+    .toast.success { background: #27ae60; }
+    .toast.error { background: #e74c3c; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .sidebar { width: 70px; }
+      .sidebar .logo-text, .sidebar .logo-sub, .sidebar .nav-btn span:last-child, .sidebar .firebase-badge { display: none; }
+      .sidebar .nav-btn { justify-content: center; padding: 12px; }
+      .main { margin-left: 70px; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div>Connexion à Firebase...</div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  
+  <script>
+    // Configuration Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyAA_qoUYwWBTeuUqd0JToHQ8olnbS8OJno",
+      authDomain: "el-mouhssinine.firebaseapp.com",
+      projectId: "el-mouhssinine",
+      storageBucket: "el-mouhssinine.firebasestorage.app",
+      messagingSenderId: "658931173250",
+      appId: "1:658931173250:web:184b72aff3f0d1ff2f319b"
+    };
+
+    // Initialiser Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // État de l'application
+    let state = {
+      section: 'dashboard',
+      members: [],
+      events: [],
+      announcements: [],
+      donations: [],
+      notifications: [],
+      modal: null,
+      editing: null,
+      search: ''
+    };
+
+    // Écouter les collections Firebase
+    function initFirebase() {
+      db.collection('members').onSnapshot(snap => {
+        state.members = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        render();
+      });
+      db.collection('events').onSnapshot(snap => {
+        state.events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        render();
+      });
+      db.collection('announcements').onSnapshot(snap => {
+        state.announcements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        render();
+      });
+      db.collection('donations').onSnapshot(snap => {
+        state.donations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        render();
+      });
+      db.collection('sentNotifications').onSnapshot(snap => {
+        state.notifications = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(n => n.titre);
+        render();
+      });
+    }
+
+    // Stats
+    function getStats() {
+      return {
+        total: state.members.length,
+        actifs: state.members.filter(m => m.statut === 'actif').length,
+        expires: state.members.filter(m => m.statut === 'expire').length,
+        dons: state.donations.reduce((a, d) => a + (d.raised || 0), 0),
+        events: state.events.filter(e => e.actif).length
+      };
+    }
+
+    // Toast notification
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // CRUD Operations
+    async function addAnnouncement(data) {
+      await db.collection('announcements').add({
+        ...data,
+        dateCreation: new Date().toISOString().split('T')[0],
+        actif: true,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast('Annonce créée !');
+    }
+
+    async function updateAnnouncement(id, data) {
+      await db.collection('announcements').doc(id).update(data);
+      showToast('Annonce modifiée !');
+    }
+
+    async function deleteAnnouncement(id) {
+      if (confirm('Supprimer cette annonce ?')) {
+        await db.collection('announcements').doc(id).delete();
+        showToast('Annonce supprimée !');
+      }
+    }
+
+    async function toggleAnnouncement(id, current) {
+      await db.collection('announcements').doc(id).update({ actif: !current });
+    }
+
+    async function addEvent(data) {
+      await db.collection('events').add({
+        ...data,
+        actif: true,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast('Événement créé !');
+    }
+
+    async function updateEvent(id, data) {
+      await db.collection('events').doc(id).update(data);
+      showToast('Événement modifié !');
+    }
+
+    async function deleteEvent(id) {
+      if (confirm('Supprimer cet événement ?')) {
+        await db.collection('events').doc(id).delete();
+        showToast('Événement supprimé !');
+      }
+    }
+
+    async function toggleEvent(id, current) {
+      await db.collection('events').doc(id).update({ actif: !current });
+    }
+
+    async function addMember(data) {
+      await db.collection('members').add({
+        ...data,
+        dateInscription: new Date().toISOString().split('T')[0],
+        prochainPaiement: new Date(Date.now() + (data.paiement === 'annuel' ? 365 : 30) * 86400000).toISOString().split('T')[0],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast('Adhérent ajouté !');
+    }
+
+    async function updateMemberStatus(id, statut) {
+      await db.collection('members').doc(id).update({ statut });
+      showToast('Statut mis à jour !');
+    }
+
+    async function deleteMember(id) {
+      if (confirm('Supprimer cet adhérent ?')) {
+        await db.collection('members').doc(id).delete();
+        showToast('Adhérent supprimé !');
+      }
+    }
+
+    async function sendNotification(data) {
+      const stats = getStats();
+      const dest = data.cible === 'tous' ? stats.total : data.cible === 'actifs' ? stats.actifs : stats.expires;
+      await db.collection('sentNotifications').add({
+        ...data,
+        dateSent: new Date().toISOString(),
+        destinataires: dest,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast(`Notification envoyée à ${dest} personnes !`);
+    }
+
+    function exportCSV() {
+      const csv = [
+        ['Nom', 'Prénom', 'Email', 'Téléphone', 'Statut', 'Paiement'],
+        ...state.members.map(m => [m.nom, m.prenom, m.email, m.telephone, m.statut, m.paiement])
+      ].map(r => r.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'adherents.csv';
+      a.click();
+      showToast('Export téléchargé !');
+    }
+
+    // Render functions
+    function renderSidebar() {
+      const items = [
+        { id: 'dashboard', icon: '📊', label: 'Tableau de bord' },
+        { id: 'members', icon: '👥', label: 'Adhérents' },
+        { id: 'announcements', icon: '📢', label: 'Annonces' },
+        { id: 'events', icon: '📅', label: 'Événements' },
+        { id: 'notifications', icon: '🔔', label: 'Notifications' }
+      ];
+      return `
+        <aside class="sidebar">
+          <div class="logo">
+            <div class="logo-text">🕌 El Mouhssinine</div>
+            <div class="logo-sub">Administration</div>
+          </div>
+          <nav class="nav">
+            ${items.map(i => `
+              <button class="nav-btn ${state.section === i.id ? 'active' : ''}" onclick="state.section='${i.id}'; render()">
+                <span>${i.icon}</span>
+                <span>${i.label}</span>
+              </button>
+            `).join('')}
+          </nav>
+          <div class="firebase-badge">🔥 Firebase connecté</div>
+        </aside>
+      `;
+    }
+
+    function renderDashboard() {
+      const stats = getStats();
+      return `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-value">${stats.total}</div>
+            <div class="stat-label">Adhérents total</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-value" style="color: #2e7d32">${stats.actifs}</div>
+            <div class="stat-label">Actifs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-value" style="color: #d4af37">${stats.dons.toLocaleString()}€</div>
+            <div class="stat-label">Dons collectés</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📅</div>
+            <div class="stat-value">${stats.events}</div>
+            <div class="stat-label">Événements actifs</div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📊 Collecte des dons</span>
+            </div>
+            <div class="card-body">
+              ${state.donations.map(d => `
+                <div style="margin-bottom: 20px">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px">
+                    <span style="font-weight: 500">${d.icon} ${d.name}</span>
+                    <span style="color: #888">${(d.raised || 0).toLocaleString()}€ / ${(d.goal || 0).toLocaleString()}€</span>
+                  </div>
+                  <div class="progress">
+                    <div class="progress-fill" style="width: ${Math.min(100, (d.raised || 0) / (d.goal || 1) * 100)}%"></div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🔔 Dernières notifications</span>
+              <button class="btn btn-primary" onclick="openModal('notif')">+ Envoyer</button>
+            </div>
+            <div class="card-body">
+              ${state.notifications.length === 0 ? '<div class="empty">Aucune notification</div>' : 
+                state.notifications.slice(-5).reverse().map(n => `
+                  <div style="padding: 12px 0; border-bottom: 1px solid #f0f0f0">
+                    <div style="font-weight: 500">${n.titre}</div>
+                    <div style="font-size: 13px; color: #888">${n.dateSent ? new Date(n.dateSent).toLocaleDateString('fr-FR') : ''} • ${n.destinataires} dest.</div>
+                  </div>
+                `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMembers() {
+      const filtered = state.members.filter(m =>
+        (m.nom || '').toLowerCase().includes(state.search.toLowerCase()) ||
+        (m.prenom || '').toLowerCase().includes(state.search.toLowerCase()) ||
+        (m.email || '').toLowerCase().includes(state.search.toLowerCase())
+      );
+      return `
+        <div style="display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap">
+          <input type="text" class="search" placeholder="🔍 Rechercher..." value="${state.search}" oninput="state.search=this.value; render()">
+          <button class="btn btn-secondary" onclick="exportCSV()">📥 Exporter CSV</button>
+          <button class="btn btn-primary" onclick="openModal('member')">+ Ajouter</button>
+        </div>
+        <div class="card">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Contact</th>
+                <th>Inscription</th>
+                <th>Paiement</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map(m => `
+                <tr>
+                  <td>
+                    <div style="font-weight: 500">${m.prenom} ${m.nom}</div>
+                    <div style="font-size: 12px; color: #888">${m.dateNaissance || ''}</div>
+                  </td>
+                  <td>
+                    <div>${m.email}</div>
+                    <div style="font-size: 12px; color: #888">${m.telephone || ''}</div>
+                  </td>
+                  <td>${m.dateInscription || ''}</td>
+                  <td>
+                    <div>${m.paiement === 'mensuel' ? '🔄 Mensuel' : '💳 Annuel'}</div>
+                    <div style="font-size: 12px; color: #888">Prochain: ${m.prochainPaiement || ''}</div>
+                  </td>
+                  <td>
+                    <span class="badge ${m.statut === 'actif' ? 'badge-green' : m.statut === 'expire' ? 'badge-red' : 'badge-yellow'}">
+                      ${m.statut === 'actif' ? '✓ Actif' : m.statut === 'expire' ? '✗ Expiré' : '⏳ Attente'}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="actions">
+                      ${m.statut !== 'actif' ? `<button class="btn-success" onclick="updateMemberStatus('${m.id}', 'actif')">✓ Activer</button>` : ''}
+                      ${m.statut === 'actif' ? `<button class="btn-icon" style="background: #fff8e1; color: #f57f17" onclick="updateMemberStatus('${m.id}', 'expire')">Expirer</button>` : ''}
+                      <button class="btn-danger" onclick="deleteMember('${m.id}')">🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          ${filtered.length === 0 ? '<div class="empty">Aucun adhérent trouvé</div>' : ''}
+        </div>
+      `;
+    }
+
+    function renderAnnouncements() {
+      return `
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 24px">
+          <button class="btn btn-primary" onclick="openModal('ann')">+ Nouvelle annonce</button>
+        </div>
+        <div class="card">
+          <table class="table">
+            <thead>
+              <tr><th>Titre</th><th>Contenu</th><th>Date</th><th>Type</th><th>Statut</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              ${state.announcements.map(a => `
+                <tr>
+                  <td><strong>${a.titre}</strong></td>
+                  <td style="max-width: 300px"><div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">${a.contenu}</div></td>
+                  <td>${a.dateCreation || ''}</td>
+                  <td><span class="badge ${a.urgent ? 'badge-red' : 'badge-blue'}">${a.urgent ? '🚨 Urgent' : '📢 Normal'}</span></td>
+                  <td><span class="badge ${a.actif ? 'badge-green' : 'badge-gray'}">${a.actif ? '✓ Actif' : '○ Inactif'}</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn-icon" style="background: #e3f2fd; color: #1565c0" onclick="editAnnouncement('${a.id}')">✏️</button>
+                      <button class="btn-icon" style="background: ${a.actif ? '#fff8e1' : '#e8f5e9'}; color: ${a.actif ? '#f57f17' : '#2e7d32'}" onclick="toggleAnnouncement('${a.id}', ${a.actif})">${a.actif ? '👁️‍🗨️' : '👁️'}</button>
+                      <button class="btn-danger" onclick="deleteAnnouncement('${a.id}')">🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderEvents() {
+      return `
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 24px">
+          <button class="btn btn-primary" onclick="openModal('event')">+ Nouvel événement</button>
+        </div>
+        <div class="card">
+          <table class="table">
+            <thead>
+              <tr><th>Événement</th><th>Date & Heure</th><th>Lieu</th><th>Statut</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              ${state.events.map(e => `
+                <tr>
+                  <td>
+                    <div style="display: flex; align-items: center; gap: 12px">
+                      <span style="font-size: 24px">${e.icon}</span>
+                      <div>
+                        <div style="font-weight: 500">${e.titre}</div>
+                        <div style="font-size: 12px; color: #888">${e.description || ''}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div>${e.date}</div>
+                    <div style="font-size: 12px; color: #888">${e.heure}</div>
+                  </td>
+                  <td>${e.lieu || ''}</td>
+                  <td><span class="badge ${e.actif ? 'badge-green' : 'badge-gray'}">${e.actif ? '✓ Actif' : '○ Inactif'}</span></td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn-icon" style="background: #e3f2fd; color: #1565c0" onclick="editEvent('${e.id}')">✏️</button>
+                      <button class="btn-icon" style="background: ${e.actif ? '#fff8e1' : '#e8f5e9'}; color: ${e.actif ? '#f57f17' : '#2e7d32'}" onclick="toggleEvent('${e.id}', ${e.actif})">${e.actif ? '👁️‍🗨️' : '👁️'}</button>
+                      <button class="btn-danger" onclick="deleteEvent('${e.id}')">🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderNotifications() {
+      const stats = getStats();
+      return `
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 24px">
+          <button class="btn btn-primary" onclick="openModal('notif')">+ Envoyer notification</button>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">📜 Historique</span></div>
+          <table class="table">
+            <thead>
+              <tr><th>Titre</th><th>Contenu</th><th>Cible</th><th>Dest.</th><th>Date</th></tr>
+            </thead>
+            <tbody>
+              ${state.notifications.length === 0 ? '<tr><td colspan="5" class="empty">Aucune notification</td></tr>' :
+                state.notifications.slice().reverse().map(n => `
+                  <tr>
+                    <td><strong>${n.titre}</strong></td>
+                    <td style="max-width: 300px"><div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">${n.contenu}</div></td>
+                    <td><span class="badge badge-blue">${n.cible === 'tous' ? '👥 Tous' : n.cible === 'actifs' ? '✅ Actifs' : '⚠️ Expirés'}</span></td>
+                    <td>${n.destinataires}</td>
+                    <td>${n.dateSent ? new Date(n.dateSent).toLocaleString('fr-FR') : ''}</td>
+                  </tr>
+                `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderModal() {
+      if (!state.modal) return '';
+      const stats = getStats();
+      
+      if (state.modal === 'ann') {
+        const a = state.editing || { titre: '', contenu: '', urgent: false };
+        return `
+          <div class="modal active" onclick="closeModal()">
+            <div class="modal-box" onclick="event.stopPropagation()">
+              <button class="modal-close" onclick="closeModal()">×</button>
+              <h2 class="modal-title">${state.editing ? '✏️ Modifier' : '📢 Nouvelle annonce'}</h2>
+              <div class="form-group">
+                <label class="label">Titre *</label>
+                <input class="input" id="ann-titre" value="${a.titre}" placeholder="Ex: Ramadan 2025">
+              </div>
+              <div class="form-group">
+                <label class="label">Contenu *</label>
+                <textarea class="textarea" id="ann-contenu" placeholder="Votre annonce...">${a.contenu}</textarea>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="ann-urgent" ${a.urgent ? 'checked' : ''}>
+                  <span>🚨 Marquer comme urgent</span>
+                </label>
+              </div>
+              <button class="btn btn-primary" style="width: 100%" onclick="saveAnnouncement()">${state.editing ? '💾 Enregistrer' : '📤 Publier'}</button>
+            </div>
+          </div>
+        `;
+      }
+      
+      if (state.modal === 'event') {
+        const e = state.editing || { titre: '', date: '', heure: '', description: '', lieu: '', icon: '📅' };
+        const icons = ['📖', '👩', '🎤', '👶', '📅', '🕌', '📚', '🎓', '🤝', '🍽️'];
+        return `
+          <div class="modal active" onclick="closeModal()">
+            <div class="modal-box" onclick="event.stopPropagation()">
+              <button class="modal-close" onclick="closeModal()">×</button>
+              <h2 class="modal-title">${state.editing ? '✏️ Modifier' : '📅 Nouvel événement'}</h2>
+              <div class="form-group">
+                <label class="label">Icône</label>
+                <div class="icons-grid">
+                  ${icons.map(i => `<div class="icon-option ${e.icon === i ? 'active' : ''}" onclick="document.getElementById('event-icon').value='${i}'; this.parentElement.querySelectorAll('.icon-option').forEach(el=>el.classList.remove('active')); this.classList.add('active')">${i}</div>`).join('')}
+                </div>
+                <input type="hidden" id="event-icon" value="${e.icon}">
+              </div>
+              <div class="form-group">
+                <label class="label">Titre *</label>
+                <input class="input" id="event-titre" value="${e.titre}" placeholder="Ex: Cours de Tajweed">
+              </div>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="label">Date *</label>
+                  <input class="input" type="date" id="event-date" value="${e.date}">
+                </div>
+                <div class="form-group">
+                  <label class="label">Heure *</label>
+                  <input class="input" type="time" id="event-heure" value="${e.heure}">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="label">Lieu</label>
+                <input class="input" id="event-lieu" value="${e.lieu}" placeholder="Ex: Grande salle">
+              </div>
+              <div class="form-group">
+                <label class="label">Description</label>
+                <textarea class="textarea" id="event-description" placeholder="Décrivez l'événement...">${e.description}</textarea>
+              </div>
+              <button class="btn btn-primary" style="width: 100%" onclick="saveEvent()">${state.editing ? '💾 Enregistrer' : '📤 Créer'}</button>
+            </div>
+          </div>
+        `;
+      }
+      
+      if (state.modal === 'member') {
+        return `
+          <div class="modal active" onclick="closeModal()">
+            <div class="modal-box" onclick="event.stopPropagation()">
+              <button class="modal-close" onclick="closeModal()">×</button>
+              <h2 class="modal-title">👤 Ajouter un adhérent</h2>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="label">Nom *</label>
+                  <input class="input" id="member-nom">
+                </div>
+                <div class="form-group">
+                  <label class="label">Prénom *</label>
+                  <input class="input" id="member-prenom">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="label">Email *</label>
+                <input class="input" type="email" id="member-email">
+              </div>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="label">Téléphone</label>
+                  <input class="input" id="member-telephone">
+                </div>
+                <div class="form-group">
+                  <label class="label">Date naissance</label>
+                  <input class="input" type="date" id="member-dateNaissance">
+                </div>
+              </div>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="label">Statut</label>
+                  <select class="select" id="member-statut">
+                    <option value="actif">✓ Actif</option>
+                    <option value="en_attente">⏳ En attente</option>
+                    <option value="expire">✗ Expiré</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="label">Paiement</label>
+                  <select class="select" id="member-paiement">
+                    <option value="annuel">💳 Annuel</option>
+                    <option value="mensuel">🔄 Mensuel</option>
+                  </select>
+                </div>
+              </div>
+              <button class="btn btn-primary" style="width: 100%" onclick="saveMember()">✓ Ajouter</button>
+            </div>
+          </div>
+        `;
+      }
+      
+      if (state.modal === 'notif') {
+        return `
+          <div class="modal active" onclick="closeModal()">
+            <div class="modal-box" onclick="event.stopPropagation()">
+              <button class="modal-close" onclick="closeModal()">×</button>
+              <h2 class="modal-title">🔔 Envoyer une notification</h2>
+              <div class="form-group">
+                <label class="label">Titre *</label>
+                <input class="input" id="notif-titre" placeholder="Ex: Rappel Jumu'a">
+              </div>
+              <div class="form-group">
+                <label class="label">Message *</label>
+                <textarea class="textarea" id="notif-contenu" placeholder="Votre message..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="label">Destinataires</label>
+                <select class="select" id="notif-cible">
+                  <option value="tous">👥 Tous (${stats.total})</option>
+                  <option value="actifs">✅ Actifs (${stats.actifs})</option>
+                  <option value="expires">⚠️ Expirés (${stats.expires})</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" style="width: 100%" onclick="saveNotification()">📤 Envoyer</button>
+            </div>
+          </div>
+        `;
+      }
+      
+      return '';
+    }
+
+    function openModal(type) {
+      state.modal = type;
+      state.editing = null;
+      render();
+    }
+
+    function closeModal() {
+      state.modal = null;
+      state.editing = null;
+      render();
+    }
+
+    function editAnnouncement(id) {
+      state.editing = state.announcements.find(a => a.id === id);
+      state.modal = 'ann';
+      render();
+    }
+
+    function editEvent(id) {
+      state.editing = state.events.find(e => e.id === id);
+      state.modal = 'event';
+      render();
+    }
+
+    function saveAnnouncement() {
+      const data = {
+        titre: document.getElementById('ann-titre').value,
+        contenu: document.getElementById('ann-contenu').value,
+        urgent: document.getElementById('ann-urgent').checked
+      };
+      if (!data.titre || !data.contenu) return alert('Remplissez tous les champs');
+      if (state.editing) {
+        updateAnnouncement(state.editing.id, data);
+      } else {
+        addAnnouncement(data);
+      }
+      closeModal();
+    }
+
+    function saveEvent() {
+      const data = {
+        titre: document.getElementById('event-titre').value,
+        date: document.getElementById('event-date').value,
+        heure: document.getElementById('event-heure').value,
+        lieu: document.getElementById('event-lieu').value,
+        description: document.getElementById('event-description').value,
+        icon: document.getElementById('event-icon').value
+      };
+      if (!data.titre || !data.date || !data.heure) return alert('Remplissez les champs obligatoires');
+      if (state.editing) {
+        updateEvent(state.editing.id, data);
+      } else {
+        addEvent(data);
+      }
+      closeModal();
+    }
+
+    function saveMember() {
+      const data = {
+        nom: document.getElementById('member-nom').value,
+        prenom: document.getElementById('member-prenom').value,
+        email: document.getElementById('member-email').value,
+        telephone: document.getElementById('member-telephone').value,
+        dateNaissance: document.getElementById('member-dateNaissance').value,
+        statut: document.getElementById('member-statut').value,
+        paiement: document.getElementById('member-paiement').value
+      };
+      if (!data.nom || !data.prenom || !data.email) return alert('Remplissez les champs obligatoires');
+      addMember(data);
+      closeModal();
+    }
+
+    function saveNotification() {
+      const data = {
+        titre: document.getElementById('notif-titre').value,
+        contenu: document.getElementById('notif-contenu').value,
+        cible: document.getElementById('notif-cible').value
+      };
+      if (!data.titre || !data.contenu) return alert('Remplissez les champs');
+      sendNotification(data);
+      closeModal();
+    }
+
+    // Main render
+    function render() {
+      const sections = {
+        dashboard: { title: 'Tableau de bord', render: renderDashboard },
+        members: { title: 'Adhérents', render: renderMembers },
+        announcements: { title: 'Annonces', render: renderAnnouncements },
+        events: { title: 'Événements', render: renderEvents },
+        notifications: { title: 'Notifications', render: renderNotifications }
+      };
+      
+      const current = sections[state.section];
+      
+      document.getElementById('app').innerHTML = `
+        <div class="app">
+          ${renderSidebar()}
+          <main class="main">
+            <div class="header">
+              <h1 class="title">${current.title}</h1>
+            </div>
+            ${current.render()}
+          </main>
+        </div>
+        ${renderModal()}
+      `;
+    }
+
+    // Service Worker pour PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    // Initialisation
+    initFirebase();
+  </script>
+</body>
+</html>

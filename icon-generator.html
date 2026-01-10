@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur d'icônes - El Mouhssinine</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, system-ui, sans-serif; background: #1a2744; min-height: 100vh; padding: 40px 20px; color: #e8e0d5; }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { color: #d4af37; text-align: center; margin-bottom: 30px; }
+    .preview { display: flex; justify-content: center; margin-bottom: 30px; }
+    canvas { border-radius: 20%; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+    .form { background: rgba(255,255,255,0.05); border-radius: 16px; padding: 24px; margin-bottom: 20px; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 8px; color: #8b9dc3; font-size: 14px; }
+    input, select { width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #e8e0d5; font-size: 14px; }
+    input[type="color"] { height: 50px; cursor: pointer; }
+    .btn { width: 100%; padding: 16px; background: linear-gradient(135deg, #d4af37, #f4d03f); border: none; border-radius: 12px; color: #1a2744; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 12px; }
+    .btn:hover { opacity: 0.9; }
+    .sizes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; }
+    .size-btn { padding: 10px; background: rgba(255,255,255,0.1); border: none; border-radius: 8px; color: #e8e0d5; cursor: pointer; }
+    .size-btn:hover { background: rgba(212,175,55,0.2); }
+    .info { background: rgba(39,174,96,0.1); border: 1px solid rgba(39,174,96,0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px; color: #27ae60; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🕌 Générateur d'icônes</h1>
+    
+    <div class="info">
+      Génère les icônes pour l'application El Mouhssinine. Télécharge chaque taille et place-les dans le dossier <code>icons/</code>.
+    </div>
+    
+    <div class="preview">
+      <canvas id="canvas" width="512" height="512"></canvas>
+    </div>
+    
+    <div class="form">
+      <div class="form-group">
+        <label>Couleur de fond</label>
+        <input type="color" id="bgColor" value="#1a2744">
+      </div>
+      <div class="form-group">
+        <label>Couleur du texte</label>
+        <input type="color" id="textColor" value="#d4af37">
+      </div>
+      <div class="form-group">
+        <label>Emoji</label>
+        <input type="text" id="emoji" value="🕌" maxlength="2">
+      </div>
+      <div class="form-group">
+        <label>Texte (optionnel)</label>
+        <input type="text" id="text" value="" placeholder="Ex: EM">
+      </div>
+    </div>
+    
+    <button class="btn" onclick="downloadAll()">📥 Télécharger toutes les tailles</button>
+    
+    <div class="sizes">
+      <button class="size-btn" onclick="download(72)">72px</button>
+      <button class="size-btn" onclick="download(96)">96px</button>
+      <button class="size-btn" onclick="download(128)">128px</button>
+      <button class="size-btn" onclick="download(144)">144px</button>
+      <button class="size-btn" onclick="download(152)">152px</button>
+      <button class="size-btn" onclick="download(192)">192px</button>
+      <button class="size-btn" onclick="download(384)">384px</button>
+      <button class="size-btn" onclick="download(512)">512px</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    function draw() {
+      const bgColor = document.getElementById('bgColor').value;
+      const textColor = document.getElementById('textColor').value;
+      const emoji = document.getElementById('emoji').value;
+      const text = document.getElementById('text').value;
+      
+      // Background
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, 512, 512);
+      
+      // Emoji
+      ctx.font = '200px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(emoji, 256, text ? 200 : 256);
+      
+      // Text
+      if (text) {
+        ctx.font = 'bold 120px sans-serif';
+        ctx.fillStyle = textColor;
+        ctx.fillText(text, 256, 380);
+      }
+    }
+    
+    function download(size) {
+      draw();
+      
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = size;
+      tempCanvas.height = size;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(canvas, 0, 0, size, size);
+      
+      const link = document.createElement('a');
+      link.download = `icon-${size}.png`;
+      link.href = tempCanvas.toDataURL('image/png');
+      link.click();
+    }
+    
+    function downloadAll() {
+      const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+      sizes.forEach((size, i) => {
+        setTimeout(() => download(size), i * 200);
+      });
+    }
+    
+    // Events
+    document.getElementById('bgColor').addEventListener('input', draw);
+    document.getElementById('textColor').addEventListener('input', draw);
+    document.getElementById('emoji').addEventListener('input', draw);
+    document.getElementById('text').addEventListener('input', draw);
+    
+    // Initial draw
+    draw();
+  </script>
+</body>
+</html>

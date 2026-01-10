@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a1628">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="El Mouhssinine">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <title>Mosquée El Mouhssinine</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+      background: linear-gradient(180deg, #0a1628 0%, #1a2744 100%);
+      min-height: 100vh;
+      color: #e8e0d5;
+      max-width: 430px;
+      margin: 0 auto;
+      position: relative;
+      overflow-x: hidden;
+    }
+    
+    /* Pattern */
+    .pattern {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 300px;
+      opacity: 0.05;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0L60 30L30 60L0 30z' fill='none' stroke='%23d4af37'/%3E%3C/svg%3E");
+      background-size: 60px;
+      pointer-events: none;
+    }
+    
+    /* Header */
+    .header { padding: 20px; text-align: center; position: relative; z-index: 1; }
+    .bismillah { font-size: 24px; color: #d4af37; }
+    .mosque-name { font-size: 26px; font-weight: 300; color: #d4af37; letter-spacing: 2px; margin-top: 8px; }
+    .date { font-size: 13px; color: #8b9dc3; margin-top: 8px; }
+    
+    /* Prayer Card */
+    .prayer-card {
+      background: linear-gradient(135deg, rgba(212,175,55,0.2) 0%, rgba(212,175,55,0.05) 100%);
+      border-radius: 24px;
+      padding: 24px;
+      margin: 16px;
+      text-align: center;
+      border: 1px solid rgba(212,175,55,0.3);
+    }
+    .prayer-label { font-size: 12px; color: #8b9dc3; margin-bottom: 8px; }
+    .prayer-name { font-size: 32px; font-weight: 600; color: #d4af37; }
+    .prayer-time { font-size: 48px; font-weight: 200; color: #fff; letter-spacing: 4px; }
+    .countdown { font-size: 14px; color: #8b9dc3; margin-top: 12px; }
+    
+    /* Prayer Grid */
+    .prayer-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 0 16px; }
+    .prayer-item { text-align: center; padding: 12px 4px; background: rgba(255,255,255,0.05); border-radius: 12px; }
+    .prayer-item.active { background: rgba(212,175,55,0.2); border: 1px solid rgba(212,175,55,0.4); }
+    .prayer-item-name { font-size: 11px; color: #8b9dc3; }
+    .prayer-item-time { font-size: 14px; font-weight: 600; }
+    
+    /* Section */
+    .section-title { font-size: 18px; font-weight: 600; color: #d4af37; margin: 24px 16px 12px; display: flex; align-items: center; gap: 8px; }
+    
+    /* Cards */
+    .card { background: rgba(255,255,255,0.05); border-radius: 20px; padding: 20px; margin: 12px 16px; border: 1px solid rgba(212,175,55,0.15); }
+    
+    /* Announcement */
+    .ann-card { padding: 14px; background: rgba(255,255,255,0.03); border-radius: 12px; margin-bottom: 8px; border-left: 3px solid; }
+    .ann-card.urgent { border-color: #e74c3c; }
+    .ann-card.normal { border-color: #d4af37; }
+    .ann-title { font-size: 14px; font-weight: 600; color: #e8e0d5; margin-bottom: 4px; }
+    .ann-content { font-size: 13px; color: #8b9dc3; }
+    .urgent-badge { background: #e74c3c; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px; }
+    
+    /* Event */
+    .event-card { display: flex; align-items: center; gap: 12px; padding: 14px; background: rgba(255,255,255,0.03); border-radius: 12px; margin-bottom: 8px; }
+    .event-icon { font-size: 24px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: rgba(212,175,55,0.15); border-radius: 12px; }
+    .event-title { font-size: 15px; font-weight: 600; }
+    .event-info { font-size: 12px; color: #8b9dc3; }
+    
+    /* Navbar */
+    .navbar {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 430px;
+      background: rgba(10,22,40,0.98);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(212,175,55,0.1);
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 0 20px;
+      z-index: 100;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      color: #6b7c9b;
+      cursor: pointer;
+    }
+    .nav-item.active { color: #d4af37; }
+    .nav-icon { font-size: 20px; }
+    .nav-label { font-size: 9px; text-transform: uppercase; }
+    
+    /* Page content */
+    .page { padding-bottom: 100px; display: none; }
+    .page.active { display: block; }
+    
+    /* Donations */
+    .donation-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+    .donation-item { padding: 14px; background: rgba(255,255,255,0.05); border-radius: 12px; cursor: pointer; border: 2px solid transparent; }
+    .donation-item.active { border-color: #d4af37; background: rgba(212,175,55,0.1); }
+    .donation-icon { font-size: 24px; margin-bottom: 8px; }
+    .donation-name { font-size: 13px; font-weight: 600; }
+    .donation-progress { font-size: 11px; color: #8b9dc3; }
+    .progress-bar { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 8px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #d4af37, #f4d03f); border-radius: 2px; }
+    
+    /* Amount buttons */
+    .amount-grid { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .amount-btn { padding: 10px 20px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; color: #e8e0d5; cursor: pointer; }
+    .amount-btn.active { background: rgba(212,175,55,0.2); border-color: #d4af37; color: #d4af37; }
+    
+    /* Type toggle */
+    .type-toggle { display: flex; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 4px; margin-bottom: 16px; }
+    .type-btn { flex: 1; padding: 10px; border-radius: 10px; border: none; background: transparent; color: #8b9dc3; cursor: pointer; }
+    .type-btn.active { background: rgba(212,175,55,0.2); color: #d4af37; }
+    
+    /* Buttons */
+    .btn-primary { width: 100%; padding: 16px; background: linear-gradient(135deg, #d4af37, #f4d03f); border: none; border-radius: 14px; color: #0a1628; font-size: 16px; font-weight: 600; cursor: pointer; }
+    .btn-secondary { width: 100%; padding: 14px; background: transparent; border: 2px solid rgba(212,175,55,0.5); border-radius: 14px; color: #d4af37; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 12px; }
+    
+    /* Member card */
+    .member-card { background: linear-gradient(135deg, rgba(212,175,55,0.15), rgba(212,175,55,0.05)); border-radius: 20px; padding: 20px; margin: 16px; border: 1px solid rgba(212,175,55,0.25); }
+    .avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #d4af37, #f4d03f); display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 16px; color: #0a1628; font-weight: 700; }
+    
+    /* Badge */
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge-actif { background: rgba(39,174,96,0.2); color: #27ae60; }
+    .badge-expire { background: rgba(231,76,60,0.2); color: #e74c3c; }
+    .badge-attente { background: rgba(241,196,15,0.2); color: #f1c40f; }
+    
+    /* Info row */
+    .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .info-label { color: #8b9dc3; font-size: 13px; }
+    .info-value { color: #e8e0d5; font-size: 14px; font-weight: 500; }
+    
+    /* Modal */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 200; padding: 20px; }
+    .modal.active { display: flex; }
+    .modal-content { background: linear-gradient(135deg, #1a2744, #0d1829); border-radius: 24px; padding: 24px; width: 100%; max-width: 360px; border: 1px solid rgba(212,175,55,0.2); max-height: 90vh; overflow-y: auto; position: relative; }
+    .modal-title { font-size: 20px; font-weight: 600; color: #d4af37; margin-bottom: 20px; text-align: center; }
+    .modal-close { position: absolute; top: 16px; right: 16px; background: transparent; border: none; color: #8b9dc3; font-size: 24px; cursor: pointer; }
+    
+    /* Input */
+    .input { width: 100%; padding: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: #e8e0d5; font-size: 14px; margin-bottom: 12px; outline: none; }
+    .input:focus { border-color: #d4af37; }
+    
+    /* Tags */
+    .tag { padding: 4px 10px; background: rgba(212,175,55,0.15); border-radius: 6px; font-size: 12px; color: #d4af37; display: inline-block; margin-right: 8px; margin-top: 8px; }
+    
+    /* More page */
+    .info-card { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .info-icon { font-size: 20px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: rgba(212,175,55,0.1); border-radius: 10px; }
+    .info-title { font-size: 11px; color: #6b7c9b; }
+    .info-text { font-size: 14px; }
+    
+    /* Qibla */
+    .qibla { display: flex; align-items: center; justify-content: center; gap: 20px; }
+    .qibla-compass { width: 100px; height: 100px; border-radius: 50%; background: rgba(212,175,55,0.1); border: 2px solid rgba(212,175,55,0.3); display: flex; align-items: center; justify-content: center; font-size: 40px; }
+    .qibla-direction { font-size: 24px; color: #d4af37; font-weight: 300; }
+    
+    /* Loading */
+    .loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; gap: 16px; }
+    .spinner { width: 40px; height: 40px; border: 3px solid rgba(212,175,55,0.2); border-top: 3px solid #d4af37; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Empty */
+    .empty { text-align: center; padding: 40px 20px; color: #8b9dc3; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div style="color: #d4af37">Chargement...</div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  
+  <script>
+    // Configuration Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyAA_qoUYwWBTeuUqd0JToHQ8olnbS8OJno",
+      authDomain: "el-mouhssinine.firebaseapp.com",
+      projectId: "el-mouhssinine",
+      storageBucket: "el-mouhssinine.firebasestorage.app",
+      messagingSenderId: "658931173250",
+      appId: "1:658931173250:web:184b72aff3f0d1ff2f319b"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // État
+    let state = {
+      page: 'home',
+      members: [],
+      events: [],
+      announcements: [],
+      donations: [],
+      donationType: 'ponctuel',
+      donationAmount: 20,
+      donationCategory: 'general',
+      isLoggedIn: false,
+      currentMember: null,
+      modal: null
+    };
+
+    // Horaires de prière (à connecter avec API Aladhan)
+    const prayerTimes = { fajr: "06:15", dhuhr: "12:30", asr: "15:15", maghrib: "17:45", isha: "19:30" };
+
+    function getNextPrayer() {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const prayers = [
+        { name: 'Fajr', time: prayerTimes.fajr },
+        { name: 'Dhuhr', time: prayerTimes.dhuhr },
+        { name: 'Asr', time: prayerTimes.asr },
+        { name: 'Maghrib', time: prayerTimes.maghrib },
+        { name: 'Isha', time: prayerTimes.isha }
+      ];
+      for (const prayer of prayers) {
+        const [h, m] = prayer.time.split(':').map(Number);
+        if (h * 60 + m > currentMinutes) {
+          const diff = (h * 60 + m) - currentMinutes;
+          return { ...prayer, remaining: `${Math.floor(diff / 60)}h ${diff % 60}min` };
+        }
+      }
+      return { ...prayers[0], remaining: 'Demain' };
+    }
+
+    // Firebase listeners
+    function initFirebase() {
+      db.collection('members').onSnapshot(snap => {
+        state.members = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        render();
+      });
+      db.collection('events').onSnapshot(snap => {
+        state.events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        render();
+      });
+      db.collection('announcements').onSnapshot(snap => {
+        state.announcements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        render();
+      });
+      db.collection('donations').onSnapshot(snap => {
+        state.donations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        render();
+      });
+    }
+
+    // Actions
+    async function makeDonation() {
+      const donation = state.donations.find(d => d.id === state.donationCategory);
+      if (donation) {
+        await db.collection('donations').doc(state.donationCategory).update({
+          raised: (donation.raised || 0) + state.donationAmount
+        });
+        closeModal();
+        alert(`Merci pour votre don de ${state.donationAmount}€ !`);
+      }
+    }
+
+    async function login(email) {
+      const member = state.members.find(m => m.email === email);
+      if (member) {
+        state.currentMember = member;
+        state.isLoggedIn = true;
+        closeModal();
+        render();
+      } else {
+        alert('Email non trouvé');
+      }
+    }
+
+    async function register(data) {
+      const newMember = {
+        ...data,
+        dateInscription: new Date().toISOString().split('T')[0],
+        statut: 'en_attente',
+        prochainPaiement: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      const docRef = await db.collection('members').add(newMember);
+      state.currentMember = { id: docRef.id, ...newMember };
+      state.isLoggedIn = true;
+      closeModal();
+      render();
+    }
+
+    function logout() {
+      state.isLoggedIn = false;
+      state.currentMember = null;
+      render();
+    }
+
+    function openModal(type) { state.modal = type; render(); }
+    function closeModal() { state.modal = null; render(); }
+    function setPage(page) { state.page = page; render(); }
+
+    // Render pages
+    function renderHome() {
+      const nextPrayer = getNextPrayer();
+      const activeAnnouncements = state.announcements.filter(a => a.actif);
+      const activeEvents = state.events.filter(e => e.actif);
+      const now = new Date();
+      
+      return `
+        <div class="page active">
+          <div class="pattern"></div>
+          <div class="header">
+            <div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+            <h1 class="mosque-name">Mosquée El Mouhssinine</h1>
+            <p class="date">📅 ${now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+          </div>
+          
+          <div class="prayer-card">
+            <div class="prayer-label">PROCHAINE PRIÈRE</div>
+            <div class="prayer-name">${nextPrayer.name}</div>
+            <div class="prayer-time">${nextPrayer.time}</div>
+            <div class="countdown">⏱️ Dans ${nextPrayer.remaining}</div>
+          </div>
+          
+          <div class="prayer-grid">
+            ${['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].map(p => `
+              <div class="prayer-item ${nextPrayer.name === p ? 'active' : ''}">
+                <div class="prayer-item-name">${p}</div>
+                <div class="prayer-item-time">${prayerTimes[p.toLowerCase()]}</div>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div class="section-title">📢 Annonces</div>
+          <div style="padding: 0 16px">
+            ${activeAnnouncements.length === 0 ? '<div class="empty">Aucune annonce</div>' :
+              activeAnnouncements.map(a => `
+                <div class="ann-card ${a.urgent ? 'urgent' : 'normal'}">
+                  <div class="ann-title">${a.titre}${a.urgent ? '<span class="urgent-badge">URGENT</span>' : ''}</div>
+                  <div class="ann-content">${a.contenu}</div>
+                </div>
+              `).join('')}
+          </div>
+          
+          <div class="section-title">📅 Événements à venir</div>
+          <div class="card">
+            ${activeEvents.length === 0 ? '<div class="empty">Aucun événement</div>' :
+              activeEvents.slice(0, 3).map(e => `
+                <div class="event-card">
+                  <div class="event-icon">${e.icon}</div>
+                  <div>
+                    <div class="event-title">${e.titre}</div>
+                    <div class="event-info">${e.date} à ${e.heure} • ${e.lieu}</div>
+                  </div>
+                </div>
+              `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDonations() {
+      return `
+        <div class="page active">
+          <div class="pattern"></div>
+          <div class="header">
+            <h1 class="mosque-name" style="font-size: 24px">Faire un Don</h1>
+          </div>
+          <div class="card">
+            <div class="type-toggle">
+              <button class="type-btn ${state.donationType === 'ponctuel' ? 'active' : ''}" onclick="state.donationType='ponctuel'; render()">💳 Ponctuel</button>
+              <button class="type-btn ${state.donationType === 'mensuel' ? 'active' : ''}" onclick="state.donationType='mensuel'; render()">🔄 Mensuel</button>
+            </div>
+            
+            <div class="section-title" style="margin: 0 0 12px">Choisir un projet</div>
+            <div class="donation-grid">
+              ${state.donations.map(d => `
+                <div class="donation-item ${state.donationCategory === d.id ? 'active' : ''}" onclick="state.donationCategory='${d.id}'; render()">
+                  <div class="donation-icon">${d.icon}</div>
+                  <div class="donation-name">${d.name}</div>
+                  <div class="donation-progress">${Math.round((d.raised || 0) / (d.goal || 1) * 100)}% • ${(d.raised || 0).toLocaleString()}€</div>
+                  <div class="progress-bar"><div class="progress-fill" style="width: ${Math.min(100, (d.raised || 0) / (d.goal || 1) * 100)}%"></div></div>
+                </div>
+              `).join('')}
+            </div>
+            
+            <div class="section-title" style="margin: 16px 0 12px">Montant</div>
+            <div class="amount-grid">
+              ${[10, 20, 50, 100, 200].map(a => `
+                <button class="amount-btn ${state.donationAmount === a ? 'active' : ''}" onclick="state.donationAmount=${a}; render()">${a}€</button>
+              `).join('')}
+            </div>
+            
+            <button class="btn-primary" onclick="openModal('donation')">
+              ${state.donationType === 'mensuel' ? `Donner ${state.donationAmount}€/mois` : `Donner ${state.donationAmount}€`}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMember() {
+      if (!state.isLoggedIn) {
+        return `
+          <div class="page active">
+            <div class="pattern"></div>
+            <div class="header">
+              <h1 class="mosque-name" style="font-size: 24px">Espace Adhérent</h1>
+              <p style="color: #8b9dc3; font-size: 13px">Cotisation: 100€/an</p>
+            </div>
+            <div class="card">
+              <div style="text-align: center; padding: 20px 0">
+                <div style="font-size: 60px; margin-bottom: 16px">👤</div>
+                <h3 style="color: #e8e0d5; font-size: 18px; margin-bottom: 8px">Rejoignez notre communauté</h3>
+                <p style="color: #8b9dc3; font-size: 14px; margin-bottom: 24px">Devenez adhérent pour soutenir votre mosquée.</p>
+                <button class="btn-primary" onclick="openModal('register')">📝 S'inscrire</button>
+                <button class="btn-secondary" onclick="openModal('login')">🔑 J'ai déjà un compte</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      
+      const m = state.currentMember;
+      return `
+        <div class="page active">
+          <div class="pattern"></div>
+          <div class="header">
+            <h1 class="mosque-name" style="font-size: 24px">Espace Adhérent</h1>
+          </div>
+          <div class="member-card">
+            <div class="avatar">${(m.prenom || '')[0] || ''}${(m.nom || '')[0] || ''}</div>
+            <div style="text-align: center">
+              <h3 style="color: #e8e0d5; font-size: 20px; margin-bottom: 4px">${m.prenom} ${m.nom}</h3>
+              <span class="badge badge-${m.statut === 'actif' ? 'actif' : m.statut === 'expire' ? 'expire' : 'attente'}">
+                ${m.statut === 'actif' ? '✓ Actif' : m.statut === 'expire' ? '✗ Expiré' : '⏳ En attente'}
+              </span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="info-row">
+              <span class="info-label">Email</span>
+              <span class="info-value">${m.email}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Téléphone</span>
+              <span class="info-value">${m.telephone || '-'}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Paiement</span>
+              <span class="info-value">${m.paiement === 'mensuel' ? 'Mensuel (8,33€/mois)' : 'Annuel (100€/an)'}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Prochain paiement</span>
+              <span class="info-value">${m.prochainPaiement || '-'}</span>
+            </div>
+          </div>
+          <div style="padding: 16px">
+            <button class="btn-secondary" onclick="logout()">🚪 Se déconnecter</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderEvents() {
+      const activeEvents = state.events.filter(e => e.actif);
+      return `
+        <div class="page active">
+          <div class="pattern"></div>
+          <div class="header">
+            <h1 class="mosque-name" style="font-size: 24px">Événements</h1>
+          </div>
+          <div style="padding: 0 16px">
+            ${activeEvents.length === 0 ? '<div class="card"><div class="empty">Aucun événement programmé</div></div>' :
+              activeEvents.map(e => `
+                <div class="card" style="margin-left: 0; margin-right: 0">
+                  <div style="display: flex; align-items: center; gap: 16px">
+                    <div class="event-icon" style="width: 56px; height: 56px; font-size: 28px">${e.icon}</div>
+                    <div>
+                      <div style="font-size: 17px; font-weight: 600">${e.titre}</div>
+                      <div style="font-size: 12px; color: #8b9dc3; margin-top: 4px">${e.description || ''}</div>
+                      <div style="margin-top: 8px">
+                        <span class="tag">📅 ${e.date}</span>
+                        <span class="tag">🕐 ${e.heure}</span>
+                        <span class="tag">📍 ${e.lieu}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMore() {
+      return `
+        <div class="page active">
+          <div class="pattern"></div>
+          <div class="header">
+            <h1 class="mosque-name" style="font-size: 24px">Plus</h1>
+          </div>
+          <div class="card">
+            <div style="text-align: center; margin-bottom: 20px">
+              <div style="font-size: 60px; margin-bottom: 12px">🕌</div>
+              <h2 style="color: #d4af37; font-size: 22px">Mosquée El Mouhssinine</h2>
+            </div>
+            <div class="info-card">
+              <div class="info-icon">📍</div>
+              <div><div class="info-title">Adresse</div><div class="info-text">123 Avenue de la Paix, 75001 Paris</div></div>
+            </div>
+            <div class="info-card">
+              <div class="info-icon">📞</div>
+              <div><div class="info-title">Téléphone</div><div class="info-text">+33 1 23 45 67 89</div></div>
+            </div>
+            <div class="info-card">
+              <div class="info-icon">📧</div>
+              <div><div class="info-title">Email</div><div class="info-text">contact@el-mouhssinine.fr</div></div>
+            </div>
+            <div class="info-card">
+              <div class="info-icon">👤</div>
+              <div><div class="info-title">Imam</div><div class="info-text">Sheikh Ahmad Hassan</div></div>
+            </div>
+          </div>
+          
+          <div class="section-title">🧭 Qibla</div>
+          <div class="card">
+            <div class="qibla">
+              <div class="qibla-compass">🕋</div>
+              <div>
+                <div style="font-size: 16px; font-weight: 600">Direction de la Mecque</div>
+                <div class="qibla-direction">119° SE</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderModal() {
+      if (!state.modal) return '';
+      
+      if (state.modal === 'donation') {
+        const d = state.donations.find(d => d.id === state.donationCategory);
+        return `
+          <div class="modal active" onclick="closeModal()">
+            <div class="modal-content" onclick="event.stopPropagation()">
+              <button class="modal-close" onclick="closeModal()">×</button>
+              <div class="modal-title">💝 Finaliser le don</div>
+              <div style="text-align: center; margin-bottom: 20px">
+                <div style="font-size: 36px; font-weight: 300; color: #d4af37">${state.donationAmount}€</div>
+                <div style="font-size: 13px; color: #8b9dc3">${state.donationType === 'mensuel' ? 'par mois' : 'don unique'} • ${d ? d.name : ''}</div>
+              </div>
+              <input class="input" placeholder="Nom complet">
+              <input class="input" type="email" placeholder="Email">
+              <input class="input" placeholder="Numéro de carte">
+              <div style="display: flex; gap: 12px">
+                <input class="input" placeholder="MM/AA" style="flex: 1">
+                <input class="input" placeholder="CVV" style="flex: 1">
+              </div>
+              <button class="btn-primary" onclick="makeDonation()">🔒 Confirmer</button>
+            </div>
+          </div>
+        `;
+      }
+      
+      if (state.modal === 'login') {
+        return `
+          <div class="modal active" onclick="closeModal()">
+            <div class="modal-content" onclick="event.stopPropagation()">
+              <button class="modal-close" onclick="closeModal()">×</button>
+              <div class="modal-title">🔑 Connexion</div>
+              <input class="input" type="email" id="login-email" placeholder="Email">
+              <input class="input" type="password" placeholder="Mot de passe">
+              <button class="btn-primary" onclick="login(document.getElementById('login-email').value)">Se connecter</button>
+            </div>
+          </div>
+        `;
+      }
+      
+      if (state.modal === 'register') {
+        return `
+          <div class="modal active" onclick="closeModal()">
+            <div class="modal-content" onclick="event.stopPropagation()">
+              <button class="modal-close" onclick="closeModal()">×</button>
+              <div class="modal-title">📝 Inscription</div>
+              <input class="input" id="reg-nom" placeholder="Nom *">
+              <input class="input" id="reg-prenom" placeholder="Prénom *">
+              <input class="input" type="date" id="reg-date" style="color-scheme: dark">
+              <input class="input" type="email" id="reg-email" placeholder="Email *">
+              <input class="input" id="reg-tel" placeholder="Téléphone">
+              <button class="btn-primary" onclick="register({nom: document.getElementById('reg-nom').value, prenom: document.getElementById('reg-prenom').value, dateNaissance: document.getElementById('reg-date').value, email: document.getElementById('reg-email').value, telephone: document.getElementById('reg-tel').value, paiement: 'annuel'})">S'inscrire</button>
+            </div>
+          </div>
+        `;
+      }
+      
+      return '';
+    }
+
+    function renderNavbar() {
+      const items = [
+        { id: 'home', icon: '🏠', label: 'Accueil' },
+        { id: 'donations', icon: '💝', label: 'Dons' },
+        { id: 'member', icon: '👤', label: 'Adhérent' },
+        { id: 'events', icon: '📅', label: 'Événements' },
+        { id: 'more', icon: '☰', label: 'Plus' }
+      ];
+      return `
+        <nav class="navbar">
+          ${items.map(i => `
+            <button class="nav-item ${state.page === i.id ? 'active' : ''}" onclick="setPage('${i.id}')">
+              <span class="nav-icon">${i.icon}</span>
+              <span class="nav-label">${i.label}</span>
+            </button>
+          `).join('')}
+        </nav>
+      `;
+    }
+
+    function render() {
+      const pages = {
+        home: renderHome,
+        donations: renderDonations,
+        member: renderMember,
+        events: renderEvents,
+        more: renderMore
+      };
+      
+      document.getElementById('app').innerHTML = `
+        ${pages[state.page]()}
+        ${renderNavbar()}
+        ${renderModal()}
+      `;
+    }
+
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    // Init
+    initFirebase();
+  </script>
+</body>
+</html>
