@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,110 +6,102 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme';
+import { subscribeToEvents } from '../services/firebase';
+import { useLanguage } from '../context/LanguageContext';
+import { eventCategories } from '../data/mockData';
 
 interface Event {
   id: string;
   title: string;
   description: string;
-  date: string;
+  date: Date | string;
   time: string;
   location: string;
-  category: string;
+  category?: string;
 }
 
-const events: Event[] = [
-  {
-    id: '1',
-    title: 'Conférence Islamique',
-    description:
-      'Une conférence sur les fondements de la foi avec Sheikh Mohamed.',
-    date: '15 Janvier 2026',
-    time: 'Après Maghrib - 19h30',
-    location: 'Salle de prière principale',
-    category: 'Conférence',
-  },
-  {
-    id: '2',
-    title: 'Cours de Tajwid',
-    description:
-      'Apprentissage des règles de récitation du Coran. Tous niveaux acceptés.',
-    date: 'Tous les Samedis',
-    time: '14h00 - 15h30',
-    location: 'Salle d\'étude',
-    category: 'Cours',
-  },
-  {
-    id: '3',
-    title: 'Iftar Communautaire',
-    description:
-      'Rupture du jeûne en communauté pendant le mois de Ramadan.',
-    date: 'Durant Ramadan',
-    time: 'Au coucher du soleil',
-    location: 'Salle polyvalente',
-    category: 'Événement',
-  },
-  {
-    id: '4',
-    title: 'Cours d\'Arabe',
-    description:
-      'Initiation à la langue arabe pour débutants et intermédiaires.',
-    date: 'Tous les Dimanches',
-    time: '10h00 - 12h00',
-    location: 'Salle d\'étude',
-    category: 'Cours',
-  },
-  {
-    id: '5',
-    title: 'Assemblée Générale',
-    description:
-      'Assemblée générale annuelle de l\'association. Présence des adhérents requise.',
-    date: '28 Février 2026',
-    time: '15h00 - 18h00',
-    location: 'Salle polyvalente',
-    category: 'Réunion',
-  },
-];
-
-const categories = ['Tous', 'Conférence', 'Cours', 'Événement', 'Réunion'];
-
 const EventsScreen: React.FC = () => {
-  const [selectedCategory, setSelectedCategory] = useState('Tous');
+  const { t, isRTL, language } = useLanguage();
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('tous');
   const [refreshing, setRefreshing] = useState(false);
 
+  useEffect(() => {
+    const unsubscribe = subscribeToEvents((data) => {
+      setEvents(data as Event[]);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const filteredEvents =
-    selectedCategory === 'Tous'
+    selectedCategory === 'tous'
       ? events
       : events.filter(event => event.category === selectedCategory);
 
   const onRefresh = () => {
     setRefreshing(true);
+    // Les données se mettront à jour via le listener Firebase
     setTimeout(() => setRefreshing(false), 1000);
   };
 
-  const getCategoryColor = (category: string) => {
+  const formatDate = (date: Date | string): string => {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return date as string;
+
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    };
+    return d.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'fr-FR', options);
+  };
+
+  const getCategoryColor = (category?: string) => {
     switch (category) {
-      case 'Conférence':
+      case 'conference':
         return '#4299e1';
-      case 'Cours':
+      case 'education':
         return '#48bb78';
-      case 'Événement':
+      case 'communaute':
         return colors.accent;
-      case 'Réunion':
-        return '#ed8936';
+      case 'ramadan':
+        return '#9f7aea';
       default:
         return colors.textMuted;
     }
   };
 
+  const getCategoryLabel = (categoryId?: string) => {
+    const cat = eventCategories.find(c => c.id === categoryId);
+    if (!cat) return categoryId || '';
+    return language === 'ar' ? cat.labelAr : cat.label;
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={styles.loadingText}>{t('loading')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Événements</Text>
-        <Text style={styles.subtitle}>
-          Découvrez nos prochaines activités
+        <Text style={[styles.title, isRTL && styles.rtlText]}>{t('events')}</Text>
+        <Text style={[styles.subtitle, isRTL && styles.rtlText]}>
+          {language === 'ar' ? 'اكتشف أنشطتنا القادمة' : 'Découvrez nos prochaines activités'}
         </Text>
       </View>
 
@@ -117,21 +109,21 @@ const EventsScreen: React.FC = () => {
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.categoriesContainer}
-        contentContainerStyle={styles.categoriesContent}>
-        {categories.map(category => (
+        contentContainerStyle={[styles.categoriesContent, isRTL && styles.categoriesContentRTL]}>
+        {eventCategories.map(category => (
           <TouchableOpacity
-            key={category}
+            key={category.id}
             style={[
               styles.categoryButton,
-              selectedCategory === category && styles.categoryButtonSelected,
+              selectedCategory === category.id && styles.categoryButtonSelected,
             ]}
-            onPress={() => setSelectedCategory(category)}>
+            onPress={() => setSelectedCategory(category.id)}>
             <Text
               style={[
                 styles.categoryText,
-                selectedCategory === category && styles.categoryTextSelected,
+                selectedCategory === category.id && styles.categoryTextSelected,
               ]}>
-              {category}
+              {language === 'ar' ? category.labelAr : category.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -147,38 +139,57 @@ const EventsScreen: React.FC = () => {
             tintColor={colors.accent}
           />
         }>
-        {(filteredEvents || []).map(event => (
-          <TouchableOpacity key={event.id} style={styles.eventCard}>
-            <View style={styles.eventHeader}>
-              <View
-                style={[
-                  styles.categoryBadge,
-                  { backgroundColor: getCategoryColor(event.category) },
-                ]}>
-                <Text style={styles.categoryBadgeText}>{event.category}</Text>
+        {filteredEvents.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>📅</Text>
+            <Text style={[styles.emptyText, isRTL && styles.rtlText]}>
+              {language === 'ar' ? 'لا توجد أحداث قادمة' : 'Aucun événement à venir'}
+            </Text>
+          </View>
+        ) : (
+          filteredEvents.map(event => (
+            <TouchableOpacity key={event.id} style={styles.eventCard}>
+              <View style={styles.eventHeader}>
+                {event.category && (
+                  <View
+                    style={[
+                      styles.categoryBadge,
+                      { backgroundColor: getCategoryColor(event.category) },
+                    ]}>
+                    <Text style={styles.categoryBadgeText}>
+                      {getCategoryLabel(event.category)}
+                    </Text>
+                  </View>
+                )}
               </View>
-            </View>
-            <Text style={styles.eventTitle}>{event.title}</Text>
-            <Text style={styles.eventDescription}>{event.description}</Text>
-            <View style={styles.eventDetails}>
-              <View style={styles.eventDetail}>
-                <Text style={styles.detailIcon}>📅</Text>
-                <Text style={styles.detailText}>{event.date}</Text>
+              <Text style={[styles.eventTitle, isRTL && styles.rtlText]}>{event.title}</Text>
+              <Text style={[styles.eventDescription, isRTL && styles.rtlText]}>
+                {event.description}
+              </Text>
+              <View style={styles.eventDetails}>
+                <View style={[styles.eventDetail, isRTL && styles.eventDetailRTL]}>
+                  <Text style={styles.detailIcon}>📅</Text>
+                  <Text style={[styles.detailText, isRTL && styles.rtlText]}>
+                    {formatDate(event.date)}
+                  </Text>
+                </View>
+                <View style={[styles.eventDetail, isRTL && styles.eventDetailRTL]}>
+                  <Text style={styles.detailIcon}>🕐</Text>
+                  <Text style={[styles.detailText, isRTL && styles.rtlText]}>{event.time}</Text>
+                </View>
+                <View style={[styles.eventDetail, isRTL && styles.eventDetailRTL]}>
+                  <Text style={styles.detailIcon}>📍</Text>
+                  <Text style={[styles.detailText, isRTL && styles.rtlText]}>{event.location}</Text>
+                </View>
               </View>
-              <View style={styles.eventDetail}>
-                <Text style={styles.detailIcon}>🕐</Text>
-                <Text style={styles.detailText}>{event.time}</Text>
-              </View>
-              <View style={styles.eventDetail}>
-                <Text style={styles.detailIcon}>📍</Text>
-                <Text style={styles.detailText}>{event.location}</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={styles.registerButton}>
-              <Text style={styles.registerButtonText}>S'inscrire</Text>
+              <TouchableOpacity style={styles.registerButton}>
+                <Text style={[styles.registerButtonText, isRTL && styles.rtlText]}>
+                  {language === 'ar' ? 'التسجيل' : "S'inscrire"}
+                </Text>
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
-        ))}
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -188,6 +199,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: colors.textMuted,
+    fontSize: 14,
   },
   header: {
     padding: 16,
@@ -209,6 +230,9 @@ const styles = StyleSheet.create({
   categoriesContent: {
     paddingHorizontal: 16,
     gap: 8,
+  },
+  categoriesContentRTL: {
+    flexDirection: 'row-reverse',
   },
   categoryButton: {
     paddingHorizontal: 16,
@@ -233,6 +257,19 @@ const styles = StyleSheet.create({
   },
   eventsContent: {
     padding: 16,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: colors.textMuted,
   },
   eventCard: {
     backgroundColor: colors.card,
@@ -274,6 +311,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  eventDetailRTL: {
+    flexDirection: 'row-reverse',
+  },
   detailIcon: {
     fontSize: 14,
     marginRight: 8,
@@ -294,6 +334,10 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 14,
     fontWeight: '600',
+  },
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
 });
 

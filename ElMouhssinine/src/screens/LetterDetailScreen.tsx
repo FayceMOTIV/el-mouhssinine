@@ -9,6 +9,7 @@ import {
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { ArabicLetter, arabicAlphabet } from '../data/alphabet';
 import ArabicLetterComponent from '../components/ArabicLetter';
+import { speakArabic } from '../services/tts';
 
 interface LetterDetailScreenProps {
   route: any;
@@ -31,6 +32,14 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
 
   const handleNavigateLetter = (targetLetter: ArabicLetter) => {
     navigation.replace('LetterDetail', { letter: targetLetter });
+  };
+
+  const handlePlaySound = () => {
+    speakArabic(letter.isolated);
+  };
+
+  const handlePlayExample = (arabicWord: string) => {
+    speakArabic(arabicWord);
   };
 
   // Example words for each letter (simplified)
@@ -173,13 +182,24 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
 
           {/* Pronunciation Guide */}
           <View style={styles.pronunciationCard}>
-            <Text style={styles.sectionTitle}>Prononciation</Text>
+            <View style={styles.pronunciationHeader}>
+              <Text style={styles.sectionTitle}>Prononciation</Text>
+              <TouchableOpacity
+                style={styles.audioButtonLarge}
+                onPress={handlePlaySound}
+              >
+                <Text style={styles.audioButtonText}>🔊</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.pronunciationContent}>
-              <View style={styles.soundBadge}>
+              <TouchableOpacity
+                style={styles.soundBadge}
+                onPress={handlePlaySound}
+              >
                 <Text style={styles.soundText}>/{letter.sound}/</Text>
-              </View>
+              </TouchableOpacity>
               <Text style={styles.pronunciationHint}>
-                Appuyez sur l'icone audio pour ecouter la prononciation correcte
+                Appuyez pour ecouter la prononciation
               </Text>
             </View>
           </View>
@@ -197,7 +217,11 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
             {showExamples && currentExamples.length > 0 && (
               <View style={styles.examplesContainer}>
                 {currentExamples.map((example, index) => (
-                  <View key={index} style={styles.exampleCard}>
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.exampleCard}
+                    onPress={() => handlePlayExample(example.arabic)}
+                  >
                     <Text style={styles.exampleArabic}>{example.arabic}</Text>
                     <Text style={styles.exampleTranslit}>
                       {example.transliteration}
@@ -205,7 +229,8 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
                     <Text style={styles.exampleTranslation}>
                       {example.translation}
                     </Text>
-                  </View>
+                    <Text style={styles.exampleAudioHint}>🔊 Appuyer pour ecouter</Text>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -303,6 +328,22 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginTop: spacing.lg,
   },
+  pronunciationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  audioButtonLarge: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(201,162,39,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioButtonText: {
+    fontSize: 24,
+  },
   sectionTitle: {
     fontSize: fontSize.lg,
     fontWeight: '600',
@@ -368,6 +409,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  exampleAudioHint: {
+    fontSize: fontSize.xs,
+    color: colors.accent,
+    marginTop: spacing.sm,
   },
   noExamples: {
     fontSize: fontSize.md,

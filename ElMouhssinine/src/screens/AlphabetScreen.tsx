@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { arabicAlphabet, letterGroups, specialLetters, ArabicLetter } from '../data/alphabet';
+import { speakArabic } from '../services/tts';
 
 interface AlphabetScreenProps {
   navigation: any;
@@ -16,11 +17,16 @@ interface AlphabetScreenProps {
 type ViewMode = 'grid' | 'list' | 'groups';
 
 const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showSpecial, setShowSpecial] = useState(false);
 
   const handleLetterPress = (letter: ArabicLetter) => {
     navigation.navigate('LetterDetail', { letter });
+  };
+
+  const handlePlaySound = (letter: ArabicLetter) => {
+    // TTS est toujours disponible (react-native-tts installé)
+    speakArabic(letter.isolated);
   };
 
   const renderGridView = () => (
@@ -30,9 +36,11 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
           key={letter.id}
           style={styles.gridItem}
           onPress={() => handleLetterPress(letter)}
+          onLongPress={() => handlePlaySound(letter)}
         >
           <Text style={styles.gridLetter}>{letter.isolated}</Text>
           <Text style={styles.gridName}>{letter.name}</Text>
+          <Text style={styles.gridPronunciation}>/{letter.pronunciation}/</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -41,26 +49,24 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
   const renderListView = () => (
     <View style={styles.listContainer}>
       {arabicAlphabet.map((letter, index) => (
-        <TouchableOpacity
-          key={letter.id}
-          style={styles.listItem}
-          onPress={() => handleLetterPress(letter)}
-        >
-          <View style={styles.listNumber}>
-            <Text style={styles.listNumberText}>{index + 1}</Text>
-          </View>
-          <View style={styles.listInfo}>
-            <Text style={styles.listName}>{letter.name}</Text>
-            <Text style={styles.listSound}>/{letter.sound}/</Text>
-          </View>
-          <View style={styles.listForms}>
-            <Text style={styles.listFormLetter}>{letter.isolated}</Text>
-            <Text style={styles.listFormLetter}>{letter.initial}</Text>
-            <Text style={styles.listFormLetter}>{letter.medial}</Text>
-            <Text style={styles.listFormLetter}>{letter.final}</Text>
-          </View>
-          <Text style={styles.chevron}>{'>'}</Text>
-        </TouchableOpacity>
+        <View key={letter.id} style={styles.listItem}>
+          <TouchableOpacity
+            style={styles.listMainContent}
+            onPress={() => handleLetterPress(letter)}
+          >
+            <Text style={styles.listLetter}>{letter.isolated}</Text>
+            <View style={styles.listInfo}>
+              <Text style={styles.listName}>{letter.name}</Text>
+              <Text style={styles.listPronunciation}>/{letter.pronunciation}/</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.audioButton}
+            onPress={() => handlePlaySound(letter)}
+          >
+            <Text style={styles.audioButtonText}>🔊</Text>
+          </TouchableOpacity>
+        </View>
       ))}
     </View>
   );
@@ -279,6 +285,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 4,
   },
+  gridPronunciation: {
+    fontSize: fontSize.xs,
+    color: colors.accent,
+    marginTop: 2,
+  },
   listContainer: {
     marginBottom: spacing.xxl,
   },
@@ -290,41 +301,42 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
-  listNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(201,162,39,0.15)',
+  listMainContent: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
   },
-  listNumberText: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
+  listLetter: {
+    fontSize: 36,
     color: colors.accent,
+    width: 50,
+    textAlign: 'center',
   },
   listInfo: {
     flex: 1,
+    marginLeft: spacing.md,
   },
   listName: {
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.text,
   },
-  listSound: {
+  listPronunciation: {
     fontSize: fontSize.sm,
     color: colors.accent,
+    marginTop: 2,
   },
-  listForms: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  audioButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(201,162,39,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.md,
   },
-  listFormLetter: {
-    fontSize: 18,
-    color: colors.text,
-    width: 24,
-    textAlign: 'center',
+  audioButtonText: {
+    fontSize: 20,
   },
   chevron: {
     fontSize: fontSize.lg,

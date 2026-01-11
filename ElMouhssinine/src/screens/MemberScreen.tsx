@@ -253,9 +253,7 @@ const MemberScreen = () => {
             <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>✨ {t('memberBenefits')}</Text>
             {[
               { icon: '📧', textKey: 'taxReceipt' },
-              { icon: '🎓', textKey: 'reducedRates' },
               { icon: '🗳️', textKey: 'votingRights' },
-              { icon: '🔔', textKey: 'priorityNotifications' },
             ].map((item, index) => (
               <View key={index} style={[styles.advantageItem, isRTL && styles.advantageItemRTL]}>
                 <Text style={styles.advantageIcon}>{item.icon}</Text>

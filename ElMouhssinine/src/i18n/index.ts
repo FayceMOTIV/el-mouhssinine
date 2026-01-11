@@ -288,14 +288,31 @@ export const translations = {
     events: 'Événements',
     noEvents: 'Aucun événement à venir',
     spiritual: 'Spirituel',
+
+    // Services & Activités
+    services: 'Nos services',
+    parking: 'Parking',
+    accessHandicapes: 'Accès handicapés',
+    salleAblution: "Salle d'ablution",
+    espaceFemmes: 'Espace femmes',
+    coursAdultes: 'Cours adultes',
+    coursEnfants: 'Cours enfants',
+    activites: 'Activités',
+    salatAid: 'Salat Al Aïd',
+    salatJanaza: 'Salat Janaza',
+    iftarRamadan: 'Iftar Ramadan',
+    datesAVenir: 'Dates à venir',
+    selonAnnonces: 'Selon annonces',
+    pendantRamadan: 'Pendant Ramadan',
+    samDim: 'Sam. & Dim.',
   },
 
   ar: {
-    // Navigation
-    home: 'الرئيسية',
-    donations: 'التبرعات',
-    member: 'العضوية',
-    quran: 'القرآن',
+    // Navigation (labels courts pour la navbar)
+    home: 'رئيسية',
+    donations: 'تبرعات',
+    member: 'عضوية',
+    quran: 'قرآن',
     more: 'المزيد',
 
     // Home Screen
@@ -583,6 +600,23 @@ export const translations = {
 
     // Spiritual
     spiritual: 'روحي',
+
+    // Services & Activités
+    services: 'خدماتنا',
+    parking: 'موقف سيارات',
+    accessHandicapes: 'دخول المعاقين',
+    salleAblution: 'قاعة الوضوء',
+    espaceFemmes: 'قسم النساء',
+    coursAdultes: 'دروس الكبار',
+    coursEnfants: 'دروس الأطفال',
+    activites: 'الأنشطة',
+    salatAid: 'صلاة العيد',
+    salatJanaza: 'صلاة الجنازة',
+    iftarRamadan: 'إفطار رمضان',
+    datesAVenir: 'التواريخ قادمة',
+    selonAnnonces: 'حسب الإعلانات',
+    pendantRamadan: 'خلال رمضان',
+    samDim: 'السبت والأحد',
   },
 };
 

@@ -274,27 +274,48 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
 
       {/* Footer */}
       <View style={styles.footer}>
-        {currentStep.type === 'quiz' ? (
-          <TouchableOpacity
-            style={[styles.nextButton, !showResult && styles.nextButtonDisabled]}
-            onPress={handleNext}
-            disabled={!showResult}
-          >
-            <Text style={styles.nextButtonText}>
-              {currentStepIndex === lesson.steps.length - 1
-                ? 'Terminer'
-                : 'Suivant'}
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-            <Text style={styles.nextButtonText}>
-              {currentStepIndex === lesson.steps.length - 1
-                ? 'Terminer'
-                : 'Suivant'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.navigationButtons}>
+          {currentStepIndex > 0 && (
+            <TouchableOpacity
+              style={styles.prevButton}
+              onPress={() => {
+                setCurrentStepIndex(currentStepIndex - 1);
+                setSelectedAnswer(null);
+                setShowResult(false);
+              }}
+            >
+              <Text style={styles.prevButtonText}>← Précédent</Text>
+            </TouchableOpacity>
+          )}
+          {currentStep.type === 'quiz' ? (
+            <TouchableOpacity
+              style={[
+                styles.nextButton,
+                !showResult && styles.nextButtonDisabled,
+                currentStepIndex > 0 && styles.nextButtonFlex,
+              ]}
+              onPress={handleNext}
+              disabled={!showResult}
+            >
+              <Text style={styles.nextButtonText}>
+                {currentStepIndex === lesson.steps.length - 1
+                  ? 'Terminer'
+                  : 'Suivant →'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.nextButton, currentStepIndex > 0 && styles.nextButtonFlex]}
+              onPress={handleNext}
+            >
+              <Text style={styles.nextButtonText}>
+                {currentStepIndex === lesson.steps.length - 1
+                  ? 'Terminer'
+                  : 'Suivant →'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -565,11 +586,31 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: 34,
   },
+  navigationButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  prevButton: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+  },
+  prevButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
   nextButton: {
+    flex: 1,
     backgroundColor: colors.accent,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
+  },
+  nextButtonFlex: {
+    flex: 1,
   },
   nextButtonDisabled: {
     opacity: 0.5,

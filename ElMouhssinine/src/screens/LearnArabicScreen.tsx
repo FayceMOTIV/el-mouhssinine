@@ -63,7 +63,7 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
       icon: '✍️',
       count: t('quizExercises'),
       progress: 0,
-      screen: 'Practice',
+      screen: 'LessonsList',
       color: '#9b59b6',
     },
   ];

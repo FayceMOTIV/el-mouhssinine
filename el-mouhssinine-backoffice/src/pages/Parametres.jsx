@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import {
   Settings, Save, Building2, MapPin, Phone, Mail, Globe, Clock,
-  Bell, Palette, Database
+  Bell, Palette, Database, Landmark
 } from 'lucide-react'
 import { Card, Button, Input, Textarea, Toggle, Loading } from '../components/common'
 import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo } from '../services/firebase'
@@ -18,11 +18,16 @@ export default function Parametres() {
     nom: 'Mosquée El Mouhssinine',
     adresse: '',
     codePostal: '',
-    ville: 'Pantin',
+    ville: 'Bourg-en-Bresse',
     telephone: '',
     email: '',
     siteWeb: '',
-    description: ''
+    description: '',
+    // Coordonnées bancaires
+    iban: '',
+    bic: '',
+    bankName: '',
+    accountHolder: ''
   })
 
   const [settings, setSettings] = useState({
@@ -101,6 +106,7 @@ export default function Parametres() {
 
   const tabs = [
     { id: 'mosquee', label: 'Mosquée', icon: Building2 },
+    { id: 'banque', label: 'Coordonnées bancaires', icon: Landmark },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'display', label: 'Affichage', icon: Palette },
     { id: 'system', label: 'Système', icon: Database }
@@ -193,6 +199,47 @@ export default function Parametres() {
               onChange={(e) => setMosqueeInfo({ ...mosqueeInfo, description: e.target.value })}
               placeholder="Brève description de la mosquée..."
               rows={3}
+            />
+          </div>
+          <div className="flex justify-end mt-6">
+            <Button onClick={handleSaveMosquee} loading={saving}>
+              <Save className="w-4 h-4 mr-2" />
+              Enregistrer
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Banque Tab */}
+      {activeTab === 'banque' && (
+        <Card title="Coordonnées bancaires" icon={Landmark}>
+          <p className="text-white/60 text-sm mb-6">
+            Ces informations seront affichées dans l'application mobile pour les dons par virement.
+          </p>
+          <div className="space-y-4">
+            <Input
+              label="Titulaire du compte"
+              value={mosqueeInfo.accountHolder}
+              onChange={(e) => setMosqueeInfo({ ...mosqueeInfo, accountHolder: e.target.value })}
+              placeholder="Association El Mouhssinine"
+            />
+            <Input
+              label="Nom de la banque"
+              value={mosqueeInfo.bankName}
+              onChange={(e) => setMosqueeInfo({ ...mosqueeInfo, bankName: e.target.value })}
+              placeholder="Crédit Agricole"
+            />
+            <Input
+              label="IBAN"
+              value={mosqueeInfo.iban}
+              onChange={(e) => setMosqueeInfo({ ...mosqueeInfo, iban: e.target.value })}
+              placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX"
+            />
+            <Input
+              label="BIC / SWIFT"
+              value={mosqueeInfo.bic}
+              onChange={(e) => setMosqueeInfo({ ...mosqueeInfo, bic: e.target.value })}
+              placeholder="AGRIFRPP"
             />
           </div>
           <div className="flex justify-end mt-6">

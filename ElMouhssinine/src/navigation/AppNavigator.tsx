@@ -1,9 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { Text, I18nManager } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { colors } from '../theme/colors';
+import { useLanguage } from '../context/LanguageContext';
+
+// Forcer LTR pour que les onglets restent dans le même ordre
+I18nManager.allowRTL(false);
+I18nManager.forceRTL(false);
 
 // Main Screens
 import HomeScreen from '../screens/HomeScreen';
@@ -30,65 +35,121 @@ import LessonScreen from '../screens/LessonScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-type TabBarIconProps = {
-  focused: boolean;
-  icon: string;
-  label: string;
-};
-
-const TabBarIcon = ({ focused, icon, label }: TabBarIconProps) => (
-  <View style={styles.tabItem}>
-    <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>{icon}</Text>
-    <Text
-      numberOfLines={1}
-      style={[styles.tabLabel, focused && styles.tabLabelActive]}
-    >
-      {label}
-    </Text>
-  </View>
-);
-
 // Spiritual Stack Navigator
 const SpiritualStack = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: colors.background,
+        },
+        headerTintColor: colors.accent,
+        headerTitleStyle: {
+          color: colors.text,
+          fontWeight: '600',
+        },
+        headerBackTitle: '',
+        headerShadowVisible: false,
       }}
     >
-      <Stack.Screen name="SpiritualHome" component={SpiritualScreen} />
+      <Stack.Screen
+        name="SpiritualHome"
+        component={SpiritualScreen}
+        options={{ headerShown: false }}
+      />
       {/* Quran */}
-      <Stack.Screen name="Quran" component={QuranScreen} />
-      <Stack.Screen name="Surah" component={SurahScreen} />
+      <Stack.Screen
+        name="Quran"
+        component={QuranScreen}
+        options={{ title: 'Coran' }}
+      />
+      <Stack.Screen
+        name="Surah"
+        component={SurahScreen}
+        options={{ title: 'Sourate' }}
+      />
       {/* Adhkar */}
-      <Stack.Screen name="Adhkar" component={AdhkarScreen} />
-      <Stack.Screen name="AdhkarDetail" component={AdhkarDetailScreen} />
+      <Stack.Screen
+        name="Adhkar"
+        component={AdhkarScreen}
+        options={{ title: 'Invocations' }}
+      />
+      <Stack.Screen
+        name="AdhkarDetail"
+        component={AdhkarDetailScreen}
+        options={{ title: 'Détails' }}
+      />
       {/* Learn Arabic */}
-      <Stack.Screen name="LearnArabic" component={LearnArabicScreen} />
-      <Stack.Screen name="Alphabet" component={AlphabetScreen} />
-      <Stack.Screen name="LetterDetail" component={LetterDetailScreen} />
-      <Stack.Screen name="LessonsList" component={LessonsListScreen} />
-      <Stack.Screen name="Lesson" component={LessonScreen} />
+      <Stack.Screen
+        name="LearnArabic"
+        component={LearnArabicScreen}
+        options={{ title: 'Apprendre l\'Arabe' }}
+      />
+      <Stack.Screen
+        name="Alphabet"
+        component={AlphabetScreen}
+        options={{ title: 'Alphabet' }}
+      />
+      <Stack.Screen
+        name="LetterDetail"
+        component={LetterDetailScreen}
+        options={{ title: 'Lettre' }}
+      />
+      <Stack.Screen
+        name="LessonsList"
+        component={LessonsListScreen}
+        options={{ title: 'Leçons' }}
+      />
+      <Stack.Screen
+        name="Lesson"
+        component={LessonScreen}
+        options={{ title: 'Leçon' }}
+      />
     </Stack.Navigator>
   );
 };
 
 const AppNavigator = () => {
+  const { t } = useLanguage();
+
   return (
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
-          tabBarStyle: styles.tabBar,
-          tabBarShowLabel: false,
+          tabBarStyle: {
+            backgroundColor: '#5c3a1a',
+            height: 90,
+            paddingBottom: 25,
+            paddingTop: 10,
+            borderTopWidth: 0,
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            flexDirection: 'row', // Forcer LTR
+          },
+          tabBarLabelStyle: {
+            fontSize: 11,
+            fontWeight: '600',
+            marginTop: 4,
+          },
+          tabBarIconStyle: {
+            marginBottom: 0,
+          },
+          tabBarActiveTintColor: '#c9a227',
+          tabBarInactiveTintColor: 'rgba(255,255,255,0.6)',
+          tabBarLabelPosition: 'below-icon',
         }}
       >
         <Tab.Screen
           name="Home"
           component={HomeScreen}
           options={{
+            tabBarLabel: t('home'),
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon focused={focused} icon="🕌" label="Accueil" />
+              <Text style={{ fontSize: 24 }}>🕌</Text>
             ),
           }}
         />
@@ -96,8 +157,9 @@ const AppNavigator = () => {
           name="Donations"
           component={DonationsScreen}
           options={{
+            tabBarLabel: t('donations'),
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon focused={focused} icon="💝" label="Dons" />
+              <Text style={{ fontSize: 24 }}>💝</Text>
             ),
           }}
         />
@@ -105,8 +167,9 @@ const AppNavigator = () => {
           name="Member"
           component={MemberScreen}
           options={{
+            tabBarLabel: t('member'),
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon focused={focused} icon="👤" label="Membre" />
+              <Text style={{ fontSize: 24 }}>👤</Text>
             ),
           }}
         />
@@ -114,8 +177,9 @@ const AppNavigator = () => {
           name="Spiritual"
           component={SpiritualStack}
           options={{
+            tabBarLabel: t('quran'),
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon focused={focused} icon="📖" label="Coran" />
+              <Text style={{ fontSize: 24 }}>📖</Text>
             ),
           }}
         />
@@ -123,8 +187,9 @@ const AppNavigator = () => {
           name="More"
           component={MoreScreen}
           options={{
+            tabBarLabel: t('more'),
             tabBarIcon: ({ focused }) => (
-              <TabBarIcon focused={focused} icon="☰" label="Plus" />
+              <Text style={{ fontSize: 24 }}>☰</Text>
             ),
           }}
         />
@@ -132,37 +197,5 @@ const AppNavigator = () => {
     </NavigationContainer>
   );
 };
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: 'rgba(92,58,26,0.98)',
-    borderTopWidth: 0,
-    height: 85,
-    paddingBottom: 25,
-    paddingTop: 10,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabIcon: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  tabIconActive: {},
-  tabLabel: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 2,
-  },
-  tabLabelActive: {
-    color: colors.accent,
-    fontWeight: '600',
-  },
-});
 
 export default AppNavigator;

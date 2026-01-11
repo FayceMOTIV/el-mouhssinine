@@ -18,6 +18,7 @@ import Adherents from './pages/Adherents'
 import Notifications from './pages/Notifications'
 import Admins from './pages/Admins'
 import Parametres from './pages/Parametres'
+import Rappels from './pages/Rappels'
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -74,6 +75,7 @@ function AppRoutes() {
         <Route index element={<Dashboard />} />
         <Route path="horaires" element={<Horaires />} />
         <Route path="annonces" element={<Annonces />} />
+        <Route path="rappels" element={<Rappels />} />
         <Route path="popups" element={<Popups />} />
         <Route path="evenements" element={<Evenements />} />
         <Route path="janaza" element={<Janaza />} />

@@ -23,11 +23,8 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
   };
 
   const isLessonAvailable = (lesson: Lesson, index: number) => {
-    // First lesson is always available
-    if (index === 0) return true;
-    // Subsequent lessons require previous one to be completed
-    const previousLesson = lessons[index - 1];
-    return isLessonCompleted(previousLesson.id);
+    // Tous les cours sont déverrouillés
+    return true;
   };
 
   const getFilteredLessons = () => {

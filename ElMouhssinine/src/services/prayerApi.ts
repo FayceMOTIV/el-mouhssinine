@@ -1,10 +1,16 @@
 // Service API pour les horaires de priere - Aladhan API
+// Ajustements pour correspondre aux horaires Mawaqit de la mosquée El Mouhssinine
 
 const BASE_URL = 'https://api.aladhan.com/v1';
 
-// Configuration : 12 degres pour Fajr et Isha (methode personnalisee)
-const FAJR_ANGLE = 12;
-const ISHA_ANGLE = 12;
+// Configuration : 15 degres pour Fajr et Isha (methode personnalisee - plus proche de Mawaqit)
+const FAJR_ANGLE = 15;
+const ISHA_ANGLE = 15;
+
+// Ajustements en minutes pour chaque prière (tune parameter)
+// Ordre: Imsak, Fajr, Sunrise, Dhuhr, Asr, Maghrib, Sunset, Isha, Midnight
+// Ces valeurs ajustent les horaires pour correspondre à Mawaqit El Mouhssinine
+const TUNE_ADJUSTMENTS = '0,-5,0,3,2,6,0,5,0';
 
 export interface PrayerTimings {
   Fajr: string;
@@ -106,7 +112,7 @@ export const PrayerAPI = {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}`
+        `${BASE_URL}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}&tune=${TUNE_ADJUSTMENTS}`
       );
       const data = await response.json();
 
@@ -132,7 +138,7 @@ export const PrayerAPI = {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/timings?latitude=${latitude}&longitude=${longitude}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}`
+        `${BASE_URL}/timings?latitude=${latitude}&longitude=${longitude}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}&tune=${TUNE_ADJUSTMENTS}`
       );
       const data = await response.json();
 
@@ -160,7 +166,7 @@ export const PrayerAPI = {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/calendarByCity/${year}/${month}?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}`
+        `${BASE_URL}/calendarByCity/${year}/${month}?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}&tune=${TUNE_ADJUSTMENTS}`
       );
       const data = await response.json();
 
@@ -237,7 +243,7 @@ export const PrayerAPI = {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}`
+        `${BASE_URL}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}&tune=${TUNE_ADJUSTMENTS}`
       );
       const data = await response.json();
 

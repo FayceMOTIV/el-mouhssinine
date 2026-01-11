@@ -12,7 +12,8 @@ import {
   Shield,
   Settings,
   LogOut,
-  X
+  X,
+  BookOpen
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -20,6 +21,7 @@ const menuItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/horaires', icon: Clock, label: 'Horaires de prière' },
   { path: '/annonces', icon: Megaphone, label: 'Annonces' },
+  { path: '/rappels', icon: BookOpen, label: 'Rappels du jour' },
   { path: '/popups', icon: MessageSquare, label: 'Popups' },
   { path: '/evenements', icon: Calendar, label: 'Événements' },
   { path: '/janaza', icon: Heart, label: 'Salat Janaza' },

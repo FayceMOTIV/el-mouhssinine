@@ -279,6 +279,38 @@ const DonationsScreen = () => {
             <Text style={[styles.secondaryBtnText, styles.zakatBtnText, isRTL && styles.rtlText]}>🧮 {t('calculateZakat')}</Text>
           </TouchableOpacity>
 
+          {/* Moyens de paiement */}
+          <View style={styles.paymentSection}>
+            <Text style={[styles.paymentSectionTitle, isRTL && styles.rtlText]}>
+              {isRTL ? 'طرق الدفع المقبولة' : 'Moyens de paiement acceptés'}
+            </Text>
+            <View style={styles.paymentGrid}>
+              <View style={styles.paymentItem}>
+                <Text style={styles.paymentItemIcon}>💳</Text>
+                <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>
+                  {isRTL ? 'بطاقة بنكية' : 'Carte bancaire'}
+                </Text>
+              </View>
+              <View style={styles.paymentItem}>
+                <Text style={styles.paymentItemIcon}>🅿️</Text>
+                <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>PayPal</Text>
+              </View>
+              <View style={styles.paymentItem}>
+                <Text style={styles.paymentItemIcon}></Text>
+                <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>Apple Pay</Text>
+              </View>
+              <View style={styles.paymentItem}>
+                <Text style={styles.paymentItemIcon}>🏦</Text>
+                <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>
+                  {isRTL ? 'تحويل بنكي' : 'Virement bancaire'}
+                </Text>
+              </View>
+            </View>
+            <Text style={[styles.paymentNote, isRTL && styles.rtlText]}>
+              {isRTL ? 'المدفوعات عبر الإنترنت ستكون متاحة قريباً' : 'Les paiements en ligne seront bientôt disponibles'}
+            </Text>
+          </View>
+
           <Text style={[styles.disclaimer, isRTL && styles.rtlText]}>
             {t('donationDisclaimer')}
           </Text>
@@ -1065,6 +1097,51 @@ const styles = StyleSheet.create({
   },
   fichierItemRTL: {
     flexDirection: 'row-reverse',
+  },
+  // Payment methods section
+  paymentSection: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  paymentSectionTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  paymentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  paymentItem: {
+    width: '48%',
+    backgroundColor: 'rgba(201,162,39,0.08)',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  paymentItemIcon: {
+    fontSize: 20,
+  },
+  paymentItemText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  paymentNote: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.md,
+    fontStyle: 'italic',
   },
 });
 

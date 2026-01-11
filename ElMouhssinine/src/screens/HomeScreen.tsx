@@ -5,7 +5,10 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
+  Modal,
+  TouchableOpacity,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import {
@@ -14,8 +17,14 @@ import {
   subscribeToEvents,
   subscribeToJanaza,
   subscribeToIqama,
+  subscribeToPopups,
+  subscribeToRappels,
+  subscribeToIslamicDates,
   IqamaDelays,
   addMinutesToTime,
+  Rappel,
+  Popup,
+  DateIslamique,
 } from '../services/firebase';
 import { PrayerAPI } from '../services/prayerApi';
 import { PrayerTime, Announcement, Event, Janaza } from '../types';
@@ -76,11 +85,15 @@ const HomeScreen = () => {
   const [_loading, setLoading] = useState(true);
   const [islamicDate, setIslamicDate] = useState(mockIslamicDate);
   const [iqamaDelays, setIqamaDelays] = useState<IqamaDelays | null>(null);
-  const [islamicEvents] = useState([
-    { name: 'Ramadan', gregorian: '28 Fevrier 2026', daysLeft: 50, icon: '🌙' },
-    { name: 'Aid al-Fitr', gregorian: '30 Mars 2026', daysLeft: 80, icon: '🎉' },
-    { name: 'Aid al-Adha', gregorian: '6 Juin 2026', daysLeft: 148, icon: '🐑' },
+  const [islamicEvents, setIslamicEvents] = useState<DateIslamique[]>([
+    { id: '1', nom: 'Ramadan', nomAr: 'رمضان', dateHijri: '1 Ramadan', dateGregorien: '2026-02-28', icon: '🌙' },
+    { id: '2', nom: 'Aïd al-Fitr', nomAr: 'عيد الفطر', dateHijri: '1 Shawwal', dateGregorien: '2026-03-30', icon: '🎉' },
+    { id: '3', nom: 'Aïd al-Adha', nomAr: 'عيد الأضحى', dateHijri: '10 Dhul Hijja', dateGregorien: '2026-06-06', icon: '🐑' },
   ]);
+  const [activePopup, setActivePopup] = useState<Popup | null>(null);
+  const [showPopup, setShowPopup] = useState(false);
+  const [currentRappel, setCurrentRappel] = useState<Rappel | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Traduction des noms de prière
   const getPrayerName = (name: string) => {
@@ -182,6 +195,49 @@ const HomeScreen = () => {
       }
     });
 
+    // Subscriptions aux dates islamiques
+    const unsubIslamicDates = subscribeToIslamicDates((dates) => {
+      if (dates && dates.length > 0) {
+        setIslamicEvents(dates);
+      }
+    });
+
+    // Subscriptions aux rappels du jour
+    const unsubRappels = subscribeToRappels((rappels) => {
+      if (rappels && rappels.length > 0) {
+        // Sélectionner un rappel aléatoire pour la journée
+        const randomIndex = Math.floor(Math.random() * rappels.length);
+        setCurrentRappel(rappels[randomIndex]);
+      }
+    });
+
+    // Subscriptions aux popups
+    const unsubPopups = subscribeToPopups(async (popups) => {
+      if (popups && popups.length > 0) {
+        const popup = popups[0]; // Prendre le popup le plus prioritaire
+        // Vérifier si ce popup a déjà été vu aujourd'hui
+        const today = new Date().toISOString().split('T')[0];
+        const lastShown = await AsyncStorage.getItem(`popup_${popup.id}_shown`);
+        if (lastShown !== today) {
+          setActivePopup(popup);
+          setShowPopup(true);
+        }
+      } else {
+        // Popup de bienvenue par défaut si pas de popup Firebase
+        const today = new Date().toISOString().split('T')[0];
+        const lastShown = await AsyncStorage.getItem('popup_welcome_shown');
+        if (lastShown !== today) {
+          setActivePopup({
+            id: 'welcome',
+            titre: 'Bienvenue à El Mouhssinine',
+            contenu: 'Que la paix soit sur vous. Bienvenue dans l\'application de la mosquée El Mouhssinine de Bourg-en-Bresse.',
+            actif: true,
+          });
+          setShowPopup(true);
+        }
+      }
+    });
+
     // Countdown timer
     const timer = setInterval(() => {
       calculateCountdown();
@@ -193,6 +249,9 @@ const HomeScreen = () => {
       unsubEvents();
       unsubJanaza();
       unsubIqama();
+      unsubIslamicDates();
+      unsubRappels();
+      unsubPopups();
       clearInterval(timer);
     };
   }, [loadPrayerData, calculateCountdown]);
@@ -209,7 +268,42 @@ const HomeScreen = () => {
     return { day, month: months[date.getMonth()] };
   };
 
+  // Fermer le popup et enregistrer qu'il a été vu
+  const closePopup = async () => {
+    if (activePopup) {
+      const today = new Date().toISOString().split('T')[0];
+      await AsyncStorage.setItem(`popup_${activePopup.id}_shown`, today);
+    }
+    setShowPopup(false);
+    setActivePopup(null);
+  };
+
   return (
+    <>
+      {/* Modal Popup */}
+      <Modal
+        visible={showPopup && activePopup !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closePopup}
+      >
+        <View style={styles.popupOverlay}>
+          <View style={styles.popupContainer}>
+            <LinearGradient
+              colors={['#5c3a1a', '#7f4f24']}
+              style={styles.popupGradient}
+            >
+              <Text style={styles.popupTitle}>{activePopup?.titre || ''}</Text>
+              <Text style={styles.popupContent}>{activePopup?.contenu || ''}</Text>
+              <TouchableOpacity style={styles.popupButton} onPress={closePopup}>
+                <Text style={styles.popupButtonText}>{isRTL ? 'حسنا' : "J'ai compris"}</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
+
+
     <View style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -244,11 +338,61 @@ const HomeScreen = () => {
             <Text style={[styles.nextPrayerName, isRTL && styles.rtlText]}>{nextPrayer.icon} {getPrayerName(nextPrayer.name)}</Text>
             <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
             <Text style={styles.countdown}>{countdown}</Text>
+            {/* Dates sous le countdown */}
+            <Text style={styles.dateGregorian}>
+              {new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Paris' })}
+            </Text>
+            <Text style={styles.dateHijri}>
+              {islamicDate.day} {isRTL ? islamicDate.monthAr : islamicDate.month} {islamicDate.year}
+            </Text>
+          </View>
+
+          {/* Rappel du jour */}
+          <View style={styles.rappelContainer}>
+            <Text style={[styles.rappelTitle, isRTL && styles.rtlText]}>📿 {isRTL ? 'تذكير اليوم' : 'Rappel du jour'}</Text>
+            <Text style={[styles.rappelText, isRTL && styles.rtlText]}>
+              "{currentRappel
+                ? (isRTL ? currentRappel.texteAr : currentRappel.texteFr)
+                : (isRTL
+                  ? 'إنما الأعمال بالنيات، وإنما لكل امرئ ما نوى'
+                  : 'Les actes ne valent que par leurs intentions, et chacun sera rétribué selon son intention.')}"
+            </Text>
+            <Text style={[styles.rappelSource, isRTL && styles.rtlText]}>
+              - {currentRappel?.source || (isRTL ? 'البخاري ومسلم' : 'Hadith Bukhari & Muslim')}
+            </Text>
+          </View>
+
+          {/* Services */}
+          <View style={styles.servicesSection}>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>🕌 {t('services')}</Text>
+            <View style={styles.servicesGrid}>
+              {[
+                { icon: '🅿️', labelKey: 'parking' },
+                { icon: '♿', labelKey: 'accessHandicapes' },
+                { icon: '💧', labelKey: 'salleAblution' },
+                { icon: '👩', labelKey: 'espaceFemmes' },
+                { icon: '📚', labelKey: 'coursAdultes' },
+                { icon: '👶', labelKey: 'coursEnfants' },
+              ].map((service, index) => (
+                <View key={index} style={styles.serviceItem}>
+                  <Text style={styles.serviceIcon}>{service.icon}</Text>
+                  <Text style={[styles.serviceLabel, isRTL && styles.rtlText]}>{t(service.labelKey as any)}</Text>
+                </View>
+              ))}
+            </View>
           </View>
 
           {/* Horaires */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>🕐 {t('todaySchedule')}</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>🕐 {t('todaySchedule')}</Text>
+              <TouchableOpacity
+                onPress={() => setShowCalendar(!showCalendar)}
+                style={styles.calendarToggle}
+              >
+                <Text style={styles.calendarToggleText}>📅</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.prayerCard}>
               {/* En-tête des colonnes */}
               <View style={[styles.prayerHeaderRow, isRTL && styles.prayerRowRTL]}>
@@ -284,7 +428,8 @@ const HomeScreen = () => {
             </View>
           </View>
 
-          {/* Calendrier Hégirien */}
+          {/* Calendrier Hégirien - Masqué par défaut */}
+          {showCalendar && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📅 {t('hijriCalendar')}</Text>
             <View style={styles.card}>
@@ -296,24 +441,35 @@ const HomeScreen = () => {
               </View>
               <View style={styles.hijriDivider} />
               <Text style={[styles.upcomingLabel, isRTL && styles.rtlText]}>{t('upcomingEvents')}</Text>
-              {(islamicEvents || []).map((event, index) => (
-                <View key={event.name} style={[
-                  styles.eventRow,
-                  isRTL && styles.eventRowRTL,
-                  index === islamicEvents.length - 1 && styles.eventRowLast
-                ]}>
-                  <Text style={styles.eventIcon}>{event.icon}</Text>
-                  <View style={styles.eventInfo}>
-                    <Text style={[styles.eventName, isRTL && styles.rtlText]}>{event.name}</Text>
-                    <Text style={[styles.eventDate, isRTL && styles.rtlText]}>{event.gregorian}</Text>
+              <Text style={styles.approximatif}>
+                {isRTL ? '(تواريخ تقريبية حسب الحساب الفلكي)' : '(dates approximatives selon calcul astronomique)'}
+              </Text>
+              {(islamicEvents || []).slice(0, 3).map((event, index) => {
+                const eventDate = new Date(event.dateGregorien);
+                const today = new Date();
+                const daysLeft = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                if (daysLeft < 0) return null; // Ne pas afficher les événements passés
+                const formattedDate = eventDate.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+                return (
+                  <View key={event.id} style={[
+                    styles.eventRow,
+                    isRTL && styles.eventRowRTL,
+                    index === Math.min(islamicEvents.length - 1, 2) && styles.eventRowLast
+                  ]}>
+                    <Text style={styles.eventIcon}>{event.icon}</Text>
+                    <View style={styles.eventInfo}>
+                      <Text style={[styles.eventName, isRTL && styles.rtlText]}>{isRTL ? event.nomAr : event.nom}</Text>
+                      <Text style={[styles.eventDate, isRTL && styles.rtlText]}>{formattedDate}</Text>
+                    </View>
+                    <View style={styles.daysLeftBadge}>
+                      <Text style={styles.daysLeftText}>{isRTL ? `${daysLeft} يوم` : `J-${daysLeft}`}</Text>
+                    </View>
                   </View>
-                  <View style={styles.daysLeftBadge}>
-                    <Text style={styles.daysLeftText}>{isRTL ? `${event.daysLeft}${t('daysLeftPrefix')}` : `${t('daysLeftPrefix')}${event.daysLeft}`}</Text>
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           </View>
+          )}
 
           {/* Salat Janaza */}
           {mockJanazaList.length > 0 && (
@@ -382,38 +538,6 @@ const HomeScreen = () => {
             )}
           </View>
 
-          {/* Prière Mortuaire */}
-          {janaza && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>🕯️ {t('funeralPrayer')}</Text>
-              <LinearGradient
-                colors={['rgba(30,58,95,0.8)', 'rgba(26,39,68,0.9)']}
-                style={styles.janazaCard}
-              >
-                <View style={[styles.janazaHeader, isRTL && styles.janazaHeaderRTL]}>
-                  <View style={styles.janazaIcon}>
-                    <Text style={styles.janazaIconText}>🤲</Text>
-                  </View>
-                  <View style={styles.janazaInfo}>
-                    <Text style={[styles.janazaTitle, isRTL && styles.rtlText]}>{t('janazaTitle')}</Text>
-                    <Text style={styles.janazaTime}>{janaza.prayerTime}</Text>
-                  </View>
-                </View>
-                <View style={styles.janazaDetails}>
-                  <Text style={[styles.janazaDeceased, isRTL && styles.rtlText]}>
-                    <Text style={styles.janazaBold}>{t('deceased')} : </Text>
-                    {janaza.deceasedName} {janaza.deceasedNameAr && `(${janaza.deceasedNameAr})`}
-                  </Text>
-                  <Text style={[styles.janazaMessage, isRTL && styles.rtlText]}>
-                    {janaza.message || (isRTL ? "رحمه الله وأسكنه فسيح جناته" : "Que Allah lui accorde Sa miséricorde et l'accueille dans Son vaste Paradis.")}
-                  </Text>
-                </View>
-                <View style={styles.janazaFooter}>
-                  <Text style={[styles.janazaLocation, isRTL && styles.rtlText]}>📍 {janaza.location}</Text>
-                </View>
-              </LinearGradient>
-            </View>
-          )}
 
           {/* Événements */}
           <View style={styles.section}>
@@ -470,30 +594,92 @@ const HomeScreen = () => {
         </View>
       </ScrollView>
     </View>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
+  // Popup styles
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  popupContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+    width: '100%',
+    maxWidth: 340,
+    overflow: 'hidden',
+  },
+  popupGradient: {
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  popupTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#7f4f24',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  popupContent: {
+    fontSize: fontSize.md,
+    color: '#333333',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: spacing.xl,
+  },
+  popupButton: {
+    backgroundColor: '#c9a227',
+    paddingVertical: 14,
+    paddingHorizontal: spacing.xl,
+    borderRadius: 12,
+    marginTop: 16,
+    width: '100%',
+    alignItems: 'center',
+  },
+  popupButtonText: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   salamHeader: {
     width: '100%',
-    paddingTop: 60,
+    paddingTop: 70,
     paddingBottom: 24,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     marginBottom: 20,
   },
   salamArabic: {
-    fontSize: 20,
-    color: colors.accent,
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: '600',
     marginBottom: 10,
     textAlign: 'center',
-    lineHeight: 36,
+    lineHeight: 28,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+    width: '100%',
+    paddingHorizontal: 8,
+    flexWrap: 'wrap',
   },
   salamTranslation: {
     fontSize: 13,
@@ -530,11 +716,28 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: spacing.xxl,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
   sectionTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
     color: '#ffffff',
-    marginBottom: spacing.md,
+    marginBottom: 0,
+  },
+  calendarToggle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(201,162,39,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarToggleText: {
+    fontSize: 22,
   },
   nextPrayerCard: {
     backgroundColor: 'rgba(201,162,39,0.1)',
@@ -564,6 +767,114 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.accent,
     marginTop: 8,
+  },
+  dateGregorian: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    marginTop: spacing.md,
+  },
+  dateHijri: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginTop: 4,
+  },
+  rappelContainer: {
+    backgroundColor: 'rgba(201, 162, 39, 0.2)',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.accent,
+  },
+  rappelTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.accent,
+    marginBottom: spacing.sm,
+  },
+  rappelText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontStyle: 'italic',
+    lineHeight: 24,
+  },
+  rappelSource: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    textAlign: 'right',
+  },
+  approximatif: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  // Services
+  servicesSection: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
+  },
+  serviceItem: {
+    width: '30%',
+    alignItems: 'center',
+    marginVertical: spacing.sm,
+  },
+  serviceIcon: {
+    fontSize: 28,
+    marginBottom: 5,
+  },
+  serviceLabel: {
+    fontSize: 11,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  // Activités
+  activitesSection: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  activiteItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  activiteItemRTL: {
+    flexDirection: 'row-reverse',
+  },
+  activiteIcon: {
+    fontSize: 24,
+    marginRight: spacing.md,
+  },
+  activiteInfo: {
+    flex: 1,
+  },
+  activiteLabel: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  activiteDetail: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  chevronActivite: {
+    fontSize: 20,
+    color: colors.textMuted,
   },
   prayerCard: {
     backgroundColor: colors.card,
