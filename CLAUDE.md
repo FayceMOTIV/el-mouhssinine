@@ -52,11 +52,16 @@
 - Popups et rappels du jour dynamiques
 - Dates islamiques avec countdown
 
+## Corrigé (Build 28)
+- [x] Fix splash screen (suppression délai artificiel)
+- [x] Fix popup bienvenue (couleurs texte visibles)
+- [x] Header image uploadable depuis backoffice
+- [x] Icône Apple Pay stylisée
+- [x] Storage rules créées
+
 ## En cours / À fixer
 - [ ] Fix TTS son qui ne sort pas
-- [ ] Fix header arabe RTL
-- [ ] Fix splash timing
-- [ ] Fix popup bienvenue
+- [ ] Activer Firebase Storage (console)
 
 ## TODO Futur
 - [ ] Config emails SMTP (Brevo)

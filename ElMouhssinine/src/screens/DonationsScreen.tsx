@@ -295,9 +295,9 @@ const DonationsScreen = () => {
                 <Text style={styles.paymentItemIcon}>🅿️</Text>
                 <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>PayPal</Text>
               </View>
-              <View style={styles.paymentItem}>
-                <Text style={styles.paymentItemIcon}></Text>
-                <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>Apple Pay</Text>
+              <View style={[styles.paymentItem, styles.applePayItem]}>
+                <Text style={styles.applePayIcon}></Text>
+                <Text style={styles.applePayText}>Pay</Text>
               </View>
               <View style={styles.paymentItem}>
                 <Text style={styles.paymentItemIcon}>🏦</Text>
@@ -1135,6 +1135,19 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.text,
     fontWeight: '500',
+  },
+  applePayItem: {
+    backgroundColor: '#000000',
+    borderRadius: borderRadius.md,
+  },
+  applePayIcon: {
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  applePayText: {
+    fontSize: fontSize.sm,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   paymentNote: {
     fontSize: fontSize.xs,

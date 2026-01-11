@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import {
   Settings, Save, Building2, MapPin, Phone, Mail, Globe, Clock,
-  Bell, Palette, Database, Landmark
+  Bell, Palette, Database, Landmark, Image, Upload
 } from 'lucide-react'
 import { Card, Button, Input, Textarea, Toggle, Loading } from '../components/common'
-import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo } from '../services/firebase'
+import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo, storage } from '../services/firebase'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { useAuth } from '../context/AuthContext'
 
 export default function Parametres() {
@@ -13,6 +14,8 @@ export default function Parametres() {
   const [activeTab, setActiveTab] = useState('mosquee')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  const [uploading, setUploading] = useState(false)
 
   const [mosqueeInfo, setMosqueeInfo] = useState({
     nom: 'Mosquée El Mouhssinine',
@@ -27,7 +30,9 @@ export default function Parametres() {
     iban: '',
     bic: '',
     bankName: '',
-    accountHolder: ''
+    accountHolder: '',
+    // Image d'en-tête
+    headerImageUrl: ''
   })
 
   const [settings, setSettings] = useState({
@@ -104,8 +109,45 @@ export default function Parametres() {
     }
   }
 
+  const handleHeaderImageUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    // Vérifier le type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Veuillez sélectionner une image')
+      return
+    }
+
+    // Vérifier la taille (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('L\'image ne doit pas dépasser 5MB')
+      return
+    }
+
+    setUploading(true)
+    try {
+      const storageRef = ref(storage, 'settings/header-image.png')
+      await uploadBytes(storageRef, file)
+      const url = await getDownloadURL(storageRef)
+
+      // Mettre à jour les infos mosquée avec l'URL
+      const newMosqueeInfo = { ...mosqueeInfo, headerImageUrl: url }
+      await updateMosqueeInfo(newMosqueeInfo)
+      setMosqueeInfo(newMosqueeInfo)
+
+      toast.success('Image d\'en-tête uploadée avec succès !')
+    } catch (error) {
+      console.error('Erreur upload:', error)
+      toast.error('Erreur lors de l\'upload de l\'image')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const tabs = [
     { id: 'mosquee', label: 'Mosquée', icon: Building2 },
+    { id: 'header', label: 'Image d\'en-tête', icon: Image },
     { id: 'banque', label: 'Coordonnées bancaires', icon: Landmark },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'display', label: 'Affichage', icon: Palette },
@@ -206,6 +248,56 @@ export default function Parametres() {
               <Save className="w-4 h-4 mr-2" />
               Enregistrer
             </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Header Image Tab */}
+      {activeTab === 'header' && (
+        <Card title="Image d'en-tête de l'accueil" icon={Image}>
+          <p className="text-white/60 text-sm mb-6">
+            Cette image s'affichera en haut de l'écran d'accueil de l'application mobile.
+            <br />
+            <span className="text-accent">Dimensions recommandées : 1290 x 400 pixels</span>
+          </p>
+
+          <div className="space-y-6">
+            {/* Zone d'upload */}
+            <div className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-accent transition-colors">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleHeaderImageUpload}
+                disabled={uploading}
+                className="hidden"
+                id="header-image-input"
+              />
+              <label
+                htmlFor="header-image-input"
+                className={`cursor-pointer ${uploading ? 'opacity-50' : ''}`}
+              >
+                <Upload className="w-12 h-12 mx-auto mb-4 text-white/40" />
+                <p className="text-white font-medium mb-2">
+                  {uploading ? 'Upload en cours...' : 'Cliquez pour sélectionner une image'}
+                </p>
+                <p className="text-white/50 text-sm">PNG, JPG jusqu'à 5MB</p>
+              </label>
+            </div>
+
+            {/* Aperçu */}
+            {mosqueeInfo.headerImageUrl && (
+              <div className="space-y-3">
+                <p className="text-white font-medium">Aperçu actuel :</p>
+                <img
+                  src={mosqueeInfo.headerImageUrl}
+                  alt="Header"
+                  className="w-full max-h-48 object-cover rounded-xl border border-white/10"
+                />
+                <p className="text-white/50 text-xs">
+                  L'image sera affichée en pleine largeur sur l'écran d'accueil de l'app
+                </p>
+              </div>
+            )}
           </div>
         </Card>
       )}

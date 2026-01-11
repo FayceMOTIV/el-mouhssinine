@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode, useState, useEffect } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useEffect } from 'react';
 import { StatusBar, View, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -41,25 +41,13 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 }
 
 const App: React.FC = () => {
-  const [isReady, setIsReady] = useState(false);
-
+  // Initialiser TTS au démarrage
   useEffect(() => {
-    // Initialiser TTS
     initTTS();
-
-    // Garder la splash visible 2 secondes
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, 2000);
-
-    return () => clearTimeout(timer);
   }, []);
 
-  // La splash iOS native reste visible tant que isReady est false
-  if (!isReady) {
-    return null;
-  }
-
+  // La splash iOS native (LaunchScreen.storyboard) reste visible pendant le chargement JS
+  // Pas besoin de délai artificiel qui cause une page blanche
   return (
     <ErrorBoundary>
       <LanguageProvider>

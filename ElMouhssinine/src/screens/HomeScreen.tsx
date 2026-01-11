@@ -7,6 +7,7 @@ import {
   RefreshControl,
   Modal,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
@@ -20,6 +21,7 @@ import {
   subscribeToPopups,
   subscribeToRappels,
   subscribeToIslamicDates,
+  subscribeToMosqueeInfo,
   IqamaDelays,
   addMinutesToTime,
   Rappel,
@@ -94,6 +96,7 @@ const HomeScreen = () => {
   const [showPopup, setShowPopup] = useState(false);
   const [currentRappel, setCurrentRappel] = useState<Rappel | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null);
 
   // Traduction des noms de prière
   const getPrayerName = (name: string) => {
@@ -211,6 +214,13 @@ const HomeScreen = () => {
       }
     });
 
+    // Subscription aux infos mosquée (pour l'image header)
+    const unsubMosqueeInfo = subscribeToMosqueeInfo((info) => {
+      if (info?.headerImageUrl) {
+        setHeaderImageUrl(info.headerImageUrl);
+      }
+    });
+
     // Subscriptions aux popups
     const unsubPopups = subscribeToPopups(async (popups) => {
       if (popups && popups.length > 0) {
@@ -251,6 +261,7 @@ const HomeScreen = () => {
       unsubIqama();
       unsubIslamicDates();
       unsubRappels();
+      unsubMosqueeInfo();
       unsubPopups();
       clearInterval(timer);
     };
@@ -311,19 +322,27 @@ const HomeScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Header Salam */}
-        <LinearGradient
-          colors={['#5c3a1a', '#7f4f24']}
-          style={styles.salamHeader}
-        >
-          <Text style={styles.salamArabic}>
-            {t('welcome')}
-          </Text>
-          <Text style={[styles.salamTranslation, isRTL && styles.rtlText]}>
-            {t('salamTranslation')}
-          </Text>
-          <View style={styles.salamDivider} />
-        </LinearGradient>
+        {/* Header - Image ou Salam */}
+        {headerImageUrl ? (
+          <Image
+            source={{ uri: headerImageUrl }}
+            style={styles.headerImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <LinearGradient
+            colors={['#5c3a1a', '#7f4f24']}
+            style={styles.salamHeader}
+          >
+            <Text style={styles.salamArabic}>
+              {t('welcome')}
+            </Text>
+            <Text style={[styles.salamTranslation, isRTL && styles.rtlText]}>
+              {t('salamTranslation')}
+            </Text>
+            <View style={styles.salamDivider} />
+          </LinearGradient>
+        )}
 
         {/* Titre */}
         <View style={styles.header}>
@@ -608,9 +627,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   popupContainer: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 24,
     marginHorizontal: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -622,19 +639,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   popupGradient: {
-    padding: spacing.md,
+    padding: spacing.xl,
     alignItems: 'center',
+    borderRadius: 20,
   },
   popupTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#7f4f24',
+    color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 16,
   },
   popupContent: {
     fontSize: fontSize.md,
-    color: '#333333',
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: spacing.xl,
@@ -656,6 +674,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  headerImage: {
+    width: '100%',
+    height: 200,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    marginBottom: 20,
   },
   salamHeader: {
     width: '100%',
