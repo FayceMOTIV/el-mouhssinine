@@ -64,6 +64,14 @@ export const PopupCible = {
   NON_MEMBRES: 'non_membres'
 }
 
+// Popup frequence d'affichage
+export const PopupFrequence = {
+  ALWAYS: 'always',
+  DAILY: 'daily',
+  ONCE: 'once',
+  WEEKLY: 'weekly'
+}
+
 // Notification statuts
 export const NotificationStatut = {
   BROUILLON: 'brouillon',

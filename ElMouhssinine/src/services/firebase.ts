@@ -86,6 +86,7 @@ export interface Popup {
   dateDebut?: string;
   dateFin?: string;
   priorite?: number;
+  frequence?: 'always' | 'daily' | 'once' | 'weekly';
 }
 
 export interface DateIslamique {
@@ -121,29 +122,39 @@ export const subscribeToAnnouncements = (callback: (data: Announcement[]) => voi
     return () => {};
   }
 
+  console.log('🔔 [Firebase] Subscribing to announcements...');
+
   try {
+    // Query simple sans orderBy pour éviter les problèmes d'index composite
     return firestore()
       .collection('announcements')
       .where('actif', '==', true)
-      .orderBy('createdAt', 'desc')
       .onSnapshot(
         snapshot => {
-          const data = snapshot.docs.map(doc => ({
-            id: doc.id,
-            title: doc.data().titre,
-            content: doc.data().contenu,
-            isActive: doc.data().actif,
-            publishedAt: toDate(doc.data().createdAt),
-          }));
-          callback(mergeWithMock(data, mockAnnouncements as Announcement[]));
+          console.log('📢 [Firebase] Annonces snapshot:', snapshot.docs.length, 'documents');
+          const data = snapshot.docs.map(doc => {
+            const docData = doc.data();
+            console.log('📢 [Firebase] Annonce:', doc.id, docData.titre);
+            return {
+              id: doc.id,
+              title: docData.titre,
+              content: docData.contenu,
+              isActive: docData.actif,
+              publishedAt: toDate(docData.createdAt),
+            };
+          });
+          // Tri côté client (plus récent en premier)
+          data.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+          console.log('📢 [Firebase] Annonces finales:', data.length);
+          callback(data.length > 0 ? data : mockAnnouncements as Announcement[]);
         },
         error => {
-          console.error('[Firebase] Announcements error:', error);
+          console.error('❌ [Firebase] Announcements error:', error.message);
           callback(mockAnnouncements as Announcement[]);
         }
       );
-  } catch (error) {
-    console.error('[Firebase] Announcements catch:', error);
+  } catch (error: any) {
+    console.error('❌ [Firebase] Announcements catch:', error?.message);
     callback(mockAnnouncements as Announcement[]);
     return () => {};
   }
@@ -183,32 +194,42 @@ export const subscribeToEvents = (callback: (data: Event[]) => void) => {
     return () => {};
   }
 
+  console.log('🔔 [Firebase] Subscribing to events...');
+
   try {
+    // Query simple sans orderBy pour éviter les problèmes d'index composite
     return firestore()
       .collection('events')
       .where('actif', '==', true)
-      .orderBy('date', 'asc')
       .onSnapshot(
         snapshot => {
-          const data = snapshot.docs.map(doc => ({
-            id: doc.id,
-            title: doc.data().titre,
-            description: doc.data().description,
-            date: toDate(doc.data().date),
-            time: doc.data().heure,
-            location: doc.data().lieu,
-            requiresRegistration: doc.data().inscription || false,
-            category: doc.data().categorie,
-          }));
-          callback(mergeWithMock(data, mockEvents as Event[]));
+          console.log('📅 [Firebase] Events snapshot:', snapshot.docs.length, 'documents');
+          const data = snapshot.docs.map(doc => {
+            const docData = doc.data();
+            console.log('📅 [Firebase] Event:', doc.id, docData.titre);
+            return {
+              id: doc.id,
+              title: docData.titre,
+              description: docData.description,
+              date: toDate(docData.date),
+              time: docData.heure,
+              location: docData.lieu,
+              requiresRegistration: docData.inscription || false,
+              category: docData.categorie,
+            };
+          });
+          // Tri côté client (plus proche en premier)
+          data.sort((a, b) => a.date.getTime() - b.date.getTime());
+          console.log('📅 [Firebase] Events finaux:', data.length);
+          callback(data.length > 0 ? data : mockEvents as Event[]);
         },
         error => {
-          console.error('[Firebase] Events error:', error);
+          console.error('❌ [Firebase] Events error:', error.message);
           callback(mockEvents as Event[]);
         }
       );
-  } catch (error) {
-    console.error('[Firebase] Events catch:', error);
+  } catch (error: any) {
+    console.error('❌ [Firebase] Events catch:', error?.message);
     callback(mockEvents as Event[]);
     return () => {};
   }
@@ -245,6 +266,7 @@ export const getEvents = async (): Promise<Event[]> => {
 // Collection Firestore: "janaza"
 // Champs backoffice: nomDefunt, nomDefuntAr, date, heurePriere, lieu, phraseAr, phraseFr, actif
 
+// Version qui retourne UN SEUL janaza (le plus récent) - conservée pour compatibilité
 export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
   if (FORCE_DEMO_MODE) {
     const active = mockJanaza.find(j => j.isActive);
@@ -252,43 +274,103 @@ export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
     return () => {};
   }
 
+  console.log('🔔 [Firebase] Subscribing to janaza...');
+
   try {
     return firestore()
       .collection('janaza')
       .where('actif', '==', true)
-      .orderBy('date', 'desc')
-      .limit(1)
       .onSnapshot(
         snapshot => {
+          console.log('🤲 [Firebase] Janaza snapshot:', snapshot.docs.length, 'documents');
           if (snapshot.empty) {
-            // Pas de janaza active dans Firebase, vérifier mock
-            const mockActive = mockJanaza.find(j => j.isActive);
-            callback(mockActive ? (mockActive as Janaza) : null);
+            console.log('🤲 [Firebase] Pas de janaza active');
+            callback(null);
             return;
           }
-          const doc = snapshot.docs[0];
+          const docs = snapshot.docs.map(doc => ({
+            doc,
+            date: toDate(doc.data().date),
+          }));
+          docs.sort((a, b) => b.date.getTime() - a.date.getTime());
+          const doc = docs[0].doc;
+          const docData = doc.data();
+          console.log('🤲 [Firebase] Janaza:', doc.id, docData.nomDefunt);
           const data: Janaza = {
             id: doc.id,
-            deceasedName: doc.data().nomDefunt,
-            deceasedNameAr: doc.data().nomDefuntAr || doc.data().phraseAr,
-            prayerDate: toDate(doc.data().date),
-            prayerTime: doc.data().heurePriere,
-            location: doc.data().lieu,
-            message: doc.data().phraseFr,
-            isActive: doc.data().actif,
+            deceasedName: docData.nomDefunt,
+            deceasedNameAr: docData.nomDefuntAr || docData.phraseAr,
+            prayerDate: toDate(docData.date),
+            prayerTime: docData.heurePriere,
+            location: docData.lieu,
+            message: docData.phraseFr,
+            isActive: docData.actif,
+            salatApres: docData.salatApres,
           };
           callback(data);
         },
         error => {
-          console.error('[Firebase] Janaza error:', error);
-          const mockActive = mockJanaza.find(j => j.isActive);
-          callback(mockActive ? (mockActive as Janaza) : null);
+          console.error('❌ [Firebase] Janaza error:', error.message);
+          callback(null);
         }
       );
-  } catch (error) {
-    console.error('[Firebase] Janaza catch:', error);
-    const mockActive = mockJanaza.find(j => j.isActive);
-    callback(mockActive ? (mockActive as Janaza) : null);
+  } catch (error: any) {
+    console.error('❌ [Firebase] Janaza catch:', error?.message);
+    callback(null);
+    return () => {};
+  }
+};
+
+// Version qui retourne TOUS les janazas actifs
+export const subscribeToJanazaList = (callback: (data: Janaza[]) => void) => {
+  if (FORCE_DEMO_MODE) {
+    const activeList = mockJanaza.filter(j => j.isActive) as Janaza[];
+    callback(activeList);
+    return () => {};
+  }
+
+  console.log('🔔 [Firebase] Subscribing to janaza list...');
+
+  try {
+    return firestore()
+      .collection('janaza')
+      .where('actif', '==', true)
+      .onSnapshot(
+        snapshot => {
+          console.log('🤲 [Firebase] Janaza list snapshot:', snapshot.docs.length, 'documents');
+          if (snapshot.empty) {
+            console.log('🤲 [Firebase] Pas de janaza active');
+            callback([]);
+            return;
+          }
+          // Mapper TOUS les documents et trier par date
+          const janazaList: Janaza[] = snapshot.docs.map(doc => {
+            const docData = doc.data();
+            return {
+              id: doc.id,
+              deceasedName: docData.nomDefunt,
+              deceasedNameAr: docData.nomDefuntAr || docData.phraseAr,
+              prayerDate: toDate(docData.date),
+              prayerTime: docData.heurePriere,
+              location: docData.lieu,
+              message: docData.phraseFr,
+              isActive: docData.actif,
+              salatApres: docData.salatApres, // "apres_fajr", "apres_dhuhr", etc.
+            };
+          });
+          // Trier par date (plus récent en premier)
+          janazaList.sort((a, b) => b.prayerDate.getTime() - a.prayerDate.getTime());
+          console.log('🤲 [Firebase] Janaza list:', janazaList.length, 'items');
+          callback(janazaList);
+        },
+        error => {
+          console.error('❌ [Firebase] Janaza list error:', error.message);
+          callback([]);
+        }
+      );
+  } catch (error: any) {
+    console.error('❌ [Firebase] Janaza list catch:', error?.message);
+    callback([]);
     return () => {};
   }
 };
@@ -319,6 +401,7 @@ export const getActiveJanaza = async (): Promise<Janaza | null> => {
       location: doc.data().lieu,
       message: doc.data().phraseFr,
       isActive: doc.data().actif,
+      salatApres: doc.data().salatApres,
     };
   } catch (error) {
     console.error('[Firebase] getActiveJanaza error:', error);
@@ -544,7 +627,7 @@ export const getRappels = async (): Promise<Rappel[]> => {
 // Collection Firestore: "settings/mosqueeInfo"
 // Champs backoffice: nom, adresse, codePostal, ville, telephone, email, siteWeb, iban, bic, bankName, accountHolder
 
-export const subscribeToMosqueeInfo = (callback: (data: MosqueeInfo) => void) => {
+export const subscribeToMosqueeInfo = (callback: (data: MosqueeInfo & { headerImageUrl?: string }) => void) => {
   if (FORCE_DEMO_MODE) {
     callback(mockMosqueeInfo);
     return () => {};
@@ -570,6 +653,7 @@ export const subscribeToMosqueeInfo = (callback: (data: MosqueeInfo) => void) =>
               bic: data?.bic || mockMosqueeInfo.bic,
               bankName: data?.bankName || mockMosqueeInfo.bankName,
               accountHolder: data?.accountHolder || mockMosqueeInfo.accountHolder,
+              headerImageUrl: data?.headerImageUrl || undefined,
             });
           } else {
             callback(mockMosqueeInfo);
@@ -591,11 +675,15 @@ export const getMosqueeInfo = async (): Promise<MosqueeInfo> => {
   if (FORCE_DEMO_MODE) {
     return mockMosqueeInfo;
   }
+  console.log('🏦 [Firebase] Getting mosquee info...');
   try {
     const doc = await firestore().collection('settings').doc('mosqueeInfo').get();
+    console.log('🏦 [Firebase] Doc exists:', doc.exists);
     if (doc.exists) {
       const data = doc.data();
-      return {
+      console.log('🏦 [Firebase] Raw data:', JSON.stringify(data));
+      console.log('🏦 [Firebase] IBAN from Firebase:', data?.iban);
+      const result = {
         name: data?.nom || mockMosqueeInfo.name,
         address: data?.adresse || mockMosqueeInfo.address,
         postalCode: data?.codePostal || mockMosqueeInfo.postalCode,
@@ -608,10 +696,13 @@ export const getMosqueeInfo = async (): Promise<MosqueeInfo> => {
         bankName: data?.bankName || mockMosqueeInfo.bankName,
         accountHolder: data?.accountHolder || mockMosqueeInfo.accountHolder,
       };
+      console.log('🏦 [Firebase] Final IBAN:', result.iban);
+      return result;
     }
+    console.log('🏦 [Firebase] Doc does not exist, using mock');
     return mockMosqueeInfo;
-  } catch (error) {
-    console.error('[Firebase] getMosqueeInfo error:', error);
+  } catch (error: any) {
+    console.error('❌ [Firebase] getMosqueeInfo error:', error?.message);
     return mockMosqueeInfo;
   }
 };

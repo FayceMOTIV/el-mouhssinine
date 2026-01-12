@@ -246,6 +246,125 @@ exports.onNewPopup = functions
     }
   });
 
+// ==================== NOTIFICATION DEPUIS BACKOFFICE ====================
+// Trigger : quand une notification est créée/mise à jour avec statut "envoyée"
+
+exports.onNotificationFromBackoffice = functions
+  .region('europe-west1')
+  .firestore
+  .document('notifications/{notificationId}')
+  .onWrite(async (change, context) => {
+    // Si le document est supprimé, ne rien faire
+    if (!change.after.exists) {
+      console.log('Notification supprimée, pas d\'action');
+      return null;
+    }
+
+    const notification = change.after.data();
+    const previousData = change.before.exists ? change.before.data() : null;
+
+    // Ne traiter que si le statut est "envoyee" et qu'il vient de changer
+    // Note: "envoyee" sans accent pour matcher le backoffice
+    if (notification.statut !== 'envoyee') {
+      console.log('Notification pas encore envoyée, statut:', notification.statut);
+      return null;
+    }
+
+    // Si le statut était déjà "envoyee", ne pas renvoyer
+    if (previousData && previousData.statut === 'envoyee' && previousData.notificationSent) {
+      console.log('Notification déjà envoyée précédemment');
+      return null;
+    }
+
+    // Mapper le topic du backoffice vers le topic FCM
+    const topicMapping = {
+      'tous': 'general',
+      'announcements': 'announcements',
+      'events': 'events',
+      'janaza': 'janaza',
+      'prayer_reminders': 'jumua',
+      'membres': 'general',
+    };
+
+    const fcmTopic = topicMapping[notification.topic] || 'general';
+    const notifTitle = notification.titre || 'Notification';
+    const notifBody = truncate(notification.message, 200);
+
+    const message = {
+      notification: {
+        title: notifTitle,
+        body: notifBody,
+      },
+      data: {
+        type: 'backoffice_notification',
+        id: context.params.notificationId,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+      },
+      // Configuration spécifique iOS/APNs
+      apns: {
+        headers: {
+          'apns-priority': '10',
+          'apns-push-type': 'alert',
+        },
+        payload: {
+          aps: {
+            alert: {
+              title: notifTitle,
+              body: notifBody,
+            },
+            sound: 'default',
+            badge: 1,
+            'content-available': 1,
+          },
+        },
+      },
+      // Configuration spécifique Android
+      android: {
+        priority: 'high',
+        notification: {
+          sound: 'default',
+          channelId: 'general',
+        },
+      },
+      topic: fcmTopic,
+    };
+
+    try {
+      const response = await admin.messaging().send(message);
+      console.log('🔔 Notification backoffice envoyée:', response);
+
+      // Marquer comme envoyée
+      await change.after.ref.update({
+        notificationSent: true,
+        notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        fcmMessageId: response,
+      });
+
+      // Enregistrer dans l'historique
+      await admin.firestore().collection('notifications_history').add({
+        title: notification.titre,
+        body: notification.message,
+        topic: fcmTopic,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        messageId: response,
+        success: true,
+        source: 'backoffice',
+      });
+
+      return { success: true, messageId: response };
+    } catch (error) {
+      console.error('❌ Erreur notification backoffice:', error);
+
+      // Marquer comme echouee (sans accent pour matcher le backoffice)
+      await change.after.ref.update({
+        statut: 'echouee',
+        error: error.message,
+      });
+
+      return { error: error.message };
+    }
+  });
+
 // ==================== NOTIFICATION MANUELLE ====================
 // Appelée depuis le backoffice via callable function
 
@@ -468,3 +587,4 @@ exports.getNotificationStats = functions
       throw new functions.https.HttpsError('internal', error.message);
     }
   });
+

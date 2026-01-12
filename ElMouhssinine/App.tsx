@@ -1,10 +1,11 @@
-import React, { Component, ErrorInfo, ReactNode, useEffect } from 'react';
-import { StatusBar, View, Text, StyleSheet } from 'react-native';
+import React, { Component, ErrorInfo, ReactNode, useEffect, useState } from 'react';
+import { StatusBar, View, Text, StyleSheet, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { colors } from './src/theme/colors';
 import { LanguageProvider } from './src/context/LanguageContext';
 import { initTTS } from './src/services/tts';
+import { initializeFCM, setupForegroundHandler } from './src/services/notifications';
 
 // Error Boundary pour capturer les crashes
 interface ErrorBoundaryState {
@@ -41,13 +42,45 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 }
 
 const App: React.FC = () => {
-  // Initialiser TTS au démarrage
+  // Garder la splash native visible pendant 3 secondes
+  const [appReady, setAppReady] = useState(false);
+
   useEffect(() => {
-    initTTS();
+    const prepare = async () => {
+      // Initialiser TTS au démarrage
+      initTTS();
+
+      // Initialiser FCM pour les notifications push
+      await initializeFCM();
+
+      // Attendre 3 secondes pour garder la splash visible
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setAppReady(true);
+    };
+
+    prepare();
   }, []);
 
-  // La splash iOS native (LaunchScreen.storyboard) reste visible pendant le chargement JS
-  // Pas besoin de délai artificiel qui cause une page blanche
+  // Gérer les notifications en foreground
+  useEffect(() => {
+    const unsubscribe = setupForegroundHandler();
+    return unsubscribe;
+  }, []);
+
+  // Afficher l'image splash pendant 3 secondes
+  if (!appReady) {
+    return (
+      <View style={styles.splashContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="#5c3a1a" translucent />
+        <Image
+          source={require('./src/assets/splash.png')}
+          style={styles.splashImage}
+          resizeMode="cover"
+        />
+      </View>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <LanguageProvider>
@@ -61,6 +94,17 @@ const App: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  // Splash Screen styles
+  splashContainer: {
+    flex: 1,
+    backgroundColor: '#5c3a1a',
+  },
+  splashImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  // Error styles
   errorContainer: {
     flex: 1,
     backgroundColor: '#7f4f24',

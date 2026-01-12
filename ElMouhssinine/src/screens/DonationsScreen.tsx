@@ -8,9 +8,10 @@ import {
   TextInput,
   Modal,
   Alert,
+  Image,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { subscribeToProjects, getMosqueeInfo, createDonation } from '../services/firebase';
+import { subscribeToProjects, subscribeToMosqueeInfo, createDonation } from '../services/firebase';
 import { Project, MosqueeInfo } from '../types';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useLanguage } from '../context/LanguageContext';
@@ -85,11 +86,18 @@ const DonationsScreen = () => {
       }
     });
 
-    getMosqueeInfo().then((info) => {
-      if (info) setMosqueeInfo(info);
+    // Subscription temps réel pour IBAN et infos mosquée
+    const unsubMosqueeInfo = subscribeToMosqueeInfo((info) => {
+      if (info) {
+        console.log('🏦 MosqueeInfo updated:', info.iban);
+        setMosqueeInfo(info);
+      }
     });
 
-    return () => unsubProjects();
+    return () => {
+      unsubProjects();
+      unsubMosqueeInfo();
+    };
   }, []);
 
   const displayProjects = projectType === 'interne' 
@@ -295,8 +303,11 @@ const DonationsScreen = () => {
                 <Text style={styles.paymentItemIcon}>🅿️</Text>
                 <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>PayPal</Text>
               </View>
-              <View style={[styles.paymentItem, styles.applePayItem]}>
-                <Text style={styles.applePayIcon}></Text>
+              <View style={styles.applePayButton}>
+                <Image
+                  source={require('../assets/apple-logo.png')}
+                  style={styles.appleLogo}
+                />
                 <Text style={styles.applePayText}>Pay</Text>
               </View>
               <View style={styles.paymentItem}>
@@ -1136,18 +1147,31 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '500',
   },
-  applePayItem: {
+  applePayButton: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#000000',
     borderRadius: borderRadius.md,
-  },
-  applePayIcon: {
-    fontSize: 16,
-    color: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
   },
   applePayText: {
-    fontSize: fontSize.sm,
-    color: '#FFFFFF',
+    fontSize: 20,
     fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  appleLogo: {
+    width: 20,
+    height: 24,
+    marginRight: 8,
+    tintColor: '#FFFFFF',
+  },
+  applePayLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: '#333333',
   },
   paymentNote: {
     fontSize: fontSize.xs,

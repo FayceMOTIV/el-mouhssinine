@@ -41,6 +41,7 @@ export interface Janaza {
   location: string;
   message?: string;
   isActive: boolean;
+  salatApres?: string; // "apres_fajr", "apres_dhuhr", etc.
 }
 
 export interface Project {

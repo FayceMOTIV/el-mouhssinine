@@ -12,7 +12,8 @@ import {
   Toggle,
   Badge,
   Loading,
-  EmptyState
+  EmptyState,
+  AIWriteButton
 } from '../components/common'
 import {
   subscribeToEvenements,
@@ -247,20 +248,41 @@ export default function Evenements() {
         title={editingEvenement ? 'Modifier l\'événement' : 'Nouvel événement'}
       >
         <div className="space-y-4">
-          <Input
-            label="Titre"
-            value={formData.titre}
-            onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
-            placeholder="Ex: Conférence sur le Ramadan"
-            required
-          />
-          <Textarea
-            label="Description"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Détails de l'événement..."
-            rows={3}
-          />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Titre</label>
+              <AIWriteButton
+                type="evenement"
+                field="titre"
+                existingContent={formData.titre}
+                onGenerated={(content) => setFormData({ ...formData, titre: content })}
+              />
+            </div>
+            <Input
+              value={formData.titre}
+              onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
+              placeholder="Ex: Conférence sur le Ramadan"
+              required
+            />
+          </div>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Description</label>
+              <AIWriteButton
+                type="evenement"
+                field="contenu"
+                existingTitle={formData.titre}
+                existingContent={formData.description}
+                onGenerated={(content) => setFormData({ ...formData, description: content })}
+              />
+            </div>
+            <Textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Détails de l'événement..."
+              rows={3}
+            />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Date"

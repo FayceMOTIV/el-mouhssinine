@@ -3,10 +3,12 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import FirebaseCore
+import FirebaseMessaging
 import AVFoundation
+import UserNotifications
 
 @main
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
   var window: UIWindow?
 
   var reactNativeDelegate: ReactNativeDelegate?
@@ -18,6 +20,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   ) -> Bool {
     // Initialize Firebase FIRST before any other setup
     FirebaseApp.configure()
+
+    // Configure push notifications
+    UNUserNotificationCenter.current().delegate = self
+    Messaging.messaging().delegate = self
+
+    // Request notification authorization
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+      if granted {
+        print("✅ Notification permission granted")
+      } else if let error = error {
+        print("❌ Notification permission error: \(error)")
+      }
+    }
+
+    // Register for remote notifications
+    application.registerForRemoteNotifications()
 
     // Configure audio session for background playback
     do {
@@ -43,6 +61,48 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     )
 
     return true
+  }
+
+  // MARK: - Remote Notifications
+
+  func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+    print("📱 [APNs] Token (raw hex): \(tokenString)")
+    print("📱 [APNs] Token length: \(deviceToken.count) bytes")
+
+    // Vérifier si sandbox ou production
+    #if DEBUG
+    print("📱 [APNs] Environment: SANDBOX (DEBUG build)")
+    #else
+    print("📱 [APNs] Environment: PRODUCTION (RELEASE build)")
+    #endif
+
+    Messaging.messaging().apnsToken = deviceToken
+    print("✅ [APNs] Token registered with Firebase Messaging")
+  }
+
+  func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    print("❌ Failed to register for remote notifications: \(error)")
+  }
+
+  // MARK: - MessagingDelegate
+
+  func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+    if let token = fcmToken {
+      print("✅ FCM Token: \(token)")
+    }
+  }
+
+  // MARK: - UNUserNotificationCenterDelegate
+
+  // Handle notification when app is in foreground
+  func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    completionHandler([.banner, .sound, .badge])
+  }
+
+  // Handle notification tap
+  func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+    completionHandler()
   }
 }
 

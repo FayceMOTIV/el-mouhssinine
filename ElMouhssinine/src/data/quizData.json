@@ -1,0 +1,1167 @@
+{
+  "quiz": {
+    "niveau1_debutant": [
+      {
+        "id": 1,
+        "type": "qcm",
+        "question_fr": "Combien y a-t-il de piliers en Islam ?",
+        "question_ar": "كَمْ عَدَدُ أَرْكَانِ الإِسْلَامِ؟",
+        "choices_fr": ["3", "4", "5", "6"],
+        "choices_ar": ["٣", "٤", "٥", "٦"],
+        "correct_index": 2,
+        "explication_fr": "Les 5 piliers sont : Shahada, Salat, Zakat, Sawm et Hajj.",
+        "explication_ar": "أَرْكَانُ الإِسْلَامِ الخَمْسَةُ هِيَ: الشَّهَادَة، الصَّلَاة، الزَّكَاة، الصَّوْم، الحَجّ."
+      },
+      {
+        "id": 2,
+        "type": "qcm",
+        "question_fr": "Quel est le premier pilier de l'Islam ?",
+        "question_ar": "مَا هُوَ الرُّكْنُ الأَوَّلُ مِنْ أَرْكَانِ الإِسْلَامِ؟",
+        "choices_fr": ["La prière (Salat)", "L'attestation de foi (Shahada)", "Le jeûne (Sawm)", "L'aumône (Zakat)"],
+        "choices_ar": ["الصَّلَاة", "الشَّهَادَة", "الصَّوْم", "الزَّكَاة"],
+        "correct_index": 1,
+        "explication_fr": "La Shahada est l'attestation qu'il n'y a de divinité qu'Allah et que Mohammed est Son messager.",
+        "explication_ar": "الشَّهَادَةُ هِيَ أَنْ تَشْهَدَ أَنْ لَا إِلَهَ إِلَّا اللهُ وَأَنَّ مُحَمَّدًا رَسُولُ اللهِ."
+      },
+      {
+        "id": 3,
+        "type": "qcm",
+        "question_fr": "Combien de prières obligatoires un musulman doit-il accomplir chaque jour ?",
+        "question_ar": "كَمْ عَدَدُ الصَّلَوَاتِ المَفْرُوضَةِ فِي اليَوْمِ؟",
+        "choices_fr": ["3", "4", "5", "7"],
+        "choices_ar": ["٣", "٤", "٥", "٧"],
+        "correct_index": 2,
+        "explication_fr": "Les 5 prières sont : Fajr, Dhuhr, Asr, Maghrib et Isha.",
+        "explication_ar": "الصَّلَوَاتُ الخَمْسُ هِيَ: الفَجْر، الظُّهْر، العَصْر، المَغْرِب، العِشَاء."
+      },
+      {
+        "id": 4,
+        "type": "vrai_faux",
+        "question_fr": "Le Ramadan est le 9ème mois du calendrier islamique.",
+        "question_ar": "رَمَضَانُ هُوَ الشَّهْرُ التَّاسِعُ فِي التَّقْوِيمِ الهِجْرِي.",
+        "correct": true,
+        "explication_fr": "Ramadan est bien le 9ème mois de l'année hégrienne.",
+        "explication_ar": "رَمَضَانُ هُوَ الشَّهْرُ التَّاسِعُ مِنَ السَّنَةِ الهِجْرِيَّة."
+      },
+      {
+        "id": 5,
+        "type": "qcm",
+        "question_fr": "Quel est le nom de la prière de l'aube ?",
+        "question_ar": "مَا اسْمُ صَلَاةِ الفَجْرِ؟",
+        "choices_fr": ["Dhuhr", "Fajr", "Maghrib", "Isha"],
+        "choices_ar": ["الظُّهْر", "الفَجْر", "المَغْرِب", "العِشَاء"],
+        "correct_index": 1,
+        "explication_fr": "Fajr est la prière de l'aube, accomplie avant le lever du soleil.",
+        "explication_ar": "الفَجْرُ هِيَ صَلَاةُ الصُّبْحِ قَبْلَ طُلُوعِ الشَّمْسِ."
+      },
+      {
+        "id": 6,
+        "type": "qcm",
+        "question_fr": "Combien de rakaat comporte la prière du Fajr ?",
+        "question_ar": "كَمْ رَكْعَةً فِي صَلَاةِ الفَجْرِ؟",
+        "choices_fr": ["2", "3", "4", "5"],
+        "choices_ar": ["٢", "٣", "٤", "٥"],
+        "correct_index": 0,
+        "explication_fr": "La prière du Fajr comporte 2 rakaat obligatoires.",
+        "explication_ar": "صَلَاةُ الفَجْرِ رَكْعَتَانِ."
+      },
+      {
+        "id": 7,
+        "type": "vrai_faux",
+        "question_fr": "La prière du Dhuhr comporte 4 rakaat.",
+        "question_ar": "صَلَاةُ الظُّهْرِ أَرْبَعُ رَكَعَاتٍ.",
+        "correct": true,
+        "explication_fr": "Dhuhr comporte bien 4 rakaat obligatoires.",
+        "explication_ar": "صَلَاةُ الظُّهْرِ أَرْبَعُ رَكَعَاتٍ فَرْضًا."
+      },
+      {
+        "id": 8,
+        "type": "qcm",
+        "question_fr": "Combien de rakaat comporte la prière du Maghrib ?",
+        "question_ar": "كَمْ رَكْعَةً فِي صَلَاةِ المَغْرِبِ؟",
+        "choices_fr": ["2", "3", "4", "5"],
+        "choices_ar": ["٢", "٣", "٤", "٥"],
+        "correct_index": 1,
+        "explication_fr": "La prière du Maghrib comporte 3 rakaat obligatoires.",
+        "explication_ar": "صَلَاةُ المَغْرِبِ ثَلَاثُ رَكَعَاتٍ."
+      },
+      {
+        "id": 9,
+        "type": "qcm",
+        "question_fr": "Combien y a-t-il de piliers de la foi (Iman) ?",
+        "question_ar": "كَمْ عَدَدُ أَرْكَانِ الإِيمَانِ؟",
+        "choices_fr": ["4", "5", "6", "7"],
+        "choices_ar": ["٤", "٥", "٦", "٧"],
+        "correct_index": 2,
+        "explication_fr": "Les 6 piliers de la foi : Allah, les Anges, les Livres, les Prophètes, le Jour Dernier et le Destin.",
+        "explication_ar": "أَرْكَانُ الإِيمَانِ سِتَّةٌ: الإِيمَانُ بِاللهِ وَمَلَائِكَتِهِ وَكُتُبِهِ وَرُسُلِهِ وَاليَوْمِ الآخِرِ وَالقَدَرِ."
+      },
+      {
+        "id": 10,
+        "type": "qcm",
+        "question_fr": "Qui est le premier prophète de l'Islam ?",
+        "question_ar": "مَنْ هُوَ أَوَّلُ الأَنْبِيَاءِ؟",
+        "choices_fr": ["Nouh (Noé)", "Ibrahim (Abraham)", "Adam", "Mohammed ﷺ"],
+        "choices_ar": ["نُوح", "إِبْرَاهِيم", "آدَم", "مُحَمَّد ﷺ"],
+        "correct_index": 2,
+        "explication_fr": "Adam (عليه السلام) est le premier homme et le premier prophète.",
+        "explication_ar": "آدَمُ عَلَيْهِ السَّلَامُ هُوَ أَوَّلُ إِنْسَانٍ وَأَوَّلُ نَبِيٍّ."
+      },
+      {
+        "id": 11,
+        "type": "qcm",
+        "question_fr": "Qui est le dernier prophète de l'Islam ?",
+        "question_ar": "مَنْ هُوَ خَاتَمُ الأَنْبِيَاءِ؟",
+        "choices_fr": ["Issa (Jésus)", "Moussa (Moïse)", "Ibrahim (Abraham)", "Mohammed ﷺ"],
+        "choices_ar": ["عِيسَى", "مُوسَى", "إِبْرَاهِيم", "مُحَمَّد ﷺ"],
+        "correct_index": 3,
+        "explication_fr": "Mohammed ﷺ est le sceau des prophètes (Khatam an-Nabiyyin).",
+        "explication_ar": "مُحَمَّدٌ ﷺ هُوَ خَاتَمُ النَّبِيِّينَ."
+      },
+      {
+        "id": 12,
+        "type": "vrai_faux",
+        "question_fr": "Ibrahim (Abraham) est surnommé 'Khalilullah' (l'ami d'Allah).",
+        "question_ar": "إِبْرَاهِيمُ يُلَقَّبُ بِـ'خَلِيلِ اللهِ'.",
+        "correct": true,
+        "explication_fr": "Ibrahim est appelé Khalilullah car Allah l'a pris comme ami intime.",
+        "explication_ar": "إِبْرَاهِيمُ يُسَمَّى خَلِيلَ اللهِ لِأَنَّ اللهَ اتَّخَذَهُ خَلِيلًا."
+      },
+      {
+        "id": 13,
+        "type": "qcm",
+        "question_fr": "Combien de sourates contient le Coran ?",
+        "question_ar": "كَمْ عَدَدُ سُوَرِ القُرْآنِ الكَرِيمِ؟",
+        "choices_fr": ["100", "110", "114", "120"],
+        "choices_ar": ["١٠٠", "١١٠", "١١٤", "١٢٠"],
+        "correct_index": 2,
+        "explication_fr": "Le Coran contient 114 sourates.",
+        "explication_ar": "القُرْآنُ الكَرِيمُ يَحْتَوِي عَلَى ١١٤ سُورَة."
+      },
+      {
+        "id": 14,
+        "type": "qcm",
+        "question_fr": "Quelle est la première sourate du Coran ?",
+        "question_ar": "مَا هِيَ أَوَّلُ سُورَةٍ فِي القُرْآنِ؟",
+        "choices_fr": ["Al-Baqara", "Al-Fatiha", "Al-Ikhlas", "An-Nas"],
+        "choices_ar": ["البَقَرَة", "الفَاتِحَة", "الإِخْلَاص", "النَّاس"],
+        "correct_index": 1,
+        "explication_fr": "Al-Fatiha (L'Ouverture) est la première sourate du Coran.",
+        "explication_ar": "الفَاتِحَةُ هِيَ أَوَّلُ سُورَةٍ فِي القُرْآنِ الكَرِيمِ."
+      },
+      {
+        "id": 15,
+        "type": "qcm",
+        "question_fr": "Quelle est la dernière sourate du Coran ?",
+        "question_ar": "مَا هِيَ آخِرُ سُورَةٍ فِي القُرْآنِ؟",
+        "choices_fr": ["Al-Falaq", "An-Nas", "Al-Ikhlas", "Al-Kawthar"],
+        "choices_ar": ["الفَلَق", "النَّاس", "الإِخْلَاص", "الكَوْثَر"],
+        "correct_index": 1,
+        "explication_fr": "An-Nas (Les Hommes) est la 114ème et dernière sourate.",
+        "explication_ar": "سُورَةُ النَّاسِ هِيَ السُّورَةُ ١١ل وَالأَخِيرَةُ فِي القُرْآنِ."
+      },
+      {
+        "id": 16,
+        "type": "vrai_faux",
+        "question_fr": "La sourate Al-Fatiha comporte 7 versets.",
+        "question_ar": "سُورَةُ الفَاتِحَةِ تَتَكَوَّنُ مِنْ ٧ آيَاتٍ.",
+        "correct": true,
+        "explication_fr": "Al-Fatiha est aussi appelée 'As-Sab' al-Mathani' (les sept répétées).",
+        "explication_ar": "الفَاتِحَةُ تُسَمَّى أَيْضًا 'السَّبْعَ المَثَانِي'."
+      },
+      {
+        "id": 17,
+        "type": "qcm",
+        "question_fr": "À quel prophète le Coran a-t-il été révélé ?",
+        "question_ar": "عَلَى أَيِّ نَبِيٍّ أُنْزِلَ القُرْآنُ؟",
+        "choices_fr": ["Moussa", "Issa", "Ibrahim", "Mohammed ﷺ"],
+        "choices_ar": ["مُوسَى", "عِيسَى", "إِبْرَاهِيم", "مُحَمَّد ﷺ"],
+        "correct_index": 3,
+        "explication_fr": "Le Coran a été révélé au Prophète Mohammed ﷺ.",
+        "explication_ar": "القُرْآنُ أُنْزِلَ عَلَى النَّبِيِّ مُحَمَّدٍ ﷺ."
+      },
+      {
+        "id": 18,
+        "type": "qcm",
+        "question_fr": "Qu'est-ce que la Zakat ?",
+        "question_ar": "مَا هِيَ الزَّكَاةُ؟",
+        "choices_fr": ["Le pèlerinage", "L'aumône obligatoire", "Le jeûne", "La prière"],
+        "choices_ar": ["الحَجّ", "الصَّدَقَةُ الوَاجِبَة", "الصَّوْم", "الصَّلَاة"],
+        "correct_index": 1,
+        "explication_fr": "La Zakat est l'aumône obligatoire, 3ème pilier de l'Islam.",
+        "explication_ar": "الزَّكَاةُ هِيَ الصَّدَقَةُ الوَاجِبَةُ، وَهِيَ الرُّكْنُ الثَّالِثُ مِنْ أَرْكَانِ الإِسْلَامِ."
+      },
+      {
+        "id": 19,
+        "type": "qcm",
+        "question_fr": "Qu'est-ce que le Hajj ?",
+        "question_ar": "مَا هُوَ الحَجُّ؟",
+        "choices_fr": ["Le jeûne du Ramadan", "La prière du vendredi", "Le pèlerinage à La Mecque", "L'aumône"],
+        "choices_ar": ["صِيَامُ رَمَضَان", "صَلَاةُ الجُمُعَة", "الحَجُّ إِلَى مَكَّة", "الزَّكَاة"],
+        "correct_index": 2,
+        "explication_fr": "Le Hajj est le pèlerinage à La Mecque, 5ème pilier de l'Islam.",
+        "explication_ar": "الحَجُّ هُوَ الرُّكْنُ الخَامِسُ مِنْ أَرْكَانِ الإِسْلَامِ."
+      },
+      {
+        "id": 20,
+        "type": "vrai_faux",
+        "question_fr": "Le Hajj est obligatoire pour tout musulman une fois dans sa vie s'il en a les moyens.",
+        "question_ar": "الحَجُّ فَرْضٌ عَلَى كُلِّ مُسْلِمٍ مَرَّةً وَاحِدَةً فِي العُمُرِ إِذَا اسْتَطَاعَ.",
+        "correct": true,
+        "explication_fr": "Le Hajj est obligatoire pour celui qui en a la capacité physique et financière.",
+        "explication_ar": "الحَجُّ فَرْضٌ عَلَى المُسْتَطِيعِ مَادِّيًّا وَجَسَدِيًّا."
+      },
+      {
+        "id": 21,
+        "type": "qcm",
+        "question_fr": "Durant quel mois se déroule le Hajj ?",
+        "question_ar": "فِي أَيِّ شَهْرٍ يُؤَدَّى الحَجُّ؟",
+        "choices_fr": ["Ramadan", "Muharram", "Dhul Hijja", "Rajab"],
+        "choices_ar": ["رَمَضَان", "مُحَرَّم", "ذُو الحِجَّة", "رَجَب"],
+        "correct_index": 2,
+        "explication_fr": "Le Hajj se déroule durant le mois de Dhul Hijja.",
+        "explication_ar": "الحَجُّ يُؤَدَّى فِي شَهْرِ ذِي الحِجَّةِ."
+      },
+      {
+        "id": 22,
+        "type": "qcm",
+        "question_fr": "Quel prophète a construit la Kaaba avec son fils ?",
+        "question_ar": "أَيُّ نَبِيٍّ بَنَى الكَعْبَةَ مَعَ ابْنِهِ؟",
+        "choices_fr": ["Adam", "Nouh", "Ibrahim", "Mohammed ﷺ"],
+        "choices_ar": ["آدَم", "نُوح", "إِبْرَاهِيم", "مُحَمَّد ﷺ"],
+        "correct_index": 2,
+        "explication_fr": "Ibrahim (Abraham) et son fils Ismail ont construit la Kaaba.",
+        "explication_ar": "إِبْرَاهِيمُ وَابْنُهُ إِسْمَاعِيلُ بَنَيَا الكَعْبَةَ."
+      },
+      {
+        "id": 23,
+        "type": "vrai_faux",
+        "question_fr": "Moussa (Moïse) a reçu la Torah.",
+        "question_ar": "مُوسَى عَلَيْهِ السَّلَامُ أُنْزِلَتْ عَلَيْهِ التَّوْرَاةُ.",
+        "correct": true,
+        "explication_fr": "La Torah (At-Tawrat) a été révélée au prophète Moussa.",
+        "explication_ar": "التَّوْرَاةُ أُنْزِلَتْ عَلَى نَبِيِّ اللهِ مُوسَى عَلَيْهِ السَّلَامُ."
+      },
+      {
+        "id": 24,
+        "type": "qcm",
+        "question_fr": "Quel livre a été révélé au prophète Issa (Jésus) ?",
+        "question_ar": "أَيُّ كِتَابٍ أُنْزِلَ عَلَى النَّبِيِّ عِيسَى؟",
+        "choices_fr": ["La Torah", "Le Zabur", "L'Injil (Évangile)", "Le Coran"],
+        "choices_ar": ["التَّوْرَاة", "الزَّبُور", "الإِنْجِيل", "القُرْآن"],
+        "correct_index": 2,
+        "explication_fr": "L'Injil (Évangile) a été révélé au prophète Issa (Jésus).",
+        "explication_ar": "الإِنْجِيلُ أُنْزِلَ عَلَى نَبِيِّ اللهِ عِيسَى عَلَيْهِ السَّلَامُ."
+      },
+      {
+        "id": 25,
+        "type": "qcm",
+        "question_fr": "Quel est le premier mois du calendrier islamique ?",
+        "question_ar": "مَا هُوَ أَوَّلُ شَهْرٍ فِي التَّقْوِيمِ الهِجْرِيِّ؟",
+        "choices_fr": ["Ramadan", "Muharram", "Rajab", "Dhul Hijja"],
+        "choices_ar": ["رَمَضَان", "مُحَرَّم", "رَجَب", "ذُو الحِجَّة"],
+        "correct_index": 1,
+        "explication_fr": "Muharram est le premier mois de l'année hégrienne.",
+        "explication_ar": "مُحَرَّمٌ هُوَ أَوَّلُ شَهْرٍ فِي السَّنَةِ الهِجْرِيَّةِ."
+      },
+      {
+        "id": 26,
+        "type": "vrai_faux",
+        "question_fr": "La prière de l'Asr comporte 4 rakaat.",
+        "question_ar": "صَلَاةُ العَصْرِ أَرْبَعُ رَكَعَاتٍ.",
+        "correct": true,
+        "explication_fr": "La prière de l'Asr comporte 4 rakaat obligatoires.",
+        "explication_ar": "صَلَاةُ العَصْرِ أَرْبَعُ رَكَعَاتٍ فَرْضًا."
+      },
+      {
+        "id": 27,
+        "type": "qcm",
+        "question_fr": "Combien de rakaat comporte la prière de l'Isha ?",
+        "question_ar": "كَمْ رَكْعَةً فِي صَلَاةِ العِشَاءِ؟",
+        "choices_fr": ["2", "3", "4", "5"],
+        "choices_ar": ["٢", "٣", "٤", "٥"],
+        "correct_index": 2,
+        "explication_fr": "La prière de l'Isha comporte 4 rakaat obligatoires.",
+        "explication_ar": "صَلَاةُ العِشَاءِ أَرْبَعُ رَكَعَاتٍ فَرْضًا."
+      },
+      {
+        "id": 28,
+        "type": "qcm",
+        "question_fr": "Quel prophète est connu pour avoir construit l'Arche ?",
+        "question_ar": "أَيُّ نَبِيٍّ بَنَى السَّفِينَةَ؟",
+        "choices_fr": ["Adam", "Nouh (Noé)", "Ibrahim", "Moussa"],
+        "choices_ar": ["آدَم", "نُوح", "إِبْرَاهِيم", "مُوسَى"],
+        "correct_index": 1,
+        "explication_fr": "Nouh (Noé) a construit l'Arche sur ordre d'Allah avant le déluge.",
+        "explication_ar": "نُوحٌ عَلَيْهِ السَّلَامُ بَنَى السَّفِينَةَ بِأَمْرِ اللهِ قَبْلَ الطُّوفَانِ."
+      },
+      {
+        "id": 29,
+        "type": "vrai_faux",
+        "question_fr": "Croire aux anges fait partie des piliers de la foi.",
+        "question_ar": "الإِيمَانُ بِالمَلَائِكَةِ مِنْ أَرْكَانِ الإِيمَانِ.",
+        "correct": true,
+        "explication_fr": "La croyance aux anges est le 2ème pilier de la foi (Iman).",
+        "explication_ar": "الإِيمَانُ بِالمَلَائِكَةِ هُوَ الرُّكْنُ الثَّانِي مِنْ أَرْكَانِ الإِيمَانِ."
+      },
+      {
+        "id": 30,
+        "type": "qcm",
+        "question_fr": "Comment s'appelle l'ange qui a transmis le Coran au Prophète ﷺ ?",
+        "question_ar": "مَا اسْمُ المَلَكِ الَّذِي نَزَلَ بِالقُرْآنِ؟",
+        "choices_fr": ["Mikail", "Israfil", "Jibril (Gabriel)", "Azrail"],
+        "choices_ar": ["مِيكَائِيل", "إِسْرَافِيل", "جِبْرِيل", "عَزْرَائِيل"],
+        "correct_index": 2,
+        "explication_fr": "L'ange Jibril (Gabriel) a transmis le Coran au Prophète ﷺ.",
+        "explication_ar": "جِبْرِيلُ عَلَيْهِ السَّلَامُ هُوَ الَّذِي نَزَلَ بِالقُرْآنِ عَلَى النَّبِيِّ ﷺ."
+      },
+      {
+        "id": 31,
+        "type": "qcm",
+        "question_fr": "Dans quelle ville est née le Prophète Mohammed ﷺ ?",
+        "question_ar": "فِي أَيِّ مَدِينَةٍ وُلِدَ النَّبِيُّ مُحَمَّدٌ ﷺ؟",
+        "choices_fr": ["Médine", "La Mecque", "Jérusalem", "Taif"],
+        "choices_ar": ["المَدِينَة", "مَكَّة", "القُدْس", "الطَّائِف"],
+        "correct_index": 1,
+        "explication_fr": "Le Prophète ﷺ est né à La Mecque.",
+        "explication_ar": "وُلِدَ النَّبِيُّ ﷺ فِي مَكَّةَ المُكَرَّمَةِ."
+      },
+      {
+        "id": 32,
+        "type": "vrai_faux",
+        "question_fr": "Le Jour du Jugement (Yawm al-Qiyama) fait partie des piliers de la foi.",
+        "question_ar": "يَوْمُ القِيَامَةِ مِنْ أَرْكَانِ الإِيمَانِ.",
+        "correct": true,
+        "explication_fr": "Croire au Jour Dernier est le 5ème pilier de la foi.",
+        "explication_ar": "الإِيمَانُ بِاليَوْمِ الآخِرِ هُوَ الرُّكْنُ الخَامِسُ مِنْ أَرْكَانِ الإِيمَانِ."
+      },
+      {
+        "id": 33,
+        "type": "qcm",
+        "question_fr": "Quel est le jour sacré de la semaine pour les musulmans ?",
+        "question_ar": "مَا هُوَ اليَوْمُ المُقَدَّسُ فِي الأُسْبُوعِ لِلْمُسْلِمِينَ؟",
+        "choices_fr": ["Samedi", "Dimanche", "Vendredi", "Lundi"],
+        "choices_ar": ["السَّبْت", "الأَحَد", "الجُمُعَة", "الاثْنَيْن"],
+        "correct_index": 2,
+        "explication_fr": "Le vendredi (Yawm al-Jumu'a) est le jour de la grande prière commune.",
+        "explication_ar": "يَوْمُ الجُمُعَةِ هُوَ يَوْمُ صَلَاةِ الجُمُعَةِ."
+      },
+      {
+        "id": 34,
+        "type": "qcm",
+        "question_fr": "Qu'est-ce que le Sawm ?",
+        "question_ar": "مَا هُوَ الصَّوْمُ؟",
+        "choices_fr": ["La prière", "Le jeûne", "L'aumône", "Le pèlerinage"],
+        "choices_ar": ["الصَّلَاة", "الإِمْسَاكُ عَنِ الطَّعَامِ", "الزَّكَاة", "الحَجّ"],
+        "correct_index": 1,
+        "explication_fr": "Le Sawm est le jeûne, 4ème pilier de l'Islam.",
+        "explication_ar": "الصَّوْمُ هُوَ الرُّكْنُ الرَّابِعُ مِنْ أَرْكَانِ الإِسْلَامِ."
+      },
+      {
+        "id": 35,
+        "type": "vrai_faux",
+        "question_fr": "Le Zabur a été révélé au prophète Dawud (David).",
+        "question_ar": "الزَّبُورُ أُنْزِلَ عَلَى النَّبِيِّ دَاوُدَ.",
+        "correct": true,
+        "explication_fr": "Le Zabur (Psaumes) a été révélé au prophète Dawud.",
+        "explication_ar": "الزَّبُورُ أُنْزِلَ عَلَى نَبِيِّ اللهِ دَاوُدَ عَلَيْهِ السَّلَامُ."
+      },
+      {
+        "id": 36,
+        "type": "qcm",
+        "question_fr": "Quelle sourate est récitée dans chaque rakaat de la prière ?",
+        "question_ar": "أَيُّ سُورَةٍ تُقْرَأُ فِي كُلِّ رَكْعَةٍ؟",
+        "choices_fr": ["Al-Baqara", "Al-Fatiha", "Al-Ikhlas", "Yasin"],
+        "choices_ar": ["البَقَرَة", "الفَاتِحَة", "الإِخْلَاص", "يس"],
+        "correct_index": 1,
+        "explication_fr": "Al-Fatiha est obligatoire dans chaque rakaat de la prière.",
+        "explication_ar": "الفَاتِحَةُ وَاجِبَةٌ فِي كُلِّ رَكْعَةٍ مِنَ الصَّلَاةِ."
+      },
+      {
+        "id": 37,
+        "type": "qcm",
+        "question_fr": "Quel est le 6ème pilier de la foi ?",
+        "question_ar": "مَا هُوَ الرُّكْنُ السَّادِسُ مِنْ أَرْكَانِ الإِيمَانِ؟",
+        "choices_fr": ["Les Anges", "Les Livres", "Le Destin (Al-Qadr)", "Les Prophètes"],
+        "choices_ar": ["المَلَائِكَة", "الكُتُب", "القَدَر", "الرُّسُل"],
+        "correct_index": 2,
+        "explication_fr": "Le 6ème pilier est la croyance au destin (Al-Qadr), bon ou mauvais.",
+        "explication_ar": "الرُّكْنُ السَّادِسُ هُوَ الإِيمَانُ بِالقَدَرِ خَيْرِهِ وَشَرِّهِ."
+      },
+      {
+        "id": 38,
+        "type": "vrai_faux",
+        "question_fr": "Yusuf (Joseph) était le fils de Yaqub (Jacob).",
+        "question_ar": "يُوسُفُ كَانَ ابْنَ يَعْقُوبَ.",
+        "correct": true,
+        "explication_fr": "Le prophète Yusuf était le fils du prophète Yaqub.",
+        "explication_ar": "النَّبِيُّ يُوسُفُ كَانَ ابْنَ النَّبِيِّ يَعْقُوبَ عَلَيْهِمَا السَّلَامُ."
+      },
+      {
+        "id": 39,
+        "type": "qcm",
+        "question_fr": "Quelle fête marque la fin du Ramadan ?",
+        "question_ar": "أَيُّ عِيدٍ يَأْتِي بَعْدَ رَمَضَانَ؟",
+        "choices_fr": ["Eid al-Adha", "Eid al-Fitr", "Mawlid", "Isra et Miraj"],
+        "choices_ar": ["عِيدُ الأَضْحَى", "عِيدُ الفِطْر", "المَوْلِد", "الإِسْرَاءُ وَالمِعْرَاج"],
+        "correct_index": 1,
+        "explication_fr": "Eid al-Fitr (fête de la rupture du jeûne) célèbre la fin du Ramadan.",
+        "explication_ar": "عِيدُ الفِطْرِ يَأْتِي بَعْدَ شَهْرِ رَمَضَانَ المُبَارَكِ."
+      },
+      {
+        "id": 40,
+        "type": "qcm",
+        "question_fr": "Quelle fête commémore le sacrifice d'Ibrahim ?",
+        "question_ar": "أَيُّ عِيدٍ يُحْيِي ذِكْرَى تَضْحِيَةِ إِبْرَاهِيمَ؟",
+        "choices_fr": ["Eid al-Fitr", "Eid al-Adha", "Achoura", "Laylat al-Qadr"],
+        "choices_ar": ["عِيدُ الفِطْر", "عِيدُ الأَضْحَى", "عَاشُورَاء", "لَيْلَةُ القَدْر"],
+        "correct_index": 1,
+        "explication_fr": "Eid al-Adha (fête du sacrifice) commémore le sacrifice d'Ibrahim.",
+        "explication_ar": "عِيدُ الأَضْحَى يُحْيِي ذِكْرَى قِصَّةِ إِبْرَاهِيمَ وَإِسْمَاعِيلَ."
+      }
+    ],
+    "niveau2_intermediaire": [
+      {
+        "id": 41,
+        "type": "qcm",
+        "question_fr": "Qui était le premier calife après le Prophète ﷺ ?",
+        "question_ar": "مَنْ كَانَ أَوَّلَ خَلِيفَةٍ بَعْدَ النَّبِيِّ ﷺ؟",
+        "choices_fr": ["Omar ibn al-Khattab", "Uthman ibn Affan", "Abu Bakr as-Siddiq", "Ali ibn Abi Talib"],
+        "choices_ar": ["عُمَرُ بْنُ الخَطَّاب", "عُثْمَانُ بْنُ عَفَّان", "أَبُو بَكْرٍ الصِّدِّيق", "عَلِيُّ بْنُ أَبِي طَالِب"],
+        "correct_index": 2,
+        "explication_fr": "Abu Bakr as-Siddiq fut le premier calife bien guidé (632-634).",
+        "explication_ar": "أَبُو بَكْرٍ الصِّدِّيقُ كَانَ أَوَّلَ الخُلَفَاءِ الرَّاشِدِينَ."
+      },
+      {
+        "id": 42,
+        "type": "qcm",
+        "question_fr": "En quelle année de l'Hégire a eu lieu la bataille de Badr ?",
+        "question_ar": "فِي أَيِّ سَنَةٍ هِجْرِيَّةٍ وَقَعَتْ غَزْوَةُ بَدْرٍ؟",
+        "choices_fr": ["An 1", "An 2", "An 3", "An 5"],
+        "choices_ar": ["السَّنَةُ ١", "السَّنَةُ ٢", "السَّنَةُ ٣", "السَّنَةُ ٥"],
+        "correct_index": 1,
+        "explication_fr": "La bataille de Badr a eu lieu en l'an 2 de l'Hégire (624).",
+        "explication_ar": "غَزْوَةُ بَدْرٍ وَقَعَتْ فِي السَّنَةِ الثَّانِيَةِ لِلْهِجْرَةِ."
+      },
+      {
+        "id": 43,
+        "type": "vrai_faux",
+        "question_fr": "Khadija bint Khuwaylid était la première épouse du Prophète ﷺ.",
+        "question_ar": "خَدِيجَةُ بِنْتُ خُوَيْلِدٍ كَانَتْ أَوَّلَ زَوْجَةٍ لِلنَّبِيِّ ﷺ.",
+        "correct": true,
+        "explication_fr": "Khadija fut la première épouse et la première à croire en sa mission prophétique.",
+        "explication_ar": "خَدِيجَةُ كَانَتْ أَوَّلَ زَوْجَةٍ وَأَوَّلَ مَنْ آمَنَتْ بِالنَّبِيِّ ﷺ."
+      },
+      {
+        "id": 44,
+        "type": "qcm",
+        "question_fr": "Quel compagnon était surnommé 'Al-Farouq' (celui qui distingue le vrai du faux) ?",
+        "question_ar": "أَيُّ صَحَابِيٍّ لُقِّبَ بِـ'الفَارُوقِ'؟",
+        "choices_fr": ["Abu Bakr", "Omar ibn al-Khattab", "Uthman", "Ali"],
+        "choices_ar": ["أَبُو بَكْر", "عُمَرُ بْنُ الخَطَّاب", "عُثْمَان", "عَلِيّ"],
+        "correct_index": 1,
+        "explication_fr": "Omar ibn al-Khattab était surnommé Al-Farouq pour sa justice.",
+        "explication_ar": "عُمَرُ بْنُ الخَطَّابِ لُقِّبَ بِالفَارُوقِ لِعَدْلِهِ."
+      },
+      {
+        "id": 45,
+        "type": "qcm",
+        "question_fr": "Quel ange est responsable de souffler dans la Trompe le Jour du Jugement ?",
+        "question_ar": "أَيُّ مَلَكٍ يَنْفُخُ فِي الصُّورِ يَوْمَ القِيَامَةِ؟",
+        "choices_fr": ["Jibril", "Mikail", "Israfil", "Malik"],
+        "choices_ar": ["جِبْرِيل", "مِيكَائِيل", "إِسْرَافِيل", "مَالِك"],
+        "correct_index": 2,
+        "explication_fr": "Israfil est l'ange chargé de souffler dans la Trompe (As-Sur).",
+        "explication_ar": "إِسْرَافِيلُ هُوَ المَلَكُ المُوَكَّلُ بِالنَّفْخِ فِي الصُّورِ."
+      },
+      {
+        "id": 46,
+        "type": "qcm",
+        "question_fr": "Quel ange est responsable de la pluie et de la végétation ?",
+        "question_ar": "أَيُّ مَلَكٍ مُوَكَّلٌ بِالمَطَرِ وَالنَّبَاتِ؟",
+        "choices_fr": ["Jibril", "Mikail", "Israfil", "Ridwan"],
+        "choices_ar": ["جِبْرِيل", "مِيكَائِيل", "إِسْرَافِيل", "رِضْوَان"],
+        "correct_index": 1,
+        "explication_fr": "Mikail est l'ange chargé de la pluie et des provisions.",
+        "explication_ar": "مِيكَائِيلُ هُوَ المَلَكُ المُوَكَّلُ بِالمَطَرِ وَالرِّزْقِ."
+      },
+      {
+        "id": 47,
+        "type": "vrai_faux",
+        "question_fr": "La bataille de Uhud a eu lieu en l'an 3 de l'Hégire.",
+        "question_ar": "غَزْوَةُ أُحُدٍ وَقَعَتْ فِي السَّنَةِ الثَّالِثَةِ لِلْهِجْرَةِ.",
+        "correct": true,
+        "explication_fr": "La bataille de Uhud a eu lieu en l'an 3 (625).",
+        "explication_ar": "غَزْوَةُ أُحُدٍ وَقَعَتْ فِي السَّنَةِ ٣ هِجْرِيَّة."
+      },
+      {
+        "id": 48,
+        "type": "qcm",
+        "question_fr": "Quel compagnon a compilé le Coran en un seul livre sous Abu Bakr ?",
+        "question_ar": "أَيُّ صَحَابِيٍّ جَمَعَ القُرْآنَ فِي مُصْحَفٍ وَاحِدٍ فِي عَهْدِ أَبِي بَكْرٍ؟",
+        "choices_fr": ["Omar", "Uthman", "Zayd ibn Thabit", "Ali"],
+        "choices_ar": ["عُمَر", "عُثْمَان", "زَيْدُ بْنُ ثَابِت", "عَلِيّ"],
+        "correct_index": 2,
+        "explication_fr": "Zayd ibn Thabit a compilé le Coran sous la direction d'Abu Bakr.",
+        "explication_ar": "زَيْدُ بْنُ ثَابِتٍ جَمَعَ القُرْآنَ بِأَمْرٍ مِنْ أَبِي بَكْرٍ."
+      },
+      {
+        "id": 49,
+        "type": "qcm",
+        "question_fr": "Combien d'ablutions (wudu) comprend le lavage obligatoire ?",
+        "question_ar": "كَمْ عَدَدُ فَرَائِضِ الوُضُوءِ؟",
+        "choices_fr": ["4", "5", "6", "7"],
+        "choices_ar": ["٤", "٥", "٦", "٧"],
+        "correct_index": 0,
+        "explication_fr": "Les 4 obligations du wudu : visage, bras, tête (essuyage), pieds.",
+        "explication_ar": "فَرَائِضُ الوُضُوءِ أَرْبَعَةٌ: غَسْلُ الوَجْهِ، غَسْلُ اليَدَيْنِ، مَسْحُ الرَّأْسِ، غَسْلُ الرِّجْلَيْنِ."
+      },
+      {
+        "id": 50,
+        "type": "qcm",
+        "question_fr": "Quelle sourate est équivalente au tiers du Coran ?",
+        "question_ar": "أَيُّ سُورَةٍ تَعْدِلُ ثُلُثَ القُرْآنِ؟",
+        "choices_fr": ["Al-Fatiha", "Al-Ikhlas", "Al-Nas", "Al-Falaq"],
+        "choices_ar": ["الفَاتِحَة", "الإِخْلَاص", "النَّاس", "الفَلَق"],
+        "correct_index": 1,
+        "explication_fr": "Le Prophète ﷺ a dit que Sourate Al-Ikhlas équivaut au tiers du Coran.",
+        "explication_ar": "قَالَ النَّبِيُّ ﷺ أَنَّ سُورَةَ الإِخْلَاصِ تَعْدِلُ ثُلُثَ القُرْآنِ."
+      },
+      {
+        "id": 51,
+        "type": "vrai_faux",
+        "question_fr": "Aïcha bint Abi Bakr était la fille du premier calife.",
+        "question_ar": "عَائِشَةُ بِنْتُ أَبِي بَكْرٍ كَانَتْ ابْنَةَ الخَلِيفَةِ الأَوَّلِ.",
+        "correct": true,
+        "explication_fr": "Aïcha était la fille d'Abu Bakr et épouse du Prophète ﷺ.",
+        "explication_ar": "عَائِشَةُ كَانَتْ ابْنَةَ أَبِي بَكْرٍ الصِّدِّيقِ وَزَوْجَةَ النَّبِيِّ ﷺ."
+      },
+      {
+        "id": 52,
+        "type": "qcm",
+        "question_fr": "Quel prophète a été jeté dans le feu par son peuple ?",
+        "question_ar": "أَيُّ نَبِيٍّ أُلْقِيَ فِي النَّارِ مِنْ قِبَلِ قَوْمِهِ؟",
+        "choices_fr": ["Moussa", "Nouh", "Ibrahim", "Yusuf"],
+        "choices_ar": ["مُوسَى", "نُوح", "إِبْرَاهِيم", "يُوسُف"],
+        "correct_index": 2,
+        "explication_fr": "Ibrahim fut jeté dans le feu mais Allah le rendit frais et paisible pour lui.",
+        "explication_ar": "أُلْقِيَ إِبْرَاهِيمُ فِي النَّارِ فَجَعَلَهَا اللهُ بَرْدًا وَسَلَامًا عَلَيْهِ."
+      },
+      {
+        "id": 53,
+        "type": "qcm",
+        "question_fr": "Quel prophète a parlé au berceau ?",
+        "question_ar": "أَيُّ نَبِيٍّ تَكَلَّمَ فِي المَهْدِ؟",
+        "choices_fr": ["Moussa", "Issa (Jésus)", "Ibrahim", "Yahya"],
+        "choices_ar": ["مُوسَى", "عِيسَى", "إِبْرَاهِيم", "يَحْيَى"],
+        "correct_index": 1,
+        "explication_fr": "Issa (Jésus) a parlé dans le berceau pour défendre sa mère Maryam.",
+        "explication_ar": "تَكَلَّمَ عِيسَى فِي المَهْدِ دِفَاعًا عَنْ أُمِّهِ مَرْيَمَ."
+      },
+      {
+        "id": 54,
+        "type": "vrai_faux",
+        "question_fr": "La bataille d'Al-Khandaq (tranchée) est aussi appelée la bataille d'Al-Ahzab.",
+        "question_ar": "غَزْوَةُ الخَنْدَقِ تُسَمَّى أَيْضًا غَزْوَةَ الأَحْزَابِ.",
+        "correct": true,
+        "explication_fr": "Cette bataille en l'an 5 est nommée ainsi car les coalisés (Ahzab) attaquèrent Médine.",
+        "explication_ar": "سُمِّيَتْ بِغَزْوَةِ الأَحْزَابِ لِأَنَّ الأَحْزَابَ تَحَالَفُوا ضِدَّ المَدِينَةِ."
+      },
+      {
+        "id": 55,
+        "type": "qcm",
+        "question_fr": "Quel compagnon était surnommé 'Dhu an-Nurayn' (possesseur des deux lumières) ?",
+        "question_ar": "أَيُّ صَحَابِيٍّ لُقِّبَ بِـ'ذِي النُّورَيْنِ'؟",
+        "choices_fr": ["Abu Bakr", "Omar", "Uthman ibn Affan", "Ali"],
+        "choices_ar": ["أَبُو بَكْر", "عُمَر", "عُثْمَانُ بْنُ عَفَّان", "عَلِيّ"],
+        "correct_index": 2,
+        "explication_fr": "Uthman épousa deux filles du Prophète ﷺ : Ruqayya puis Umm Kulthum.",
+        "explication_ar": "عُثْمَانُ تَزَوَّجَ ابْنَتَيِ النَّبِيِّ ﷺ: رُقَيَّةَ ثُمَّ أُمَّ كُلْثُومٍ."
+      },
+      {
+        "id": 56,
+        "type": "qcm",
+        "question_fr": "Quel prophète est appelé 'Kalimullah' (celui à qui Allah a parlé) ?",
+        "question_ar": "أَيُّ نَبِيٍّ يُسَمَّى 'كَلِيمَ اللهِ'؟",
+        "choices_fr": ["Ibrahim", "Moussa", "Issa", "Mohammed ﷺ"],
+        "choices_ar": ["إِبْرَاهِيم", "مُوسَى", "عِيسَى", "مُحَمَّد ﷺ"],
+        "correct_index": 1,
+        "explication_fr": "Moussa a parlé directement avec Allah au mont Sinaï.",
+        "explication_ar": "كَلَّمَ اللهُ مُوسَى تَكْلِيمًا عِنْدَ جَبَلِ الطُّورِ."
+      },
+      {
+        "id": 57,
+        "type": "qcm",
+        "question_fr": "Quel prophète est appelé 'Ruhullah' (l'esprit d'Allah) ?",
+        "question_ar": "أَيُّ نَبِيٍّ يُسَمَّى 'رُوحَ اللهِ'؟",
+        "choices_fr": ["Ibrahim", "Moussa", "Issa", "Adam"],
+        "choices_ar": ["إِبْرَاهِيم", "مُوسَى", "عِيسَى", "آدَم"],
+        "correct_index": 2,
+        "explication_fr": "Issa (Jésus) est appelé Ruhullah car il fut créé par l'insufflation de l'Esprit.",
+        "explication_ar": "عِيسَى يُسَمَّى رُوحَ اللهِ لِأَنَّهُ خُلِقَ بِنَفْخِ الرُّوحِ."
+      },
+      {
+        "id": 58,
+        "type": "vrai_faux",
+        "question_fr": "Bilal ibn Rabah était le premier muezzin de l'Islam.",
+        "question_ar": "بِلَالُ بْنُ رَبَاحٍ كَانَ أَوَّلَ مُؤَذِّنٍ فِي الإِسْلَامِ.",
+        "correct": true,
+        "explication_fr": "Bilal, ancien esclave abyssin, fut le premier à appeler à la prière.",
+        "explication_ar": "بِلَالٌ كَانَ أَوَّلَ مَنْ أَذَّنَ فِي الإِسْلَامِ."
+      },
+      {
+        "id": 59,
+        "type": "qcm",
+        "question_fr": "Sourate Al-Kahf est recommandée à lire quel jour ?",
+        "question_ar": "سُورَةُ الكَهْفِ يُسْتَحَبُّ قِرَاءَتُهَا أَيَّ يَوْمٍ؟",
+        "choices_fr": ["Lundi", "Jeudi", "Vendredi", "Samedi"],
+        "choices_ar": ["الاثْنَيْن", "الخَمِيس", "الجُمُعَة", "السَّبْت"],
+        "correct_index": 2,
+        "explication_fr": "La lecture de Sourate Al-Kahf le vendredi apporte une lumière jusqu'au vendredi suivant.",
+        "explication_ar": "قِرَاءَةُ سُورَةِ الكَهْفِ يَوْمَ الجُمُعَةِ تُنِيرُ مَا بَيْنَ الجُمُعَتَيْنِ."
+      },
+      {
+        "id": 60,
+        "type": "qcm",
+        "question_fr": "Quel est le nom de la nuit où le Coran a commencé à être révélé ?",
+        "question_ar": "مَا اسْمُ اللَّيْلَةِ الَّتِي بَدَأَ فِيهَا نُزُولُ القُرْآنِ؟",
+        "choices_fr": ["Laylat al-Bara'a", "Laylat al-Qadr", "Laylat al-Isra", "Laylat al-Mi'raj"],
+        "choices_ar": ["لَيْلَةُ البَرَاءَة", "لَيْلَةُ القَدْر", "لَيْلَةُ الإِسْرَاء", "لَيْلَةُ المِعْرَاج"],
+        "correct_index": 1,
+        "explication_fr": "Laylat al-Qadr (Nuit du Destin) est la nuit où la révélation a commencé.",
+        "explication_ar": "لَيْلَةُ القَدْرِ هِيَ اللَّيْلَةُ الَّتِي أُنْزِلَ فِيهَا القُرْآنُ."
+      },
+      {
+        "id": 61,
+        "type": "vrai_faux",
+        "question_fr": "Laylat al-Qadr est meilleure que mille mois.",
+        "question_ar": "لَيْلَةُ القَدْرِ خَيْرٌ مِنْ أَلْفِ شَهْرٍ.",
+        "correct": true,
+        "explication_fr": "Allah dit dans le Coran : 'La nuit du Destin est meilleure que mille mois' (97:3).",
+        "explication_ar": "قَالَ اللهُ تَعَالَى: 'لَيْلَةُ القَدْرِ خَيْرٌ مِنْ أَلْفِ شَهْرٍ'."
+      },
+      {
+        "id": 62,
+        "type": "qcm",
+        "question_fr": "Combien d'années le Prophète ﷺ a-t-il prêché à La Mecque avant l'Hégire ?",
+        "question_ar": "كَمْ سَنَةً دَعَا النَّبِيُّ ﷺ فِي مَكَّةَ قَبْلَ الهِجْرَةِ؟",
+        "choices_fr": ["10 ans", "13 ans", "15 ans", "20 ans"],
+        "choices_ar": ["١٠ سَنَوَات", "١٣ سَنَة", "١٥ سَنَة", "٢٠ سَنَة"],
+        "correct_index": 1,
+        "explication_fr": "Le Prophète ﷺ a prêché 13 ans à La Mecque avant d'émigrer à Médine.",
+        "explication_ar": "دَعَا النَّبِيُّ ﷺ فِي مَكَّةَ ١٣ سَنَةً قَبْلَ الهِجْرَةِ."
+      },
+      {
+        "id": 63,
+        "type": "qcm",
+        "question_fr": "Quelle condition annule le wudu parmi les suivantes ?",
+        "question_ar": "أَيُّ شَيْءٍ مِنَ التَّالِيَةِ يَنْقُضُ الوُضُوءَ؟",
+        "choices_fr": ["Manger", "Parler", "Sortie de gaz", "Pleurer"],
+        "choices_ar": ["الأَكْل", "الكَلَام", "خُرُوجُ الرِّيح", "البُكَاء"],
+        "correct_index": 2,
+        "explication_fr": "Toute sortie des voies naturelles (gaz, urine, etc.) annule le wudu.",
+        "explication_ar": "كُلُّ خَارِجٍ مِنَ السَّبِيلَيْنِ يَنْقُضُ الوُضُوءَ."
+      },
+      {
+        "id": 64,
+        "type": "qcm",
+        "question_fr": "Quelle sourate commence par 'Alif Lam Mim' ?",
+        "question_ar": "أَيُّ سُورَةٍ تَبْدَأُ بِـ'الم'؟",
+        "choices_fr": ["Al-Fatiha", "Al-Baqara", "An-Nas", "Al-Ikhlas"],
+        "choices_ar": ["الفَاتِحَة", "البَقَرَة", "النَّاس", "الإِخْلَاص"],
+        "correct_index": 1,
+        "explication_fr": "Sourate Al-Baqara commence par les lettres mystérieuses 'Alif Lam Mim'.",
+        "explication_ar": "سُورَةُ البَقَرَةِ تَبْدَأُ بِالحُرُوفِ المُقَطَّعَةِ 'الم'."
+      },
+      {
+        "id": 65,
+        "type": "vrai_faux",
+        "question_fr": "Fatima az-Zahra était la fille du Prophète ﷺ et épouse d'Ali.",
+        "question_ar": "فَاطِمَةُ الزَّهْرَاءُ كَانَتْ ابْنَةَ النَّبِيِّ ﷺ وَزَوْجَةَ عَلِيٍّ.",
+        "correct": true,
+        "explication_fr": "Fatima était la fille du Prophète ﷺ et mère de Hassan et Hussein.",
+        "explication_ar": "فَاطِمَةُ كَانَتْ ابْنَةَ النَّبِيِّ ﷺ وَأُمَّ الحَسَنِ وَالحُسَيْنِ."
+      },
+      {
+        "id": 66,
+        "type": "qcm",
+        "question_fr": "Quel prophète a été avalé par une baleine ?",
+        "question_ar": "أَيُّ نَبِيٍّ ابْتَلَعَهُ الحُوتُ؟",
+        "choices_fr": ["Nouh", "Moussa", "Yunus (Jonas)", "Ayyub"],
+        "choices_ar": ["نُوح", "مُوسَى", "يُونُس", "أَيُّوب"],
+        "correct_index": 2,
+        "explication_fr": "Yunus (Jonas) fut avalé par une baleine après avoir quitté son peuple.",
+        "explication_ar": "يُونُسُ ابْتَلَعَهُ الحُوتُ بَعْدَ أَنْ تَرَكَ قَوْمَهُ."
+      },
+      {
+        "id": 67,
+        "type": "qcm",
+        "question_fr": "Quel est le nom de la plus longue sourate du Coran ?",
+        "question_ar": "مَا اسْمُ أَطْوَلِ سُورَةٍ فِي القُرْآنِ؟",
+        "choices_fr": ["Al-Imran", "An-Nisa", "Al-Baqara", "Al-Maida"],
+        "choices_ar": ["آلُ عِمْرَان", "النِّسَاء", "البَقَرَة", "المَائِدَة"],
+        "correct_index": 2,
+        "explication_fr": "Sourate Al-Baqara est la plus longue avec 286 versets.",
+        "explication_ar": "سُورَةُ البَقَرَةِ أَطْوَلُ سُورَةٍ بِـ٢٨٦ آيَة."
+      },
+      {
+        "id": 68,
+        "type": "vrai_faux",
+        "question_fr": "Hamza ibn Abd al-Muttalib était l'oncle du Prophète ﷺ.",
+        "question_ar": "حَمْزَةُ بْنُ عَبْدِ المُطَّلِبِ كَانَ عَمَّ النَّبِيِّ ﷺ.",
+        "correct": true,
+        "explication_fr": "Hamza était l'oncle du Prophète ﷺ et fut martyrisé à Uhud.",
+        "explication_ar": "حَمْزَةُ كَانَ عَمَّ النَّبِيِّ ﷺ وَاسْتُشْهِدَ فِي غَزْوَةِ أُحُدٍ."
+      },
+      {
+        "id": 69,
+        "type": "qcm",
+        "question_fr": "Quelle est la plus courte sourate du Coran ?",
+        "question_ar": "مَا هِيَ أَقْصَرُ سُورَةٍ فِي القُرْآنِ؟",
+        "choices_fr": ["Al-Ikhlas", "Al-Kawthar", "An-Nasr", "Al-Asr"],
+        "choices_ar": ["الإِخْلَاص", "الكَوْثَر", "النَّصْر", "العَصْر"],
+        "correct_index": 1,
+        "explication_fr": "Sourate Al-Kawthar est la plus courte avec 3 versets.",
+        "explication_ar": "سُورَةُ الكَوْثَرِ أَقْصَرُ سُورَةٍ بِثَلَاثِ آيَاتٍ."
+      },
+      {
+        "id": 70,
+        "type": "qcm",
+        "question_fr": "Combien de fils du Prophète ﷺ ont atteint l'âge adulte ?",
+        "question_ar": "كَمْ عَدَدُ أَبْنَاءِ النَّبِيِّ ﷺ الذُّكُورِ الَّذِينَ بَلَغُوا؟",
+        "choices_fr": ["0", "1", "2", "3"],
+        "choices_ar": ["٠", "١", "٢", "٣"],
+        "correct_index": 0,
+        "explication_fr": "Tous les fils du Prophète ﷺ sont morts en bas âge.",
+        "explication_ar": "جَمِيعُ أَبْنَاءِ النَّبِيِّ ﷺ الذُّكُورِ تُوُفُّوا صِغَارًا."
+      },
+      {
+        "id": 71,
+        "type": "vrai_faux",
+        "question_fr": "On peut faire le Tayammum (ablution sèche) en l'absence d'eau.",
+        "question_ar": "يَجُوزُ التَّيَمُّمُ عِنْدَ عَدَمِ وُجُودِ المَاءِ.",
+        "correct": true,
+        "explication_fr": "Le Tayammum avec de la terre pure est permis quand l'eau est absente ou nuisible.",
+        "explication_ar": "التَّيَمُّمُ بِالتُّرَابِ الطَّاهِرِ جَائِزٌ عِنْدَ فَقْدِ المَاءِ أَوِ الضَّرَرِ."
+      },
+      {
+        "id": 72,
+        "type": "qcm",
+        "question_fr": "Quel compagnon est connu pour avoir transmis le plus de hadiths ?",
+        "question_ar": "أَيُّ صَحَابِيٍّ رَوَى أَكْثَرَ الأَحَادِيثِ؟",
+        "choices_fr": ["Abu Bakr", "Omar", "Abu Hurayra", "Ali"],
+        "choices_ar": ["أَبُو بَكْر", "عُمَر", "أَبُو هُرَيْرَة", "عَلِيّ"],
+        "correct_index": 2,
+        "explication_fr": "Abu Hurayra a transmis plus de 5000 hadiths.",
+        "explication_ar": "أَبُو هُرَيْرَةَ رَوَى أَكْثَرَ مِنْ ٥٠٠٠ حَدِيثٍ."
+      },
+      {
+        "id": 73,
+        "type": "qcm",
+        "question_fr": "Quelle prière surérogatoire est accomplie après l'Isha pendant Ramadan ?",
+        "question_ar": "أَيُّ صَلَاةٍ نَافِلَةٍ تُصَلَّى بَعْدَ العِشَاءِ فِي رَمَضَانَ؟",
+        "choices_fr": ["Duha", "Istikhara", "Tarawih", "Witr"],
+        "choices_ar": ["الضُّحَى", "الاسْتِخَارَة", "التَّرَاوِيح", "الوِتْر"],
+        "correct_index": 2,
+        "explication_fr": "Les Tarawih sont les prières nocturnes spéciales du Ramadan.",
+        "explication_ar": "التَّرَاوِيحُ هِيَ صَلَاةُ اللَّيْلِ الخَاصَّةُ بِرَمَضَانَ."
+      },
+      {
+        "id": 74,
+        "type": "vrai_faux",
+        "question_fr": "Le Prophète ﷺ avait 40 ans quand il reçut la première révélation.",
+        "question_ar": "كَانَ عُمُرُ النَّبِيِّ ﷺ ٤٠ سَنَةً عِنْدَ نُزُولِ الوَحْيِ الأَوَّلِ.",
+        "correct": true,
+        "explication_fr": "La première révélation eut lieu dans la grotte de Hira quand il avait 40 ans.",
+        "explication_ar": "نَزَلَ الوَحْيُ الأَوَّلُ فِي غَارِ حِرَاءٍ وَعُمُرُهُ ٤٠ سَنَةً."
+      },
+      {
+        "id": 75,
+        "type": "qcm",
+        "question_fr": "Où le Prophète ﷺ a-t-il reçu la première révélation ?",
+        "question_ar": "أَيْنَ نَزَلَ الوَحْيُ الأَوَّلُ عَلَى النَّبِيِّ ﷺ؟",
+        "choices_fr": ["La Kaaba", "Médine", "La grotte de Hira", "Le mont Arafat"],
+        "choices_ar": ["الكَعْبَة", "المَدِينَة", "غَارُ حِرَاء", "جَبَلُ عَرَفَة"],
+        "correct_index": 2,
+        "explication_fr": "La première révélation eut lieu dans la grotte de Hira près de La Mecque.",
+        "explication_ar": "نَزَلَ الوَحْيُ الأَوَّلُ فِي غَارِ حِرَاءٍ قُرْبَ مَكَّةَ."
+      }
+    ],
+    "niveau3_avance": [
+      {
+        "id": 76,
+        "type": "qcm",
+        "question_fr": "En quelle année de l'Hégire a eu lieu la conquête de La Mecque (Fath Makkah) ?",
+        "question_ar": "فِي أَيِّ سَنَةٍ هِجْرِيَّةٍ كَانَ فَتْحُ مَكَّةَ؟",
+        "choices_fr": ["An 6", "An 7", "An 8", "An 10"],
+        "choices_ar": ["السَّنَةُ ٦", "السَّنَةُ ٧", "السَّنَةُ ٨", "السَّنَةُ ١٠"],
+        "correct_index": 2,
+        "explication_fr": "La conquête de La Mecque eut lieu en l'an 8 de l'Hégire (630).",
+        "explication_ar": "فَتْحُ مَكَّةَ كَانَ فِي السَّنَةِ الثَّامِنَةِ لِلْهِجْرَةِ."
+      },
+      {
+        "id": 77,
+        "type": "qcm",
+        "question_fr": "En quelle année de l'Hégire le Prophète ﷺ est-il décédé ?",
+        "question_ar": "فِي أَيِّ سَنَةٍ هِجْرِيَّةٍ تُوُفِّيَ النَّبِيُّ ﷺ؟",
+        "choices_fr": ["An 9", "An 10", "An 11", "An 12"],
+        "choices_ar": ["السَّنَةُ ٩", "السَّنَةُ ١٠", "السَّنَةُ ١١", "السَّنَةُ ١٢"],
+        "correct_index": 2,
+        "explication_fr": "Le Prophète ﷺ est décédé en l'an 11 de l'Hégire (632).",
+        "explication_ar": "تُوُفِّيَ النَّبِيُّ ﷺ فِي السَّنَةِ ١١ لِلْهِجْرَةِ."
+      },
+      {
+        "id": 78,
+        "type": "vrai_faux",
+        "question_fr": "L'Hégire (migration vers Médine) a eu lieu en 622 de l'ère chrétienne.",
+        "question_ar": "الهِجْرَةُ إِلَى المَدِينَةِ كَانَتْ سَنَةَ ٦٢٢ مِيلَادِيَّة.",
+        "correct": true,
+        "explication_fr": "L'Hégire en 622 marque le début du calendrier islamique.",
+        "explication_ar": "الهِجْرَةُ سَنَةَ ٦٢٢م هِيَ بِدَايَةُ التَّقْوِيمِ الهِجْرِيِّ."
+      },
+      {
+        "id": 79,
+        "type": "qcm",
+        "question_fr": "Quel nom d'Allah signifie 'Le Tout Miséricordieux' ?",
+        "question_ar": "أَيُّ اسْمٍ مِنْ أَسْمَاءِ اللهِ يَعْنِي 'ذُو الرَّحْمَةِ الوَاسِعَةِ'؟",
+        "choices_fr": ["Al-Malik", "Ar-Rahman", "Al-Aziz", "Al-Hakeem"],
+        "choices_ar": ["المَلِك", "الرَّحْمٰن", "العَزِيز", "الحَكِيم"],
+        "correct_index": 1,
+        "explication_fr": "Ar-Rahman signifie le Tout Miséricordieux, dont la miséricorde englobe tout.",
+        "explication_ar": "الرَّحْمٰنُ هُوَ ذُو الرَّحْمَةِ الوَاسِعَةِ الَّتِي وَسِعَتْ كُلَّ شَيْءٍ."
+      },
+      {
+        "id": 80,
+        "type": "qcm",
+        "question_fr": "Quel nom d'Allah signifie 'Le Roi' ?",
+        "question_ar": "أَيُّ اسْمٍ مِنْ أَسْمَاءِ اللهِ يَعْنِي 'المَالِكُ المُطْلَقُ'؟",
+        "choices_fr": ["Al-Malik", "Al-Quddus", "As-Salam", "Al-Jabbar"],
+        "choices_ar": ["المَلِك", "القُدُّوس", "السَّلَام", "الجَبَّار"],
+        "correct_index": 0,
+        "explication_fr": "Al-Malik signifie le Roi, le Souverain absolu.",
+        "explication_ar": "المَلِكُ هُوَ المَالِكُ المُطْلَقُ لِكُلِّ شَيْءٍ."
+      },
+      {
+        "id": 81,
+        "type": "qcm",
+        "question_fr": "Combien y a-t-il de noms d'Allah mentionnés dans la tradition ?",
+        "question_ar": "كَمْ عَدَدُ أَسْمَاءِ اللهِ الحُسْنَى المَذْكُورَةِ فِي السُّنَّةِ؟",
+        "choices_fr": ["77", "88", "99", "100"],
+        "choices_ar": ["٧٧", "٨٨", "٩٩", "١٠٠"],
+        "correct_index": 2,
+        "explication_fr": "Le hadith mentionne 99 noms d'Allah (Asma ul-Husna).",
+        "explication_ar": "الحَدِيثُ يَذْكُرُ ٩٩ اسْمًا مِنْ أَسْمَاءِ اللهِ الحُسْنَى."
+      },
+      {
+        "id": 82,
+        "type": "vrai_faux",
+        "question_fr": "Le Tajwid est la science de la récitation correcte du Coran.",
+        "question_ar": "التَّجْوِيدُ هُوَ عِلْمُ تِلَاوَةِ القُرْآنِ الصَّحِيحَةِ.",
+        "correct": true,
+        "explication_fr": "Le Tajwid enseigne les règles de prononciation et de récitation du Coran.",
+        "explication_ar": "التَّجْوِيدُ يُعَلِّمُ قَوَاعِدَ النُّطْقِ وَالتِّلَاوَةِ الصَّحِيحَةِ."
+      },
+      {
+        "id": 83,
+        "type": "qcm",
+        "question_fr": "Qu'est-ce que le Tafsir ?",
+        "question_ar": "مَا هُوَ التَّفْسِيرُ؟",
+        "choices_fr": ["La récitation", "L'exégèse du Coran", "La mémorisation", "La calligraphie"],
+        "choices_ar": ["التِّلَاوَة", "شَرْحُ القُرْآن", "الحِفْظ", "الخَطّ"],
+        "correct_index": 1,
+        "explication_fr": "Le Tafsir est la science de l'explication et de l'interprétation du Coran.",
+        "explication_ar": "التَّفْسِيرُ هُوَ عِلْمُ شَرْحِ وَتَفْسِيرِ آيَاتِ القُرْآنِ."
+      },
+      {
+        "id": 84,
+        "type": "qcm",
+        "question_fr": "Quelle est l'école juridique (madhab) fondée par l'Imam Malik ?",
+        "question_ar": "مَا هُوَ المَذْهَبُ الَّذِي أَسَّسَهُ الإِمَامُ مَالِكٌ؟",
+        "choices_fr": ["Hanafi", "Maliki", "Shafi'i", "Hanbali"],
+        "choices_ar": ["الحَنَفِيّ", "المَالِكِيّ", "الشَّافِعِيّ", "الحَنْبَلِيّ"],
+        "correct_index": 1,
+        "explication_fr": "L'Imam Malik ibn Anas a fondé l'école Malikite.",
+        "explication_ar": "الإِمَامُ مَالِكُ بْنُ أَنَسٍ أَسَّسَ المَذْهَبَ المَالِكِيَّ."
+      },
+      {
+        "id": 85,
+        "type": "qcm",
+        "question_fr": "Quelle école juridique est la plus répandue dans le monde musulman ?",
+        "question_ar": "أَيُّ مَذْهَبٍ فِقْهِيٍّ هُوَ الأَكْثَرُ انْتِشَارًا فِي العَالَمِ الإِسْلَامِيِّ؟",
+        "choices_fr": ["Hanafi", "Maliki", "Shafi'i", "Hanbali"],
+        "choices_ar": ["الحَنَفِيّ", "المَالِكِيّ", "الشَّافِعِيّ", "الحَنْبَلِيّ"],
+        "correct_index": 0,
+        "explication_fr": "L'école Hanafite est suivie par environ 30% des musulmans.",
+        "explication_ar": "المَذْهَبُ الحَنَفِيُّ يَتَّبِعُهُ حَوَالَي ٣٠٪ مِنَ المُسْلِمِينَ."
+      },
+      {
+        "id": 86,
+        "type": "vrai_faux",
+        "question_fr": "L'Imam Shafi'i était un élève de l'Imam Malik.",
+        "question_ar": "الإِمَامُ الشَّافِعِيُّ كَانَ تِلْمِيذًا لِلإِمَامِ مَالِكٍ.",
+        "correct": true,
+        "explication_fr": "L'Imam Shafi'i a étudié avec l'Imam Malik à Médine.",
+        "explication_ar": "الإِمَامُ الشَّافِعِيُّ دَرَسَ عِنْدَ الإِمَامِ مَالِكٍ فِي المَدِينَةِ."
+      },
+      {
+        "id": 87,
+        "type": "qcm",
+        "question_fr": "Quel calife a ordonné la compilation standardisée du Coran ?",
+        "question_ar": "أَيُّ خَلِيفَةٍ أَمَرَ بِتَوْحِيدِ المُصْحَفِ؟",
+        "choices_fr": ["Abu Bakr", "Omar", "Uthman", "Ali"],
+        "choices_ar": ["أَبُو بَكْر", "عُمَر", "عُثْمَان", "عَلِيّ"],
+        "correct_index": 2,
+        "explication_fr": "Uthman a standardisé le Mushaf et en a distribué des copies aux provinces.",
+        "explication_ar": "عُثْمَانُ وَحَّدَ المُصْحَفَ وَوَزَّعَ نُسَخًا عَلَى الأَمْصَارِ."
+      },
+      {
+        "id": 88,
+        "type": "qcm",
+        "question_fr": "Combien de califes bien guidés (Rashidun) y a-t-il eu ?",
+        "question_ar": "كَمْ عَدَدُ الخُلَفَاءِ الرَّاشِدِينَ؟",
+        "choices_fr": ["2", "3", "4", "5"],
+        "choices_ar": ["٢", "٣", "٤", "٥"],
+        "correct_index": 2,
+        "explication_fr": "Les 4 califes bien guidés : Abu Bakr, Omar, Uthman et Ali.",
+        "explication_ar": "الخُلَفَاءُ الرَّاشِدُونَ أَرْبَعَةٌ: أَبُو بَكْرٍ وَعُمَرُ وَعُثْمَانُ وَعَلِيٌّ."
+      },
+      {
+        "id": 89,
+        "type": "vrai_faux",
+        "question_fr": "La dynastie omeyyade a régné depuis Damas.",
+        "question_ar": "الدَّوْلَةُ الأُمَوِيَّةُ حَكَمَتْ مِنْ دِمَشْقَ.",
+        "correct": true,
+        "explication_fr": "Les Omeyyades ont établi leur capitale à Damas de 661 à 750.",
+        "explication_ar": "الأُمَوِيُّونَ جَعَلُوا دِمَشْقَ عَاصِمَتَهُمْ مِنْ ٦٦١ إِلَى ٧٥٠م."
+      },
+      {
+        "id": 90,
+        "type": "qcm",
+        "question_fr": "Quelle dynastie a succédé aux Omeyyades ?",
+        "question_ar": "أَيُّ دَوْلَةٍ جَاءَتْ بَعْدَ الأُمَوِيِّينَ؟",
+        "choices_fr": ["Fatimide", "Abbasside", "Ottoman", "Seldjoukide"],
+        "choices_ar": ["الفَاطِمِيَّة", "العَبَّاسِيَّة", "العُثْمَانِيَّة", "السَّلْجُوقِيَّة"],
+        "correct_index": 1,
+        "explication_fr": "Les Abbassides ont renversé les Omeyyades en 750.",
+        "explication_ar": "العَبَّاسِيُّونَ أَسْقَطُوا الدَّوْلَةَ الأُمَوِيَّةَ سَنَةَ ٧٥٠م."
+      },
+      {
+        "id": 91,
+        "type": "qcm",
+        "question_fr": "Quelle était la capitale des Abbassides ?",
+        "question_ar": "مَا كَانَتْ عَاصِمَةُ الدَّوْلَةِ العَبَّاسِيَّةِ؟",
+        "choices_fr": ["Damas", "Le Caire", "Bagdad", "Cordoue"],
+        "choices_ar": ["دِمَشْق", "القَاهِرَة", "بَغْدَاد", "قُرْطُبَة"],
+        "correct_index": 2,
+        "explication_fr": "Bagdad fut la capitale abbasside, fondée en 762.",
+        "explication_ar": "بَغْدَادُ كَانَتْ عَاصِمَةَ العَبَّاسِيِّينَ، أُسِّسَتْ سَنَةَ ٧٦٢م."
+      },
+      {
+        "id": 92,
+        "type": "qcm",
+        "question_fr": "Qui a compilé le recueil de hadiths 'Sahih al-Bukhari' ?",
+        "question_ar": "مَنْ جَمَعَ 'صَحِيحَ البُخَارِيِّ'؟",
+        "choices_fr": ["Muslim ibn al-Hajjaj", "Al-Bukhari", "At-Tirmidhi", "Abu Dawud"],
+        "choices_ar": ["مُسْلِمُ بْنُ الحَجَّاج", "البُخَارِيّ", "التِّرْمِذِيّ", "أَبُو دَاوُد"],
+        "correct_index": 1,
+        "explication_fr": "L'Imam Al-Bukhari (810-870) a compilé le recueil le plus authentique.",
+        "explication_ar": "الإِمَامُ البُخَارِيُّ جَمَعَ أَصَحَّ كِتَابٍ بَعْدَ القُرْآنِ."
+      },
+      {
+        "id": 93,
+        "type": "vrai_faux",
+        "question_fr": "Sahih al-Bukhari et Sahih Muslim sont considérés comme les deux recueils de hadiths les plus authentiques.",
+        "question_ar": "صَحِيحُ البُخَارِيِّ وَصَحِيحُ مُسْلِمٍ هُمَا أَصَحُّ كِتَابَيْنِ بَعْدَ القُرْآنِ.",
+        "correct": true,
+        "explication_fr": "Ces deux recueils sont appelés 'As-Sahihayn' (les deux authentiques).",
+        "explication_ar": "هَذَانِ الكِتَابَانِ يُسَمَّيَانِ 'الصَّحِيحَيْنِ'."
+      },
+      {
+        "id": 94,
+        "type": "qcm",
+        "question_fr": "Qu'est-ce que l'Isnad dans la science du hadith ?",
+        "question_ar": "مَا هُوَ الإِسْنَادُ فِي عِلْمِ الحَدِيثِ؟",
+        "choices_fr": ["Le texte du hadith", "La chaîne de transmission", "Le commentaire", "La classification"],
+        "choices_ar": ["نَصُّ الحَدِيث", "سِلْسِلَةُ الرُّوَاة", "الشَّرْح", "التَّصْنِيف"],
+        "correct_index": 1,
+        "explication_fr": "L'Isnad est la chaîne de transmetteurs remontant au Prophète ﷺ.",
+        "explication_ar": "الإِسْنَادُ هُوَ سِلْسِلَةُ الرُّوَاةِ إِلَى النَّبِيِّ ﷺ."
+      },
+      {
+        "id": 95,
+        "type": "qcm",
+        "question_fr": "Qu'est-ce que le Matn dans la science du hadith ?",
+        "question_ar": "مَا هُوَ المَتْنُ فِي عِلْمِ الحَدِيثِ؟",
+        "choices_fr": ["La chaîne de transmission", "Le texte du hadith", "Le narrateur", "Le classement"],
+        "choices_ar": ["سِلْسِلَةُ الرُّوَاة", "نَصُّ الحَدِيث", "الرَّاوِي", "التَّصْنِيف"],
+        "correct_index": 1,
+        "explication_fr": "Le Matn est le texte ou contenu du hadith lui-même.",
+        "explication_ar": "المَتْنُ هُوَ نَصُّ الحَدِيثِ نَفْسُهُ."
+      },
+      {
+        "id": 96,
+        "type": "vrai_faux",
+        "question_fr": "Al-Ghazali était un savant de l'école Shafi'ite.",
+        "question_ar": "الإِمَامُ الغَزَالِيُّ كَانَ عَالِمًا شَافِعِيًّا.",
+        "correct": true,
+        "explication_fr": "Abu Hamid al-Ghazali (1058-1111) était un théologien shafi'ite.",
+        "explication_ar": "أَبُو حَامِدٍ الغَزَالِيُّ كَانَ فَقِيهًا وَمُتَكَلِّمًا شَافِعِيًّا."
+      },
+      {
+        "id": 97,
+        "type": "qcm",
+        "question_fr": "Quel savant est l'auteur de 'Ihya Ulum ad-Din' (Revivification des sciences religieuses) ?",
+        "question_ar": "مَنْ أَلَّفَ كِتَابَ 'إِحْيَاءِ عُلُومِ الدِّينِ'؟",
+        "choices_fr": ["Ibn Taymiyya", "Al-Ghazali", "Ibn Kathir", "An-Nawawi"],
+        "choices_ar": ["ابْنُ تَيْمِيَّة", "الغَزَالِيّ", "ابْنُ كَثِير", "النَّوَوِيّ"],
+        "correct_index": 1,
+        "explication_fr": "Al-Ghazali a écrit ce chef-d'œuvre de spiritualité islamique.",
+        "explication_ar": "الغَزَالِيُّ أَلَّفَ هَذَا الكِتَابَ العَظِيمَ فِي التَّصَوُّفِ."
+      },
+      {
+        "id": 98,
+        "type": "qcm",
+        "question_fr": "Le hadith 'Les actes ne valent que par les intentions' se trouve dans quel recueil ?",
+        "question_ar": "حَدِيثُ 'إِنَّمَا الأَعْمَالُ بِالنِّيَّاتِ' فِي أَيِّ كِتَابٍ؟",
+        "choices_fr": ["Uniquement Muslim", "Uniquement Bukhari", "Bukhari et Muslim", "At-Tirmidhi"],
+        "choices_ar": ["مُسْلِمٌ فَقَط", "البُخَارِيُّ فَقَط", "البُخَارِيُّ وَمُسْلِم", "التِّرْمِذِيّ"],
+        "correct_index": 2,
+        "explication_fr": "Ce hadith est rapporté par Bukhari et Muslim (Muttafaq Alayh).",
+        "explication_ar": "هَذَا الحَدِيثُ مُتَّفَقٌ عَلَيْهِ (رَوَاهُ البُخَارِيُّ وَمُسْلِمٌ)."
+      },
+      {
+        "id": 99,
+        "type": "qcm",
+        "question_fr": "Quel terme désigne un hadith faible en termes de transmission ?",
+        "question_ar": "مَا المُصْطَلَحُ الَّذِي يَدُلُّ عَلَى حَدِيثٍ ضَعِيفِ السَّنَدِ؟",
+        "choices_fr": ["Sahih", "Hassan", "Da'if", "Mutawatir"],
+        "choices_ar": ["صَحِيح", "حَسَن", "ضَعِيف", "مُتَوَاتِر"],
+        "correct_index": 2,
+        "explication_fr": "Da'if signifie 'faible', un hadith dont la chaîne a des faiblesses.",
+        "explication_ar": "الضَّعِيفُ هُوَ الحَدِيثُ الَّذِي فِي سَنَدِهِ ضَعْفٌ."
+      },
+      {
+        "id": 100,
+        "type": "vrai_faux",
+        "question_fr": "Un hadith 'Mutawatir' est transmis par un si grand nombre de personnes qu'il est impossible qu'ils aient menti.",
+        "question_ar": "الحَدِيثُ المُتَوَاتِرُ رَوَاهُ جَمْعٌ كَبِيرٌ يَسْتَحِيلُ تَوَاطُؤُهُمْ عَلَى الكَذِبِ.",
+        "correct": true,
+        "explication_fr": "Le Mutawatir a le plus haut degré d'authenticité.",
+        "explication_ar": "المُتَوَاتِرُ أَعْلَى دَرَجَاتِ الصِّحَّةِ فِي الحَدِيثِ."
+      },
+      {
+        "id": 101,
+        "type": "qcm",
+        "question_fr": "Quel calife a conquis Jérusalem pacifiquement ?",
+        "question_ar": "أَيُّ خَلِيفَةٍ فَتَحَ القُدْسَ سِلْمِيًّا؟",
+        "choices_fr": ["Abu Bakr", "Omar ibn al-Khattab", "Uthman", "Muawiya"],
+        "choices_ar": ["أَبُو بَكْر", "عُمَرُ بْنُ الخَطَّاب", "عُثْمَان", "مُعَاوِيَة"],
+        "correct_index": 1,
+        "explication_fr": "Omar a reçu les clés de Jérusalem en 637.",
+        "explication_ar": "تَسَلَّمَ عُمَرُ مَفَاتِيحَ القُدْسِ سَنَةَ ٦٣٧م."
+      },
+      {
+        "id": 102,
+        "type": "qcm",
+        "question_fr": "En quelle année le traité de Hudaybiya a-t-il été signé ?",
+        "question_ar": "فِي أَيِّ سَنَةٍ هِجْرِيَّةٍ كَانَ صُلْحُ الحُدَيْبِيَةِ؟",
+        "choices_fr": ["An 4", "An 5", "An 6", "An 7"],
+        "choices_ar": ["السَّنَةُ ٤", "السَّنَةُ ٥", "السَّنَةُ ٦", "السَّنَةُ ٧"],
+        "correct_index": 2,
+        "explication_fr": "Le traité de Hudaybiya fut signé en l'an 6 de l'Hégire (628).",
+        "explication_ar": "صُلْحُ الحُدَيْبِيَةِ كَانَ فِي السَّنَةِ السَّادِسَةِ لِلْهِجْرَةِ."
+      },
+      {
+        "id": 103,
+        "type": "vrai_faux",
+        "question_fr": "Le Pèlerinage d'Adieu (Hajjat al-Wada') a eu lieu en l'an 10 de l'Hégire.",
+        "question_ar": "حَجَّةُ الوَدَاعِ كَانَتْ فِي السَّنَةِ العَاشِرَةِ لِلْهِجْرَةِ.",
+        "correct": true,
+        "explication_fr": "C'était le seul et dernier Hajj du Prophète ﷺ.",
+        "explication_ar": "كَانَتْ حَجَّةُ الوَدَاعِ الحَجَّةَ الوَحِيدَةَ وَالأَخِيرَةَ لِلنَّبِيِّ ﷺ."
+      },
+      {
+        "id": 104,
+        "type": "qcm",
+        "question_fr": "Quel nom d'Allah signifie 'Le Gardien' ou 'Le Protecteur' ?",
+        "question_ar": "أَيُّ اسْمٍ مِنْ أَسْمَاءِ اللهِ يَعْنِي 'الحَافِظُ'؟",
+        "choices_fr": ["Al-Hafiz", "Al-Razzaq", "Al-Wadud", "Al-Ghaffar"],
+        "choices_ar": ["الحَفِيظ", "الرَّزَّاق", "الوَدُود", "الغَفَّار"],
+        "correct_index": 0,
+        "explication_fr": "Al-Hafiz est Celui qui protège et préserve toute chose.",
+        "explication_ar": "الحَفِيظُ هُوَ الَّذِي يَحْفَظُ كُلَّ شَيْءٍ."
+      },
+      {
+        "id": 105,
+        "type": "qcm",
+        "question_fr": "Quel nom d'Allah signifie 'Le Pourvoyeur' ?",
+        "question_ar": "أَيُّ اسْمٍ مِنْ أَسْمَاءِ اللهِ يَعْنِي 'المُعْطِي الرِّزْقَ'؟",
+        "choices_fr": ["Al-Malik", "Al-Razzaq", "Al-Qawi", "Al-Shakur"],
+        "choices_ar": ["المَلِك", "الرَّزَّاق", "القَوِيّ", "الشَّكُور"],
+        "correct_index": 1,
+        "explication_fr": "Al-Razzaq est Celui qui pourvoit à tous les besoins des créatures.",
+        "explication_ar": "الرَّزَّاقُ هُوَ الَّذِي يَرْزُقُ جَمِيعَ المَخْلُوقَاتِ."
+      },
+      {
+        "id": 106,
+        "type": "qcm",
+        "question_fr": "Qu'est-ce que le Qiyas en jurisprudence islamique ?",
+        "question_ar": "مَا هُوَ القِيَاسُ فِي الفِقْهِ الإِسْلَامِيِّ؟",
+        "choices_fr": ["Le consensus", "Le raisonnement par analogie", "L'intérêt général", "La coutume"],
+        "choices_ar": ["الإِجْمَاع", "الاسْتِدْلَالُ بِالتَّشَابُه", "المَصْلَحَة", "العُرْف"],
+        "correct_index": 1,
+        "explication_fr": "Le Qiyas est le raisonnement par analogie pour déduire des règles.",
+        "explication_ar": "القِيَاسُ هُوَ إِلْحَاقُ حُكْمٍ بِآخَرَ لِتَشَابُهِ العِلَّةِ."
+      },
+      {
+        "id": 107,
+        "type": "vrai_faux",
+        "question_fr": "L'Ijma' (consensus) est une source de la législation islamique.",
+        "question_ar": "الإِجْمَاعُ مَصْدَرٌ مِنْ مَصَادِرِ التَّشْرِيعِ الإِسْلَامِيِّ.",
+        "correct": true,
+        "explication_fr": "L'Ijma' (consensus des savants) est la 3ème source après le Coran et la Sunna.",
+        "explication_ar": "الإِجْمَاعُ هُوَ المَصْدَرُ الثَّالِثُ بَعْدَ القُرْآنِ وَالسُّنَّةِ."
+      },
+      {
+        "id": 108,
+        "type": "qcm",
+        "question_fr": "Combien de versets (ayat) contient le Coran approximativement ?",
+        "question_ar": "كَمْ عَدَدُ آيَاتِ القُرْآنِ الكَرِيمِ تَقْرِيبًا؟",
+        "choices_fr": ["5000", "6236", "7000", "8000"],
+        "choices_ar": ["٥٠٠٠", "٦٢٣٦", "٧٠٠٠", "٨٠٠٠"],
+        "correct_index": 1,
+        "explication_fr": "Le Coran contient 6236 versets selon le comptage le plus répandu.",
+        "explication_ar": "القُرْآنُ يَحْتَوِي عَلَى ٦٢٣٦ آيَةً فِي العَدِّ الكُوفِيِّ."
+      },
+      {
+        "id": 109,
+        "type": "qcm",
+        "question_fr": "Qu'appelle-t-on 'Huruf al-Muqatta'at' dans le Coran ?",
+        "question_ar": "مَا هِيَ 'الحُرُوفُ المُقَطَّعَةُ' فِي القُرْآنِ؟",
+        "choices_fr": ["Les versets abrogés", "Les lettres mystérieuses au début de certaines sourates", "Les règles de Tajwid", "Les pauses obligatoires"],
+        "choices_ar": ["الآيَاتُ المَنْسُوخَة", "الحُرُوفُ فِي بِدَايَةِ بَعْضِ السُّوَر", "أَحْكَامُ التَّجْوِيد", "الوُقُوفُ الوَاجِبَة"],
+        "correct_index": 1,
+        "explication_fr": "Ce sont des lettres comme 'Alif Lam Mim' dont la signification exacte est connue d'Allah.",
+        "explication_ar": "هِيَ حُرُوفٌ مِثْلُ 'الم' مَعْنَاهَا الدَّقِيقُ عِنْدَ اللهِ."
+      },
+      {
+        "id": 110,
+        "type": "vrai_faux",
+        "question_fr": "Ibn Kathir était un célèbre exégète (mufassir) du Coran.",
+        "question_ar": "ابْنُ كَثِيرٍ كَانَ مُفَسِّرًا شَهِيرًا لِلْقُرْآنِ.",
+        "correct": true,
+        "explication_fr": "Ibn Kathir (1301-1373) a écrit 'Tafsir al-Quran al-Azim'.",
+        "explication_ar": "ابْنُ كَثِيرٍ أَلَّفَ 'تَفْسِيرَ القُرْآنِ العَظِيمِ'."
+      }
+    ]
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "total_questions": 110,
+    "niveau1_count": 40,
+    "niveau2_count": 35,
+    "niveau3_count": 35,
+    "languages": ["fr", "ar"],
+    "created_date": "2026-01-12"
+  }
+}

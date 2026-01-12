@@ -11,6 +11,13 @@ export const PopupCible = {
   NON_MEMBRES: 'non_membres'
 }
 
+export const PopupFrequence = {
+  ALWAYS: 'always',
+  DAILY: 'daily',
+  ONCE: 'once',
+  WEEKLY: 'weekly'
+}
+
 // ==================== JANAZA ====================
 export const JanazaGenre = {
   HOMME: 'homme',

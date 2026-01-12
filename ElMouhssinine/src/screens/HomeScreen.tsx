@@ -16,7 +16,7 @@ import {
   subscribeToPrayerTimes,
   subscribeToAnnouncements,
   subscribeToEvents,
-  subscribeToJanaza,
+  subscribeToJanazaList,
   subscribeToIqama,
   subscribeToPopups,
   subscribeToRappels,
@@ -82,7 +82,7 @@ const HomeScreen = () => {
   const [countdown, setCountdown] = useState('01:23:45');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const [janaza, setJanaza] = useState<Janaza | null>(null);
+  const [janazaList, setJanazaList] = useState<Janaza[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [_loading, setLoading] = useState(true);
   const [islamicDate, setIslamicDate] = useState(mockIslamicDate);
@@ -95,8 +95,10 @@ const HomeScreen = () => {
   const [activePopup, setActivePopup] = useState<Popup | null>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [currentRappel, setCurrentRappel] = useState<Rappel | null>(null);
+
   const [showCalendar, setShowCalendar] = useState(false);
   const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null);
+  const [parisTime, setParisTime] = useState('');
 
   // Traduction des noms de prière
   const getPrayerName = (name: string) => {
@@ -178,6 +180,14 @@ const HomeScreen = () => {
     const s = Math.floor((diff % (1000 * 60)) / 1000);
 
     setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
+
+    // Mettre à jour l'heure de Paris
+    const parisTimeStr = now.toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Paris'
+    });
+    setParisTime(parisTimeStr);
   }, [nextPrayer.time]);
 
   useEffect(() => {
@@ -191,7 +201,7 @@ const HomeScreen = () => {
 
     const unsubAnnouncements = subscribeToAnnouncements((data) => setAnnouncements(data || []));
     const unsubEvents = subscribeToEvents((data) => setEvents(data || []));
-    const unsubJanaza = subscribeToJanaza(setJanaza);
+    const unsubJanaza = subscribeToJanazaList(setJanazaList);
     const unsubIqama = subscribeToIqama((horaires) => {
       if (horaires?.iqama) {
         setIqamaDelays(horaires.iqama);
@@ -221,29 +231,17 @@ const HomeScreen = () => {
       }
     });
 
-    // Subscriptions aux popups
+    // Subscriptions aux popups Firebase - Respecte la fréquence configurée
     const unsubPopups = subscribeToPopups(async (popups) => {
       if (popups && popups.length > 0) {
-        const popup = popups[0]; // Prendre le popup le plus prioritaire
-        // Vérifier si ce popup a déjà été vu aujourd'hui
-        const today = new Date().toISOString().split('T')[0];
-        const lastShown = await AsyncStorage.getItem(`popup_${popup.id}_shown`);
-        if (lastShown !== today) {
-          setActivePopup(popup);
-          setShowPopup(true);
-        }
-      } else {
-        // Popup de bienvenue par défaut si pas de popup Firebase
-        const today = new Date().toISOString().split('T')[0];
-        const lastShown = await AsyncStorage.getItem('popup_welcome_shown');
-        if (lastShown !== today) {
-          setActivePopup({
-            id: 'welcome',
-            titre: 'Bienvenue à El Mouhssinine',
-            contenu: 'Que la paix soit sur vous. Bienvenue dans l\'application de la mosquée El Mouhssinine de Bourg-en-Bresse.',
-            actif: true,
-          });
-          setShowPopup(true);
+        // Parcourir les popups par priorité et trouver le premier à afficher
+        for (const popup of popups) {
+          const shouldShow = await shouldShowPopup(popup);
+          if (shouldShow) {
+            setActivePopup(popup);
+            setShowPopup(true);
+            break; // Afficher un seul popup à la fois
+          }
         }
       }
     });
@@ -279,11 +277,65 @@ const HomeScreen = () => {
     return { day, month: months[date.getMonth()] };
   };
 
-  // Fermer le popup et enregistrer qu'il a été vu
+  // Vérifier si un popup doit être affiché selon sa fréquence
+  const shouldShowPopup = async (popup: Popup): Promise<boolean> => {
+    const frequence = popup.frequence || 'always';
+    const storageKey = `popup_${popup.id}_shown`;
+
+    switch (frequence) {
+      case 'always':
+        // Toujours afficher
+        return true;
+
+      case 'daily': {
+        // Une fois par jour
+        const today = new Date().toISOString().split('T')[0];
+        const lastShown = await AsyncStorage.getItem(storageKey);
+        return lastShown !== today;
+      }
+
+      case 'once': {
+        // Une seule fois (définitivement)
+        const seen = await AsyncStorage.getItem(`popup_seen_${popup.id}`);
+        return seen !== 'true';
+      }
+
+      case 'weekly': {
+        // Une fois par semaine
+        const lastShown = await AsyncStorage.getItem(storageKey);
+        if (!lastShown) return true;
+        const lastDate = new Date(lastShown);
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+        return diffDays >= 7;
+      }
+
+      default:
+        return true;
+    }
+  };
+
+  // Fermer le popup et enregistrer qu'il a été vu selon sa fréquence
   const closePopup = async () => {
     if (activePopup) {
+      const frequence = activePopup.frequence || 'always';
       const today = new Date().toISOString().split('T')[0];
-      await AsyncStorage.setItem(`popup_${activePopup.id}_shown`, today);
+
+      switch (frequence) {
+        case 'daily':
+          // Stocker la date d'aujourd'hui
+          await AsyncStorage.setItem(`popup_${activePopup.id}_shown`, today);
+          break;
+        case 'once':
+          // Marquer comme vu définitivement
+          await AsyncStorage.setItem(`popup_seen_${activePopup.id}`, 'true');
+          break;
+        case 'weekly':
+          // Stocker la date pour vérification hebdomadaire
+          await AsyncStorage.setItem(`popup_${activePopup.id}_shown`, today);
+          break;
+        // 'always' n'enregistre rien
+      }
     }
     setShowPopup(false);
     setActivePopup(null);
@@ -294,22 +346,21 @@ const HomeScreen = () => {
       {/* Modal Popup */}
       <Modal
         visible={showPopup && activePopup !== null}
-        transparent
+        transparent={true}
         animationType="fade"
         onRequestClose={closePopup}
       >
         <View style={styles.popupOverlay}>
           <View style={styles.popupContainer}>
-            <LinearGradient
-              colors={['#5c3a1a', '#7f4f24']}
-              style={styles.popupGradient}
+            <Text style={styles.popupTitle}>{activePopup?.titre || ''}</Text>
+            <Text style={styles.popupContent}>{activePopup?.contenu || ''}</Text>
+            <TouchableOpacity
+              style={styles.popupButton}
+              onPress={closePopup}
+              activeOpacity={0.7}
             >
-              <Text style={styles.popupTitle}>{activePopup?.titre || ''}</Text>
-              <Text style={styles.popupContent}>{activePopup?.contenu || ''}</Text>
-              <TouchableOpacity style={styles.popupButton} onPress={closePopup}>
-                <Text style={styles.popupButtonText}>{isRTL ? 'حسنا' : "J'ai compris"}</Text>
-              </TouchableOpacity>
-            </LinearGradient>
+              <Text style={styles.popupButtonText}>{isRTL ? 'حسنا' : "J'ai compris"}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -353,6 +404,8 @@ const HomeScreen = () => {
         <View style={styles.content}>
           {/* Prochaine prière */}
           <View style={styles.nextPrayerCard}>
+            {/* Heure de Paris */}
+            <Text style={styles.parisTime}>{parisTime}</Text>
             <Text style={[styles.nextPrayerLabel, isRTL && styles.rtlText]}>{t('nextPrayer')}</Text>
             <Text style={[styles.nextPrayerName, isRTL && styles.rtlText]}>{nextPrayer.icon} {getPrayerName(nextPrayer.name)}</Text>
             <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
@@ -490,12 +543,20 @@ const HomeScreen = () => {
           </View>
           )}
 
-          {/* Salat Janaza */}
-          {mockJanazaList.length > 0 && (
+          {/* Salat Janaza - Utilise Firebase si disponible, sinon mock */}
+          {(janazaList.length > 0 || mockJanazaList.length > 0) && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>⚰️ {t('janazaUpcoming')}</Text>
-              {(mockJanazaList || []).map((janazaItem) => {
-                const dateObj = new Date(janazaItem.date);
+              {(janazaList.length > 0 ? janazaList : mockJanazaList).map((janazaItem: any) => {
+                // Normaliser les champs (Firebase vs Mock)
+                const dateValue = janazaItem.prayerDate || janazaItem.date;
+                const dateObj = dateValue instanceof Date ? dateValue : new Date(dateValue);
+                const nom = janazaItem.deceasedName || `${janazaItem.prenom || ''} ${janazaItem.nom || ''}`.trim();
+                const lieu = janazaItem.location || janazaItem.lieu;
+                const heure = janazaItem.prayerTime || janazaItem.heure;
+                const phraseAr = janazaItem.deceasedNameAr || janazaItem.phraseAr || 'إِنَّا لِلَّهِ وَإِنَّا إِلَيْهِ رَاجِعُونَ';
+                const phraseFr = janazaItem.message || janazaItem.phraseFr || 'Nous sommes à Allah et vers Lui nous retournons';
+
                 const joursSemaineFr = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
                 const joursSemaineAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
                 const moisFr = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
@@ -503,20 +564,32 @@ const HomeScreen = () => {
                 const joursSemaine = isRTL ? joursSemaineAr : joursSemaineFr;
                 const mois = isRTL ? moisAr : moisFr;
                 const dateFormatee = `${joursSemaine[dateObj.getDay()]} ${dateObj.getDate()} ${mois[dateObj.getMonth()]}`;
-                const heureInfo = janazaItem.heure || `${t('afterPrayerPrefix')} ${getPrayerName(janazaItem.apresSalat || '')}`;
+                // Construire l'info d'heure: soit l'heure exacte, soit "Après [prière]"
+                // Firebase: salatApres avec format "apres_dhuhr", "apres_asr", etc.
+                // Mock: apresSalat avec format "dhuhr", "asr", etc.
+                let heureInfo = heure;
+                const salatValue = janazaItem.salatApres || janazaItem.apresSalat;
+                if (!heureInfo && salatValue) {
+                  // Extraire le nom de la prière (ex: "apres_dhuhr" -> "dhuhr", ou juste "dhuhr")
+                  const prayerKey = salatValue.replace('apres_', '');
+                  heureInfo = `${t('afterPrayerPrefix')} ${getPrayerName(prayerKey)}`;
+                }
+                if (!heureInfo) {
+                  heureInfo = t('timeToConfirm') || 'Heure à confirmer';
+                }
 
                 return (
                   <View key={janazaItem.id} style={styles.janazaMockCard}>
-                    <Text style={styles.janazaMockArabic}>{janazaItem.phraseAr}</Text>
+                    <Text style={styles.janazaMockArabic}>{phraseAr}</Text>
                     <View style={styles.janazaMockInfo}>
                       <Text style={[styles.janazaMockName, isRTL && styles.rtlText]}>
-                        {janazaItem.genre === 'homme' ? '👤' : '👤'} {janazaItem.prenom} {janazaItem.nom}
+                        👤 {nom}
                       </Text>
                       <Text style={[styles.janazaMockDate, isRTL && styles.rtlText]}>
                         📅 {dateFormatee} - {heureInfo}
                       </Text>
-                      <Text style={[styles.janazaMockLieu, isRTL && styles.rtlText]}>📍 {janazaItem.lieu}</Text>
-                      <Text style={[styles.janazaMockPhraseFr, isRTL && styles.rtlText]}>"{isRTL ? janazaItem.phraseAr : janazaItem.phraseFr}"</Text>
+                      <Text style={[styles.janazaMockLieu, isRTL && styles.rtlText]}>📍 {lieu}</Text>
+                      <Text style={[styles.janazaMockPhraseFr, isRTL && styles.rtlText]}>"{isRTL ? phraseAr : phraseFr}"</Text>
                     </View>
                   </View>
                 );
@@ -558,11 +631,11 @@ const HomeScreen = () => {
           </View>
 
 
-          {/* Événements */}
+          {/* Événements - SANS limite, affiche tous les événements Firebase */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📅 {t('upcomingEvents')}</Text>
             {(events || []).length > 0 ? (
-              (events || []).slice(0, 3).map((event) => {
+              (events || []).map((event) => {
                 const { day, month } = formatDate(event.date);
                 return (
                   <View key={event.id} style={styles.card}>
@@ -618,58 +691,55 @@ const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  // Popup styles
+  // Popup styles - TRIPLER hauteur, +35% largeur
   popupOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.lg,
   },
   popupContainer: {
-    borderRadius: 20,
-    marginHorizontal: 24,
+    backgroundColor: '#6B4423',
+    borderRadius: 24,
+    padding: 32,
+    marginHorizontal: 20,
+    width: '85%',
+    minHeight: 300,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 10,
-    width: '100%',
-    maxWidth: 340,
-    overflow: 'hidden',
-  },
-  popupGradient: {
-    padding: spacing.xl,
-    alignItems: 'center',
-    borderRadius: 20,
   },
   popupTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   popupContent: {
-    fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: 18,
+    color: '#FFFFFF',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: spacing.xl,
+    lineHeight: 26,
+    marginBottom: 30,
+    paddingHorizontal: 10,
   },
   popupButton: {
-    backgroundColor: '#c9a227',
-    paddingVertical: 14,
-    paddingHorizontal: spacing.xl,
-    borderRadius: 12,
-    marginTop: 16,
-    width: '100%',
+    backgroundColor: '#F4D03F',
+    paddingVertical: 16,
+    paddingHorizontal: 60,
+    borderRadius: 30,
+    marginTop: 20,
     alignItems: 'center',
   },
   popupButtonText: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#5D4E37',
   },
   container: {
     flex: 1,
@@ -772,6 +842,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     borderWidth: 1,
     borderColor: 'rgba(201,162,39,0.2)',
+  },
+  parisTime: {
+    fontSize: 26, // +30% par rapport à 20
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
   nextPrayerLabel: {
     fontSize: fontSize.sm,

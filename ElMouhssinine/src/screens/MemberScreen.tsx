@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { getMember, updateMember, createMember } from '../services/firebase';
@@ -503,10 +504,10 @@ const MemberScreen = () => {
             {/* Méthodes de paiement */}
             <Text style={[styles.inputLabel, isRTL && styles.rtlText, { marginTop: spacing.lg }]}>{t('paymentMethod')}</Text>
             {[
-              { id: 'card', icon: '💳', labelKey: 'cardPayment', descKey: 'visaMastercard' },
-              { id: 'apple', icon: '🍎', label: 'Apple Pay', descKey: 'fastPayment' },
+              { id: 'card', icon: '💳', labelKey: 'cardPayment', descKey: 'visaMastercard', isApple: false },
+              { id: 'apple', icon: '', label: 'Apple Pay', descKey: 'fastPayment', isApple: true },
               ...(cotisationType === 'mensuel' ? [
-                { id: 'sepa', icon: '🏦', labelKey: 'bankTransfer', descKey: 'bankAccount' }
+                { id: 'sepa', icon: '🏦', labelKey: 'bankTransfer', descKey: 'bankAccount', isApple: false }
               ] : [])
             ].map((method) => (
               <TouchableOpacity
@@ -514,14 +515,22 @@ const MemberScreen = () => {
                 style={[
                   styles.paymentOption,
                   paymentMethod === method.id && styles.paymentOptionSelected,
+                  method.isApple && styles.applePayOption,
                   isRTL && styles.paymentOptionRTL
                 ]}
                 onPress={() => setPaymentMethod(method.id)}
               >
-                <Text style={styles.paymentIcon}>{method.icon}</Text>
+                {method.isApple ? (
+                  <Image
+                    source={require('../assets/apple-logo.png')}
+                    style={styles.appleLogo}
+                  />
+                ) : method.icon ? (
+                  <Text style={styles.paymentIcon}>{method.icon}</Text>
+                ) : null}
                 <View style={styles.paymentInfo}>
-                  <Text style={[styles.paymentTitle, isRTL && styles.rtlText]}>{(method as any).labelKey ? t((method as any).labelKey) : (method as any).label}</Text>
-                  <Text style={[styles.paymentDesc, isRTL && styles.rtlText]}>{t((method as any).descKey as any)}</Text>
+                  <Text style={[styles.paymentTitle, isRTL && styles.rtlText, method.isApple && styles.applePayText]}>{(method as any).labelKey ? t((method as any).labelKey) : (method as any).label}</Text>
+                  <Text style={[styles.paymentDesc, isRTL && styles.rtlText, method.isApple && styles.applePayTextMuted]}>{t((method as any).descKey as any)}</Text>
                 </View>
                 {paymentMethod === method.id && (
                   <View style={styles.checkmark}>
@@ -972,6 +981,26 @@ const styles = StyleSheet.create({
   paymentIcon: {
     fontSize: 28,
     marginRight: spacing.md,
+  },
+  applePayOption: {
+    backgroundColor: '#000000',
+    borderWidth: 0,
+  },
+  applePayIconText: {
+    fontSize: 22,
+    color: '#FFFFFF',
+  },
+  applePayText: {
+    color: '#FFFFFF',
+  },
+  applePayTextMuted: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+  appleLogo: {
+    width: 20,
+    height: 24,
+    marginRight: spacing.md,
+    tintColor: '#FFFFFF',
   },
   paymentInfo: {
     flex: 1,

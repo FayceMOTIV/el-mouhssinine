@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { onAuthChange, getAdminByUid, loginUser, logoutUser, isDemoMode } from '../services/firebase'
 import { rolePermissions, AdminRole } from '../types'
 
@@ -27,15 +27,20 @@ export const AuthProvider = ({ children }) => {
   const [admin, setAdmin] = useState(null)
   const [loading, setLoading] = useState(true)
   const [demoMode, setDemoMode] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  // Refs pour éviter les race conditions
+  const isLoggingIn = useRef(false)
+  const currentUid = useRef(null)
+  const adminFetched = useRef(false)
 
   useEffect(() => {
-    // Check if we're in demo mode
     if (isDemoMode) {
-      console.log('🎭 Mode démo activé - Firebase non disponible')
       setDemoMode(true)
       setUser({ uid: 'demo-user', email: 'admin@demo.local' })
       setAdmin(DEMO_ADMIN)
       setLoading(false)
+      setAuthChecked(true)
       return
     }
 
@@ -43,29 +48,50 @@ export const AuthProvider = ({ children }) => {
 
     try {
       unsubscribe = onAuthChange(async (firebaseUser) => {
+        // Si on est en train de se connecter, ignorer ce callback
+        if (isLoggingIn.current) {
+          return
+        }
+
         try {
           if (firebaseUser) {
+            // Si c'est le même user ET qu'on a déjà fetch l'admin, ne pas refaire
+            if (currentUid.current === firebaseUser.uid && adminFetched.current) {
+              setLoading(false)
+              setAuthChecked(true)
+              return
+            }
+
             setUser(firebaseUser)
-            // Fetch admin data
+            currentUid.current = firebaseUser.uid
+
             const adminData = await getAdminByUid(firebaseUser.uid)
-            if (adminData) {
+
+            if (adminData && adminData.actif) {
               setAdmin(adminData)
+              adminFetched.current = true
             } else {
-              // User is not an admin
               setAdmin(null)
+              adminFetched.current = true
             }
           } else {
             setUser(null)
             setAdmin(null)
+            currentUid.current = null
+            adminFetched.current = false
           }
         } catch (err) {
-          console.error('Error in auth change handler:', err)
+          console.error('[Auth] Erreur:', err)
+          setAdmin(null)
         }
+
         setLoading(false)
+        setAuthChecked(true)
       })
     } catch (err) {
-      console.error('Error setting up auth listener:', err)
+      console.error('[Auth] Erreur setup listener:', err)
       setLoading(false)
+      setAuthChecked(true)
     }
 
     return () => unsubscribe()
@@ -76,19 +102,52 @@ export const AuthProvider = ({ children }) => {
     if (demoMode || isDemoMode) {
       setUser({ uid: 'demo-user', email })
       setAdmin(DEMO_ADMIN)
+      currentUid.current = 'demo-user'
+      adminFetched.current = true
       return { user: { uid: 'demo-user', email } }
     }
 
-    const result = await loginUser(email, password)
-    const adminData = await getAdminByUid(result.user.uid)
-    if (!adminData || !adminData.actif) {
-      await logoutUser()
-      throw new Error('Accès refusé. Vous n\'êtes pas administrateur.')
+    isLoggingIn.current = true
+    setLoading(true)
+
+    try {
+      const result = await loginUser(email, password)
+      const adminData = await getAdminByUid(result.user.uid)
+
+      if (!adminData || !adminData.actif) {
+        await logoutUser()
+        isLoggingIn.current = false
+        currentUid.current = null
+        adminFetched.current = false
+        setLoading(false)
+        throw new Error('Accès refusé. Vous n\'êtes pas administrateur.')
+      }
+
+      currentUid.current = result.user.uid
+      adminFetched.current = true
+
+      setUser(result.user)
+      setAdmin(adminData)
+      setAuthChecked(true)
+      setLoading(false)
+
+      await new Promise(resolve => setTimeout(resolve, 50))
+      isLoggingIn.current = false
+
+      return result
+    } catch (error) {
+      isLoggingIn.current = false
+      currentUid.current = null
+      adminFetched.current = false
+      setLoading(false)
+      throw error
     }
-    return result
   }
 
   const logout = async () => {
+    currentUid.current = null
+    adminFetched.current = false
+
     if (!demoMode && !isDemoMode) {
       await logoutUser()
     }
@@ -106,16 +165,19 @@ export const AuthProvider = ({ children }) => {
     return admin?.role === AdminRole.SUPER_ADMIN
   }
 
+  const isAuthenticated = !!user && !!admin && admin.actif
+
   const value = {
     user,
     admin,
     loading,
+    authChecked,
     login,
     logout,
     hasPermission,
     isSuperAdmin,
     demoMode: demoMode || isDemoMode,
-    isAuthenticated: !!user && !!admin
+    isAuthenticated
   }
 
   return (

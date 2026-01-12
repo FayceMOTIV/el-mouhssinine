@@ -32,6 +32,9 @@ import LetterDetailScreen from '../screens/LetterDetailScreen';
 import LessonsListScreen from '../screens/LessonsListScreen';
 import LessonScreen from '../screens/LessonScreen';
 
+// Quiz Screen
+import QuizScreen from '../screens/QuizScreen';
+
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
@@ -79,6 +82,12 @@ const SpiritualStack = () => {
         name="AdhkarDetail"
         component={AdhkarDetailScreen}
         options={{ title: 'Détails' }}
+      />
+      {/* Quiz */}
+      <Stack.Screen
+        name="Quiz"
+        component={QuizScreen}
+        options={{ title: 'Quiz Islam' }}
       />
       {/* Learn Arabic */}
       <Stack.Screen

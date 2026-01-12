@@ -56,16 +56,12 @@ if (!FORCE_DEMO_MODE) {
     db = getFirestore(app)
     auth = getAuth(app)
     storage = getStorage(app)
-    console.log('✅ Firebase initialisé avec succès')
   } catch (err) {
-    console.warn('⚠️ Firebase non disponible, mode démo activé:', err.message)
     isDemoMode = true
   }
-} else {
-  console.log('🎭 Mode démo forcé pour le développement')
 }
 
-export { db, auth, storage }
+export { app, db, auth, storage }
 
 // ==================== MOCK DATA FOR DEMO MODE ====================
 const mockData = {
@@ -301,7 +297,31 @@ export const subscribeToMembres = (cb) => subscribeToCollection('members', cb, [
 // Admins
 export const getAdmins = () => getCollection('admins', [orderBy('createdAt', 'desc')])
 export const subscribeToAdmins = (cb) => subscribeToCollection('admins', cb, [orderBy('createdAt', 'desc')])
-export const getAdminByUid = (uid) => getDocument('admins', uid)
+
+// Cherche un admin par UID - d'abord par Document ID, puis par champ uid
+export const getAdminByUid = async (uid) => {
+  if (isDemoMode) {
+    const admins = mockData.admins || []
+    return admins.find(a => a.id === uid || a.uid === uid) || null
+  }
+
+  // 1. Essayer par Document ID
+  const docRef = doc(db, 'admins', uid)
+  const docSnap = await getDoc(docRef)
+  if (docSnap.exists()) {
+    return { id: docSnap.id, ...docSnap.data() }
+  }
+
+  // 2. Sinon chercher par champ uid
+  const q = query(collection(db, 'admins'), where('uid', '==', uid))
+  const snapshot = await getDocs(q)
+  if (!snapshot.empty) {
+    const adminDoc = snapshot.docs[0]
+    return { id: adminDoc.id, ...adminDoc.data() }
+  }
+
+  return null
+}
 
 // Notifications
 export const getNotifications = () => getCollection('notifications', [orderBy('createdAt', 'desc')])

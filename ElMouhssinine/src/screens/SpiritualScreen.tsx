@@ -33,6 +33,15 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
       color: '#27ae60',
     },
     {
+      id: 'quiz',
+      title: 'Quiz Islam',
+      titleAr: 'اختبار الإسلام',
+      description: '110 questions sur 3 niveaux',
+      icon: '🎓',
+      screen: 'Quiz',
+      color: '#9b59b6',
+    },
+    {
       id: 'learnArabic',
       title: "Apprendre l'Arabe",
       titleAr: 'تعلم العربية',
@@ -55,9 +64,9 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Spirituel</Text>
-          <Text style={styles.arabicTitle}>الروحانية</Text>
-          <Text style={styles.subtitle}>Coran, Invocations & Apprentissage</Text>
+          <Text style={styles.title}>Islam</Text>
+          <Text style={styles.arabicTitle}>الإسلام</Text>
+          <Text style={styles.subtitle}>Coran, Invocations, Quiz & Apprentissage</Text>
         </View>
 
         <View style={styles.content}>

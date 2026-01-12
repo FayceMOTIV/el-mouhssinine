@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import { BookOpen, Plus, Edit, Trash2, Search, Check, X } from 'lucide-react'
-import { Card, Button, Input, Textarea, Toggle, Loading, EmptyState, Modal, Badge } from '../components/common'
+import { Card, Button, Input, Textarea, Toggle, Loading, EmptyState, Modal, Badge, AIWriteButton } from '../components/common'
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../services/firebase'
 
@@ -273,24 +273,44 @@ export default function Rappels() {
         title={editingRappel ? 'Modifier le rappel' : 'Nouveau rappel'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Textarea
-            label="Texte en français *"
-            value={formData.texteFr}
-            onChange={(e) => setFormData({ ...formData, texteFr: e.target.value })}
-            placeholder="Les actes ne valent que par leurs intentions..."
-            rows={3}
-            required
-          />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Texte en français *</label>
+              <AIWriteButton
+                type="rappel"
+                field="contenu"
+                existingContent={formData.texteFr}
+                onGenerated={(content) => setFormData({ ...formData, texteFr: content })}
+              />
+            </div>
+            <Textarea
+              value={formData.texteFr}
+              onChange={(e) => setFormData({ ...formData, texteFr: e.target.value })}
+              placeholder="Les actes ne valent que par leurs intentions..."
+              rows={3}
+              required
+            />
+          </div>
 
-          <Textarea
-            label="Texte en arabe"
-            value={formData.texteAr}
-            onChange={(e) => setFormData({ ...formData, texteAr: e.target.value })}
-            placeholder="إنما الأعمال بالنيات..."
-            rows={3}
-            className="text-right"
-            dir="rtl"
-          />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Texte en arabe</label>
+              <AIWriteButton
+                type="rappel"
+                field="contenu"
+                existingContent={formData.texteAr}
+                onGenerated={(content) => setFormData({ ...formData, texteAr: content })}
+              />
+            </div>
+            <Textarea
+              value={formData.texteAr}
+              onChange={(e) => setFormData({ ...formData, texteAr: e.target.value })}
+              placeholder="إنما الأعمال بالنيات..."
+              rows={3}
+              className="text-right"
+              dir="rtl"
+            />
+          </div>
 
           <Input
             label="Source"

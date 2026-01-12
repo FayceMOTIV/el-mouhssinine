@@ -13,7 +13,8 @@ import {
   Toggle,
   Badge,
   Loading,
-  EmptyState
+  EmptyState,
+  AIWriteButton
 } from '../components/common'
 import {
   subscribeToJanazas,
@@ -336,18 +337,38 @@ export default function Janaza() {
               placeholder="Ex: Mosquée El Mouhssinine"
             />
           </div>
-          <Textarea
-            label="Phrase en arabe"
-            value={formData.phraseAr}
-            onChange={(e) => setFormData({ ...formData, phraseAr: e.target.value })}
-            className="text-right"
-            dir="rtl"
-          />
-          <Textarea
-            label="Phrase en français"
-            value={formData.phraseFr}
-            onChange={(e) => setFormData({ ...formData, phraseFr: e.target.value })}
-          />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Phrase en arabe</label>
+              <AIWriteButton
+                type="janaza"
+                field="contenu"
+                existingContent={formData.phraseAr}
+                onGenerated={(content) => setFormData({ ...formData, phraseAr: content })}
+              />
+            </div>
+            <Textarea
+              value={formData.phraseAr}
+              onChange={(e) => setFormData({ ...formData, phraseAr: e.target.value })}
+              className="text-right"
+              dir="rtl"
+            />
+          </div>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Phrase en français</label>
+              <AIWriteButton
+                type="janaza"
+                field="contenu"
+                existingContent={formData.phraseFr}
+                onGenerated={(content) => setFormData({ ...formData, phraseFr: content })}
+              />
+            </div>
+            <Textarea
+              value={formData.phraseFr}
+              onChange={(e) => setFormData({ ...formData, phraseFr: e.target.value })}
+            />
+          </div>
           <Toggle
             label="Afficher sur l'application"
             checked={formData.actif}

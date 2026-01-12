@@ -14,7 +14,8 @@ import {
   Badge,
   StatusBadge,
   Loading,
-  EmptyState
+  EmptyState,
+  AIWriteButton
 } from '../components/common'
 import {
   subscribeToNotifications,
@@ -326,21 +327,42 @@ export default function Notifications() {
         size="lg"
       >
         <div className="space-y-4">
-          <Input
-            label="Titre"
-            value={formData.titre}
-            onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
-            placeholder="Ex: Rappel de prière"
-            required
-          />
-          <Textarea
-            label="Message"
-            value={formData.message}
-            onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-            placeholder="Contenu de la notification..."
-            rows={3}
-            required
-          />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Titre</label>
+              <AIWriteButton
+                type="notification"
+                field="titre"
+                existingContent={formData.titre}
+                onGenerated={(content) => setFormData({ ...formData, titre: content })}
+              />
+            </div>
+            <Input
+              value={formData.titre}
+              onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
+              placeholder="Ex: Rappel de prière"
+              required
+            />
+          </div>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Message</label>
+              <AIWriteButton
+                type="notification"
+                field="message"
+                existingTitle={formData.titre}
+                existingContent={formData.message}
+                onGenerated={(content) => setFormData({ ...formData, message: content })}
+              />
+            </div>
+            <Textarea
+              value={formData.message}
+              onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+              placeholder="Contenu de la notification..."
+              rows={3}
+              required
+            />
+          </div>
           <Select
             label="Destinataires"
             value={formData.topic}

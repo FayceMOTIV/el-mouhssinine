@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,10 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Animated,
+  Platform,
 } from 'react-native';
+import CompassHeading from 'react-native-compass-heading';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { subscribeToMosqueeInfo } from '../services/firebase';
@@ -45,6 +48,9 @@ const MoreScreen = () => {
 
   const [copied, setCopied] = useState('');
   const [jumuaReminderEnabled, setJumuaReminderEnabled] = useState(false);
+  const [compassHeading, setCompassHeading] = useState(0);
+  const [compassError, setCompassError] = useState<string | null>(null);
+  const rotateAnim = useRef(new Animated.Value(0)).current;
   const qiblaDirection = 119; // Direction Qibla pour Bourg-en-Bresse
 
   useEffect(() => {
@@ -53,6 +59,34 @@ const MoreScreen = () => {
     });
     return () => unsub?.();
   }, []);
+
+  // Initialiser la boussole
+  useEffect(() => {
+    const degree_update_rate = 3; // Mise à jour toutes les 3 degrés
+
+    CompassHeading.start(degree_update_rate, ({ heading, accuracy }) => {
+      setCompassHeading(heading);
+      setCompassError(null);
+
+      // Calculer la rotation de l'aiguille vers la Qibla
+      // L'aiguille doit pointer vers qiblaDirection depuis le Nord
+      // Donc on soustrait le heading actuel pour compenser l'orientation du téléphone
+      const qiblaRotation = qiblaDirection - heading;
+
+      Animated.timing(rotateAnim, {
+        toValue: qiblaRotation,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }).catch((error: any) => {
+      console.error('Compass error:', error);
+      setCompassError(language === 'ar' ? 'البوصلة غير متوفرة' : 'Boussole non disponible');
+    });
+
+    return () => {
+      CompassHeading.stop();
+    };
+  }, [language, rotateAnim]);
 
   // Charger l'état du rappel Jumu'a au démarrage
   useEffect(() => {
@@ -126,33 +160,73 @@ const MoreScreen = () => {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>🧭 {t('qiblaDirection')}</Text>
             <View style={styles.qiblaCard}>
-              {/* Boussole */}
-              <View style={styles.compass}>
-                <View style={styles.compassRing}>
-                  {/* Points cardinaux */}
-                  <Text style={[styles.cardinal, styles.cardinalN]}>N</Text>
-                  <Text style={[styles.cardinal, styles.cardinalS]}>S</Text>
-                  <Text style={[styles.cardinal, styles.cardinalE]}>E</Text>
-                  <Text style={[styles.cardinal, styles.cardinalO]}>O</Text>
-                  
-                  {/* Aiguille */}
-                  <View style={[
-                    styles.needle,
-                    { transform: [{ rotate: `${qiblaDirection}deg` }] }
-                  ]}>
-                    <View style={styles.needlePointer} />
-                  </View>
-                  
-                  {/* Centre Kaaba */}
-                  <View style={styles.compassCenter}>
-                    <Text style={styles.kaaba}>🕋</Text>
-                  </View>
+              {/* Titre Direction de La Mecque */}
+              <Text style={styles.qiblaMainTitle}>
+                {language === 'ar' ? 'اتجاه مكة المكرمة' : 'Direction de La Mecque'}
+              </Text>
+              <Text style={styles.kaaba}>🕋</Text>
+
+              {compassError ? (
+                <View style={styles.compassErrorContainer}>
+                  <Text style={styles.compassErrorIcon}>🧭</Text>
+                  <Text style={styles.compassErrorText}>{compassError}</Text>
                 </View>
+              ) : (
+                <>
+                  {/* Grande boussole améliorée */}
+                  <View style={styles.compass}>
+                    <View style={styles.compassRing}>
+                      {/* Points cardinaux plus visibles */}
+                      <Text style={[styles.cardinal, styles.cardinalN]}>N</Text>
+                      <Text style={[styles.cardinal, styles.cardinalS]}>S</Text>
+                      <Text style={[styles.cardinal, styles.cardinalE]}>E</Text>
+                      <Text style={[styles.cardinal, styles.cardinalO]}>O</Text>
+
+                      {/* Grande flèche dorée animée vers la Qibla */}
+                      <Animated.View style={[
+                        styles.needle,
+                        {
+                          transform: [{
+                            rotate: rotateAnim.interpolate({
+                              inputRange: [-360, 360],
+                              outputRange: ['-360deg', '360deg'],
+                            })
+                          }]
+                        }
+                      ]}>
+                        <View style={styles.needlePointer}>
+                          <Text style={styles.arrowEmoji}>▲</Text>
+                        </View>
+                        <View style={styles.needleLine} />
+                      </Animated.View>
+
+                      {/* Centre de la boussole */}
+                      <View style={styles.compassCenter} />
+                    </View>
+                  </View>
+
+                  {/* Indicateur d'alignement */}
+                  <View style={[
+                    styles.alignmentIndicator,
+                    Math.abs((compassHeading - qiblaDirection + 360) % 360) < 15 && styles.alignmentIndicatorAligned
+                  ]}>
+                    <Text style={styles.alignmentText}>
+                      {Math.abs((compassHeading - qiblaDirection + 360) % 360) < 15
+                        ? (language === 'ar' ? '✓ أنت على القبلة!' : '✓ Vous êtes aligné!')
+                        : (language === 'ar' ? 'وجّه الهاتف نحو القبلة' : 'Tournez vers la Qibla')}
+                    </Text>
+                  </View>
+                </>
+              )}
+
+              {/* Direction en degrés */}
+              <View style={styles.qiblaDegreesContainer}>
+                <Text style={styles.qiblaDegreesValue}>{qiblaDirection}°</Text>
+                <Text style={styles.qiblaDegreesLabel}>{t('southEast')}</Text>
               </View>
 
-              <Text style={[styles.qiblaDirection, isRTL && styles.textRTL]}>{qiblaDirection}° {t('southEast')}</Text>
               <Text style={[styles.qiblaCity, isRTL && styles.textRTL]}>
-                {t('qiblaDirectionFrom')} {mosqueeInfo.city}
+                📍 {t('qiblaDirectionFrom')} {mosqueeInfo.city}
               </Text>
             </View>
           </View>
@@ -425,72 +499,131 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
   },
-  // Qibla
+  // Qibla - Design amélioré
   qiblaCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.xxl,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.3)',
+  },
+  qiblaMainTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  kaaba: {
+    fontSize: 40,
+    marginBottom: spacing.lg,
   },
   compass: {
-    width: 180,
-    height: 180,
+    width: 220,
+    height: 220,
     marginBottom: spacing.lg,
   },
   compassRing: {
     width: '100%',
     height: '100%',
-    borderRadius: 90,
-    borderWidth: 4,
+    borderRadius: 110,
+    borderWidth: 6,
     borderColor: colors.accent,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(201,162,39,0.08)',
   },
   cardinal: {
     position: 'absolute',
-    fontSize: fontSize.sm,
+    fontSize: fontSize.lg,
     fontWeight: 'bold',
-    color: colors.textMuted,
+    color: colors.text,
   },
-  cardinalN: { top: 8 },
-  cardinalS: { bottom: 8 },
-  cardinalE: { right: 8 },
-  cardinalO: { left: 8 },
+  cardinalN: { top: 12 },
+  cardinalS: { bottom: 12 },
+  cardinalE: { right: 12 },
+  cardinalO: { left: 12 },
   needle: {
     position: 'absolute',
-    width: 4,
-    height: 70,
-    backgroundColor: 'transparent',
+    width: 40,
+    height: 90,
     alignItems: 'center',
   },
   needlePointer: {
-    width: 4,
-    height: 35,
-    backgroundColor: colors.accent,
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
-  },
-  compassCenter: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(201,162,39,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  kaaba: {
-    fontSize: 24,
+  arrowEmoji: {
+    fontSize: 48,
+    color: colors.accent,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
-  qiblaDirection: {
-    fontSize: fontSize.xxl,
+  needleLine: {
+    width: 4,
+    height: 30,
+    backgroundColor: colors.accent,
+    borderRadius: 2,
+  },
+  compassCenter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.accent,
+  },
+  alignmentIndicator: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+  },
+  alignmentIndicatorAligned: {
+    backgroundColor: 'rgba(76,175,80,0.3)',
+  },
+  alignmentText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  qiblaDegreesContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: spacing.sm,
+  },
+  qiblaDegreesValue: {
+    fontSize: 42,
     fontWeight: 'bold',
     color: colors.accent,
-    marginBottom: 4,
+  },
+  qiblaDegreesLabel: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginLeft: spacing.xs,
   },
   qiblaCity: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.md,
     color: colors.textMuted,
+    textAlign: 'center',
+  },
+  compassErrorContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  compassErrorIcon: {
+    fontSize: 48,
+    marginBottom: spacing.md,
+    opacity: 0.5,
+  },
+  compassErrorText: {
+    fontSize: fontSize.md,
+    color: colors.textMuted,
+    marginBottom: spacing.md,
   },
   // RIB
   ribHeader: {

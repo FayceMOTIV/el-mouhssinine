@@ -8,7 +8,7 @@ export const translations = {
     home: 'Accueil',
     donations: 'Dons',
     member: 'Adhérent',
-    quran: 'Coran',
+    quran: 'Islam',
     more: 'Plus',
 
     // Home Screen
@@ -28,6 +28,7 @@ export const translations = {
     deceased: 'Défunt(e)',
     janazaUpcoming: 'Salat Janaza à venir',
     afterPrayerPrefix: 'Après',
+    timeToConfirm: 'Heure à confirmer',
 
     // Prayers
     fajr: 'Fajr',
@@ -312,7 +313,7 @@ export const translations = {
     home: 'رئيسية',
     donations: 'تبرعات',
     member: 'عضوية',
-    quran: 'قرآن',
+    quran: 'إسلام',
     more: 'المزيد',
 
     // Home Screen
@@ -332,6 +333,7 @@ export const translations = {
     deceased: 'المتوفى',
     janazaUpcoming: 'صلاة الجنازة القادمة',
     afterPrayerPrefix: 'بعد',
+    timeToConfirm: 'الوقت سيُحدد',
 
     // Prayers
     fajr: 'الفجر',

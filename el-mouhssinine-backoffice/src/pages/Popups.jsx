@@ -13,7 +13,8 @@ import {
   Toggle,
   Badge,
   Loading,
-  EmptyState
+  EmptyState,
+  AIWriteButton
 } from '../components/common'
 import {
   subscribeToPopups,
@@ -21,7 +22,7 @@ import {
   updateDocument,
   deleteDocument
 } from '../services/firebase'
-import { PopupPriorite, PopupCible } from '../types'
+import { PopupPriorite, PopupCible, PopupFrequence } from '../types'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
@@ -30,6 +31,7 @@ const defaultPopup = {
   message: '',
   priorite: PopupPriorite.NORMALE,
   cible: PopupCible.TOUS,
+  frequence: PopupFrequence.ALWAYS,
   lienBouton: '',
   texteBouton: '',
   actif: true,
@@ -47,6 +49,13 @@ const cibleOptions = [
   { value: PopupCible.TOUS, label: 'Tous les utilisateurs' },
   { value: PopupCible.MEMBRES, label: 'Membres uniquement' },
   { value: PopupCible.NON_MEMBRES, label: 'Non-membres uniquement' }
+]
+
+const frequenceOptions = [
+  { value: PopupFrequence.ALWAYS, label: 'À chaque ouverture' },
+  { value: PopupFrequence.DAILY, label: 'Une fois par jour' },
+  { value: PopupFrequence.ONCE, label: 'Une seule fois' },
+  { value: PopupFrequence.WEEKLY, label: 'Une fois par semaine' }
 ]
 
 export default function Popups() {
@@ -74,6 +83,7 @@ export default function Popups() {
         message: popup.message || '',
         priorite: popup.priorite || PopupPriorite.NORMALE,
         cible: popup.cible || PopupCible.TOUS,
+        frequence: popup.frequence || PopupFrequence.ALWAYS,
         lienBouton: popup.lienBouton || '',
         texteBouton: popup.texteBouton || '',
         actif: popup.actif !== false,
@@ -153,6 +163,16 @@ export default function Popups() {
     }
   }
 
+  const getFrequenceLabel = (frequence) => {
+    switch (frequence) {
+      case PopupFrequence.ALWAYS: return 'Chaque ouverture'
+      case PopupFrequence.DAILY: return '1x/jour'
+      case PopupFrequence.ONCE: return 'Une fois'
+      case PopupFrequence.WEEKLY: return '1x/semaine'
+      default: return 'Chaque ouverture'
+    }
+  }
+
   const columns = [
     {
       key: 'titre',
@@ -180,6 +200,15 @@ export default function Popups() {
         <span className="text-white/70 capitalize">
           {row.cible === PopupCible.MEMBRES ? 'Membres' :
            row.cible === PopupCible.NON_MEMBRES ? 'Non-membres' : 'Tous'}
+        </span>
+      )
+    },
+    {
+      key: 'frequence',
+      label: 'Fréquence',
+      render: (row) => (
+        <span className="text-white/70 text-sm">
+          {getFrequenceLabel(row.frequence)}
         </span>
       )
     },
@@ -269,22 +298,43 @@ export default function Popups() {
         size="lg"
       >
         <div className="space-y-4">
-          <Input
-            label="Titre"
-            value={formData.titre}
-            onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
-            placeholder="Ex: Rappel important"
-            required
-          />
-          <Textarea
-            label="Message"
-            value={formData.message}
-            onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-            placeholder="Contenu de la popup..."
-            rows={4}
-            required
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Titre</label>
+              <AIWriteButton
+                type="popup"
+                field="titre"
+                existingContent={formData.titre}
+                onGenerated={(content) => setFormData({ ...formData, titre: content })}
+              />
+            </div>
+            <Input
+              value={formData.titre}
+              onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
+              placeholder="Ex: Rappel important"
+              required
+            />
+          </div>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Message</label>
+              <AIWriteButton
+                type="popup"
+                field="message"
+                existingTitle={formData.titre}
+                existingContent={formData.message}
+                onGenerated={(content) => setFormData({ ...formData, message: content })}
+              />
+            </div>
+            <Textarea
+              value={formData.message}
+              onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+              placeholder="Contenu de la popup..."
+              rows={4}
+              required
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Select
               label="Priorité"
               value={formData.priorite}
@@ -296,6 +346,12 @@ export default function Popups() {
               value={formData.cible}
               onChange={(e) => setFormData({ ...formData, cible: e.target.value })}
               options={cibleOptions}
+            />
+            <Select
+              label="Fréquence d'affichage"
+              value={formData.frequence}
+              onChange={(e) => setFormData({ ...formData, frequence: e.target.value })}
+              options={frequenceOptions}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

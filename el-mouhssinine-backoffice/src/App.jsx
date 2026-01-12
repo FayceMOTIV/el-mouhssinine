@@ -22,13 +22,13 @@ import Rappels from './pages/Rappels'
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
+  const { isAuthenticated, loading, authChecked } = useAuth()
 
-  if (loading) {
+  if (loading || !authChecked) {
     return <FullPageLoader />
   }
 
-  if (!user) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
 
@@ -37,9 +37,9 @@ function ProtectedRoute({ children }) {
 
 // Admin Route Component
 function AdminRoute({ children }) {
-  const { isSuperAdmin, loading } = useAuth()
+  const { isSuperAdmin, loading, authChecked } = useAuth()
 
-  if (loading) {
+  if (loading || !authChecked) {
     return <FullPageLoader />
   }
 
@@ -52,9 +52,10 @@ function AdminRoute({ children }) {
 
 // App Routes
 function AppRoutes() {
-  const { user, loading } = useAuth()
+  const { isAuthenticated, loading, authChecked } = useAuth()
 
-  if (loading) {
+  // Attendre que l'auth soit complètement vérifié
+  if (loading || !authChecked) {
     return <FullPageLoader />
   }
 
@@ -62,7 +63,7 @@ function AppRoutes() {
     <Routes>
       <Route
         path="/login"
-        element={user ? <Navigate to="/" replace /> : <Login />}
+        element={isAuthenticated ? <Navigate to="/" replace /> : <Login />}
       />
       <Route
         path="/"

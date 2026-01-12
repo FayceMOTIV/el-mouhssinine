@@ -12,7 +12,8 @@ import {
   Toggle,
   Badge,
   Loading,
-  EmptyState
+  EmptyState,
+  AIWriteButton
 } from '../components/common'
 import {
   subscribeToAnnonces,
@@ -232,21 +233,42 @@ export default function Annonces() {
         title={editingAnnonce ? 'Modifier l\'annonce' : 'Nouvelle annonce'}
       >
         <div className="space-y-4">
-          <Input
-            label="Titre"
-            value={formData.titre}
-            onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
-            placeholder="Ex: Fermeture exceptionnelle"
-            required
-          />
-          <Textarea
-            label="Contenu"
-            value={formData.contenu}
-            onChange={(e) => setFormData({ ...formData, contenu: e.target.value })}
-            placeholder="Détails de l'annonce..."
-            rows={5}
-            required
-          />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Titre</label>
+              <AIWriteButton
+                type="annonce"
+                field="titre"
+                existingContent={formData.titre}
+                onGenerated={(content) => setFormData({ ...formData, titre: content })}
+              />
+            </div>
+            <Input
+              value={formData.titre}
+              onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
+              placeholder="Ex: Fermeture exceptionnelle"
+              required
+            />
+          </div>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-white">Contenu</label>
+              <AIWriteButton
+                type="annonce"
+                field="contenu"
+                existingTitle={formData.titre}
+                existingContent={formData.contenu}
+                onGenerated={(content) => setFormData({ ...formData, contenu: content })}
+              />
+            </div>
+            <Textarea
+              value={formData.contenu}
+              onChange={(e) => setFormData({ ...formData, contenu: e.target.value })}
+              placeholder="Détails de l'annonce..."
+              rows={5}
+              required
+            />
+          </div>
           <Toggle
             label="Annonce active"
             checked={formData.actif}

@@ -3,6 +3,7 @@ import { toast } from 'react-toastify'
 import {
   Coins, Plus, Pencil, Trash2, FileText, Upload, X, Download, File, Image as ImageIcon
 } from 'lucide-react'
+import AIWriteButton from '../components/common/AIWriteButton'
 import {
   Card,
   Button,
@@ -428,20 +429,38 @@ export default function Dons() {
         size="lg"
       >
         <div className="space-y-4">
-          <Input
-            label="Titre du projet"
-            value={formData.titre}
-            onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
-            placeholder="Ex: Rénovation de la salle de prière"
-            required
-          />
-          <Textarea
-            label="Description"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Détails du projet..."
-            rows={3}
-          />
+          <div className="relative">
+            <Input
+              label="Titre du projet"
+              value={formData.titre}
+              onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
+              placeholder="Ex: Rénovation de la salle de prière"
+              required
+            />
+            <AIWriteButton
+              type="projet"
+              field="titre"
+              existingContent={formData.titre}
+              onGenerated={(text) => setFormData({ ...formData, titre: text })}
+              className="absolute right-2 top-8"
+            />
+          </div>
+          <div className="relative">
+            <Textarea
+              label="Description"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Détails du projet..."
+              rows={3}
+            />
+            <AIWriteButton
+              type="projet"
+              field="description"
+              existingContent={formData.description}
+              onGenerated={(text) => setFormData({ ...formData, description: text })}
+              className="absolute right-2 top-8"
+            />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Objectif (€)"

@@ -1,5 +1,6 @@
 // Service d'authentification - Mode Mock pour TestFlight
-// Firebase sera active plus tard
+// Les inscriptions sont sauvegardées dans Firestore pour le backoffice
+import firestore from '@react-native-firebase/firestore';
 
 export interface MemberProfile {
   uid: string;
@@ -60,7 +61,7 @@ export const AuthService = {
   // Mode mock actif
   isMockMode: true,
 
-  // Inscription d'un nouveau membre (mock)
+  // Inscription d'un nouveau membre (mock mais sauvegarde dans Firestore)
   signUp: async (
     email: string,
     password: string,
@@ -83,6 +84,37 @@ export const AuthService = {
       email,
       displayName: name,
     };
+
+    // IMPORTANT: Sauvegarder dans Firestore pour le backoffice
+    try {
+      const memberId = generateMemberId();
+      const nameParts = name.trim().split(' ');
+      const prenom = nameParts[0] || '';
+      const nom = nameParts.slice(1).join(' ') || prenom;
+
+      await firestore().collection('members').add({
+        nom: nom,
+        prenom: prenom,
+        email: email,
+        telephone: '',
+        adresse: '',
+        cotisation: {
+          type: 'annuel',
+          montant: 0,
+          dateDebut: null,
+          dateFin: null
+        },
+        actif: true,
+        memberId: memberId,
+        uid: mockUser.uid,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        source: 'mobile_app' // Pour identifier les inscriptions depuis l'app
+      });
+      console.log('[Auth] ✅ Membre sauvegardé dans Firestore:', email, memberId);
+    } catch (error) {
+      console.error('[Auth] ❌ Erreur sauvegarde Firestore:', error);
+      // On continue malgré l'erreur pour ne pas bloquer l'inscription
+    }
 
     currentUser = mockUser;
     notifyAuthStateChange(mockUser);

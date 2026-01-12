@@ -77,21 +77,23 @@ export const createNotificationChannels = async () => {
 
 // S'abonner à tous les topics par défaut
 export const subscribeToAllTopics = async () => {
-  try {
-    await Promise.all([
-      messaging().subscribeToTopic(FCM_TOPICS.ANNOUNCEMENTS),
-      messaging().subscribeToTopic(FCM_TOPICS.EVENTS),
-      messaging().subscribeToTopic(FCM_TOPICS.JANAZA),
-      messaging().subscribeToTopic(FCM_TOPICS.JUMUA),
-      messaging().subscribeToTopic(FCM_TOPICS.GENERAL),
-    ]);
-    await AsyncStorage.setItem('fcm_topics_subscribed', 'true');
-    console.log('Subscribed to all FCM topics');
-    return true;
-  } catch (error) {
-    console.error('Error subscribing to topics:', error);
-    return false;
+  const topics = ['general', 'announcements', 'events', 'janaza', 'jumua', 'fajr_reminders'];
+  let successCount = 0;
+
+  for (const topic of topics) {
+    try {
+      await messaging().subscribeToTopic(topic);
+      successCount++;
+    } catch (error: any) {
+      console.error(`Erreur souscription topic ${topic}:`, error?.message);
+    }
   }
+
+  if (successCount === topics.length) {
+    await AsyncStorage.setItem('fcm_topics_subscribed', 'true');
+    return true;
+  }
+  return false;
 };
 
 // S'abonner à un topic spécifique
@@ -197,41 +199,60 @@ export const setupNotificationOpenedHandler = (
     });
 };
 
+// Type pour le résultat d'initialisation FCM
+export interface FCMInitResult {
+  success: boolean;
+  token?: string;
+  permissionStatus?: number;
+  error?: string;
+  errorCode?: string;
+}
+
 // Initialiser les notifications FCM
-export const initializeFCM = async () => {
+export const initializeFCM = async (): Promise<FCMInitResult> => {
   try {
-    // Créer les channels
+    // Créer les channels (Android)
     await createNotificationChannels();
 
     // Demander la permission
     const authStatus = await messaging().requestPermission();
-    const enabled =
-      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-    if (enabled) {
-      console.log('FCM Authorization status:', authStatus);
+    if (authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL) {
 
-      // Récupérer/rafraîchir le token
-      await getFCMToken();
+      // Obtenir le token FCM
+      const token = await messaging().getToken();
 
-      // S'abonner aux topics si pas encore fait
-      const isSubscribed = await AsyncStorage.getItem('fcm_topics_subscribed');
-      if (isSubscribed !== 'true') {
-        await subscribeToAllTopics();
+      if (!token) {
+        return {
+          success: false,
+          permissionStatus: authStatus,
+          error: 'Pas de token FCM obtenu',
+        };
       }
 
-      // Setup foreground handler
-      setupForegroundHandler();
+      // S'abonner aux topics
+      await subscribeToAllTopics();
 
-      return true;
+      return {
+        success: true,
+        token: token,
+        permissionStatus: authStatus,
+      };
     } else {
-      console.log('FCM permission denied');
-      return false;
+      return {
+        success: false,
+        permissionStatus: authStatus,
+        error: 'Permission notifications refusée',
+      };
     }
-  } catch (error) {
-    console.error('Error initializing FCM:', error);
-    return false;
+  } catch (error: any) {
+    console.error('FCM initialization error:', error?.message);
+    return {
+      success: false,
+      error: error?.message || 'Erreur inconnue',
+      errorCode: error?.code,
+    };
   }
 };
 
