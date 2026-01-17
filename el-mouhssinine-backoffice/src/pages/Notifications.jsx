@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
-import { Bell, Plus, Pencil, Trash2, Send, Clock } from 'lucide-react'
+import { Bell, Plus, Pencil, Trash2, Send, Clock, Copy } from 'lucide-react'
 import {
   Card,
   Button,
@@ -174,6 +174,21 @@ export default function Notifications() {
     }
   }
 
+  const handleDuplicate = (notification) => {
+    setEditingNotification(null) // Nouvelle notification, pas édition
+    setFormData({
+      titre: `${notification.titre} (copie)`,
+      message: notification.message || '',
+      topic: notification.topic || NotificationTopic.TOUS,
+      statut: NotificationStatut.PROGRAMMEE,
+      dateProgrammee: '',
+      heureProgrammee: ''
+    })
+    setSendNow(true)
+    setModalOpen(true)
+    toast.info('Notification dupliquée - modifiez et envoyez')
+  }
+
   const getTopicLabel = (topic) => {
     return topicOptions.find(t => t.value === topic)?.label || topic
   }
@@ -239,14 +254,23 @@ export default function Notifications() {
             </button>
           )}
           <button
+            onClick={() => handleDuplicate(row)}
+            className="p-2 hover:bg-blue-500/10 rounded-lg transition-colors"
+            title="Dupliquer"
+          >
+            <Copy className="w-4 h-4 text-blue-400" />
+          </button>
+          <button
             onClick={() => handleOpenModal(row)}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            title="Modifier"
           >
             <Pencil className="w-4 h-4 text-white/50" />
           </button>
           <button
             onClick={() => setDeleteModal({ open: true, notification: row })}
             className="p-2 hover:bg-red-500/10 rounded-lg transition-colors"
+            title="Supprimer"
           >
             <Trash2 className="w-4 h-4 text-red-400" />
           </button>

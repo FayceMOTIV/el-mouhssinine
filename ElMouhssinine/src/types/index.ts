@@ -44,6 +44,17 @@ export interface Janaza {
   salatApres?: string; // "apres_fajr", "apres_dhuhr", etc.
 }
 
+export interface ProjectFile {
+  id: string;
+  nom: string;
+  type: string;
+  url: string;
+  taille?: number;
+  uploadedAt?: string;
+  uploadedBy?: string;
+  storagePath?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -55,6 +66,7 @@ export interface Project {
   lieu?: string;
   iban?: string;
   isActive: boolean;
+  fichiers?: ProjectFile[];
 }
 
 export interface Member {

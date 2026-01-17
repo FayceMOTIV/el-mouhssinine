@@ -64,11 +64,32 @@ service cloud.firestore {
 
     // ==================== COLLECTIONS PROTÉGÉES ====================
 
-    // Membres - Lecture admin, création publique (pour inscriptions depuis l'app)
+    // Membres - Lecture par le propriétaire, inscripteur ou admin
     match /members/{memberId} {
-      allow read: if isAdmin();
-      allow create: if true;  // Permettre création depuis l'app mobile (TestFlight)
-      allow update, delete: if isAdmin();
+      // Helper: vérifie si inscrit par cet utilisateur (avec vérification champ existe)
+      function isInscripteur() {
+        return 'inscritPar' in resource.data &&
+               resource.data.inscritPar != null &&
+               'odUserId' in resource.data.inscritPar &&
+               resource.data.inscritPar.odUserId == request.auth.uid;
+      }
+
+      // Lecture: admin OU propriétaire OU inscripteur (celui qui a inscrit ce membre)
+      allow read: if isAdmin() ||
+                     request.auth.uid == memberId ||
+                     (resource.data.uid == request.auth.uid) ||
+                     (request.auth.token.email != null && resource.data.email == request.auth.token.email) ||
+                     isInscripteur();
+      // Création: utilisateur authentifié (inscription depuis l'app)
+      allow create: if request.auth != null;
+      // Update: admin OU propriétaire OU inscripteur
+      allow update: if isAdmin() ||
+                       request.auth.uid == memberId ||
+                       (resource.data.uid == request.auth.uid) ||
+                       (request.auth.token.email != null && resource.data.email == request.auth.token.email) ||
+                       isInscripteur();
+      // Suppression: admin uniquement
+      allow delete: if isAdmin();
     }
 
     // Dons - Lecture admin, création authentifiée
@@ -78,12 +99,32 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Admins - Lecture pour utilisateurs authentifiés, écriture super_admin uniquement
+    // Admins - Lecture admin uniquement, écriture super_admin uniquement
     match /admins/{adminId} {
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow write: if request.auth != null &&
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin';
+    }
+
+    // Messages utilisateurs - SÉCURISÉ: lecture par propriétaire ou admin uniquement
+    match /messages/{messageId} {
+      // Helper: vérifie si l'utilisateur est le propriétaire du message
+      function isMessageOwner() {
+        return resource.data.odUserId == request.auth.uid;
+      }
+
+      // Lecture: UNIQUEMENT admin OU propriétaire du message
+      allow read: if isAdmin() || (isAuthenticated() && isMessageOwner());
+
+      // Création: utilisateur authentifié (et odUserId doit correspondre à l'auth)
+      allow create: if isAuthenticated() && request.resource.data.odUserId == request.auth.uid;
+
+      // Mise à jour: admin (répondre, changer statut) OU propriétaire (ajouter réponse, soft delete)
+      allow update: if isAdmin() || (isAuthenticated() && isMessageOwner());
+
+      // Suppression: admin uniquement (les users font du soft delete)
+      allow delete: if isAdmin();
     }
 
     // Notifications (pour le backoffice) - Admin uniquement
@@ -95,6 +136,13 @@ service cloud.firestore {
     match /notifications_history/{docId} {
       allow read: if isAdmin();
       allow write: if false; // Écriture uniquement via Cloud Functions
+    }
+
+    // Payments (historique des paiements cotisations et dons) - Admin lecture/écriture, app création
+    match /payments/{paymentId} {
+      allow read: if isAdmin();
+      allow create: if request.auth != null;  // Utilisateur authentifié (paiements)
+      allow update, delete: if isAdmin();
     }
 
     // ==================== RÈGLE PAR DÉFAUT ====================

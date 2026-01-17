@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
@@ -182,150 +182,166 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
     );
   }
 
+  // Render individual ayah
+  const renderAyah = useCallback(({ item: ayah, index }: { item: any; index: number }) => {
+    const translation = surahData?.translation?.ayahs?.[index];
+    const isSelected = selectedAyah === ayah.numberInSurah;
+
+    return (
+      <TouchableOpacity
+        style={[styles.ayahCard, isSelected && styles.ayahCardSelected]}
+        onPress={() => handleAyahPress(ayah.numberInSurah)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.ayahHeader}>
+          <View style={styles.ayahNumberBadge}>
+            <Text style={styles.ayahNumberText}>{ayah.numberInSurah}</Text>
+          </View>
+          {isSelected && (
+            <View style={styles.ayahActions}>
+              <TouchableOpacity
+                style={[styles.ayahActionButton, playingAyah === ayah.numberInSurah && styles.ayahActionButtonActive]}
+                onPress={() => handlePlayAudio(ayah.numberInSurah)}
+              >
+                <Text style={styles.ayahActionIcon}>{playingAyah === ayah.numberInSurah ? '⏸️' : '▶️'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.ayahActionButton, isFavorite(ayah.numberInSurah) && styles.ayahActionButtonActive]}
+                onPress={() => handleToggleFavorite(ayah.numberInSurah)}
+              >
+                <Text style={styles.ayahActionIcon}>{isFavorite(ayah.numberInSurah) ? '❤️' : '🤍'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.ayahActionButton}
+                onPress={() => handleCopyAyah(ayah.numberInSurah)}
+              >
+                <Text style={styles.ayahActionIcon}>📋</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <Text style={styles.ayahArabic}>{ayah.text}</Text>
+
+        {showTranslation && translation && (
+          <Text style={styles.ayahTranslation}>{translation.text}</Text>
+        )}
+      </TouchableOpacity>
+    );
+  }, [surahData?.translation?.ayahs, selectedAyah, playingAyah, showTranslation, favorites]);
+
+  const ListHeaderComponent = useCallback(() => (
+    <>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={[styles.backButton, isRTL && styles.backButtonRTL]}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={[styles.backButtonText, isRTL && styles.rtlText]}>
+            {isRTL ? `${t('back')} >` : `< ${t('back')}`}
+          </Text>
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={[styles.surahNumber, isRTL && styles.rtlText]}>{t('surah')} {surahNumber}</Text>
+          <Text style={styles.surahArabicName}>{surahInfo?.name}</Text>
+          <Text style={[styles.surahEnglishName, isRTL && styles.rtlText]}>{surahInfo?.englishName}</Text>
+          <Text style={[styles.surahTranslation, isRTL && styles.rtlText]}>{surahInfo?.translation}</Text>
+          <View style={[styles.surahMeta, isRTL && styles.surahMetaRTL]}>
+            <Text style={styles.metaText}>{surahInfo?.ayahs} {t('verses')}</Text>
+            <Text style={styles.metaDot}>•</Text>
+            <Text style={styles.metaText}>
+              {surahInfo?.type === 'Mecquoise' ? t('meccan') : t('medinan')}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Options */}
+      <View style={[styles.optionsBar, isRTL && styles.optionsBarRTL]}>
+        <TouchableOpacity
+          style={[styles.optionButton, showTranslation && styles.optionButtonActive, isRTL && styles.optionButtonRTL]}
+          onPress={() => setShowTranslation(!showTranslation)}
+        >
+          <Text style={styles.optionIcon}>📖</Text>
+          <Text style={[styles.optionText, showTranslation && styles.optionTextActive]}>
+            {t('translation')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.optionButton, isRTL && styles.optionButtonRTL]}
+          onPress={() => setShowReciterModal(true)}
+        >
+          <Text style={styles.optionIcon}>🎧</Text>
+          <Text style={styles.optionText}>{t('reciter')}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* LECTEUR SOURATE COMPLÈTE */}
+      <View style={[styles.audioPlayer, isRTL && styles.audioPlayerRTL]}>
+        <TouchableOpacity onPress={handlePlaySurah} style={styles.playButton}>
+          <Text style={styles.playIcon}>{isPlayingSurah ? '⏸️' : '▶️'}</Text>
+        </TouchableOpacity>
+        <View style={styles.playerInfo}>
+          <Text style={[styles.playerTitle, isRTL && styles.rtlText]}>{t('listenFullSurah')}</Text>
+          <Text style={[styles.playerReciter, isRTL && styles.rtlText]}>{selectedReciter.name}</Text>
+        </View>
+      </View>
+
+      {/* Bismillah */}
+      {surahNumber !== 9 && surahNumber !== 1 && (
+        <View style={styles.bismillahContainer}>
+          <Text style={styles.bismillah}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</Text>
+          {showTranslation && !isRTL && (
+            <Text style={styles.bismillahTranslation}>
+              {t('bismillahTranslation')}
+            </Text>
+          )}
+        </View>
+      )}
+    </>
+  ), [isRTL, t, surahNumber, surahInfo, showTranslation, isPlayingSurah, selectedReciter, navigation]);
+
+  const ListFooterComponent = useCallback(() => (
+    <View style={[styles.navigationContainer, isRTL && styles.navigationContainerRTL]}>
+      <TouchableOpacity
+        style={[styles.navButton, surahNumber === 1 && styles.navButtonDisabled]}
+        onPress={handlePreviousSurah}
+        disabled={surahNumber === 1}
+      >
+        <Text style={[styles.navButtonText, isRTL && styles.rtlText]}>
+          {isRTL ? `${t('previousSurah')} >` : `< ${t('previousSurah')}`}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.navButton, surahNumber === 114 && styles.navButtonDisabled]}
+        onPress={handleNextSurah}
+        disabled={surahNumber === 114}
+      >
+        <Text style={[styles.navButtonText, isRTL && styles.rtlText]}>
+          {isRTL ? `< ${t('nextSurah')}` : `${t('nextSurah')} >`}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ), [isRTL, t, surahNumber]);
+
+  const keyExtractor = useCallback((item: any) => item.numberInSurah.toString(), []);
+
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={[styles.backButton, isRTL && styles.backButtonRTL]}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={[styles.backButtonText, isRTL && styles.rtlText]}>
-              {isRTL ? `${t('back')} >` : `< ${t('back')}`}
-            </Text>
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={[styles.surahNumber, isRTL && styles.rtlText]}>{t('surah')} {surahNumber}</Text>
-            <Text style={styles.surahArabicName}>{surahInfo?.name}</Text>
-            <Text style={[styles.surahEnglishName, isRTL && styles.rtlText]}>{surahInfo?.englishName}</Text>
-            <Text style={[styles.surahTranslation, isRTL && styles.rtlText]}>{surahInfo?.translation}</Text>
-            <View style={[styles.surahMeta, isRTL && styles.surahMetaRTL]}>
-              <Text style={styles.metaText}>{surahInfo?.ayahs} {t('verses')}</Text>
-              <Text style={styles.metaDot}>•</Text>
-              <Text style={styles.metaText}>
-                {surahInfo?.type === 'Mecquoise' ? t('meccan') : t('medinan')}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Options */}
-        <View style={[styles.optionsBar, isRTL && styles.optionsBarRTL]}>
-          <TouchableOpacity
-            style={[styles.optionButton, showTranslation && styles.optionButtonActive, isRTL && styles.optionButtonRTL]}
-            onPress={() => setShowTranslation(!showTranslation)}
-          >
-            <Text style={styles.optionIcon}>📖</Text>
-            <Text style={[styles.optionText, showTranslation && styles.optionTextActive]}>
-              {t('translation')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.optionButton, isRTL && styles.optionButtonRTL]}
-            onPress={() => setShowReciterModal(true)}
-          >
-            <Text style={styles.optionIcon}>🎧</Text>
-            <Text style={styles.optionText}>{t('reciter')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* LECTEUR SOURATE COMPLÈTE */}
-        <View style={[styles.audioPlayer, isRTL && styles.audioPlayerRTL]}>
-          <TouchableOpacity onPress={handlePlaySurah} style={styles.playButton}>
-            <Text style={styles.playIcon}>{isPlayingSurah ? '⏸️' : '▶️'}</Text>
-          </TouchableOpacity>
-          <View style={styles.playerInfo}>
-            <Text style={[styles.playerTitle, isRTL && styles.rtlText]}>{t('listenFullSurah')}</Text>
-            <Text style={[styles.playerReciter, isRTL && styles.rtlText]}>{selectedReciter.name}</Text>
-          </View>
-        </View>
-
-        {/* Bismillah */}
-        {surahNumber !== 9 && surahNumber !== 1 && (
-          <View style={styles.bismillahContainer}>
-            <Text style={styles.bismillah}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</Text>
-            {showTranslation && !isRTL && (
-              <Text style={styles.bismillahTranslation}>
-                {t('bismillahTranslation')}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Versets */}
-        <View style={styles.ayahsContainer}>
-          {(surahData?.arabic?.ayahs || []).map((ayah, index) => {
-            const translation = surahData?.translation?.ayahs?.[index];
-            const isSelected = selectedAyah === ayah.numberInSurah;
-
-            return (
-              <TouchableOpacity
-                key={ayah.numberInSurah}
-                style={[styles.ayahCard, isSelected && styles.ayahCardSelected]}
-                onPress={() => handleAyahPress(ayah.numberInSurah)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.ayahHeader}>
-                  <View style={styles.ayahNumberBadge}>
-                    <Text style={styles.ayahNumberText}>{ayah.numberInSurah}</Text>
-                  </View>
-                  {isSelected && (
-                    <View style={styles.ayahActions}>
-                      <TouchableOpacity
-                        style={[styles.ayahActionButton, playingAyah === ayah.numberInSurah && styles.ayahActionButtonActive]}
-                        onPress={() => handlePlayAudio(ayah.numberInSurah)}
-                      >
-                        <Text style={styles.ayahActionIcon}>{playingAyah === ayah.numberInSurah ? '⏸️' : '▶️'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.ayahActionButton, isFavorite(ayah.numberInSurah) && styles.ayahActionButtonActive]}
-                        onPress={() => handleToggleFavorite(ayah.numberInSurah)}
-                      >
-                        <Text style={styles.ayahActionIcon}>{isFavorite(ayah.numberInSurah) ? '❤️' : '🤍'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.ayahActionButton}
-                        onPress={() => handleCopyAyah(ayah.numberInSurah)}
-                      >
-                        <Text style={styles.ayahActionIcon}>📋</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-
-                <Text style={styles.ayahArabic}>{ayah.text}</Text>
-
-                {showTranslation && translation && (
-                  <Text style={styles.ayahTranslation}>{translation.text}</Text>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Navigation entre sourates */}
-        <View style={[styles.navigationContainer, isRTL && styles.navigationContainerRTL]}>
-          <TouchableOpacity
-            style={[styles.navButton, surahNumber === 1 && styles.navButtonDisabled]}
-            onPress={handlePreviousSurah}
-            disabled={surahNumber === 1}
-          >
-            <Text style={[styles.navButtonText, isRTL && styles.rtlText]}>
-              {isRTL ? `${t('previousSurah')} >` : `< ${t('previousSurah')}`}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.navButton, surahNumber === 114 && styles.navButtonDisabled]}
-            onPress={handleNextSurah}
-            disabled={surahNumber === 114}
-          >
-            <Text style={[styles.navButtonText, isRTL && styles.rtlText]}>
-              {isRTL ? `< ${t('nextSurah')}` : `${t('nextSurah')} >`}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+      <FlatList
+        data={surahData?.arabic?.ayahs || []}
+        renderItem={renderAyah}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={ListHeaderComponent}
+        ListFooterComponent={ListFooterComponent}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews={true}
+      />
 
       {/* Modal Recitateur */}
       <Modal visible={showReciterModal} transparent animationType="fade">
@@ -371,6 +387,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  listContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 100,
   },
   loadingContainer: {
     justifyContent: 'center',

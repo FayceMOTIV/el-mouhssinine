@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import {
   Settings, Save, Building2, MapPin, Phone, Mail, Globe, Clock,
-  Bell, Palette, Database, Landmark, Image, Upload
+  Palette, Database, Landmark, Image, Upload, CreditCard
 } from 'lucide-react'
 import { Card, Button, Input, Textarea, Toggle, Loading } from '../components/common'
-import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo, storage } from '../services/firebase'
+import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo, storage, getCotisationPrices, updateCotisationPrices } from '../services/firebase'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { useAuth } from '../context/AuthContext'
 
@@ -38,6 +38,14 @@ export default function Parametres() {
   const [settings, setSettings] = useState({
     notifications: {
       prayerReminders: true,
+      reminderMinutes: 15,
+      prayers: {
+        Fajr: true,
+        Dhuhr: true,
+        Asr: true,
+        Maghrib: true,
+        Isha: true
+      },
       eventReminders: true,
       janazaAlerts: true,
       generalAnnouncements: true
@@ -53,15 +61,22 @@ export default function Parametres() {
     }
   })
 
+  // Prix des cotisations
+  const [cotisationPrices, setCotisationPrices] = useState({
+    mensuel: 10,
+    annuel: 100
+  })
+
   useEffect(() => {
     loadData()
   }, [])
 
   const loadData = async () => {
     try {
-      const [mosquee, general] = await Promise.all([
+      const [mosquee, general, cotisation] = await Promise.all([
         getMosqueeInfo(),
-        getSettings()
+        getSettings(),
+        getCotisationPrices()
       ])
 
       if (mosquee) {
@@ -74,6 +89,9 @@ export default function Parametres() {
           display: { ...prev.display, ...general.display },
           maintenance: { ...prev.maintenance, ...general.maintenance }
         }))
+      }
+      if (cotisation) {
+        setCotisationPrices(prev => ({ ...prev, ...cotisation }))
       }
     } catch (err) {
       console.error('Error loading settings:', err)
@@ -103,6 +121,19 @@ export default function Parametres() {
       toast.success('Paramètres enregistrés')
     } catch (err) {
       console.error('Error saving settings:', err)
+      toast.error('Erreur lors de la sauvegarde')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSaveCotisation = async () => {
+    setSaving(true)
+    try {
+      await updateCotisationPrices(cotisationPrices)
+      toast.success('Prix des cotisations enregistrés')
+    } catch (err) {
+      console.error('Error saving cotisation prices:', err)
       toast.error('Erreur lors de la sauvegarde')
     } finally {
       setSaving(false)
@@ -149,7 +180,7 @@ export default function Parametres() {
     { id: 'mosquee', label: 'Mosquée', icon: Building2 },
     { id: 'header', label: 'Image d\'en-tête', icon: Image },
     { id: 'banque', label: 'Coordonnées bancaires', icon: Landmark },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'cotisation', label: 'Cotisations', icon: CreditCard },
     { id: 'display', label: 'Affichage', icon: Palette },
     { id: 'system', label: 'Système', icon: Database }
   ]
@@ -343,65 +374,37 @@ export default function Parametres() {
         </Card>
       )}
 
-      {/* Notifications Tab */}
-      {activeTab === 'notifications' && (
-        <Card title="Paramètres des notifications" icon={Bell}>
+      {/* Cotisations Tab */}
+      {activeTab === 'cotisation' && (
+        <Card title="Prix des cotisations" icon={CreditCard}>
+          <p className="text-white/60 text-sm mb-6">
+            Définissez les prix des cotisations pour les membres.
+            Ces prix seront utilisés dans l'application mobile.
+          </p>
           <div className="space-y-4">
-            <div className="flex items-center justify-between py-3 border-b border-white/10">
-              <div>
-                <p className="text-white font-medium">Rappels de prière</p>
-                <p className="text-sm text-white/50">Envoyer des rappels avant chaque prière</p>
-              </div>
-              <Toggle
-                checked={settings.notifications.prayerReminders}
-                onChange={(checked) => setSettings({
-                  ...settings,
-                  notifications: { ...settings.notifications, prayerReminders: checked }
-                })}
-              />
-            </div>
-            <div className="flex items-center justify-between py-3 border-b border-white/10">
-              <div>
-                <p className="text-white font-medium">Rappels d'événements</p>
-                <p className="text-sm text-white/50">Notifier les utilisateurs des événements à venir</p>
-              </div>
-              <Toggle
-                checked={settings.notifications.eventReminders}
-                onChange={(checked) => setSettings({
-                  ...settings,
-                  notifications: { ...settings.notifications, eventReminders: checked }
-                })}
-              />
-            </div>
-            <div className="flex items-center justify-between py-3 border-b border-white/10">
-              <div>
-                <p className="text-white font-medium">Alertes Janaza</p>
-                <p className="text-sm text-white/50">Envoyer des notifications pour les Salat Janaza</p>
-              </div>
-              <Toggle
-                checked={settings.notifications.janazaAlerts}
-                onChange={(checked) => setSettings({
-                  ...settings,
-                  notifications: { ...settings.notifications, janazaAlerts: checked }
-                })}
-              />
-            </div>
-            <div className="flex items-center justify-between py-3">
-              <div>
-                <p className="text-white font-medium">Annonces générales</p>
-                <p className="text-sm text-white/50">Notifications pour les annonces importantes</p>
-              </div>
-              <Toggle
-                checked={settings.notifications.generalAnnouncements}
-                onChange={(checked) => setSettings({
-                  ...settings,
-                  notifications: { ...settings.notifications, generalAnnouncements: checked }
-                })}
-              />
+            <Input
+              label="Prix mensuel (€)"
+              type="number"
+              value={cotisationPrices.mensuel}
+              onChange={(e) => setCotisationPrices({ ...cotisationPrices, mensuel: parseFloat(e.target.value) || 0 })}
+              placeholder="10"
+            />
+            <Input
+              label="Prix annuel (€)"
+              type="number"
+              value={cotisationPrices.annuel}
+              onChange={(e) => setCotisationPrices({ ...cotisationPrices, annuel: parseFloat(e.target.value) || 0 })}
+              placeholder="100"
+            />
+            <div className="bg-white/5 rounded-lg p-4 mt-4">
+              <p className="text-white/70 text-sm">
+                💡 <strong>Note :</strong> Le paiement mensuel n'est pas récurrent automatiquement.
+                Les membres devront renouveler manuellement chaque mois.
+              </p>
             </div>
           </div>
           <div className="flex justify-end mt-6">
-            <Button onClick={handleSaveSettings} loading={saving}>
+            <Button onClick={handleSaveCotisation} loading={saving}>
               <Save className="w-4 h-4 mr-2" />
               Enregistrer
             </Button>

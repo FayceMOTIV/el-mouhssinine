@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import { Clock, Save, RotateCcw, Lock, Edit3, RefreshCw, Plus } from 'lucide-react'
 import { Card, Button, Loading } from '../components/common'
-import { getPrayerTimes, updatePrayerTimes } from '../services/firebase'
+import { getIqamaAndJumuaTimes, updatePrayerTimes } from '../services/firebase'
 
 const PRAYERS = [
   { id: 'fajr', label: 'Fajr', labelAr: 'الفجر', hasIqama: true },
@@ -14,11 +14,25 @@ const PRAYERS = [
 ]
 
 // Helper function to add minutes to a time string (HH:MM)
+// Gère le wrap around minuit (23:30 + 60min = 00:30, 01:00 - 120min = 23:00)
 const addMinutesToTime = (time, minutes) => {
-  if (!time || !minutes) return '--:--'
+  if (!time) return '--:--'
+  // Si pas de minutes spécifiées, retourner l'heure originale
+  if (minutes === undefined || minutes === null || minutes === '') return time
+
   const [hours, mins] = time.split(':').map(Number)
-  const totalMins = hours * 60 + mins + parseInt(minutes)
-  const newHours = Math.floor(totalMins / 60) % 24
+  if (isNaN(hours) || isNaN(mins)) return '--:--'
+
+  let totalMins = hours * 60 + mins + parseInt(minutes)
+
+  // Gérer les valeurs négatives (wrap around minuit vers le jour précédent)
+  const MINUTES_PER_DAY = 24 * 60
+  while (totalMins < 0) {
+    totalMins += MINUTES_PER_DAY
+  }
+  totalMins = totalMins % MINUTES_PER_DAY
+
+  const newHours = Math.floor(totalMins / 60)
   const newMins = totalMins % 60
   return `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`
 }
@@ -37,12 +51,14 @@ export default function Horaires() {
   const [loadingApi, setLoadingApi] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Fetch Adhan times from Aladhan API
+  // Fetch Adhan times from Aladhan API - Ajusté pour Mawaqit El Mouhssinine
   const fetchAdhanTimes = async () => {
     setLoadingApi(true)
     try {
+      // Method 12 + tune pour correspondre aux horaires Mawaqit El Mouhssinine
+      // tune: Fajr -20min, Dhuhr +2min, Asr +4min, Maghrib +8min, Isha +27min
       const response = await fetch(
-        'https://api.aladhan.com/v1/timingsByCity?city=Bourg-en-Bresse&country=France&method=99&methodSettings=12,null,12'
+        'https://api.aladhan.com/v1/timingsByCity?city=Bourg-en-Bresse&country=France&method=12&tune=0,-20,0,2,4,8,0,27,0'
       )
       const data = await response.json()
 
@@ -70,7 +86,7 @@ export default function Horaires() {
   // Load Iqama and Jumua times from Firebase
   const loadFirebaseTimes = async () => {
     try {
-      const data = await getPrayerTimes()
+      const data = await getIqamaAndJumuaTimes()
       if (data) {
         setIqamaTimes(data.iqama || {})
         setJumuaTimes(data.jumua || {})
@@ -251,7 +267,7 @@ export default function Horaires() {
             <div className="text-sm text-white/50 space-y-2">
               <p>
                 <span className="text-blue-400 font-medium">Adhan :</span> Horaires récupérés automatiquement depuis l'API Aladhan.
-                Ils sont calculés selon les coordonnées de Bourg-en-Bresse avec un angle de 12° pour Fajr et Isha.
+                Méthode "Muslims of France" (UOIF) - 12° pour Fajr et Isha (identique à Mawaqit).
               </p>
               <p>
                 <span className="text-green-400 font-medium">Délai Iqama :</span> Nombre de minutes à ajouter à l'heure de l'Adhan.

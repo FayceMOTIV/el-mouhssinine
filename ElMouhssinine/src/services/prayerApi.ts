@@ -1,16 +1,15 @@
 // Service API pour les horaires de priere - Aladhan API
-// Ajustements pour correspondre aux horaires Mawaqit de la mosquée El Mouhssinine
+// Ajusté pour correspondre aux horaires Mawaqit de la mosquée El Mouhssinine
 
 const BASE_URL = 'https://api.aladhan.com/v1';
 
-// Configuration : 15 degres pour Fajr et Isha (methode personnalisee - plus proche de Mawaqit)
-const FAJR_ANGLE = 15;
-const ISHA_ANGLE = 15;
+// Configuration : Méthode 12 = Muslims of France (UOIF)
+const CALCULATION_METHOD = 12;
 
-// Ajustements en minutes pour chaque prière (tune parameter)
-// Ordre: Imsak, Fajr, Sunrise, Dhuhr, Asr, Maghrib, Sunset, Isha, Midnight
-// Ces valeurs ajustent les horaires pour correspondre à Mawaqit El Mouhssinine
-const TUNE_ADJUSTMENTS = '0,-5,0,3,2,6,0,5,0';
+// Ajustements pour correspondre aux horaires Mawaqit El Mouhssinine
+// Format: Imsak,Fajr,Sunrise,Dhuhr,Asr,Maghrib,Sunset,Isha,Midnight
+// Fajr: -20min, Dhuhr: +2min, Asr: +4min, Maghrib: +8min, Isha: +27min
+const TUNE_ADJUSTMENTS = '0,-20,0,2,4,8,0,27,0';
 
 export interface PrayerTimings {
   Fajr: string;
@@ -101,7 +100,7 @@ const setCache = (key: string, data: any) => {
 };
 
 export const PrayerAPI = {
-  // Horaires par ville avec degres personnalises (12 degres)
+  // Horaires par ville - Méthode Muslims of France (UOIF) = Mawaqit
   getTimesByCity: async (
     city: string = 'Bourg-en-Bresse',
     country: string = 'France'
@@ -112,7 +111,7 @@ export const PrayerAPI = {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}&tune=${TUNE_ADJUSTMENTS}`
+        `${BASE_URL}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${CALCULATION_METHOD}&tune=${TUNE_ADJUSTMENTS}`
       );
       const data = await response.json();
 
@@ -127,7 +126,7 @@ export const PrayerAPI = {
     }
   },
 
-  // Horaires par coordonnees GPS avec degres personnalises
+  // Horaires par coordonnees GPS - Méthode Muslims of France (UOIF)
   getTimesByCoords: async (
     latitude: number,
     longitude: number
@@ -138,7 +137,7 @@ export const PrayerAPI = {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/timings?latitude=${latitude}&longitude=${longitude}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}&tune=${TUNE_ADJUSTMENTS}`
+        `${BASE_URL}/timings?latitude=${latitude}&longitude=${longitude}&method=${CALCULATION_METHOD}&tune=${TUNE_ADJUSTMENTS}`
       );
       const data = await response.json();
 
@@ -153,7 +152,7 @@ export const PrayerAPI = {
     }
   },
 
-  // Calendrier du mois complet
+  // Calendrier du mois complet - Méthode Muslims of France (UOIF)
   getMonthlyCalendar: async (
     year: number,
     month: number,
@@ -166,7 +165,7 @@ export const PrayerAPI = {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/calendarByCity/${year}/${month}?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}&tune=${TUNE_ADJUSTMENTS}`
+        `${BASE_URL}/calendarByCity/${year}/${month}?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${CALCULATION_METHOD}&tune=${TUNE_ADJUSTMENTS}`
       );
       const data = await response.json();
 
@@ -232,7 +231,7 @@ export const PrayerAPI = {
     }
   },
 
-  // Obtenir les horaires complets du jour (avec metadonnees)
+  // Obtenir les horaires complets du jour (avec metadonnees) - Méthode UOIF
   getFullDayData: async (
     city: string = 'Bourg-en-Bresse',
     country: string = 'France'
@@ -243,7 +242,7 @@ export const PrayerAPI = {
 
     try {
       const response = await fetch(
-        `${BASE_URL}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=99&methodSettings=${FAJR_ANGLE},null,${ISHA_ANGLE}&tune=${TUNE_ADJUSTMENTS}`
+        `${BASE_URL}/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${CALCULATION_METHOD}&tune=${TUNE_ADJUSTMENTS}`
       );
       const data = await response.json();
 

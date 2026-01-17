@@ -9,7 +9,14 @@ import {
   Clock,
   Megaphone,
   Heart,
-  ArrowRight
+  ArrowRight,
+  CreditCard,
+  CalendarDays,
+  CalendarRange,
+  MessageCircle,
+  UserCheck,
+  UserX,
+  Hourglass
 } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { Card, StatCard, Loading, ProgressBar } from '../components/common'
@@ -18,8 +25,11 @@ import {
   subscribeToDons,
   subscribeToProjets,
   subscribeToEvenements,
-  subscribeToJanazas,
-  getPrayerTimes
+  subscribeToPayments,
+  getPaymentStats,
+  PaymentType,
+  getPrayerTimes,
+  subscribeToUnreadMessagesCount
 } from '../services/firebase'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -27,15 +37,26 @@ import { fr } from 'date-fns/locale'
 export default function Dashboard() {
   const [stats, setStats] = useState({
     membres: 0,
+    membresActifs: 0,
+    membresEnAttente: 0,
+    membresEnAttentePaiement: 0,
     donsTotal: 0,
     donsMois: 0,
-    evenements: 0
+    evenements: 0,
+    messagesNonLus: 0
   })
   const [projets, setProjets] = useState([])
   const [recentDons, setRecentDons] = useState([])
   const [prochainEvenement, setProchainEvenement] = useState(null)
   const [prayerTimes, setPrayerTimes] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [donationsChartData, setDonationsChartData] = useState([])
+  const [membresChartData, setMembresChartData] = useState([])
+  const [payments, setPayments] = useState([])
+  const [paymentStats, setPaymentStats] = useState({
+    cotisations: { today: { total: 0, count: 0 }, month: { total: 0, count: 0 }, year: { total: 0, count: 0 } },
+    dons: { today: { total: 0, count: 0 }, month: { total: 0, count: 0 }, year: { total: 0, count: 0 } }
+  })
 
   useEffect(() => {
     const unsubscribes = []
@@ -43,7 +64,47 @@ export default function Dashboard() {
     // Membres
     unsubscribes.push(
       subscribeToMembres((data) => {
-        setStats(prev => ({ ...prev, membres: data.length }))
+        // Calculer les stats par statut
+        const actifs = data.filter(m => m.status === 'actif' || (!m.status && m.cotisation?.dateFin && new Date(m.cotisation.dateFin.toDate?.() || m.cotisation.dateFin) >= new Date()))
+        const enAttente = data.filter(m => m.status === 'en_attente_signature')
+        const enAttentePaiement = data.filter(m => m.status === 'en_attente_paiement')
+
+        setStats(prev => ({
+          ...prev,
+          membres: data.length,
+          membresActifs: actifs.length,
+          membresEnAttente: enAttente.length,
+          membresEnAttentePaiement: enAttentePaiement.length
+        }))
+
+        // Generer les donnees du graphique des nouveaux membres (6 derniers mois)
+        const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+        const chartData = []
+        for (let i = 5; i >= 0; i--) {
+          const monthDate = new Date()
+          monthDate.setMonth(monthDate.getMonth() - i)
+          const monthNum = monthDate.getMonth()
+          const yearNum = monthDate.getFullYear()
+
+          const newMembers = data.filter(m => {
+            if (!m.createdAt) return false
+            const date = m.createdAt?.toDate?.() || new Date(m.createdAt)
+            return date.getMonth() === monthNum && date.getFullYear() === yearNum
+          })
+
+          chartData.push({
+            name: monthNames[monthNum],
+            nouveaux: newMembers.length
+          })
+        }
+        setMembresChartData(chartData)
+      })
+    )
+
+    // Messages non lus
+    unsubscribes.push(
+      subscribeToUnreadMessagesCount((count) => {
+        setStats(prev => ({ ...prev, messagesNonLus: count }))
       })
     )
 
@@ -60,6 +121,28 @@ export default function Dashboard() {
 
         setStats(prev => ({ ...prev, donsTotal: total, donsMois }))
         setRecentDons(data.slice(0, 5))
+
+        // Generer les donnees du graphique par mois (6 derniers mois)
+        const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+        const chartData = []
+        for (let i = 5; i >= 0; i--) {
+          const monthDate = new Date()
+          monthDate.setMonth(monthDate.getMonth() - i)
+          const monthNum = monthDate.getMonth()
+          const yearNum = monthDate.getFullYear()
+
+          const monthDons = data.filter(d => {
+            const date = d.date?.toDate?.() || new Date(d.date)
+            return date.getMonth() === monthNum && date.getFullYear() === yearNum
+          })
+          const monthTotal = monthDons.reduce((sum, d) => sum + (d.montant || 0), 0)
+
+          chartData.push({
+            name: monthNames[monthNum],
+            montant: monthTotal
+          })
+        }
+        setDonationsChartData(chartData)
       })
     )
 
@@ -83,6 +166,20 @@ export default function Dashboard() {
       })
     )
 
+    // Payments (cotisations + dons via app)
+    unsubscribes.push(
+      subscribeToPayments((data) => {
+        setPayments(data)
+        // Calculer les stats pour cotisations et dons
+        const cotisationStats = getPaymentStats(data, PaymentType.COTISATION)
+        const donStats = getPaymentStats(data, PaymentType.DON)
+        setPaymentStats({
+          cotisations: cotisationStats,
+          dons: donStats
+        })
+      })
+    )
+
     // Prayer Times
     getPrayerTimes().then(data => {
       setPrayerTimes(data)
@@ -92,25 +189,6 @@ export default function Dashboard() {
 
     return () => unsubscribes.forEach(unsub => unsub())
   }, [])
-
-  // Mock data for charts
-  const donationsData = [
-    { name: 'Jan', montant: 2400 },
-    { name: 'Fév', montant: 1398 },
-    { name: 'Mar', montant: 9800 },
-    { name: 'Avr', montant: 3908 },
-    { name: 'Mai', montant: 4800 },
-    { name: 'Juin', montant: 3800 }
-  ]
-
-  const membresData = [
-    { name: 'Jan', nouveaux: 12 },
-    { name: 'Fév', nouveaux: 19 },
-    { name: 'Mar', nouveaux: 15 },
-    { name: 'Avr', nouveaux: 22 },
-    { name: 'Mai', nouveaux: 18 },
-    { name: 'Juin', nouveaux: 25 }
-  ]
 
   if (loading) {
     return (
@@ -122,21 +200,17 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Stats Grid */}
+      {/* Stats Grid - Ligne 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Total Adhérents"
+          title="Total Membres"
           value={stats.membres}
           icon={Users}
-          trend="+12%"
-          trendUp
         />
         <StatCard
           title="Dons ce mois"
           value={`${stats.donsMois.toLocaleString()} €`}
           icon={Coins}
-          trend="+8%"
-          trendUp
         />
         <StatCard
           title="Total Dons"
@@ -150,13 +224,88 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Stats Grid - Ligne 2 : Membres & Messages */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Membres actifs"
+          value={stats.membresActifs}
+          icon={UserCheck}
+          variant="success"
+        />
+        <StatCard
+          title="En attente signature"
+          value={stats.membresEnAttente}
+          icon={Hourglass}
+          variant="warning"
+        />
+        <StatCard
+          title="En attente paiement"
+          value={stats.membresEnAttentePaiement}
+          icon={CreditCard}
+          variant="info"
+        />
+        <Link to="/messages" className="block">
+          <StatCard
+            title="Messages non lus"
+            value={stats.messagesNonLus}
+            icon={MessageCircle}
+            variant={stats.messagesNonLus > 0 ? 'danger' : 'default'}
+          />
+        </Link>
+      </div>
+
+      {/* Recettes App (Paiements CB/Apple Pay) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Cotisations Stats */}
+        <Card title="Cotisations (App)" icon={CreditCard}>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white/5 rounded-lg p-4 text-center">
+              <p className="text-xs text-white/50 mb-1">Aujourd'hui</p>
+              <p className="text-xl font-bold text-green-400">{paymentStats.cotisations.today.total.toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats.cotisations.today.count} paiement{paymentStats.cotisations.today.count > 1 ? 's' : ''}</p>
+            </div>
+            <div className="bg-white/5 rounded-lg p-4 text-center">
+              <p className="text-xs text-white/50 mb-1">Ce mois</p>
+              <p className="text-xl font-bold text-blue-400">{paymentStats.cotisations.month.total.toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats.cotisations.month.count} paiement{paymentStats.cotisations.month.count > 1 ? 's' : ''}</p>
+            </div>
+            <div className="bg-white/5 rounded-lg p-4 text-center">
+              <p className="text-xs text-white/50 mb-1">Cette année</p>
+              <p className="text-xl font-bold text-secondary">{paymentStats.cotisations.year.total.toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats.cotisations.year.count} paiement{paymentStats.cotisations.year.count > 1 ? 's' : ''}</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Dons App Stats */}
+        <Card title="Dons (App)" icon={Coins}>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white/5 rounded-lg p-4 text-center">
+              <p className="text-xs text-white/50 mb-1">Aujourd'hui</p>
+              <p className="text-xl font-bold text-green-400">{paymentStats.dons.today.total.toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats.dons.today.count} don{paymentStats.dons.today.count > 1 ? 's' : ''}</p>
+            </div>
+            <div className="bg-white/5 rounded-lg p-4 text-center">
+              <p className="text-xs text-white/50 mb-1">Ce mois</p>
+              <p className="text-xl font-bold text-blue-400">{paymentStats.dons.month.total.toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats.dons.month.count} don{paymentStats.dons.month.count > 1 ? 's' : ''}</p>
+            </div>
+            <div className="bg-white/5 rounded-lg p-4 text-center">
+              <p className="text-xs text-white/50 mb-1">Cette année</p>
+              <p className="text-xl font-bold text-secondary">{paymentStats.dons.year.total.toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats.dons.year.count} don{paymentStats.dons.year.count > 1 ? 's' : ''}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Donations Chart */}
         <Card title="Évolution des dons" icon={TrendingUp}>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={donationsData}>
+              <AreaChart data={donationsChartData}>
                 <defs>
                   <linearGradient id="colorMontant" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#c9a227" stopOpacity={0.3} />
@@ -186,10 +335,10 @@ export default function Dashboard() {
         </Card>
 
         {/* Members Chart */}
-        <Card title="Nouveaux adhérents" icon={Users}>
+        <Card title="Nouveaux membres" icon={Users}>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={membresData}>
+              <BarChart data={membresChartData}>
                 <XAxis dataKey="name" stroke="#ffffff50" />
                 <YAxis stroke="#ffffff50" />
                 <Tooltip

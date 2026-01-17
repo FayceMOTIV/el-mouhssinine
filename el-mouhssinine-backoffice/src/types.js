@@ -151,6 +151,8 @@ export const CotisationStatut = {
   ACTIF: 'actif',
   EXPIRE: 'expire',
   EN_ATTENTE: 'en_attente',
+  EN_ATTENTE_SIGNATURE: 'en_attente_signature',
+  EN_ATTENTE_PAIEMENT: 'en_attente_paiement',
   AUCUN: 'aucun'
 }
 

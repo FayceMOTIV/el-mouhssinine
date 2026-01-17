@@ -47,7 +47,7 @@ const permissionLabels = {
   evenements: 'Événements',
   janaza: 'Salat Janaza',
   dons: 'Dons & Projets',
-  adherents: 'Adhérents',
+  adherents: 'Membres',
   notifications: 'Notifications',
   admins: 'Gestion Admins',
   parametres: 'Paramètres'
@@ -147,10 +147,18 @@ export default function Admins() {
         await updateDocument('admins', editingAdmin.id, data)
         toast.success('Administrateur mis à jour')
       } else {
-        // Note: In a real app, you'd create the Firebase Auth user first
-        // and then save the admin document with the UID
+        // IMPORTANT: La creation d'un compte Firebase Auth necessite Firebase Admin SDK
+        // Pour l'instant, creez manuellement le compte dans Firebase Console:
+        // 1. Allez sur Firebase Console > Authentication > Users
+        // 2. Ajoutez un utilisateur avec email et mot de passe
+        // 3. Copiez l'UID genere
+        // 4. Le document admin sera cree ici avec l'email correspondant
+        //
+        // TODO: Implementer une Cloud Function createAdmin pour automatiser ce process
         await addDocument('admins', data)
-        toast.success('Administrateur créé')
+        toast.success('Document admin créé. ATTENTION: Créez manuellement le compte Firebase Auth dans la console Firebase avec le même email.', {
+          autoClose: 10000
+        })
       }
       handleCloseModal()
     } catch (err) {
@@ -290,6 +298,23 @@ export default function Admins() {
 
   return (
     <div className="space-y-6">
+      {/* Info Banner */}
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+        <h4 className="text-blue-400 font-medium mb-1">Gestion des administrateurs</h4>
+        <p className="text-sm text-white/70">
+          Pour ajouter un nouvel admin: créez d'abord le compte dans{' '}
+          <a
+            href="https://console.firebase.google.com/project/el-mouhssinine/authentication/users"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 underline hover:text-blue-300"
+          >
+            Firebase Console → Authentication
+          </a>
+          , puis ajoutez-le ici avec le même email.
+        </p>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>

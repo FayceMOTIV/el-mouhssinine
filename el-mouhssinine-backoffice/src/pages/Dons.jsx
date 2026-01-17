@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'react-toastify'
 import {
-  Coins, Plus, Pencil, Trash2, FileText, Upload, X, Download, File, Image as ImageIcon
+  Coins, Plus, Pencil, Trash2, FileText, Upload, X, Download, File, Image as ImageIcon, Search
 } from 'lucide-react'
 import AIWriteButton from '../components/common/AIWriteButton'
 import {
@@ -40,7 +40,41 @@ const defaultProjet = {
   montantActuel: 0,
   categorie: CategorieProjet.INTERNE,
   actif: true,
-  fichiers: []
+  fichiers: [],
+  iban: '',
+  lieu: ''
+}
+
+// Validation basique du format IBAN
+// FR76 1234 5678 9012 3456 7890 123 (27 chars pour France)
+// Supporte les IBAN internationaux de 15 à 34 caractères
+const validateIBAN = (iban) => {
+  if (!iban) return { valid: false, error: 'IBAN requis' }
+
+  // Nettoyer l'IBAN (retirer espaces et mettre en majuscules)
+  const cleanIban = iban.replace(/\s/g, '').toUpperCase()
+
+  // Vérifier la longueur (15 à 34 caractères selon le pays)
+  if (cleanIban.length < 15 || cleanIban.length > 34) {
+    return { valid: false, error: 'Format IBAN invalide (15-34 caractères)' }
+  }
+
+  // Vérifier que ça commence par 2 lettres (code pays)
+  if (!/^[A-Z]{2}/.test(cleanIban)) {
+    return { valid: false, error: 'L\'IBAN doit commencer par un code pays (ex: FR, DE, ES)' }
+  }
+
+  // Vérifier que les 2 caractères suivants sont des chiffres (clé de contrôle)
+  if (!/^[A-Z]{2}[0-9]{2}/.test(cleanIban)) {
+    return { valid: false, error: 'Clé de contrôle IBAN invalide (2 chiffres après le code pays)' }
+  }
+
+  // Vérifier que le reste ne contient que des caractères alphanumériques
+  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]+$/.test(cleanIban)) {
+    return { valid: false, error: 'L\'IBAN ne doit contenir que des lettres et chiffres' }
+  }
+
+  return { valid: true, error: null }
 }
 
 const categorieOptions = [
@@ -61,6 +95,32 @@ export default function Dons() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Filtrer les projets par recherche
+  const filteredProjets = useMemo(() => {
+    if (!searchQuery) return projets
+    const query = searchQuery.toLowerCase()
+    return projets.filter(p =>
+      p.titre?.toLowerCase().includes(query) ||
+      p.description?.toLowerCase().includes(query) ||
+      p.lieu?.toLowerCase().includes(query)
+    )
+  }, [projets, searchQuery])
+
+  // Filtrer les dons par recherche
+  const filteredDons = useMemo(() => {
+    if (!searchQuery) return dons
+    const query = searchQuery.toLowerCase()
+    return dons.filter(d => {
+      const projet = projets.find(p => p.id === d.projetId)
+      return (
+        d.donateur?.toLowerCase().includes(query) ||
+        projet?.titre?.toLowerCase().includes(query) ||
+        d.modePaiement?.toLowerCase().includes(query)
+      )
+    })
+  }, [dons, projets, searchQuery])
 
   useEffect(() => {
     const unsubProjets = subscribeToProjets((data) => {
@@ -86,7 +146,9 @@ export default function Dons() {
         montantActuel: projet.montantActuel || 0,
         categorie: projet.categorie || CategorieProjet.INTERNE,
         actif: projet.actif !== false,
-        fichiers: projet.fichiers || []
+        fichiers: projet.fichiers || [],
+        iban: projet.iban || '',
+        lieu: projet.lieu || ''
       })
     } else {
       setEditingProjet(null)
@@ -154,6 +216,14 @@ export default function Dons() {
       toast.error('L\'objectif doit être supérieur à 0')
       return
     }
+    // IBAN obligatoire et validé pour les projets externes
+    if (formData.categorie === CategorieProjet.EXTERNE) {
+      const ibanValidation = validateIBAN(formData.iban)
+      if (!ibanValidation.valid) {
+        toast.error(ibanValidation.error)
+        return
+      }
+    }
 
     setSaving(true)
     try {
@@ -163,7 +233,9 @@ export default function Dons() {
         objectif: parseFloat(formData.objectif),
         montantActuel: parseFloat(formData.montantActuel) || 0,
         categorie: formData.categorie,
-        actif: formData.actif
+        actif: formData.actif,
+        iban: formData.iban || '',
+        lieu: formData.lieu || ''
       }
 
       if (editingProjet) {
@@ -241,6 +313,80 @@ export default function Dons() {
         <Badge variant={row.fichiers?.length > 0 ? 'info' : 'default'}>
           {row.fichiers?.length || 0} fichier{(row.fichiers?.length || 0) !== 1 ? 's' : ''}
         </Badge>
+      )
+    },
+    {
+      key: 'actif',
+      label: 'Statut',
+      render: (row) => (
+        <Badge variant={row.actif ? 'success' : 'default'}>
+          {row.actif ? 'Actif' : 'Terminé'}
+        </Badge>
+      )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleOpenModal(row)}
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+          >
+            <Pencil className="w-4 h-4 text-white/50" />
+          </button>
+          <button
+            onClick={() => setDeleteModal({ open: true, item: row, type: 'projet' })}
+            className="p-2 hover:bg-red-500/10 rounded-lg transition-colors"
+          >
+            <Trash2 className="w-4 h-4 text-red-400" />
+          </button>
+        </div>
+      )
+    }
+  ]
+
+  // Colonnes pour les projets externes (avec IBAN et lieu)
+  const projetColumnsExterne = [
+    {
+      key: 'titre',
+      label: 'Projet',
+      render: (row) => (
+        <div>
+          <p className="font-medium text-white">{row.titre}</p>
+          <p className="text-sm text-white/50 line-clamp-1">{row.description}</p>
+          {row.lieu && (
+            <p className="text-xs text-orange-300 mt-1">📍 {row.lieu}</p>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'progression',
+      label: 'Progression',
+      render: (row) => (
+        <div className="w-40">
+          <ProgressBar
+            value={row.montantActuel || 0}
+            max={row.objectif || 1}
+            size="sm"
+          />
+        </div>
+      )
+    },
+    {
+      key: 'iban',
+      label: 'RIB / IBAN',
+      render: (row) => (
+        <div className="max-w-[200px]">
+          {row.iban ? (
+            <p className="text-xs text-white/70 font-mono truncate" title={row.iban}>
+              {row.iban}
+            </p>
+          ) : (
+            <span className="text-xs text-red-400">⚠️ Non renseigné</span>
+          )}
+        </div>
       )
     },
     {
@@ -362,26 +508,42 @@ export default function Dons() {
         </Card>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-white/10 pb-4">
-        <Button
-          variant={activeTab === 'projets' ? 'primary' : 'ghost'}
-          onClick={() => setActiveTab('projets')}
-        >
-          Projets ({projets.length})
-        </Button>
-        <Button
-          variant={activeTab === 'dons' ? 'primary' : 'ghost'}
-          onClick={() => setActiveTab('dons')}
-        >
-          Dons ({dons.length})
-        </Button>
+      {/* Tabs + Search */}
+      <div className="flex flex-wrap justify-between items-center gap-4 border-b border-white/10 pb-4">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant={activeTab === 'projets' ? 'primary' : 'ghost'}
+            onClick={() => { setActiveTab('projets'); setSearchQuery(''); }}
+          >
+            Projets ({projets.length})
+          </Button>
+          <Button
+            variant={activeTab === 'dons' ? 'primary' : 'ghost'}
+            onClick={() => { setActiveTab('dons'); setSearchQuery(''); }}
+          >
+            Dons ({dons.length})
+          </Button>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+          <input
+            type="text"
+            placeholder={activeTab === 'projets' ? 'Rechercher un projet...' : 'Rechercher un don...'}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-56 bg-white/5 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-secondary text-sm"
+          />
+        </div>
       </div>
 
       {/* Projets Tab */}
       {activeTab === 'projets' && (
         <>
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center">
+            <p className="text-white/50 text-sm">
+              {filteredProjets.length} projet{filteredProjets.length !== 1 ? 's' : ''}
+              {searchQuery && ` sur ${projets.length}`}
+            </p>
             <Button onClick={() => handleOpenModal()}>
               <Plus className="w-4 h-4 mr-2" />
               Nouveau projet
@@ -396,10 +558,59 @@ export default function Dons() {
               action={() => handleOpenModal()}
               actionLabel="Créer un projet"
             />
-          ) : (
+          ) : filteredProjets.length === 0 ? (
             <Card>
-              <Table columns={projetColumns} data={projets} />
+              <p className="text-center text-white/50 py-8">Aucun résultat pour "{searchQuery}"</p>
             </Card>
+          ) : (
+            <div className="space-y-8">
+              {/* Section Projets Mosquée (internes) */}
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  🕌 Projets Mosquée
+                  <span className="text-sm font-normal text-white/50">
+                    ({filteredProjets.filter(p => p.categorie !== CategorieProjet.EXTERNE).length})
+                  </span>
+                </h3>
+                {filteredProjets.filter(p => p.categorie !== CategorieProjet.EXTERNE).length === 0 ? (
+                  <Card>
+                    <p className="text-center text-white/50 py-6">Aucun projet interne</p>
+                  </Card>
+                ) : (
+                  <Card>
+                    <Table
+                      columns={projetColumns}
+                      data={filteredProjets.filter(p => p.categorie !== CategorieProjet.EXTERNE)}
+                    />
+                  </Card>
+                )}
+              </div>
+
+              {/* Section Autres Causes (externes) */}
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  🌍 Autres Causes
+                  <span className="text-sm font-normal text-white/50">
+                    ({filteredProjets.filter(p => p.categorie === CategorieProjet.EXTERNE).length})
+                  </span>
+                  <span className="text-xs bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded-full">
+                    Virement uniquement
+                  </span>
+                </h3>
+                {filteredProjets.filter(p => p.categorie === CategorieProjet.EXTERNE).length === 0 ? (
+                  <Card>
+                    <p className="text-center text-white/50 py-6">Aucun projet externe</p>
+                  </Card>
+                ) : (
+                  <Card>
+                    <Table
+                      columns={projetColumnsExterne}
+                      data={filteredProjets.filter(p => p.categorie === CategorieProjet.EXTERNE)}
+                    />
+                  </Card>
+                )}
+              </div>
+            </div>
           )}
         </>
       )}
@@ -407,15 +618,23 @@ export default function Dons() {
       {/* Dons Tab */}
       {activeTab === 'dons' && (
         <>
+          <p className="text-white/50 text-sm mb-4">
+            {filteredDons.length} don{filteredDons.length !== 1 ? 's' : ''}
+            {searchQuery && ` sur ${dons.length}`}
+          </p>
           {dons.length === 0 ? (
             <EmptyState
               icon={Coins}
               title="Aucun don"
               description="Les dons apparaîtront ici."
             />
+          ) : filteredDons.length === 0 ? (
+            <Card>
+              <p className="text-center text-white/50 py-8">Aucun résultat pour "{searchQuery}"</p>
+            </Card>
           ) : (
             <Card>
-              <Table columns={donColumns} data={dons} />
+              <Table columns={donColumns} data={filteredDons} />
             </Card>
           )}
         </>
@@ -426,7 +645,7 @@ export default function Dons() {
         isOpen={modalOpen}
         onClose={handleCloseModal}
         title={editingProjet ? 'Modifier le projet' : 'Nouveau projet'}
-        size="lg"
+        size="xl"
       >
         <div className="space-y-4">
           <div className="relative">
@@ -484,6 +703,28 @@ export default function Dons() {
             onChange={(e) => setFormData({ ...formData, categorie: e.target.value })}
             options={categorieOptions}
           />
+
+          {/* Champs spécifiques aux projets externes */}
+          {formData.categorie === CategorieProjet.EXTERNE && (
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 space-y-4">
+              <p className="text-sm text-orange-300 font-medium">
+                ⚠️ Projet externe : les dons seront versés directement au bénéficiaire
+              </p>
+              <Input
+                label="IBAN du bénéficiaire *"
+                value={formData.iban}
+                onChange={(e) => setFormData({ ...formData, iban: e.target.value })}
+                placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX"
+                required
+              />
+              <Input
+                label="Lieu / Pays"
+                value={formData.lieu}
+                onChange={(e) => setFormData({ ...formData, lieu: e.target.value })}
+                placeholder="Ex: Palestine, Maroc, Syrie..."
+              />
+            </div>
+          )}
 
           {/* File Upload Section - Only for existing projects */}
           {editingProjet && (

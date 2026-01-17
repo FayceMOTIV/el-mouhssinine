@@ -15,10 +15,12 @@ import Evenements from './pages/Evenements'
 import Janaza from './pages/Janaza'
 import Dons from './pages/Dons'
 import Adherents from './pages/Adherents'
-import Notifications from './pages/Notifications'
 import Admins from './pages/Admins'
 import Parametres from './pages/Parametres'
 import Rappels from './pages/Rappels'
+import Messages from './pages/Messages'
+import Revenus from './pages/Revenus'
+import RecusFiscaux from './pages/RecusFiscaux'
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -82,7 +84,9 @@ function AppRoutes() {
         <Route path="janaza" element={<Janaza />} />
         <Route path="dons" element={<Dons />} />
         <Route path="adherents" element={<Adherents />} />
-        <Route path="notifications" element={<Notifications />} />
+        <Route path="revenus" element={<Revenus />} />
+        <Route path="recus-fiscaux" element={<RecusFiscaux />} />
+        <Route path="messages" element={<Messages />} />
         <Route
           path="admins"
           element={

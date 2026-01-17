@@ -31,83 +31,114 @@ export const getOpenAIKey = async () => {
   }
 }
 
+// Prompt SPECIAL pour la generation de TITRES uniquement
+const TITLE_PROMPT = `Tu generes des TITRES pour une application mobile de mosquee.
+REGLES STRICTES:
+- Maximum 40 caracteres (5-6 mots)
+- Pas de ponctuation finale (pas de point, pas de !)
+- Commence par un emoji pertinent
+- Ton direct et informatif
+- Pas de formules ("Chers freres", "Rappel important", etc.)
+- Pas de ":" dans le titre
+
+EXEMPLES DE BONS TITRES:
+- 🕌 Priere de l'Aid demain 8h
+- 📚 Nouveaux cours d'arabe
+- 🌙 Debut Ramadan confirme
+- 🤲 Collecte vetements ce samedi
+- ⚠️ Mosquee fermee lundi
+- 🎉 Fete de fin d'annee
+- 📖 Cours Coran enfants samedi
+
+EXEMPLES DE MAUVAIS TITRES (a eviter):
+- "Rappel important concernant la priere" ❌ (trop long)
+- "Chers freres et soeurs, venez nombreux" ❌ (formule inutile)
+- "Information : nouvelle activite" ❌ (pas informatif)
+- "N'oubliez pas !" ❌ (pas de contenu)
+
+Genere UN SEUL titre court et percutant, sans guillemets.`
+
 // Prompts contextuels pour chaque type de contenu
+// IMPORTANT: Tous les prompts limitent les reponses a 2-3 phrases pour l'app mobile
 const PROMPTS = {
   notification: {
-    system: `Tu es un assistant pour une mosquée. Tu rédiges des notifications push courtes et engageantes.
-Règles:
-- Maximum 100 caractères pour le titre
-- Maximum 200 caractères pour le message
-- Ton respectueux et bienveillant
-- Utilise des emojis appropriés (🕌 🤲 📢 etc.)
-- En français sauf si demandé en arabe`,
+    system: `Tu es un assistant pour une mosquee. Tu rediges des notifications push TRES COURTES.
+REGLES STRICTES:
+- Titre: MAX 50 caracteres
+- Message: MAX 2 phrases (100 caracteres)
+- Style DIRECT, pas de formules de politesse longues
+- Un emoji max au debut
+- Exemple: "La priere de l'Aid aura lieu demain a 8h. Venez nombreux!"
+NE JAMAIS depasser ces limites.`,
     examples: [
-      { titre: "🕌 Jumu'a demain à 13h30", message: "N'oubliez pas la prière du vendredi. Arrivez en avance !" },
-      { titre: "📢 Nouvelle annonce", message: "Un cours de Coran pour enfants commence ce samedi. Inscriptions ouvertes !" }
+      { titre: "🕌 Jumu'a 13h30", message: "Priere du vendredi. Arrivez en avance !" },
+      { titre: "📢 Cours Coran", message: "Nouveau cours pour enfants ce samedi. Inscriptions ouvertes." }
     ]
   },
   annonce: {
-    system: `Tu es un assistant pour une mosquée. Tu rédiges des annonces claires et informatives.
-Règles:
-- Titre accrocheur mais sobre
-- Contenu structuré et facile à lire
-- Inclure les informations essentielles (date, lieu, horaire si pertinent)
-- Ton professionnel et chaleureux
-- En français`,
+    system: `Tu es un assistant pour une mosquee. Tu rediges des annonces CONCISES.
+REGLES STRICTES:
+- Titre: MAX 60 caracteres
+- Contenu: MAX 3 phrases courtes
+- Va droit au but, pas de blabla
+- Infos essentielles: quoi, quand, ou
+- Style direct et clair`,
     examples: []
   },
   popup: {
-    system: `Tu es un assistant pour une mosquée. Tu rédiges des messages popup importants.
-Règles:
-- Message court et impactant
-- Appel à l'action clair si nécessaire
-- Ton urgent mais pas alarmiste
-- Utilise des emojis avec modération`,
+    system: `Tu es un assistant pour une mosquee. Tu rediges des popups ULTRA COURTS.
+REGLES STRICTES:
+- Titre: MAX 40 caracteres
+- Message: MAX 2 phrases (80 caracteres)
+- Style DIRECT et impactant
+- Un seul emoji si necessaire
+- Exemple: "Rappel: la priere de l'Aid aura lieu demain a 8h."
+NE JAMAIS faire de longs textes.`,
     examples: []
   },
   evenement: {
-    system: `Tu es un assistant pour une mosquée. Tu rédiges des descriptions d'événements.
-Règles:
-- Description engageante
-- Mentionner le programme si fourni
-- Inclure les informations pratiques
-- Encourager la participation`,
+    system: `Tu es un assistant pour une mosquee. Tu rediges des descriptions d'evenements.
+REGLES STRICTES:
+- Titre: MAX 60 caracteres
+- Description: MAX 4 phrases courtes
+- Inclure: date, heure, lieu
+- Style engageant mais concis`,
     examples: []
   },
   rappel: {
-    system: `Tu es un assistant pour une mosquée. Tu rédiges des rappels spirituels (hadiths, sagesses).
-Règles:
-- Texte inspirant et positif
-- Mentionner la source si c'est un hadith
-- Peut être en français ET en arabe
-- Ton doux et encourageant`,
+    system: `Tu es un assistant pour une mosquee. Tu rediges des rappels spirituels.
+REGLES STRICTES:
+- MAX 3 phrases
+- Hadith + source courte si applicable
+- Peut etre en francais ET arabe
+- Ton inspirant mais bref`,
     examples: []
   },
   janaza: {
-    system: `Tu es un assistant pour une mosquée. Tu rédiges des annonces de Salat Janaza.
-Règles:
-- Ton respectueux et solennel
-- Inclure les informations essentielles (nom, date, heure, lieu)
-- Formule de condoléances appropriée
-- Rappeler l'importance de la prière pour le défunt`,
+    system: `Tu es un assistant pour une mosquee. Tu rediges des annonces de Salat Janaza.
+REGLES STRICTES:
+- Titre: Nom + "Salat Janaza"
+- Message: MAX 3 phrases
+- Inclure: nom, date, heure, lieu
+- Formule de condoleances courte`,
     examples: []
   },
   projet: {
-    system: `Tu es un assistant pour une mosquée. Tu rédiges des descriptions de projets de collecte de dons.
-Règles:
-- Titre accrocheur et clair
-- Description engageante qui inspire la générosité
-- Expliquer l'impact concret du projet
-- Ton professionnel et motivant
-- Encourager les donateurs à participer`,
+    system: `Tu es un assistant pour une mosquee. Tu rediges des descriptions de projets.
+REGLES STRICTES:
+- Titre: MAX 50 caracteres, accrocheur
+- Description: MAX 3 phrases
+- Expliquer l'impact concretement
+- Appel a l'action clair`,
     examples: []
   },
   general: {
-    system: `Tu es un assistant pour une mosquée. Tu aides à rédiger du contenu.
-Règles:
-- Ton respectueux et bienveillant
-- Contenu approprié pour une communauté musulmane
-- En français sauf si demandé autrement`,
+    system: `Tu es un assistant pour une mosquee. Tu aides a rediger du contenu.
+REGLES STRICTES:
+- MAX 3 phrases par reponse
+- Style direct et concis
+- Pas de formules de politesse longues
+- Va droit au but`,
     examples: []
   }
 }
@@ -131,25 +162,28 @@ export const generateContent = async (type, userPrompt, context = {}) => {
   // Construire le message utilisateur
   let userMessage = userPrompt
 
-  if (context.existingTitle) {
+  // Determiner si on genere un TITRE ou du contenu
+  const isGeneratingTitle = context.field === 'titre'
+
+  if (context.existingTitle && !isGeneratingTitle) {
     userMessage += `\n\nTitre existant: "${context.existingTitle}"`
   }
   if (context.existingContent) {
     userMessage += `\n\nContenu existant à améliorer: "${context.existingContent}"`
   }
-  if (context.field === 'titre') {
-    userMessage += '\n\nGénère uniquement un TITRE court et accrocheur.'
-  }
   if (context.field === 'message' || context.field === 'contenu') {
     userMessage += '\n\nGénère uniquement le CONTENU/MESSAGE (pas de titre).'
   }
 
+  // Utiliser le prompt TITRE special si on genere un titre
+  const systemPrompt = isGeneratingTitle ? TITLE_PROMPT : promptConfig.system
+
   const messages = [
-    { role: 'system', content: promptConfig.system },
+    { role: 'system', content: systemPrompt },
   ]
 
-  // Ajouter des exemples si disponibles
-  if (promptConfig.examples.length > 0) {
+  // Ajouter des exemples si disponibles (seulement pour le contenu, pas les titres)
+  if (!isGeneratingTitle && promptConfig.examples.length > 0) {
     messages.push({
       role: 'system',
       content: 'Exemples de bons contenus:\n' + promptConfig.examples.map(e =>

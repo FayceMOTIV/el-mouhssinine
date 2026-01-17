@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-toastify'
-import { Calendar, Plus, Pencil, Trash2, MapPin, Clock } from 'lucide-react'
+import { Calendar, Plus, Pencil, Trash2, MapPin, Clock, Copy, Send, Search } from 'lucide-react'
 import {
   Card,
   Button,
@@ -19,7 +19,8 @@ import {
   subscribeToEvenements,
   addDocument,
   updateDocument,
-  deleteDocument
+  deleteDocument,
+  sendNotification
 } from '../services/firebase'
 import { format, isPast, isFuture } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -38,9 +39,23 @@ export default function Evenements() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, evenement: null })
+  const [notifModal, setNotifModal] = useState({ open: false, evenement: null })
+  const [sendingNotif, setSendingNotif] = useState(false)
   const [editingEvenement, setEditingEvenement] = useState(null)
   const [formData, setFormData] = useState(defaultEvenement)
   const [saving, setSaving] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Filtrer les événements par recherche
+  const filteredEvenements = useMemo(() => {
+    if (!searchQuery) return evenements
+    const query = searchQuery.toLowerCase()
+    return evenements.filter(e =>
+      e.titre?.toLowerCase().includes(query) ||
+      e.description?.toLowerCase().includes(query) ||
+      e.lieu?.toLowerCase().includes(query)
+    )
+  }, [evenements, searchQuery])
 
   useEffect(() => {
     const unsubscribe = subscribeToEvenements((data) => {
@@ -121,6 +136,83 @@ export default function Evenements() {
     }
   }
 
+  const handleDuplicate = (evenement) => {
+    setEditingEvenement(null)
+    setFormData({
+      titre: `${evenement.titre} (copie)`,
+      description: evenement.description || '',
+      date: '',
+      heure: evenement.heure || '',
+      lieu: evenement.lieu || '',
+      actif: true
+    })
+    setModalOpen(true)
+    toast.info('Événement dupliqué - modifiez la date et créez')
+  }
+
+  // Générer le contenu de la notification pour prévisualisation
+  const getNotificationContent = (evenement) => {
+    if (!evenement) return { title: '', body: '' }
+
+    const eventDate = evenement.date?.toDate?.() || new Date(evenement.date)
+    const dateStr = format(eventDate, 'EEEE d MMMM yyyy', { locale: fr })
+
+    // Titre : nom de l'événement
+    const title = evenement.titre || 'Nouvel événement'
+
+    // Corps : date + heure + lieu + description (tronquée)
+    let body = `📅 ${dateStr}`
+    if (evenement.heure) {
+      body += ` à ${evenement.heure}`
+    }
+    if (evenement.lieu) {
+      body += `\n📍 ${evenement.lieu}`
+    }
+    if (evenement.description) {
+      // Tronquer la description à 100 caractères
+      const desc = evenement.description.length > 100
+        ? evenement.description.substring(0, 100) + '...'
+        : evenement.description
+      body += `\n${desc}`
+    }
+
+    return { title, body }
+  }
+
+  // Ouvrir la modal de confirmation
+  const handleOpenNotifModal = (evenement) => {
+    setNotifModal({ open: true, evenement })
+  }
+
+  // Envoyer la notification après confirmation
+  const handleConfirmSendNotification = async () => {
+    const evenement = notifModal.evenement
+    if (!evenement) return
+
+    setSendingNotif(true)
+    try {
+      const { title, body } = getNotificationContent(evenement)
+
+      await sendNotification(
+        title,
+        body,
+        'events',
+        { type: 'event', id: evenement.id }
+      )
+      await updateDocument('events', evenement.id, {
+        notificationSent: true,
+        notificationSentAt: new Date()
+      })
+      toast.success('Notification envoyée à tous les utilisateurs !')
+      setNotifModal({ open: false, evenement: null })
+    } catch (err) {
+      console.error('Error sending notification:', err)
+      toast.error('Erreur lors de l\'envoi de la notification')
+    } finally {
+      setSendingNotif(false)
+    }
+  }
+
   const getEventStatus = (event) => {
     const date = event.date?.toDate?.() || new Date(event.date)
     if (isPast(date)) return { label: 'Passé', variant: 'default' }
@@ -189,14 +281,31 @@ export default function Evenements() {
       render: (row) => (
         <div className="flex items-center gap-2">
           <button
+            onClick={() => handleDuplicate(row)}
+            className="p-2 hover:bg-blue-500/10 rounded-lg transition-colors"
+            title="Dupliquer"
+          >
+            <Copy className="w-4 h-4 text-blue-400" />
+          </button>
+          <button
             onClick={() => handleOpenModal(row)}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            title="Modifier"
           >
             <Pencil className="w-4 h-4 text-white/50" />
           </button>
           <button
+            onClick={() => handleOpenNotifModal(row)}
+            className={`p-2 rounded-lg transition-colors ${row.notificationSent ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-500/10'}`}
+            title={row.notificationSent ? 'Notification déjà envoyée' : 'Envoyer une notification'}
+            disabled={row.notificationSent}
+          >
+            <Send className={`w-4 h-4 ${row.notificationSent ? 'text-white/30' : 'text-green-400'}`} />
+          </button>
+          <button
             onClick={() => setDeleteModal({ open: true, evenement: row })}
             className="p-2 hover:bg-red-500/10 rounded-lg transition-colors"
+            title="Supprimer"
           >
             <Trash2 className="w-4 h-4 text-red-400" />
           </button>
@@ -216,10 +325,24 @@ export default function Evenements() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <p className="text-white/50">
-          {evenements.length} événement{evenements.length !== 1 ? 's' : ''}
-        </p>
+      <div className="flex flex-wrap justify-between items-center gap-4">
+        <div className="flex items-center gap-4">
+          {/* Barre de recherche */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <input
+              type="text"
+              placeholder="Rechercher..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-48 bg-white/5 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-secondary text-sm"
+            />
+          </div>
+          <p className="text-white/50">
+            {filteredEvenements.length} événement{filteredEvenements.length !== 1 ? 's' : ''}
+            {searchQuery && ` sur ${evenements.length}`}
+          </p>
+        </div>
         <Button onClick={() => handleOpenModal()}>
           <Plus className="w-4 h-4 mr-2" />
           Nouvel événement
@@ -235,9 +358,13 @@ export default function Evenements() {
           action={() => handleOpenModal()}
           actionLabel="Créer un événement"
         />
+      ) : filteredEvenements.length === 0 ? (
+        <Card>
+          <p className="text-center text-white/50 py-8">Aucun résultat pour "{searchQuery}"</p>
+        </Card>
       ) : (
         <Card>
-          <Table columns={columns} data={evenements} />
+          <Table columns={columns} data={filteredEvenements} />
         </Card>
       )}
 
@@ -246,6 +373,7 @@ export default function Evenements() {
         isOpen={modalOpen}
         onClose={handleCloseModal}
         title={editingEvenement ? 'Modifier l\'événement' : 'Nouvel événement'}
+        size="xl"
       >
         <div className="space-y-4">
           <div className="relative">
@@ -330,6 +458,59 @@ export default function Evenements() {
         confirmLabel="Supprimer"
         danger
       />
+
+      {/* Notification Confirmation Modal */}
+      <Modal
+        isOpen={notifModal.open}
+        onClose={() => setNotifModal({ open: false, evenement: null })}
+        title="Envoyer une notification"
+        size="md"
+      >
+        {notifModal.evenement && (
+          <div className="space-y-4">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-amber-400 text-sm flex items-center gap-2">
+                <Send className="w-4 h-4" />
+                Cette notification sera envoyée à <strong>tous les utilisateurs</strong> de l'application.
+              </p>
+            </div>
+
+            {/* Prévisualisation */}
+            <div>
+              <p className="text-white/50 text-sm mb-2">Prévisualisation de la notification :</p>
+              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                <p className="text-white font-semibold mb-2">
+                  {getNotificationContent(notifModal.evenement).title}
+                </p>
+                <p className="text-white/70 text-sm whitespace-pre-line">
+                  {getNotificationContent(notifModal.evenement).body}
+                </p>
+              </div>
+            </div>
+
+            {/* Détails de l'événement */}
+            <div className="text-sm text-white/50">
+              <p>Informations incluses dans la notification :</p>
+              <ul className="list-disc list-inside mt-1 space-y-1">
+                <li>Titre de l'événement</li>
+                <li>Date complète (jour + date)</li>
+                {notifModal.evenement.heure && <li>Heure : {notifModal.evenement.heure}</li>}
+                {notifModal.evenement.lieu && <li>Lieu : {notifModal.evenement.lieu}</li>}
+                {notifModal.evenement.description && <li>Description (100 premiers caractères)</li>}
+              </ul>
+            </div>
+          </div>
+        )}
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="ghost" onClick={() => setNotifModal({ open: false, evenement: null })}>
+            Annuler
+          </Button>
+          <Button onClick={handleConfirmSendNotification} loading={sendingNotif}>
+            <Send className="w-4 h-4 mr-2" />
+            Envoyer la notification
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

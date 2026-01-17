@@ -67,7 +67,9 @@ export const CotisationType = {
 export const CotisationStatut = {
   ACTIF: 'actif',
   EXPIRE: 'expire',
-  AUCUN: 'aucun'
+  AUCUN: 'aucun',
+  EN_ATTENTE_SIGNATURE: 'en_attente_signature',
+  EN_ATTENTE_PAIEMENT: 'en_attente_paiement'
 }
 
 // ==================== NOTIFICATIONS ====================

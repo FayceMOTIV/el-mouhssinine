@@ -8,7 +8,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
+import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
 import quizData from '../data/quizData.json';
 
 const { width } = Dimensions.get('window');
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: HEADER_PADDING_TOP,
     paddingBottom: spacing.lg,
     alignItems: 'center',
   },
@@ -775,9 +775,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   scoreCircle: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: wp(36),
+    height: wp(36),
+    borderRadius: wp(18),
     backgroundColor: 'rgba(201,162,39,0.1)',
     borderWidth: 4,
     borderColor: colors.accent,

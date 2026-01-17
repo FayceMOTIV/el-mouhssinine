@@ -5,6 +5,7 @@ import notifee, {
   TimestampTrigger,
 } from '@notifee/react-native';
 import messaging from '@react-native-firebase/messaging';
+import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ==================== FCM TOPICS ====================
@@ -17,6 +18,7 @@ export const FCM_TOPICS = {
   JUMUA: 'jumua',
   FAJR_REMINDERS: 'fajr_reminders',
   GENERAL: 'general',
+  MEMBERS: 'members', // Topic pour les membres uniquement
 } as const;
 
 export type FCMTopic = typeof FCM_TOPICS[keyof typeof FCM_TOPICS];
@@ -137,6 +139,29 @@ export const getFCMToken = async (): Promise<string | null> => {
   } catch (error) {
     console.error('Error getting FCM token:', error);
     return null;
+  }
+};
+
+// Sauvegarder le token FCM dans Firestore pour notifications personnelles
+export const saveFCMTokenToFirestore = async (userId: string): Promise<boolean> => {
+  try {
+    const token = await messaging().getToken();
+    if (!token || !userId) {
+      console.log('[FCM] Pas de token ou userId pour sauvegarde');
+      return false;
+    }
+
+    // Mettre à jour le document membre avec le token FCM
+    await firestore().collection('members').doc(userId).update({
+      fcmToken: token,
+      fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log('[FCM] Token sauvegardé pour userId:', userId);
+    return true;
+  } catch (error) {
+    console.error('[FCM] Erreur sauvegarde token:', error);
+    return false;
   }
 };
 
@@ -340,4 +365,50 @@ export const cancelJumuaReminder = async () => {
 export const isJumuaReminderEnabled = async () => {
   const value = await AsyncStorage.getItem('jumua_reminder_enabled');
   return value === 'true';
+};
+
+// ==================== MEMBER TOPIC MANAGEMENT ====================
+
+// S'abonner au topic membres (appelé quand l'utilisateur devient membre)
+export const subscribeToMembersTopic = async () => {
+  try {
+    await messaging().subscribeToTopic(FCM_TOPICS.MEMBERS);
+    await AsyncStorage.setItem('is_subscribed_members_topic', 'true');
+    console.log('Subscribed to members topic');
+    return true;
+  } catch (error) {
+    console.error('Error subscribing to members topic:', error);
+    return false;
+  }
+};
+
+// Se désabonner du topic membres
+export const unsubscribeFromMembersTopic = async () => {
+  try {
+    await messaging().unsubscribeFromTopic(FCM_TOPICS.MEMBERS);
+    await AsyncStorage.setItem('is_subscribed_members_topic', 'false');
+    console.log('Unsubscribed from members topic');
+    return true;
+  } catch (error) {
+    console.error('Error unsubscribing from members topic:', error);
+    return false;
+  }
+};
+
+// Vérifier si abonné au topic membres
+export const isSubscribedToMembersTopic = async () => {
+  const value = await AsyncStorage.getItem('is_subscribed_members_topic');
+  return value === 'true';
+};
+
+// ==================== BADGE MANAGEMENT ====================
+
+// Effacer le badge de l'icône de l'app
+export const clearBadgeCount = async () => {
+  try {
+    await notifee.setBadgeCount(0);
+    console.log('Badge count cleared');
+  } catch (error) {
+    console.error('Error clearing badge count:', error);
+  }
 };

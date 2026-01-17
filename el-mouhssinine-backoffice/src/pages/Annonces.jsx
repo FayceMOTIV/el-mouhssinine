@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-toastify'
-import { Megaphone, Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react'
+import { Megaphone, Plus, Pencil, Trash2, Eye, EyeOff, Copy, Send, Search } from 'lucide-react'
 import {
   Card,
   Button,
@@ -19,7 +19,8 @@ import {
   subscribeToAnnonces,
   addDocument,
   updateDocument,
-  deleteDocument
+  deleteDocument,
+  sendNotification
 } from '../services/firebase'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -35,9 +36,22 @@ export default function Annonces() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, annonce: null })
+  const [notifModal, setNotifModal] = useState({ open: false, annonce: null })
+  const [sendingNotif, setSendingNotif] = useState(false)
   const [editingAnnonce, setEditingAnnonce] = useState(null)
   const [formData, setFormData] = useState(defaultAnnonce)
   const [saving, setSaving] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Filtrer les annonces par recherche
+  const filteredAnnonces = useMemo(() => {
+    if (!searchQuery) return annonces
+    const query = searchQuery.toLowerCase()
+    return annonces.filter(a =>
+      a.titre?.toLowerCase().includes(query) ||
+      a.contenu?.toLowerCase().includes(query)
+    )
+  }, [annonces, searchQuery])
 
   useEffect(() => {
     const unsubscribe = subscribeToAnnonces((data) => {
@@ -119,6 +133,66 @@ export default function Annonces() {
     }
   }
 
+  const handleDuplicate = (annonce) => {
+    setEditingAnnonce(null)
+    setFormData({
+      titre: `${annonce.titre} (copie)`,
+      contenu: annonce.contenu || '',
+      actif: true
+    })
+    setModalOpen(true)
+    toast.info('Annonce dupliquée - modifiez et créez')
+  }
+
+  // Générer le contenu de la notification pour prévisualisation
+  const getNotificationContent = (annonce) => {
+    if (!annonce) return { title: '', body: '' }
+
+    // Titre avec emoji
+    const title = `📢 ${annonce.titre || 'Nouvelle annonce'}`
+
+    // Corps : contenu tronqué à 150 caractères
+    const body = annonce.contenu?.length > 150
+      ? annonce.contenu.substring(0, 150) + '...'
+      : annonce.contenu || ''
+
+    return { title, body }
+  }
+
+  // Ouvrir la modal de confirmation
+  const handleOpenNotifModal = (annonce) => {
+    setNotifModal({ open: true, annonce })
+  }
+
+  // Envoyer la notification après confirmation
+  const handleConfirmSendNotification = async () => {
+    const annonce = notifModal.annonce
+    if (!annonce) return
+
+    setSendingNotif(true)
+    try {
+      const { title, body } = getNotificationContent(annonce)
+
+      await sendNotification(
+        title,
+        body,
+        'announcements',
+        { type: 'announcement', id: annonce.id }
+      )
+      await updateDocument('announcements', annonce.id, {
+        notificationSent: true,
+        notificationSentAt: new Date()
+      })
+      toast.success('Notification envoyée à tous les utilisateurs !')
+      setNotifModal({ open: false, annonce: null })
+    } catch (err) {
+      console.error('Error sending notification:', err)
+      toast.error('Erreur lors de l\'envoi de la notification')
+    } finally {
+      setSendingNotif(false)
+    }
+  }
+
   const columns = [
     {
       key: 'titre',
@@ -174,14 +248,31 @@ export default function Annonces() {
             )}
           </button>
           <button
+            onClick={() => handleDuplicate(row)}
+            className="p-2 hover:bg-blue-500/10 rounded-lg transition-colors"
+            title="Dupliquer"
+          >
+            <Copy className="w-4 h-4 text-blue-400" />
+          </button>
+          <button
             onClick={() => handleOpenModal(row)}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            title="Modifier"
           >
             <Pencil className="w-4 h-4 text-white/50" />
           </button>
           <button
+            onClick={() => handleOpenNotifModal(row)}
+            className={`p-2 rounded-lg transition-colors ${row.notificationSent ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-500/10'}`}
+            title={row.notificationSent ? 'Notification déjà envoyée' : 'Envoyer une notification'}
+            disabled={row.notificationSent}
+          >
+            <Send className={`w-4 h-4 ${row.notificationSent ? 'text-white/30' : 'text-green-400'}`} />
+          </button>
+          <button
             onClick={() => setDeleteModal({ open: true, annonce: row })}
             className="p-2 hover:bg-red-500/10 rounded-lg transition-colors"
+            title="Supprimer"
           >
             <Trash2 className="w-4 h-4 text-red-400" />
           </button>
@@ -201,10 +292,24 @@ export default function Annonces() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <p className="text-white/50">
-          {annonces.length} annonce{annonces.length !== 1 ? 's' : ''}
-        </p>
+      <div className="flex flex-wrap justify-between items-center gap-4">
+        <div className="flex items-center gap-4">
+          {/* Barre de recherche */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <input
+              type="text"
+              placeholder="Rechercher..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-48 bg-white/5 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-secondary text-sm"
+            />
+          </div>
+          <p className="text-white/50">
+            {filteredAnnonces.length} annonce{filteredAnnonces.length !== 1 ? 's' : ''}
+            {searchQuery && ` sur ${annonces.length}`}
+          </p>
+        </div>
         <Button onClick={() => handleOpenModal()}>
           <Plus className="w-4 h-4 mr-2" />
           Nouvelle annonce
@@ -220,9 +325,13 @@ export default function Annonces() {
           action={() => handleOpenModal()}
           actionLabel="Créer une annonce"
         />
+      ) : filteredAnnonces.length === 0 ? (
+        <Card>
+          <p className="text-center text-white/50 py-8">Aucun résultat pour "{searchQuery}"</p>
+        </Card>
       ) : (
         <Card>
-          <Table columns={columns} data={annonces} />
+          <Table columns={columns} data={filteredAnnonces} />
         </Card>
       )}
 
@@ -231,6 +340,7 @@ export default function Annonces() {
         isOpen={modalOpen}
         onClose={handleCloseModal}
         title={editingAnnonce ? 'Modifier l\'annonce' : 'Nouvelle annonce'}
+        size="xl"
       >
         <div className="space-y-4">
           <div className="relative">
@@ -295,6 +405,55 @@ export default function Annonces() {
         confirmLabel="Supprimer"
         danger
       />
+
+      {/* Notification Confirmation Modal */}
+      <Modal
+        isOpen={notifModal.open}
+        onClose={() => setNotifModal({ open: false, annonce: null })}
+        title="Envoyer une notification"
+        size="md"
+      >
+        {notifModal.annonce && (
+          <div className="space-y-4">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-amber-400 text-sm flex items-center gap-2">
+                <Send className="w-4 h-4" />
+                Cette notification sera envoyée à <strong>tous les utilisateurs</strong> de l'application.
+              </p>
+            </div>
+
+            {/* Prévisualisation */}
+            <div>
+              <p className="text-white/50 text-sm mb-2">Prévisualisation de la notification :</p>
+              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                <p className="text-white font-semibold mb-2">
+                  {getNotificationContent(notifModal.annonce).title}
+                </p>
+                <p className="text-white/70 text-sm whitespace-pre-line">
+                  {getNotificationContent(notifModal.annonce).body}
+                </p>
+              </div>
+            </div>
+
+            {/* Détails */}
+            <div className="text-sm text-white/50">
+              <p>Contenu original : {notifModal.annonce.contenu?.length || 0} caractères</p>
+              {notifModal.annonce.contenu?.length > 150 && (
+                <p className="text-amber-400/70">Le contenu sera tronqué à 150 caractères</p>
+              )}
+            </div>
+          </div>
+        )}
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="ghost" onClick={() => setNotifModal({ open: false, annonce: null })}>
+            Annuler
+          </Button>
+          <Button onClick={handleConfirmSendNotification} loading={sendingNotif}>
+            <Send className="w-4 h-4 mr-2" />
+            Envoyer la notification
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

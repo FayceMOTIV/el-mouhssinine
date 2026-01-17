@@ -6,7 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
+import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
 import { arabicAlphabet } from '../data/alphabet';
 import { lessons, levels, getUserProgress } from '../data/lessons';
 import { vocabulary } from '../data/vocabulary';
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: HEADER_PADDING_TOP,
     paddingBottom: spacing.lg,
     alignItems: 'center',
   },

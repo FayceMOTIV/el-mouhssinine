@@ -1,9 +1,50 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
-import { BookOpen, Plus, Edit, Trash2, Search, Check, X } from 'lucide-react'
+import { BookOpen, Plus, Edit, Trash2, Search, Check, X, Download, AlertTriangle } from 'lucide-react'
 import { Card, Button, Input, Textarea, Toggle, Loading, EmptyState, Modal, Badge, AIWriteButton } from '../components/common'
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDocs, writeBatch } from 'firebase/firestore'
 import { db } from '../services/firebase'
+
+// Hadiths par défaut à importer
+const defaultHadiths = [
+  { texteFr: 'Les actes ne valent que par leurs intentions, et chacun sera rétribué selon son intention.', texteAr: 'إنما الأعمال بالنيات وإنما لكل امرئ ما نوى', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "Le meilleur d'entre vous est celui qui apprend le Coran et l'enseigne.", texteAr: 'خيركم من تعلم القرآن وعلمه', source: 'Hadith Bukhari', actif: true },
+  { texteFr: "Souriez, c'est une aumône.", texteAr: 'تبسمك في وجه أخيك صدقة', source: 'Hadith Tirmidhi', actif: true },
+  { texteFr: "Celui qui croit en Allah et au Jour Dernier, qu'il dise du bien ou qu'il se taise.", texteAr: 'من كان يؤمن بالله واليوم الآخر فليقل خيراً أو ليصمت', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: 'Le paradis se trouve sous les pieds des mères.', texteAr: 'الجنة تحت أقدام الأمهات', source: "Hadith Nasa'i", actif: true },
+  { texteFr: "La propreté fait partie de la foi.", texteAr: 'الطهور شطر الإيمان', source: 'Hadith Muslim', actif: true },
+  { texteFr: "Celui qui ne remercie pas les gens ne remercie pas Allah.", texteAr: 'لا يشكر الله من لا يشكر الناس', source: 'Hadith Abu Dawud', actif: true },
+  { texteFr: "Le croyant est le miroir du croyant.", texteAr: 'المؤمن مرآة المؤمن', source: 'Hadith Abu Dawud', actif: true },
+  { texteFr: "Facilite et ne complique pas, annonce la bonne nouvelle et ne fais pas fuir.", texteAr: 'يسروا ولا تعسروا وبشروا ولا تنفروا', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "Le musulman est celui dont les musulmans sont à l'abri de sa langue et de sa main.", texteAr: 'المسلم من سلم المسلمون من لسانه ويده', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "Aucun de vous ne sera véritablement croyant tant qu'il n'aimera pas pour son frère ce qu'il aime pour lui-même.", texteAr: 'لا يؤمن أحدكم حتى يحب لأخيه ما يحب لنفسه', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "La meilleure des invocations est celle du jour de Arafat.", texteAr: 'خير الدعاء دعاء يوم عرفة', source: 'Hadith Tirmidhi', actif: true },
+  { texteFr: "Celui qui emprunte un chemin pour acquérir une science, Allah lui facilite un chemin vers le Paradis.", texteAr: 'من سلك طريقاً يلتمس فيه علماً سهل الله له به طريقاً إلى الجنة', source: 'Hadith Muslim', actif: true },
+  { texteFr: "Les plus aimés d'entre vous auprès d'Allah sont ceux qui ont le meilleur caractère.", texteAr: 'إن أحبكم إلي وأقربكم مني مجلساً يوم القيامة أحاسنكم أخلاقاً', source: 'Hadith Tirmidhi', actif: true },
+  { texteFr: "La pudeur fait partie de la foi.", texteAr: 'الحياء من الإيمان', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "Le fort n'est pas celui qui terrasse les gens, mais celui qui se maîtrise lors de la colère.", texteAr: 'ليس الشديد بالصرعة إنما الشديد الذي يملك نفسه عند الغضب', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "Fais preuve de bon comportement envers les gens.", texteAr: 'وخالق الناس بخلق حسن', source: 'Hadith Tirmidhi', actif: true },
+  { texteFr: "L'invocation est l'essence de l'adoration.", texteAr: 'الدعاء هو العبادة', source: 'Hadith Tirmidhi', actif: true },
+  { texteFr: "Quiconque croit en Allah et au Jour Dernier, qu'il honore son voisin.", texteAr: 'من كان يؤمن بالله واليوم الآخر فليكرم جاره', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "Préserve Allah, Il te préservera.", texteAr: 'احفظ الله يحفظك', source: 'Hadith Tirmidhi', actif: true },
+  { texteFr: "La patience est lumière.", texteAr: 'والصبر ضياء', source: 'Hadith Muslim', actif: true },
+  { texteFr: "Certes, Allah est Beau et Il aime la beauté.", texteAr: 'إن الله جميل يحب الجمال', source: 'Hadith Muslim', actif: true },
+  { texteFr: "Le meilleur d'entre vous est celui qui est le plus utile aux gens.", texteAr: 'خير الناس أنفعهم للناس', source: 'Hadith Tabarani', actif: true },
+  { texteFr: "Celui qui n'est pas miséricordieux envers les gens, Allah ne sera pas miséricordieux envers lui.", texteAr: 'من لا يرحم الناس لا يرحمه الله', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "Délaisse ce qui te fait douter pour ce qui ne te fait pas douter.", texteAr: 'دع ما يريبك إلى ما لا يريبك', source: "Hadith Tirmidhi & Nasa'i", actif: true },
+  { texteFr: "Le Coran intercédera pour ses compagnons le Jour de la Résurrection.", texteAr: 'اقرؤوا القرآن فإنه يأتي يوم القيامة شفيعاً لأصحابه', source: 'Hadith Muslim', actif: true },
+  { texteFr: "La recherche du savoir est une obligation pour chaque musulman.", texteAr: 'طلب العلم فريضة على كل مسلم', source: 'Hadith Ibn Majah', actif: true },
+  { texteFr: "Les meilleurs d'entre vous sont ceux qui ont le meilleur comportement envers leurs épouses.", texteAr: 'خياركم خياركم لنسائهم', source: 'Hadith Tirmidhi', actif: true },
+  { texteFr: "Celui qui montre le chemin vers un bien a la même récompense que celui qui l'accomplit.", texteAr: 'الدال على الخير كفاعله', source: 'Hadith Muslim', actif: true },
+  { texteFr: "Dis la vérité même si elle est amère.", texteAr: 'قل الحق ولو كان مراً', source: 'Hadith Ibn Hibban', actif: true },
+  { texteFr: "Allah ne regarde pas vos corps ni vos apparences, mais Il regarde vos cœurs.", texteAr: 'إن الله لا ينظر إلى أجسادكم ولا إلى صوركم ولكن ينظر إلى قلوبكم', source: 'Hadith Muslim', actif: true },
+  { texteFr: "Quiconque fait ses ablutions parfaitement, ses péchés sortent de son corps.", texteAr: 'من توضأ فأحسن الوضوء خرجت خطاياه من جسده', source: 'Hadith Muslim', actif: true },
+  { texteFr: "La prière est la clé du Paradis.", texteAr: 'مفتاح الجنة الصلاة', source: 'Hadith Ahmad', actif: true },
+  { texteFr: "Celui qui jeûne le mois de Ramadan avec foi et espérance verra ses péchés passés pardonnés.", texteAr: 'من صام رمضان إيماناً واحتساباً غفر له ما تقدم من ذنبه', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "Les liens de parenté sont suspendus au Trône, et ils disent : Celui qui nous maintient, Allah le maintiendra.", texteAr: 'الرحم معلقة بالعرش تقول من وصلني وصله الله', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "Évitez les sept péchés destructeurs.", texteAr: 'اجتنبوا السبع الموبقات', source: 'Hadith Bukhari & Muslim', actif: true },
+  { texteFr: "La main supérieure est meilleure que la main inférieure.", texteAr: 'اليد العليا خير من اليد السفلى', source: 'Hadith Bukhari & Muslim', actif: true },
+]
 
 export default function Rappels() {
   const [rappels, setRappels] = useState([])
@@ -20,6 +61,8 @@ export default function Rappels() {
     source: '',
     actif: true
   })
+  const [importing, setImporting] = useState(false)
+  const [showImportConfirm, setShowImportConfirm] = useState(false)
 
   useEffect(() => {
     const q = query(collection(db, 'rappels'), orderBy('source', 'asc'))
@@ -129,6 +172,32 @@ export default function Rappels() {
     }
   }
 
+  const handleImportDefaults = async () => {
+    setImporting(true)
+    try {
+      const batch = writeBatch(db)
+      const rappelsRef = collection(db, 'rappels')
+
+      // Ajouter chaque hadith
+      for (const hadith of defaultHadiths) {
+        const newDocRef = doc(rappelsRef)
+        batch.set(newDocRef, {
+          ...hadith,
+          createdAt: new Date().toISOString()
+        })
+      }
+
+      await batch.commit()
+      toast.success(`${defaultHadiths.length} hadiths importés avec succès`)
+      setShowImportConfirm(false)
+    } catch (err) {
+      console.error('Error importing hadiths:', err)
+      toast.error('Erreur lors de l\'import')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -150,10 +219,18 @@ export default function Rappels() {
             Gérez les hadiths et rappels affichés dans l'application
           </p>
         </div>
-        <Button onClick={() => handleOpenModal()}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nouveau rappel
-        </Button>
+        <div className="flex gap-2">
+          {rappels.length === 0 && (
+            <Button variant="secondary" onClick={() => setShowImportConfirm(true)}>
+              <Download className="w-4 h-4 mr-2" />
+              Importer 37 hadiths
+            </Button>
+          )}
+          <Button onClick={() => handleOpenModal()}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nouveau rappel
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -194,20 +271,53 @@ export default function Rappels() {
         </Card>
       </div>
 
+      {/* Banner import si collection vide */}
+      {rappels.length === 0 && !searchTerm && (
+        <Card className="p-6 bg-gradient-to-r from-secondary/20 to-primary/20 border-secondary/30">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="p-3 bg-secondary/20 rounded-full">
+              <Download className="w-8 h-8 text-secondary" />
+            </div>
+            <div className="flex-1 text-center sm:text-left">
+              <h3 className="text-lg font-semibold text-white">Collection vide</h3>
+              <p className="text-white/70 text-sm mt-1">
+                Importez les 37 hadiths par défaut pour démarrer rapidement. Vous pourrez les modifier ou en ajouter d'autres ensuite.
+              </p>
+            </div>
+            <Button onClick={() => setShowImportConfirm(true)} loading={importing}>
+              <Download className="w-4 h-4 mr-2" />
+              Importer les hadiths
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Liste des rappels */}
-      {filteredRappels.length === 0 ? (
+      {filteredRappels.length === 0 && rappels.length > 0 ? (
+        <EmptyState
+          icon={BookOpen}
+          title="Aucun résultat"
+          description="Aucun rappel ne correspond à votre recherche"
+        />
+      ) : filteredRappels.length === 0 && rappels.length === 0 && searchTerm ? (
         <EmptyState
           icon={BookOpen}
           title="Aucun rappel"
-          description={searchTerm ? "Aucun rappel ne correspond à votre recherche" : "Ajoutez votre premier rappel pour commencer"}
-          action={!searchTerm && (
-            <Button onClick={() => handleOpenModal()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Ajouter un rappel
-            </Button>
-          )}
+          description="Commencez par importer les hadiths par défaut ou ajoutez-en manuellement"
+          action={
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setShowImportConfirm(true)}>
+                <Download className="w-4 h-4 mr-2" />
+                Importer
+              </Button>
+              <Button onClick={() => handleOpenModal()}>
+                <Plus className="w-4 h-4 mr-2" />
+                Ajouter
+              </Button>
+            </div>
+          }
         />
-      ) : (
+      ) : filteredRappels.length > 0 ? (
         <div className="space-y-4">
           {filteredRappels.map(rappel => (
             <Card key={rappel.id} className="p-4">
@@ -264,13 +374,14 @@ export default function Rappels() {
             </Card>
           ))}
         </div>
-      )}
+      ) : null}
 
       {/* Modal Ajout/Modification */}
       <Modal
         isOpen={showModal}
         onClose={handleCloseModal}
         title={editingRappel ? 'Modifier le rappel' : 'Nouveau rappel'}
+        size="xl"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
@@ -353,6 +464,39 @@ export default function Rappels() {
           </Button>
           <Button variant="danger" onClick={() => handleDelete(deleteConfirm)}>
             Supprimer
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Modal Confirmation Import */}
+      <Modal
+        isOpen={showImportConfirm}
+        onClose={() => setShowImportConfirm(false)}
+        title="Importer les hadiths par défaut"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-white font-medium">Attention</p>
+              <p className="text-white/70 text-sm mt-1">
+                Cette action va ajouter {defaultHadiths.length} hadiths à votre collection.
+                Si vous avez déjà des rappels, ils ne seront pas supprimés.
+              </p>
+            </div>
+          </div>
+          <p className="text-white/70">
+            Les hadiths importés incluent des citations de Bukhari, Muslim, Tirmidhi et d'autres recueils authentiques.
+            Vous pourrez les modifier ou les supprimer individuellement par la suite.
+          </p>
+        </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="ghost" onClick={() => setShowImportConfirm(false)}>
+            Annuler
+          </Button>
+          <Button onClick={handleImportDefaults} loading={importing}>
+            <Download className="w-4 h-4 mr-2" />
+            Importer {defaultHadiths.length} hadiths
           </Button>
         </div>
       </Modal>

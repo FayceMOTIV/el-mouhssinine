@@ -1,21 +1,25 @@
+import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Clock,
   Megaphone,
   MessageSquare,
+  MessageCircle,
   Calendar,
   Heart,
   Coins,
   Users,
-  Bell,
   Shield,
   Settings,
   LogOut,
   X,
-  BookOpen
+  BookOpen,
+  TrendingUp,
+  FileText
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { subscribeToUnreadMessagesCount } from '../../services/firebase'
 
 const menuItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -26,8 +30,10 @@ const menuItems = [
   { path: '/evenements', icon: Calendar, label: 'Événements' },
   { path: '/janaza', icon: Heart, label: 'Salat Janaza' },
   { path: '/dons', icon: Coins, label: 'Dons & Projets' },
-  { path: '/adherents', icon: Users, label: 'Adhérents' },
-  { path: '/notifications', icon: Bell, label: 'Notifications' },
+  { path: '/adherents', icon: Users, label: 'Membres' },
+  { path: '/revenus', icon: TrendingUp, label: 'Gestion revenus' },
+  { path: '/recus-fiscaux', icon: FileText, label: 'Reçus fiscaux' },
+  { path: '/messages', icon: MessageCircle, label: 'Messages', hasBadge: true },
   { path: '/admins', icon: Shield, label: 'Gestion Admins', adminOnly: true },
   { path: '/parametres', icon: Settings, label: 'Paramètres' }
 ]
@@ -35,6 +41,15 @@ const menuItems = [
 export default function Sidebar({ isOpen, onClose }) {
   const { admin, logout, isSuperAdmin } = useAuth()
   const location = useLocation()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // S'abonner au nombre de messages non lus
+  useEffect(() => {
+    const unsubscribe = subscribeToUnreadMessagesCount((count) => {
+      setUnreadCount(count)
+    })
+    return () => unsubscribe()
+  }, [])
 
   const filteredMenuItems = menuItems.filter(
     item => !item.adminOnly || isSuperAdmin()
@@ -97,7 +112,12 @@ export default function Sidebar({ isOpen, onClose }) {
                     `}
                   >
                     <item.icon className="w-5 h-5" />
-                    <span className="font-medium">{item.label}</span>
+                    <span className="font-medium flex-1">{item.label}</span>
+                    {item.hasBadge && unreadCount > 0 && (
+                      <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                   </NavLink>
                 </li>
               ))}

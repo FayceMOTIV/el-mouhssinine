@@ -30,6 +30,11 @@ import {
   getDownloadURL,
   deleteObject
 } from 'firebase/storage'
+import {
+  getFunctions,
+  httpsCallable,
+  connectFunctionsEmulator
+} from 'firebase/functions'
 
 const firebaseConfig = {
   apiKey: "AIzaSyCJr6tGI9QpbWr3pf1GpYoEnvsGgkJj8j8",
@@ -49,6 +54,7 @@ let app = null
 let db = null
 let auth = null
 let storage = null
+let functions = null
 
 if (!FORCE_DEMO_MODE) {
   try {
@@ -56,12 +62,13 @@ if (!FORCE_DEMO_MODE) {
     db = getFirestore(app)
     auth = getAuth(app)
     storage = getStorage(app)
+    functions = getFunctions(app, 'europe-west1')
   } catch (err) {
     isDemoMode = true
   }
 }
 
-export { app, db, auth, storage }
+export { app, db, auth, storage, functions }
 
 // ==================== MOCK DATA FOR DEMO MODE ====================
 const mockData = {
@@ -263,8 +270,42 @@ export const subscribeToDocument = (collectionName, docId, callback) => {
 // ==================== SPECIFIC QUERIES ====================
 
 // Horaires
-export const getPrayerTimes = () => getDocument('settings', 'prayerTimes')
+// Fetch prayer times from Aladhan API for Bourg-en-Bresse
+// Méthode 12 + tune pour correspondre aux horaires Mawaqit El Mouhssinine
+// tune: Fajr -20min, Dhuhr +2min, Asr +4min, Maghrib +8min, Isha +27min
+export const getPrayerTimes = async () => {
+  try {
+    const response = await fetch(
+      'https://api.aladhan.com/v1/timingsByCity?city=Bourg-en-Bresse&country=France&method=12&tune=0,-20,0,2,4,8,0,27,0'
+    )
+
+    if (!response.ok) throw new Error('Erreur API Aladhan')
+
+    const data = await response.json()
+    const timings = data.data.timings
+
+    return {
+      times: {
+        fajr: timings.Fajr,
+        sunrise: timings.Sunrise,
+        dhuhr: timings.Dhuhr,
+        asr: timings.Asr,
+        maghrib: timings.Maghrib,
+        isha: timings.Isha
+      },
+      date: data.data.date.readable,
+      hijri: data.data.date.hijri.date
+    }
+  } catch (error) {
+    console.error('Erreur récupération horaires:', error)
+    // Fallback: essayer de récupérer depuis Firestore
+    return getDocument('settings', 'prayerTimes')
+  }
+}
 export const updatePrayerTimes = (data) => setDocument('settings', 'prayerTimes', data)
+
+// Récupérer les horaires Iqama et Jumua depuis Firebase
+export const getIqamaAndJumuaTimes = () => getDocument('settings', 'prayerTimes')
 
 // Annonces
 export const getAnnonces = () => getCollection('announcements', [orderBy('createdAt', 'desc')])
@@ -293,6 +334,107 @@ export const subscribeToDons = (cb) => subscribeToCollection('donations', cb, [o
 // Membres
 export const getMembres = () => getCollection('members', [orderBy('createdAt', 'desc')])
 export const subscribeToMembres = (cb) => subscribeToCollection('members', cb, [orderBy('createdAt', 'desc')])
+
+// ==================== PAYMENTS (Historique des paiements) ====================
+// Types: 'cotisation' (membres) ou 'don' (dons/projets)
+
+export const PaymentType = {
+  COTISATION: 'cotisation',
+  DON: 'don'
+}
+
+// S'abonner à tous les paiements
+export const subscribeToPayments = (cb) => subscribeToCollection('payments', cb, [orderBy('createdAt', 'desc')])
+
+// S'abonner aux paiements d'un membre spécifique
+export const subscribeToMemberPayments = (membreId, cb) => {
+  if (isDemoMode) {
+    setTimeout(() => cb([]), 100)
+    return () => {}
+  }
+  const q = query(
+    collection(db, 'payments'),
+    where('membreId', '==', membreId),
+    orderBy('date', 'desc')
+  )
+  return onSnapshot(q, (snapshot) => {
+    const payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    cb(payments)
+  })
+}
+
+// Ajouter un paiement
+export const addPayment = async (paymentData) => {
+  if (isDemoMode) {
+    console.log('[DEMO] Add payment:', paymentData)
+    return { id: 'demo-' + Date.now() }
+  }
+  const docRef = await addDoc(collection(db, 'payments'), {
+    ...paymentData,
+    createdAt: serverTimestamp()
+  })
+  return { id: docRef.id }
+}
+
+// Obtenir les paiements par type (cotisation ou don)
+export const getPaymentsByType = async (type) => {
+  if (isDemoMode) return []
+  const q = query(
+    collection(db, 'payments'),
+    where('type', '==', type),
+    orderBy('date', 'desc')
+  )
+  const snapshot = await getDocs(q)
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+}
+
+// Obtenir les stats de paiements par période
+export const getPaymentStats = (payments, type = null) => {
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const yearStart = new Date(now.getFullYear(), 0, 1)
+
+  // Filtrer par type si spécifié
+  let filtered = payments
+  if (type) {
+    filtered = payments.filter(p => p.type === type)
+  }
+
+  // Helper pour obtenir la date (supporte 'date' et 'createdAt')
+  const getDate = (p) => {
+    const dateField = p.date || p.createdAt
+    if (!dateField) return new Date(0)
+    return dateField?.toDate?.() || new Date(dateField)
+  }
+
+  // Helper pour obtenir le montant (supporte 'montant' et 'amount')
+  const getAmount = (p) => p.montant || p.amount || 0
+
+  const getTotal = (startDate) => {
+    return filtered.reduce((sum, p) => {
+      const pDate = getDate(p)
+      if (pDate >= startDate) {
+        return sum + getAmount(p)
+      }
+      return sum
+    }, 0)
+  }
+
+  const getCount = (startDate) => {
+    return filtered.filter(p => {
+      const pDate = getDate(p)
+      return pDate >= startDate
+    }).length
+  }
+
+  return {
+    today: { total: getTotal(todayStart), count: getCount(todayStart) },
+    month: { total: getTotal(monthStart), count: getCount(monthStart) },
+    year: { total: getTotal(yearStart), count: getCount(yearStart) },
+    all: { total: filtered.reduce((sum, p) => sum + getAmount(p), 0), count: filtered.length }
+  }
+}
 
 // Admins
 export const getAdmins = () => getCollection('admins', [orderBy('createdAt', 'desc')])
@@ -332,6 +474,14 @@ export const getSettings = () => getDocument('settings', 'general')
 export const updateSettings = (data) => setDocument('settings', 'general', data)
 export const getMosqueeInfo = () => getDocument('settings', 'mosqueeInfo')
 export const updateMosqueeInfo = (data) => setDocument('settings', 'mosqueeInfo', data)
+
+// Cotisations
+export const getCotisationPrices = () => getDocument('settings', 'cotisation')
+export const updateCotisationPrices = (data) => setDocument('settings', 'cotisation', data)
+
+// Rappels
+export const getRappels = () => getCollection('rappels', [orderBy('createdAt', 'desc')])
+export const subscribeToRappels = (cb) => subscribeToCollection('rappels', cb, [orderBy('createdAt', 'desc')])
 
 // ==================== FILE STORAGE ====================
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -437,3 +587,152 @@ export const uploadImage = async (path, file) => {
 
 // Export Firestore utilities for custom queries
 export { collection, doc, query, where, orderBy, serverTimestamp, arrayUnion, arrayRemove }
+
+// ==================== MESSAGES (Système de messagerie) ====================
+
+/**
+ * Status possibles pour un message
+ */
+export const MessageStatus = {
+  NON_LU: 'non_lu',
+  EN_COURS: 'en_cours',
+  RESOLU: 'resolu'
+}
+
+/**
+ * Sujets de messages disponibles
+ */
+export const MESSAGE_SUBJECTS = [
+  'Question générale',
+  'Demande de certificat',
+  'Problème technique',
+  'Suggestion',
+  'Autre'
+]
+
+/**
+ * S'abonner à tous les messages (temps réel)
+ */
+export const subscribeToMessages = (callback) => {
+  if (isDemoMode) {
+    setTimeout(() => callback([]), 100)
+    return () => {}
+  }
+  const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (snapshot) => {
+    const messages = snapshot.docs
+      // Filtrer les messages supprimés par l'admin
+      .filter(doc => !doc.data().deletedByAdmin)
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+    callback(messages)
+  })
+}
+
+/**
+ * Mettre à jour le status d'un message
+ */
+export const updateMessageStatus = async (messageId, status) => {
+  if (isDemoMode) {
+    console.log('[DEMO] Update message status:', messageId, status)
+    return
+  }
+  const messageRef = doc(db, 'messages', messageId)
+  await updateDoc(messageRef, {
+    status,
+    updatedAt: serverTimestamp()
+  })
+}
+
+/**
+ * Répondre à un message
+ */
+export const replyToMessage = async (messageId, replyText, adminName = 'Admin') => {
+  if (isDemoMode) {
+    console.log('[DEMO] Reply to message:', messageId, replyText)
+    return
+  }
+  const messageRef = doc(db, 'messages', messageId)
+  const reponse = {
+    id: `reply-${Date.now()}`,
+    message: replyText,
+    createdBy: 'mosquee',
+    createdAt: new Date().toISOString()
+  }
+  await updateDoc(messageRef, {
+    reponses: arrayUnion(reponse),
+    status: MessageStatus.EN_COURS,
+    updatedAt: serverTimestamp()
+  })
+}
+
+/**
+ * Supprimer un message (soft delete - reste visible pour l'utilisateur)
+ */
+export const deleteMessage = async (messageId) => {
+  if (isDemoMode) {
+    console.log('[DEMO] Delete message:', messageId)
+    return
+  }
+  const messageRef = doc(db, 'messages', messageId)
+  // Soft delete: marquer comme supprimé par l'admin
+  await updateDoc(messageRef, {
+    deletedByAdmin: true,
+    deletedByAdminAt: serverTimestamp()
+  })
+}
+
+/**
+ * Obtenir le nombre de messages non lus (pour le badge)
+ */
+export const getUnreadMessagesCount = async () => {
+  if (isDemoMode) {
+    return 0
+  }
+  const q = query(collection(db, 'messages'), where('status', '==', MessageStatus.NON_LU))
+  const snapshot = await getDocs(q)
+  return snapshot.size
+}
+
+/**
+ * S'abonner au nombre de messages non lus (temps réel)
+ */
+export const subscribeToUnreadMessagesCount = (callback) => {
+  if (isDemoMode) {
+    setTimeout(() => callback(0), 100)
+    return () => {}
+  }
+  const q = query(collection(db, 'messages'), where('status', '==', MessageStatus.NON_LU))
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.size)
+  })
+}
+
+// ==================== NOTIFICATIONS ====================
+
+/**
+ * Envoie une notification push via Cloud Functions
+ * @param {string} title - Titre de la notification
+ * @param {string} body - Corps de la notification
+ * @param {string} topic - Topic FCM (announcements, events, janaza, all)
+ * @param {object} customData - Données supplémentaires
+ */
+export const sendNotification = async (title, body, topic = 'all', customData = {}) => {
+  if (isDemoMode || !functions) {
+    console.log('[DEMO] Notification simulée:', { title, body, topic })
+    return { success: true, demo: true }
+  }
+
+  try {
+    const sendManualNotification = httpsCallable(functions, 'sendManualNotification')
+    const result = await sendManualNotification({
+      title,
+      body,
+      topic,
+      data: customData
+    })
+    return result.data
+  } catch (error) {
+    console.error('Erreur envoi notification:', error)
+    throw error
+  }
+}

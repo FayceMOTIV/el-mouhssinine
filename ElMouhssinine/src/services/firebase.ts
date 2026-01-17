@@ -50,6 +50,9 @@ const toDate = (timestamp: any): Date => {
 
 // ==================== INTERFACES ====================
 
+// Réexport du type MosqueeInfo depuis types
+export type { MosqueeInfo } from '../types';
+
 export interface IqamaDelays {
   fajr: number | string;
   dhuhr: number | string;
@@ -437,6 +440,7 @@ export const subscribeToProjects = (callback: (data: Project[]) => void) => {
             isActive: doc.data().actif,
             lieu: doc.data().lieu,
             iban: doc.data().iban,
+            fichiers: doc.data().fichiers || [],
           }));
           callback(mergeWithMock(data, mockProjects as Project[]));
         },
@@ -475,6 +479,7 @@ export const getProjects = async (isExternal?: boolean): Promise<Project[]> => {
       isActive: doc.data().actif,
       lieu: doc.data().lieu,
       iban: doc.data().iban,
+      fichiers: doc.data().fichiers || [],
     }));
     data = mergeWithMock(data, mockProjects as Project[]);
     if (isExternal !== undefined) {
@@ -511,6 +516,157 @@ export const createDonation = async (donation: Omit<Donation, 'id' | 'createdAt'
   } catch (error) {
     console.error('[Firebase] createDonation error:', error);
     return `error-donation-${Date.now()}`;
+  }
+};
+
+// Ajouter un don avec paiement Stripe
+export interface AddDonationParams {
+  projectId: string;
+  projectName: string;
+  amount: number;
+  stripePaymentIntentId: string;
+  paymentMethod: string;
+  isAnonymous?: boolean;
+  donorEmail?: string;
+  donorName?: string;
+}
+
+export const addDonation = async (params: AddDonationParams): Promise<string> => {
+  if (FORCE_DEMO_MODE) {
+    return `mock-donation-${Date.now()}`;
+  }
+  try {
+    // Utiliser stripePaymentIntentId comme docId pour IDEMPOTENCE
+    // Si retry, le même document sera réécrit au lieu d'en créer un nouveau
+    const docId = params.stripePaymentIntentId || `donation-${Date.now()}`;
+    const donationRef = firestore().collection('donations').doc(docId);
+    const projectRef = params.projectId ? firestore().collection('projects').doc(params.projectId) : null;
+
+    // Vérifier si donation existe déjà (idempotence)
+    const existingDoc = await donationRef.get();
+    if (existingDoc.exists) {
+      console.log('[Firebase] Don déjà existant (idempotent):', docId);
+      return docId;
+    }
+
+    // TRANSACTION ATOMIQUE: donation + update projet
+    await firestore().runTransaction(async (transaction) => {
+      // 1. Créer le don
+      transaction.set(donationRef, {
+        donateur: params.isAnonymous ? 'Anonyme' : (params.donorName || params.donorEmail || 'Anonyme'),
+        donateurEmail: params.isAnonymous ? null : (params.donorEmail || null),
+        montant: params.amount,
+        projetId: params.projectId,
+        projetNom: params.projectName,
+        modePaiement: params.paymentMethod,
+        stripePaymentIntentId: params.stripePaymentIntentId,
+        statut: 'completed',
+        isAnonymous: params.isAnonymous || false,
+        source: 'app_mobile',
+        date: firestore.FieldValue.serverTimestamp(),
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 2. Mettre à jour le montant collecté du projet (dans la même transaction)
+      if (projectRef) {
+        const projectDoc = await transaction.get(projectRef);
+        if (projectDoc.exists) {
+          transaction.update(projectRef, {
+            montantActuel: firestore.FieldValue.increment(params.amount),
+          });
+        }
+      }
+    });
+
+    console.log('[Firebase] Don enregistré (transaction atomique):', docId);
+    return docId;
+  } catch (error) {
+    console.error('[Firebase] addDonation error:', error);
+    throw error;
+  }
+};
+
+// Ajouter un paiement de cotisation avec Stripe
+export interface AddPaymentParams {
+  memberId: string;
+  memberName: string;
+  amount: number;
+  stripePaymentIntentId: string;
+  paymentMethod: string;
+  period?: string;
+}
+
+export const addPayment = async (params: AddPaymentParams): Promise<string> => {
+  if (FORCE_DEMO_MODE) {
+    return `mock-payment-${Date.now()}`;
+  }
+  try {
+    // Utiliser stripePaymentIntentId comme docId pour IDEMPOTENCE
+    const docId = params.stripePaymentIntentId || `payment-${Date.now()}`;
+    const paymentRef = firestore().collection('payments').doc(docId);
+    const memberRef = params.memberId ? firestore().collection('members').doc(params.memberId) : null;
+
+    // Vérifier si paiement existe déjà (idempotence)
+    const existingDoc = await paymentRef.get();
+    if (existingDoc.exists) {
+      console.log('[Firebase] Paiement déjà existant (idempotent):', docId);
+      return docId;
+    }
+
+    const now = new Date();
+    // Calculer dateFin selon la période
+    let dateFin: Date;
+    if (params.period === 'mensuel') {
+      dateFin = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    } else {
+      // annuel par défaut
+      dateFin = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+    }
+
+    // TRANSACTION ATOMIQUE: paiement + update membre
+    await firestore().runTransaction(async (transaction) => {
+      // 1. Créer le paiement
+      transaction.set(paymentRef, {
+        memberId: params.memberId,
+        memberName: params.memberName,
+        montant: params.amount,
+        modePaiement: params.paymentMethod,
+        stripePaymentIntentId: params.stripePaymentIntentId,
+        type: 'cotisation',
+        statut: 'completed',
+        source: 'app_mobile',
+        period: params.period || 'annuel',
+        date: firestore.FieldValue.serverTimestamp(),
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 2. Mettre à jour le statut du membre (dans la même transaction)
+      if (memberRef) {
+        const memberDoc = await transaction.get(memberRef);
+        if (memberDoc.exists) {
+          transaction.update(memberRef, {
+            statut: 'actif',
+            status: 'actif',
+            datePaiement: firestore.FieldValue.serverTimestamp(),
+            montantPaye: params.amount,
+            stripePaymentId: params.stripePaymentIntentId,
+            formule: params.period || 'annuel',
+            cotisation: {
+              type: params.period || 'annuel',
+              montant: params.amount,
+              dateDebut: firestore.Timestamp.fromDate(now),
+              dateFin: firestore.Timestamp.fromDate(dateFin),
+            },
+          });
+        }
+      }
+    });
+
+    console.log('[Firebase] Paiement cotisation enregistré (transaction atomique):', docId);
+    return docId;
+  } catch (error) {
+    console.error('[Firebase] addPayment error:', error);
+    throw error;
   }
 };
 
@@ -671,6 +827,52 @@ export const subscribeToMosqueeInfo = (callback: (data: MosqueeInfo & { headerIm
   }
 };
 
+// ==================== PRIX COTISATIONS ====================
+// Collection Firestore: "settings/cotisation"
+export interface CotisationPrices {
+  mensuel: number;
+  annuel: number;
+}
+
+const defaultCotisationPrices: CotisationPrices = {
+  mensuel: 10,
+  annuel: 100,
+};
+
+export const subscribeToCotisationPrices = (callback: (data: CotisationPrices) => void) => {
+  if (FORCE_DEMO_MODE) {
+    callback(defaultCotisationPrices);
+    return () => {};
+  }
+
+  try {
+    return firestore()
+      .collection('settings')
+      .doc('cotisation')
+      .onSnapshot(
+        doc => {
+          if (doc.exists) {
+            const data = doc.data();
+            callback({
+              mensuel: data?.mensuel ?? defaultCotisationPrices.mensuel,
+              annuel: data?.annuel ?? defaultCotisationPrices.annuel,
+            });
+          } else {
+            callback(defaultCotisationPrices);
+          }
+        },
+        error => {
+          console.error('[Firebase] CotisationPrices error:', error);
+          callback(defaultCotisationPrices);
+        }
+      );
+  } catch (error) {
+    console.error('[Firebase] CotisationPrices catch:', error);
+    callback(defaultCotisationPrices);
+    return () => {};
+  }
+};
+
 export const getMosqueeInfo = async (): Promise<MosqueeInfo> => {
   if (FORCE_DEMO_MODE) {
     return mockMosqueeInfo;
@@ -766,6 +968,105 @@ export const getPrayerTimes = async (): Promise<HorairesData> => {
 };
 
 export const subscribeToPrayerTimes = subscribeToIqama;
+
+// ==================== GENERAL SETTINGS (Display, Maintenance) ====================
+// Collection Firestore: "settings/general"
+
+export interface DisplaySettings {
+  showIqama: boolean;
+  showSunrise: boolean;
+  darkMode: boolean;
+}
+
+export interface MaintenanceSettings {
+  enabled: boolean;
+  message: string;
+}
+
+export interface GeneralSettings {
+  display: DisplaySettings;
+  maintenance: MaintenanceSettings;
+}
+
+const defaultGeneralSettings: GeneralSettings = {
+  display: {
+    showIqama: true,
+    showSunrise: true,
+    darkMode: true,
+  },
+  maintenance: {
+    enabled: false,
+    message: '',
+  },
+};
+
+export const subscribeToGeneralSettings = (callback: (data: GeneralSettings) => void) => {
+  if (FORCE_DEMO_MODE) {
+    callback(defaultGeneralSettings);
+    return () => {};
+  }
+
+  try {
+    return firestore()
+      .collection('settings')
+      .doc('general')
+      .onSnapshot(
+        doc => {
+          if (doc.exists) {
+            const data = doc.data();
+            callback({
+              display: {
+                showIqama: data?.display?.showIqama ?? true,
+                showSunrise: data?.display?.showSunrise ?? true,
+                darkMode: data?.display?.darkMode ?? true,
+              },
+              maintenance: {
+                enabled: data?.maintenance?.enabled ?? false,
+                message: data?.maintenance?.message ?? '',
+              },
+            });
+          } else {
+            callback(defaultGeneralSettings);
+          }
+        },
+        error => {
+          console.error('[Firebase] GeneralSettings error:', error);
+          callback(defaultGeneralSettings);
+        }
+      );
+  } catch (error) {
+    console.error('[Firebase] GeneralSettings catch:', error);
+    callback(defaultGeneralSettings);
+    return () => {};
+  }
+};
+
+export const getGeneralSettings = async (): Promise<GeneralSettings> => {
+  if (FORCE_DEMO_MODE) {
+    return defaultGeneralSettings;
+  }
+  try {
+    const doc = await firestore().collection('settings').doc('general').get();
+    if (doc.exists) {
+      const data = doc.data();
+      return {
+        display: {
+          showIqama: data?.display?.showIqama ?? true,
+          showSunrise: data?.display?.showSunrise ?? true,
+          darkMode: data?.display?.darkMode ?? true,
+        },
+        maintenance: {
+          enabled: data?.maintenance?.enabled ?? false,
+          message: data?.maintenance?.message ?? '',
+        },
+      };
+    }
+    return defaultGeneralSettings;
+  } catch (error) {
+    console.error('[Firebase] getGeneralSettings error:', error);
+    return defaultGeneralSettings;
+  }
+};
 
 // ==================== DATES ISLAMIQUES ====================
 // Collection Firestore: "dates_islamiques"
@@ -875,26 +1176,134 @@ export const updateMember = async (memberId: string, data: Partial<Member>): Pro
   }
 };
 
-export const createMember = async (member: Omit<Member, 'id' | 'createdAt' | 'memberId'>): Promise<string> => {
+// Interface pour l'objet inscritPar (info du payeur)
+export interface InscritParData {
+  odUserId: string;  // ID Firebase du payeur
+  nom: string;
+  prenom: string;
+}
+
+// Interface pour création de membre avec nouveaux champs multi-membres
+export interface CreateMemberData {
+  // Champs directs (nouveau format)
+  nom?: string;
+  prenom?: string;
+  telephone?: string;
+  adresse?: string;
+  email?: string;
+  // Ancien format
+  name?: string;
+  phone?: string;
+  // Nouveaux champs multi-membres
+  inscritPar?: InscritParData | string; // Objet avec info du payeur (ou string pour rétrocompatibilité)
+  status?: 'actif' | 'en_attente_signature' | 'en_attente_paiement' | 'expire';
+  dateInscription?: Date;
+  datePaiement?: Date | null; // null pour virement non encore reçu
+  paiementId?: string; // ID pour regrouper les membres payés ensemble
+  referenceVirement?: string | null; // Référence pour paiement par virement (ex: ADH-2026-X7K9MN)
+  montant?: number; // Montant payé
+  modePaiement?: string; // 'carte', 'apple', 'virement', etc.
+  formule?: 'mensuel' | 'annuel' | null; // Type de cotisation choisi
+  // Cotisation
+  cotisation?: {
+    type: 'mensuel' | 'annuel' | null;
+    montant: number;
+    dateDebut: Date | null;
+    dateFin: Date | null;
+  };
+  cotisationType?: 'mensuel' | 'annuel' | null;
+}
+
+export const createMember = async (member: CreateMemberData | Omit<Member, 'id' | 'createdAt' | 'memberId'>): Promise<string> => {
   if (FORCE_DEMO_MODE) {
     return `mock-member-${Date.now()}`;
   }
   try {
-    const nameParts = member.name.split(' ');
-    const docRef = await firestore().collection('members').add({
-      prenom: nameParts[0],
-      nom: nameParts.slice(1).join(' '),
-      email: member.email,
-      telephone: member.phone,
-      cotisation: {
+    // Déterminer nom et prénom
+    let nom = '';
+    let prenom = '';
+
+    if ('nom' in member && member.nom) {
+      nom = member.nom;
+      prenom = ('prenom' in member && member.prenom) ? member.prenom : '';
+    } else if ('name' in member && member.name) {
+      const nameParts = member.name.split(' ');
+      prenom = nameParts[0];
+      nom = nameParts.slice(1).join(' ');
+    }
+
+    // Déterminer téléphone et email
+    const telephone = ('telephone' in member && member.telephone)
+      ? member.telephone
+      : ('phone' in member && member.phone)
+        ? member.phone
+        : '';
+    const email = member.email || '';
+    const adresse = ('adresse' in member && member.adresse) ? member.adresse : '';
+
+    // Construire l'objet cotisation
+    let cotisationData: any;
+    if ('cotisation' in member && member.cotisation) {
+      cotisationData = {
+        type: member.cotisation.type,
+        montant: member.cotisation.montant,
+        dateDebut: member.cotisation.dateDebut,
+        dateFin: member.cotisation.dateFin,
+      };
+    } else if ('cotisationType' in member) {
+      cotisationData = {
         type: member.cotisationType,
-        montant: member.cotisationType === 'annuel' ? 100 : 10,
+        montant: member.cotisationType === 'annuel' ? 100 : 20,
         dateDebut: firestore.FieldValue.serverTimestamp(),
         dateFin: getNextPaymentDate(member.cotisationType),
-      },
+      };
+    }
+
+    // Construire le document
+    const docData: any = {
+      nom,
+      prenom,
+      email,
+      telephone,
+      adresse,
+      cotisation: cotisationData,
       actif: true,
       createdAt: firestore.FieldValue.serverTimestamp(),
-    });
+    };
+
+    // Ajouter les champs multi-membres si présents
+    if ('inscritPar' in member && member.inscritPar) {
+      docData.inscritPar = member.inscritPar;
+    }
+    if ('status' in member && member.status) {
+      docData.status = member.status;
+    }
+    if ('dateInscription' in member && member.dateInscription) {
+      docData.dateInscription = member.dateInscription;
+    }
+    // datePaiement: sauvegarder même si null (virement en attente)
+    if ('datePaiement' in member) {
+      docData.datePaiement = member.datePaiement; // peut être null pour virement
+    }
+    if ('paiementId' in member && member.paiementId) {
+      docData.paiementId = member.paiementId;
+    }
+    // referenceVirement: pour les paiements par virement
+    if ('referenceVirement' in member) {
+      docData.referenceVirement = member.referenceVirement;
+    }
+    if ('montant' in member && member.montant !== undefined) {
+      docData.montant = member.montant;
+    }
+    if ('modePaiement' in member && member.modePaiement) {
+      docData.modePaiement = member.modePaiement;
+    }
+    // formule: type d'abonnement choisi
+    if ('formule' in member && member.formule) {
+      docData.formule = member.formule;
+    }
+
+    const docRef = await firestore().collection('members').add(docData);
     return docRef.id;
   } catch (error) {
     console.error('[Firebase] createMember error:', error);
@@ -920,6 +1329,196 @@ const getNextPaymentDate = (type: 'mensuel' | 'annuel' | null): Date => {
   return new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
 };
 
+// ==================== ADHÉRENTS INSCRITS PAR UN UTILISATEUR ====================
+
+export interface InscribedMember {
+  id: string;
+  nom: string;
+  prenom: string;
+  telephone: string;
+  email?: string;
+  adresse?: string;
+  status: string;
+  dateInscription: Date;
+  formule?: 'mensuel' | 'annuel' | null;
+  montant?: number;
+  modePaiement?: string;
+  datePaiement?: Date;
+  dateFin?: Date;
+  paiementId?: string;
+}
+
+export const getMembersInscribedBy = async (userId: string): Promise<InscribedMember[]> => {
+  if (FORCE_DEMO_MODE) return [];
+  try {
+    const snapshot = await firestore()
+      .collection('members')
+      .where('inscritPar.odUserId', '==', userId)
+      .get();
+
+    const members = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        nom: data.nom || '',
+        prenom: data.prenom || '',
+        telephone: data.telephone || '',
+        email: data.email || '',
+        adresse: data.adresse || '',
+        status: data.status || 'en_attente_signature',
+        dateInscription: toDate(data.dateInscription),
+        formule: data.formule || data.cotisation?.type || null,
+        montant: data.montant || data.cotisation?.montant || 0,
+        modePaiement: data.modePaiement || '',
+        datePaiement: data.datePaiement ? toDate(data.datePaiement) : undefined,
+        dateFin: data.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : undefined,
+        paiementId: data.paiementId || '',
+      };
+    });
+
+    // Trier par date d'inscription décroissante (plus récent en premier)
+    return members.sort((a, b) => {
+      const dateA = a.dateInscription?.getTime() || 0;
+      const dateB = b.dateInscription?.getTime() || 0;
+      return dateB - dateA;
+    });
+  } catch (error) {
+    console.error('[Firebase] getMembersInscribedBy error:', error);
+    return [];
+  }
+};
+
+// Récupérer l'adhésion de l'utilisateur connecté (par email)
+export interface MyMembership {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string;
+  telephone: string;
+  adresse: string;
+  status: string;
+  formule: 'mensuel' | 'annuel' | null;
+  montant: number;
+  dateInscription: Date;
+  datePaiement?: Date;
+  dateDebut?: Date;
+  dateFin?: Date;
+  modePaiement?: string;
+  paiementId?: string;
+  inscritPar?: { nom: string; prenom: string } | null;
+  referenceVirement?: string;
+}
+
+export const getMyMembership = async (email: string): Promise<MyMembership | null> => {
+  if (FORCE_DEMO_MODE) return null;
+  try {
+    const snapshot = await firestore()
+      .collection('members')
+      .where('email', '==', email.toLowerCase())
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) return null;
+
+    const doc = snapshot.docs[0];
+    const data = doc.data();
+
+    // Déterminer le statut - null signifie "actif" (legacy du backoffice)
+    const hasValidCotisation = data.cotisation?.dateFin &&
+      (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
+    const memberStatus = data.status || (hasValidCotisation ? 'actif' : 'en_attente_signature');
+
+    return {
+      id: doc.id,
+      nom: data.nom || '',
+      prenom: data.prenom || '',
+      email: data.email || '',
+      telephone: data.telephone || '',
+      adresse: data.adresse || '',
+      status: memberStatus,
+      formule: data.formule || data.cotisation?.type || null,
+      montant: data.montant || data.cotisation?.montant || 0,
+      dateInscription: toDate(data.dateInscription),
+      datePaiement: data.datePaiement ? toDate(data.datePaiement) : undefined,
+      dateDebut: data.cotisation?.dateDebut ? toDate(data.cotisation.dateDebut) : undefined,
+      dateFin: data.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : undefined,
+      modePaiement: data.modePaiement || '',
+      paiementId: data.paiementId || '',
+      inscritPar: data.inscritPar && typeof data.inscritPar === 'object'
+        ? { nom: data.inscritPar.nom, prenom: data.inscritPar.prenom }
+        : null,
+      referenceVirement: data.referenceVirement || undefined,
+    };
+  } catch (error) {
+    console.error('[Firebase] getMyMembership error:', error);
+    return null;
+  }
+};
+
+// Listener temps réel pour les adhésions (mise à jour automatique depuis le backoffice)
+export const subscribeToMyMembership = (
+  email: string,
+  callback: (membership: MyMembership | null) => void
+): (() => void) => {
+  if (FORCE_DEMO_MODE || !email) {
+    callback(null);
+    return () => {};
+  }
+
+  try {
+    return firestore()
+      .collection('members')
+      .where('email', '==', email.toLowerCase())
+      .limit(1)
+      .onSnapshot(
+        snapshot => {
+          if (snapshot.empty) {
+            callback(null);
+            return;
+          }
+
+          const doc = snapshot.docs[0];
+          const data = doc.data();
+
+          // Déterminer le statut
+          const hasValidCotisation = data.cotisation?.dateFin &&
+            (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
+          const memberStatus = data.status || (hasValidCotisation ? 'actif' : 'en_attente_signature');
+
+          callback({
+            id: doc.id,
+            nom: data.nom || '',
+            prenom: data.prenom || '',
+            email: data.email || '',
+            telephone: data.telephone || '',
+            adresse: data.adresse || '',
+            status: memberStatus,
+            formule: data.formule || data.cotisation?.type || null,
+            montant: data.montant || data.cotisation?.montant || 0,
+            dateInscription: toDate(data.dateInscription),
+            datePaiement: data.datePaiement ? toDate(data.datePaiement) : undefined,
+            dateDebut: data.cotisation?.dateDebut ? toDate(data.cotisation.dateDebut) : undefined,
+            dateFin: data.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : undefined,
+            modePaiement: data.modePaiement || '',
+            paiementId: data.paiementId || '',
+            inscritPar: data.inscritPar && typeof data.inscritPar === 'object'
+              ? { nom: data.inscritPar.nom, prenom: data.inscritPar.prenom }
+              : null,
+            referenceVirement: data.referenceVirement || undefined,
+          });
+        },
+        error => {
+          console.error('[Firebase] subscribeToMyMembership error:', error);
+          callback(null);
+        }
+      );
+  } catch (error) {
+    console.error('[Firebase] subscribeToMyMembership catch:', error);
+    callback(null);
+    return () => {};
+  }
+};
+
 // ==================== SERVICES & ACTIVITÉS (statiques) ====================
 
 export const getServices = () => mockServices;
@@ -929,6 +1528,441 @@ export const getActivites = () => mockActivites;
 
 export const getSourates = async () => [];
 export const getDuas = async () => [];
+
+// ==================== MESSAGERIE ====================
+
+export type MessageStatus = 'non_lu' | 'en_cours' | 'resolu';
+
+export interface MessageReply {
+  id: string;
+  message: string;
+  createdAt: Date;
+  createdBy: 'mosquee' | 'user';
+}
+
+export interface UserMessage {
+  id: string;
+  odUserId: string;
+  userName: string;
+  userEmail: string;
+  sujet: string;
+  message: string;
+  status: MessageStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  reponses: MessageReply[];
+}
+
+// Catégories de sujets
+export const MESSAGE_SUBJECTS = [
+  'Question générale',
+  'Demande de certificat',
+  'Problème technique',
+  'Suggestion',
+  'Autre',
+];
+
+// Anti-spam : vérifier le nombre de messages envoyés aujourd'hui
+const checkDailyMessageLimit = async (userId: string): Promise<boolean> => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const snapshot = await firestore()
+      .collection('messages')
+      .where('odUserId', '==', userId)
+      .where('createdAt', '>=', today)
+      .get();
+
+    return snapshot.docs.length < 5; // Max 5 messages par jour
+  } catch (error) {
+    console.error('[Firebase] checkDailyMessageLimit error:', error);
+    return true; // En cas d'erreur, on autorise
+  }
+};
+
+// Envoyer un nouveau message
+export const sendMessage = async (
+  userId: string,
+  userName: string,
+  userEmail: string,
+  sujet: string,
+  message: string
+): Promise<{ success: boolean; error?: string; messageId?: string }> => {
+  if (FORCE_DEMO_MODE) {
+    return { success: false, error: 'Mode démo activé' };
+  }
+
+  // Validation
+  if (!message || message.trim().length < 10) {
+    return { success: false, error: 'Le message doit contenir au moins 10 caractères' };
+  }
+
+  // Vérifier limite anti-spam
+  const canSend = await checkDailyMessageLimit(userId);
+  if (!canSend) {
+    return { success: false, error: 'Vous avez atteint la limite de 5 messages par jour' };
+  }
+
+  try {
+    const now = new Date();
+    const docRef = await firestore().collection('messages').add({
+      odUserId: userId,
+      userName,
+      userEmail,
+      sujet,
+      message: message.trim(),
+      status: 'non_lu',
+      createdAt: now,
+      updatedAt: now,
+      reponses: [],
+    });
+
+    return { success: true, messageId: docRef.id };
+  } catch (error: any) {
+    console.error('[Firebase] sendMessage error:', error);
+    return { success: false, error: error.message || 'Erreur lors de l\'envoi' };
+  }
+};
+
+// Récupérer les messages d'un utilisateur
+export const getUserMessages = async (userId: string): Promise<UserMessage[]> => {
+  if (FORCE_DEMO_MODE) return [];
+
+  try {
+    const snapshot = await firestore()
+      .collection('messages')
+      .where('odUserId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        odUserId: data.odUserId,
+        userName: data.userName,
+        userEmail: data.userEmail,
+        sujet: data.sujet,
+        message: data.message,
+        status: data.status,
+        createdAt: toDate(data.createdAt),
+        updatedAt: toDate(data.updatedAt),
+        reponses: (data.reponses || []).map((r: any) => ({
+          id: r.id,
+          message: r.message,
+          createdAt: toDate(r.createdAt),
+          createdBy: r.createdBy,
+        })),
+      };
+    });
+  } catch (error) {
+    console.error('[Firebase] getUserMessages error:', error);
+    return [];
+  }
+};
+
+// Souscrire aux messages d'un utilisateur (temps réel)
+export const subscribeToUserMessages = (
+  userId: string,
+  callback: (messages: UserMessage[]) => void
+) => {
+  if (FORCE_DEMO_MODE) {
+    callback([]);
+    return () => {};
+  }
+
+  try {
+    return firestore()
+      .collection('messages')
+      .where('odUserId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .onSnapshot(
+        snapshot => {
+          const messages = snapshot.docs
+            // Filtrer uniquement les messages supprimés par l'utilisateur
+            // (les messages supprimés par l'admin restent visibles côté user)
+            .filter(doc => !doc.data().deletedByUser)
+            .map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                odUserId: data.odUserId,
+                userName: data.userName,
+                userEmail: data.userEmail,
+                sujet: data.sujet,
+                message: data.message,
+                status: data.status,
+                createdAt: toDate(data.createdAt),
+                updatedAt: toDate(data.updatedAt),
+                reponses: (data.reponses || []).map((r: any) => ({
+                  id: r.id,
+                  message: r.message,
+                  createdAt: toDate(r.createdAt),
+                  createdBy: r.createdBy,
+                })),
+              };
+            });
+          callback(messages);
+        },
+        error => {
+          console.error('[Firebase] subscribeToUserMessages error:', error);
+          callback([]);
+        }
+      );
+  } catch (error) {
+    console.error('[Firebase] subscribeToUserMessages catch:', error);
+    callback([]);
+    return () => {};
+  }
+};
+
+// Ajouter une réponse à un message (côté utilisateur)
+export const addUserReplyToMessage = async (
+  messageId: string,
+  replyText: string,
+  userId?: string
+): Promise<{ success: boolean; error?: string }> => {
+  if (FORCE_DEMO_MODE) {
+    return { success: false, error: 'Mode démo activé' };
+  }
+
+  if (!replyText || replyText.trim().length < 5) {
+    return { success: false, error: 'La réponse doit contenir au moins 5 caractères' };
+  }
+
+  try {
+    const messageRef = firestore().collection('messages').doc(messageId);
+    const doc = await messageRef.get();
+
+    if (!doc.exists) {
+      return { success: false, error: 'Message introuvable' };
+    }
+
+    // SÉCURITÉ: Vérifier que l'utilisateur est le propriétaire du message
+    const data = doc.data();
+    if (userId && data?.odUserId !== userId) {
+      console.warn('[Firebase] Tentative de réponse non autorisée:', { messageId, userId, owner: data?.odUserId });
+      return { success: false, error: 'Non autorisé' };
+    }
+
+    // Utiliser le même format que le backoffice (ISO string + arrayUnion)
+    const newReply = {
+      id: `reply-${Date.now()}`,
+      message: replyText.trim(),
+      createdAt: new Date().toISOString(),
+      createdBy: 'user',
+    };
+
+    // arrayUnion pour ajouter atomiquement sans écraser les autres réponses
+    await messageRef.update({
+      reponses: firestore.FieldValue.arrayUnion(newReply),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
+      status: 'non_lu', // Remet en non lu pour la mosquée
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('[Firebase] addUserReplyToMessage error:', error);
+    return { success: false, error: error.message || 'Erreur lors de l\'envoi' };
+  }
+};
+
+// Récupérer un message spécifique
+export const getMessage = async (messageId: string): Promise<UserMessage | null> => {
+  if (FORCE_DEMO_MODE) return null;
+
+  try {
+    const doc = await firestore().collection('messages').doc(messageId).get();
+
+    if (!doc.exists) return null;
+
+    const data = doc.data();
+    return {
+      id: doc.id,
+      odUserId: data?.odUserId,
+      userName: data?.userName,
+      userEmail: data?.userEmail,
+      sujet: data?.sujet,
+      message: data?.message,
+      status: data?.status,
+      createdAt: toDate(data?.createdAt),
+      updatedAt: toDate(data?.updatedAt),
+      reponses: (data?.reponses || []).map((r: any) => ({
+        id: r.id,
+        message: r.message,
+        createdAt: toDate(r.createdAt),
+        createdBy: r.createdBy,
+      })),
+    };
+  } catch (error) {
+    console.error('[Firebase] getMessage error:', error);
+    return null;
+  }
+};
+
+// Supprimer un message (soft delete - reste visible dans le backoffice)
+export const deleteMessage = async (
+  messageId: string,
+  userId?: string
+): Promise<{ success: boolean; error?: string }> => {
+  if (FORCE_DEMO_MODE) {
+    return { success: false, error: 'Mode démo activé' };
+  }
+
+  try {
+    const messageRef = firestore().collection('messages').doc(messageId);
+
+    // SÉCURITÉ: Vérifier que l'utilisateur est le propriétaire du message
+    if (userId) {
+      const doc = await messageRef.get();
+      if (!doc.exists) {
+        return { success: false, error: 'Message introuvable' };
+      }
+      const data = doc.data();
+      if (data?.odUserId !== userId) {
+        console.warn('[Firebase] Tentative de suppression non autorisée:', { messageId, userId, owner: data?.odUserId });
+        return { success: false, error: 'Non autorisé' };
+      }
+    }
+
+    // Soft delete: marquer comme supprimé par l'utilisateur
+    await messageRef.update({
+      deletedByUser: true,
+      deletedByUserAt: firestore.FieldValue.serverTimestamp(),
+    });
+    return { success: true };
+  } catch (error: any) {
+    console.error('[Firebase] deleteMessage error:', error);
+    return { success: false, error: error.message || 'Erreur lors de la suppression' };
+  }
+};
+
+// Souscrire à un message spécifique (temps réel)
+export const subscribeToMessage = (
+  messageId: string,
+  callback: (message: UserMessage | null) => void
+) => {
+  if (FORCE_DEMO_MODE) {
+    callback(null);
+    return () => {};
+  }
+
+  try {
+    return firestore()
+      .collection('messages')
+      .doc(messageId)
+      .onSnapshot(
+        doc => {
+          if (!doc.exists) {
+            callback(null);
+            return;
+          }
+          const data = doc.data();
+          callback({
+            id: doc.id,
+            odUserId: data?.odUserId,
+            userName: data?.userName,
+            userEmail: data?.userEmail,
+            sujet: data?.sujet,
+            message: data?.message,
+            status: data?.status,
+            createdAt: toDate(data?.createdAt),
+            updatedAt: toDate(data?.updatedAt),
+            reponses: (data?.reponses || []).map((r: any) => ({
+              id: r.id,
+              message: r.message,
+              createdAt: toDate(r.createdAt),
+              createdBy: r.createdBy,
+            })),
+          });
+        },
+        error => {
+          console.error('[Firebase] subscribeToMessage error:', error);
+          callback(null);
+        }
+      );
+  } catch (error) {
+    console.error('[Firebase] subscribeToMessage catch:', error);
+    callback(null);
+    return () => {};
+  }
+};
+
+// ==================== REÇUS FISCAUX ====================
+
+/**
+ * Demande l'envoi d'un reçu fiscal par email
+ * @param email - Email du donateur
+ * @param annee - Année fiscale
+ */
+export const requestRecuFiscal = async (
+  email: string,
+  annee: number
+): Promise<{ success: boolean; message: string; montantTotal?: number }> => {
+  if (FORCE_DEMO_MODE) {
+    return {
+      success: false,
+      message: 'Mode démo - Fonction non disponible',
+    };
+  }
+
+  try {
+    const sendRecuFiscal = functions().httpsCallable('sendRecuFiscal');
+    const result = await sendRecuFiscal({ email, annee });
+    const data = result.data as any;
+
+    return {
+      success: true,
+      message: data.message || 'Reçu fiscal envoyé',
+      montantTotal: data.montantTotal,
+    };
+  } catch (error: any) {
+    console.error('[Firebase] requestRecuFiscal error:', error);
+    let message = 'Erreur lors de l\'envoi du reçu fiscal';
+
+    if (error.code === 'functions/not-found') {
+      message = 'Aucun don trouvé pour cette année';
+    } else if (error.code === 'functions/failed-precondition') {
+      message = 'Service non configuré. Contactez l\'administration.';
+    } else if (error.message) {
+      message = error.message;
+    }
+
+    return {
+      success: false,
+      message,
+    };
+  }
+};
+
+/**
+ * Récupère le total des dons pour une année
+ * @param email - Email du donateur
+ * @param annee - Année fiscale
+ */
+export const getDonsTotalByYear = async (
+  email: string,
+  annee: number
+): Promise<{ total: number; count: number } | null> => {
+  if (FORCE_DEMO_MODE) {
+    return null;
+  }
+
+  try {
+    const getDonsByYear = functions().httpsCallable('getDonsByYear');
+    const result = await getDonsByYear({ email, annee });
+    const data = result.data as any;
+
+    return {
+      total: data.total || 0,
+      count: data.dons?.length || 0,
+    };
+  } catch (error) {
+    console.error('[Firebase] getDonsTotalByYear error:', error);
+    return null;
+  }
+};
 
 // ==================== EXPORTS ====================
 export const isDemoMode = FORCE_DEMO_MODE;

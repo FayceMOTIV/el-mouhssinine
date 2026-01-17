@@ -1,5 +1,22 @@
-// Service de paiement Stripe - Placeholder
-// Stripe sera configure quand les cles de l'association seront disponibles
+import { Alert } from 'react-native';
+import { initPaymentSheet, presentPaymentSheet } from '@stripe/stripe-react-native';
+import functions from '@react-native-firebase/functions';
+
+// Types
+export interface PaymentParams {
+  amount: number; // en euros
+  description: string;
+  type: 'donation' | 'cotisation';
+  metadata?: {
+    projectId?: string;
+    projectName?: string;
+    memberId?: string;
+    memberName?: string;
+    isAnonymous?: boolean;
+    period?: string;
+    membersCount?: string; // Nombre de membres pour multi-adhésion
+  };
+}
 
 export interface PaymentResult {
   success: boolean;
@@ -7,101 +24,126 @@ export interface PaymentResult {
   error?: string;
 }
 
-export interface SubscriptionResult {
-  success: boolean;
-  subscriptionId?: string;
-  error?: string;
-}
+// Convertir euros en centimes pour Stripe
+const eurosToCents = (euros: number): number => Math.round(euros * 100);
 
-export const StripeService = {
-  // Indicateur de configuration
-  isConfigured: false,
+// Créer un PaymentIntent via Cloud Function
+const createPaymentIntent = async (
+  amount: number,
+  description: string,
+  metadata: Record<string, any>
+): Promise<{ clientSecret: string; paymentIntentId: string }> => {
+  try {
+    const createPayment = functions().httpsCallable('createPaymentIntent');
+    const result = await createPayment({
+      amount: eurosToCents(amount),
+      currency: 'eur',
+      description,
+      metadata,
+    });
 
-  // Initialiser Stripe avec les cles (a appeler au demarrage)
-  initialize: async (): Promise<boolean> => {
-    // TODO: Initialiser avec les vraies cles Stripe
-    // import { initStripe } from '@stripe/stripe-react-native';
-    // await initStripe({ publishableKey: 'pk_live_...' });
-    console.log('[Stripe] Service non configure - en attente des cles');
-    return false;
-  },
+    const data = result.data as { clientSecret: string; paymentIntentId: string };
+    return data;
+  } catch (error: any) {
+    console.error('Erreur création PaymentIntent:', error);
+    throw new Error(error.message || 'Erreur lors de la création du paiement');
+  }
+};
 
-  // Creer un payment intent pour un don
-  createPaymentIntent: async (
-    amount: number,
-    projectName: string,
-    donorEmail?: string
-  ): Promise<PaymentResult> => {
-    if (!StripeService.isConfigured) {
-      console.log(
-        `[Stripe] Non configure - Don: ${amount} EUR pour "${projectName}"`,
-        donorEmail ? `(${donorEmail})` : ''
-      );
+// Initialiser et présenter le Payment Sheet
+export const makePayment = async (params: PaymentParams): Promise<PaymentResult> => {
+  const { amount, description, type, metadata = {} } = params;
+
+  try {
+    // 1. Créer le PaymentIntent via Cloud Function
+    const { clientSecret, paymentIntentId } = await createPaymentIntent(
+      amount,
+      description,
+      {
+        type,
+        ...metadata,
+      }
+    );
+
+    // 2. Initialiser le Payment Sheet
+    const { error: initError } = await initPaymentSheet({
+      paymentIntentClientSecret: clientSecret,
+      merchantDisplayName: 'Mosquée El Mouhssinine',
+      style: 'automatic',
+      googlePay: {
+        merchantCountryCode: 'FR',
+        testEnv: __DEV__,
+      },
+      applePay: {
+        merchantCountryCode: 'FR',
+      },
+      defaultBillingDetails: {
+        address: {
+          country: 'FR',
+        },
+      },
+    });
+
+    if (initError) {
+      console.error('Erreur init Payment Sheet:', initError);
       return {
         success: false,
-        error: 'Le paiement par carte sera bientot disponible. Utilisez le virement bancaire.',
+        error: initError.message,
       };
     }
 
-    // TODO: Implementer avec les vraies cles
-    // 1. Appeler votre backend pour creer un PaymentIntent
-    // 2. Utiliser confirmPayment de @stripe/stripe-react-native
-    // const { paymentIntent, error } = await confirmPayment(clientSecret);
+    // 3. Présenter le Payment Sheet
+    const { error: presentError } = await presentPaymentSheet();
 
-    return {
-      success: false,
-      error: 'Fonctionnalite en cours de developpement.',
-    };
-  },
-
-  // Creer un abonnement pour la cotisation
-  createSubscription: async (
-    type: 'mensuel' | 'annuel',
-    memberEmail: string,
-    memberId: string
-  ): Promise<SubscriptionResult> => {
-    if (!StripeService.isConfigured) {
-      const amount = type === 'mensuel' ? 5 : 50;
-      console.log(
-        `[Stripe] Non configure - Cotisation ${type}: ${amount} EUR`,
-        `(${memberEmail}, ${memberId})`
-      );
+    if (presentError) {
+      // L'utilisateur a annulé ou erreur
+      if (presentError.code === 'Canceled') {
+        return {
+          success: false,
+          error: 'Paiement annulé',
+        };
+      }
+      console.error('Erreur présentation Payment Sheet:', presentError);
       return {
         success: false,
-        error: 'Le paiement par carte sera bientot disponible. Utilisez le virement bancaire.',
+        error: presentError.message,
       };
     }
 
-    // TODO: Implementer avec les vraies cles
-    // 1. Appeler votre backend pour creer une subscription Stripe
-    // 2. Gerer le cycle de facturation
-
+    // 4. Paiement réussi
+    return {
+      success: true,
+      paymentIntentId,
+    };
+  } catch (error: any) {
+    console.error('Erreur paiement:', error);
     return {
       success: false,
-      error: 'Fonctionnalite en cours de developpement.',
+      error: error.message || 'Une erreur est survenue',
     };
-  },
+  }
+};
 
-  // Annuler un abonnement
-  cancelSubscription: async (subscriptionId: string): Promise<boolean> => {
-    if (!StripeService.isConfigured) {
-      console.log(`[Stripe] Non configure - Annulation: ${subscriptionId}`);
-      return false;
-    }
+// Helper pour afficher les erreurs
+export const showPaymentError = (error: string) => {
+  Alert.alert(
+    'Erreur de paiement',
+    error,
+    [{ text: 'OK' }]
+  );
+};
 
-    // TODO: Implementer avec les vraies cles
-    return false;
-  },
+// Helper pour afficher la confirmation
+export const showPaymentSuccess = (type: 'donation' | 'cotisation') => {
+  const message = type === 'donation'
+    ? 'Votre don a été effectué avec succès. Jazak Allah Khayran!'
+    : 'Votre cotisation a été enregistrée avec succès. Jazak Allah Khayran!';
 
-  // Obtenir les informations de paiement
-  getPaymentMethods: async (): Promise<any[]> => {
-    if (!StripeService.isConfigured) {
-      return [];
-    }
-
-    // TODO: Implementer avec les vraies cles
-    return [];
-  },
+  Alert.alert(
+    'Paiement réussi',
+    message,
+    [{ text: 'OK' }]
+  );
 };
 
 // Informations bancaires pour les virements (fallback)
@@ -128,7 +170,5 @@ export const cotisationPrices = {
   },
 };
 
-// Montants suggeres pour les dons
+// Montants suggérés pour les dons
 export const suggestedDonations = [10, 20, 50, 100, 200];
-
-export default StripeService;

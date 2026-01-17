@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-toastify'
-import { Heart, Plus, Pencil, Trash2, Calendar } from 'lucide-react'
+import { Heart, Plus, Pencil, Trash2, Calendar, Send, Search } from 'lucide-react'
 import {
   Card,
   Button,
@@ -20,7 +20,8 @@ import {
   subscribeToJanazas,
   addDocument,
   updateDocument,
-  deleteDocument
+  deleteDocument,
+  sendNotification
 } from '../services/firebase'
 import { JanazaGenre, SalatOptions, defaultJanazaPhrase } from '../types'
 import { format } from 'date-fns'
@@ -59,9 +60,22 @@ export default function Janaza() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, janaza: null })
+  const [notifModal, setNotifModal] = useState({ open: false, janaza: null })
+  const [sendingNotif, setSendingNotif] = useState(false)
   const [editingJanaza, setEditingJanaza] = useState(null)
   const [formData, setFormData] = useState(defaultJanaza)
   const [saving, setSaving] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Filtrer les janazas par recherche
+  const filteredJanazas = useMemo(() => {
+    if (!searchQuery) return janazas
+    const query = searchQuery.toLowerCase()
+    return janazas.filter(j =>
+      j.nomDefunt?.toLowerCase().includes(query) ||
+      j.lieu?.toLowerCase().includes(query)
+    )
+  }, [janazas, searchQuery])
 
   useEffect(() => {
     const unsubscribe = subscribeToJanazas((data) => {
@@ -147,6 +161,72 @@ export default function Janaza() {
     }
   }
 
+  // Générer le contenu de la notification pour prévisualisation
+  const getNotificationContent = (janaza) => {
+    if (!janaza) return { title: '', body: '' }
+
+    const janazaDate = janaza.date?.toDate?.() || new Date(janaza.date)
+    const dateStr = format(janazaDate, 'EEEE d MMMM yyyy', { locale: fr })
+
+    // Titre avec emoji
+    const title = `🕌 Salat Janaza - ${janaza.nomDefunt || 'Défunt(e)'}`
+
+    // Corps : date + heure/salat + lieu + phrase
+    let body = `📅 ${dateStr}`
+
+    if (janaza.heurePriere) {
+      body += ` à ${janaza.heurePriere}`
+    } else if (janaza.salatApres) {
+      const salatLabel = salatOptions.find(s => s.value === janaza.salatApres)?.label || janaza.salatApres
+      body += `\n⏰ ${salatLabel}`
+    }
+
+    if (janaza.lieu) {
+      body += `\n📍 ${janaza.lieu}`
+    }
+
+    // Ajouter la phrase de condoléances
+    if (janaza.phraseFr) {
+      body += `\n\n${janaza.phraseFr}`
+    }
+
+    return { title, body }
+  }
+
+  // Ouvrir la modal de confirmation
+  const handleOpenNotifModal = (janaza) => {
+    setNotifModal({ open: true, janaza })
+  }
+
+  // Envoyer la notification après confirmation
+  const handleConfirmSendNotification = async () => {
+    const janaza = notifModal.janaza
+    if (!janaza) return
+
+    setSendingNotif(true)
+    try {
+      const { title, body } = getNotificationContent(janaza)
+
+      await sendNotification(
+        title,
+        body,
+        'janaza',
+        { type: 'janaza', id: janaza.id }
+      )
+      await updateDocument('janaza', janaza.id, {
+        notificationSent: true,
+        notificationSentAt: new Date()
+      })
+      toast.success('Notification envoyée à tous les utilisateurs !')
+      setNotifModal({ open: false, janaza: null })
+    } catch (err) {
+      console.error('Error sending notification:', err)
+      toast.error('Erreur lors de l\'envoi de la notification')
+    } finally {
+      setSendingNotif(false)
+    }
+  }
+
   const getGenreLabel = (genre) => {
     switch (genre) {
       case JanazaGenre.FEMME: return 'Femme'
@@ -218,12 +298,22 @@ export default function Janaza() {
           <button
             onClick={() => handleOpenModal(row)}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            title="Modifier"
           >
             <Pencil className="w-4 h-4 text-white/50" />
           </button>
           <button
+            onClick={() => handleOpenNotifModal(row)}
+            className={`p-2 rounded-lg transition-colors ${row.notificationSent ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-500/10'}`}
+            title={row.notificationSent ? 'Notification déjà envoyée' : 'Envoyer une notification'}
+            disabled={row.notificationSent}
+          >
+            <Send className={`w-4 h-4 ${row.notificationSent ? 'text-white/30' : 'text-green-400'}`} />
+          </button>
+          <button
             onClick={() => setDeleteModal({ open: true, janaza: row })}
             className="p-2 hover:bg-red-500/10 rounded-lg transition-colors"
+            title="Supprimer"
           >
             <Trash2 className="w-4 h-4 text-red-400" />
           </button>
@@ -243,10 +333,24 @@ export default function Janaza() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <p className="text-white/50">
-          {janazas.length} salat janaza
-        </p>
+      <div className="flex flex-wrap justify-between items-center gap-4">
+        <div className="flex items-center gap-4">
+          {/* Barre de recherche */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <input
+              type="text"
+              placeholder="Rechercher..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-48 bg-white/5 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-secondary text-sm"
+            />
+          </div>
+          <p className="text-white/50">
+            {filteredJanazas.length} salat janaza
+            {searchQuery && ` sur ${janazas.length}`}
+          </p>
+        </div>
         <Button onClick={() => handleOpenModal()}>
           <Plus className="w-4 h-4 mr-2" />
           Nouvelle janaza
@@ -272,9 +376,13 @@ export default function Janaza() {
           action={() => handleOpenModal()}
           actionLabel="Ajouter une janaza"
         />
+      ) : filteredJanazas.length === 0 ? (
+        <Card>
+          <p className="text-center text-white/50 py-8">Aucun résultat pour "{searchQuery}"</p>
+        </Card>
       ) : (
         <Card>
-          <Table columns={columns} data={janazas} />
+          <Table columns={columns} data={filteredJanazas} />
         </Card>
       )}
 
@@ -283,7 +391,7 @@ export default function Janaza() {
         isOpen={modalOpen}
         onClose={handleCloseModal}
         title={editingJanaza ? 'Modifier la janaza' : 'Nouvelle janaza'}
-        size="lg"
+        size="xl"
       >
         <div className="space-y-4">
           <Input
@@ -395,6 +503,60 @@ export default function Janaza() {
         confirmLabel="Supprimer"
         danger
       />
+
+      {/* Notification Confirmation Modal */}
+      <Modal
+        isOpen={notifModal.open}
+        onClose={() => setNotifModal({ open: false, janaza: null })}
+        title="Envoyer une notification"
+        size="md"
+      >
+        {notifModal.janaza && (
+          <div className="space-y-4">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-amber-400 text-sm flex items-center gap-2">
+                <Send className="w-4 h-4" />
+                Cette notification sera envoyée à <strong>tous les utilisateurs</strong> de l'application.
+              </p>
+            </div>
+
+            {/* Prévisualisation */}
+            <div>
+              <p className="text-white/50 text-sm mb-2">Prévisualisation de la notification :</p>
+              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                <p className="text-white font-semibold mb-2">
+                  {getNotificationContent(notifModal.janaza).title}
+                </p>
+                <p className="text-white/70 text-sm whitespace-pre-line">
+                  {getNotificationContent(notifModal.janaza).body}
+                </p>
+              </div>
+            </div>
+
+            {/* Détails inclus */}
+            <div className="text-sm text-white/50">
+              <p>Informations incluses :</p>
+              <ul className="list-disc list-inside mt-1 space-y-1">
+                <li>Nom du défunt : {notifModal.janaza.nomDefunt}</li>
+                <li>Date complète (jour + date)</li>
+                {notifModal.janaza.heurePriere && <li>Heure : {notifModal.janaza.heurePriere}</li>}
+                {notifModal.janaza.salatApres && <li>Après : {salatOptions.find(s => s.value === notifModal.janaza.salatApres)?.label}</li>}
+                {notifModal.janaza.lieu && <li>Lieu : {notifModal.janaza.lieu}</li>}
+                <li>Phrase de condoléances</li>
+              </ul>
+            </div>
+          </div>
+        )}
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="ghost" onClick={() => setNotifModal({ open: false, janaza: null })}>
+            Annuler
+          </Button>
+          <Button onClick={handleConfirmSendNotification} loading={sendingNotif}>
+            <Send className="w-4 h-4 mr-2" />
+            Envoyer la notification
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

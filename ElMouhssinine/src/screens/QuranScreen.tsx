@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   StyleSheet,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
+import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
 import { QuranAPI, surahsInfo } from '../services/quranApi';
 import { useLanguage } from '../context/LanguageContext';
+import { SkeletonLoader } from '../components';
 
 interface QuranScreenProps {
   navigation: any;
@@ -59,147 +61,178 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
     return matchesSearch && matchesType;
   });
 
-  const handleSurahPress = (surahNumber: number) => {
+  const handleSurahPress = useCallback((surahNumber: number) => {
     navigation.navigate('Surah', { surahNumber });
-  };
+  }, [navigation]);
+
+  const renderSurahItem = useCallback(({ item: surah }: { item: typeof surahsInfo[0] }) => (
+    <TouchableOpacity
+      style={[styles.surahCard, isRTL && styles.surahCardRTL]}
+      onPress={() => handleSurahPress(surah.number)}
+      accessibilityLabel={`Sourate ${surah.number}, ${surah.translation || surah.englishName}, ${surah.ayahs || surah.numberOfAyahs} versets`}
+      accessibilityRole="button"
+      accessibilityHint="Appuyez pour lire cette sourate"
+    >
+      <View style={styles.surahNumber}>
+        <Text style={styles.surahNumberText}>{surah.number}</Text>
+      </View>
+      <View style={styles.surahInfo}>
+        <View style={styles.surahNames}>
+          <Text style={[styles.surahEnglish, isRTL && styles.rtlText]}>{surah.englishName}</Text>
+          <Text style={[styles.surahTranslation, isRTL && styles.rtlText]}>{surah.translation}</Text>
+        </View>
+        <View style={[styles.surahMeta, isRTL && styles.surahMetaRTL]}>
+          <Text style={styles.surahAyahs}>{surah.ayahs} {t('verses')}</Text>
+          <View
+            style={[
+              styles.surahTypeBadge,
+              surah.type === 'Mecquoise'
+                ? styles.meccanBadge
+                : styles.medinanBadge,
+            ]}
+          >
+            <Text style={styles.surahTypeText}>
+              {surah.type === 'Mecquoise' ? t('meccan') : t('medinan')}
+            </Text>
+          </View>
+        </View>
+      </View>
+      <Text style={styles.surahArabic}>{surah.name}</Text>
+    </TouchableOpacity>
+  ), [isRTL, t, handleSurahPress]);
+
+  const ListHeaderComponent = useCallback(() => (
+    <>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={[styles.title, isRTL && styles.rtlText]}>{t('quranTitle')}</Text>
+        <Text style={styles.arabicTitle}>{t('quranArabicTitle')}</Text>
+        <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('surahsCount')}</Text>
+      </View>
+
+      <View style={styles.content}>
+        {/* Barre de recherche */}
+        <View style={[styles.searchContainer, isRTL && styles.searchContainerRTL]}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={[styles.searchInput, isRTL && styles.rtlText]}
+            placeholder={t('searchSurah')}
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            textAlign={isRTL ? 'right' : 'left'}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Text style={styles.clearIcon}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Filtres */}
+        <View style={[styles.filterContainer, isRTL && styles.filterContainerRTL]}>
+          {[
+            { id: 'all', labelKey: 'allFilter' },
+            { id: 'meccan', labelKey: 'meccanFilter' },
+            { id: 'medinan', labelKey: 'medinanFilter' },
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              style={[
+                styles.filterButton,
+                filterType === filter.id && styles.filterButtonActive,
+              ]}
+              onPress={() => setFilterType(filter.id as any)}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  filterType === filter.id && styles.filterButtonTextActive,
+                ]}
+              >
+                {t(filter.labelKey as any)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Acces rapide aux sourates populaires */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('popularSurahs')}</Text>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={[1, 36, 55, 56, 67, 112, 113, 114]}
+            keyExtractor={(num) => num.toString()}
+            style={[styles.popularScroll, isRTL && { transform: [{ scaleX: -1 }] }]}
+            renderItem={({ item: num }) => {
+              const surah = surahs.find((s) => s.number === num);
+              if (!surah) return null;
+              return (
+                <TouchableOpacity
+                  style={[styles.popularCard, isRTL && { transform: [{ scaleX: -1 }] }]}
+                  onPress={() => handleSurahPress(num)}
+                >
+                  <Text style={styles.popularNumber}>{num}</Text>
+                  <Text style={styles.popularName}>{surah.name}</Text>
+                  <Text style={[styles.popularEnglish, isRTL && styles.rtlText]}>{surah.englishName}</Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
+
+        {/* Titre liste des sourates */}
+        <View style={styles.sectionTitleContainer}>
+          <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+            {filterType === 'all'
+              ? t('allSurahsList')
+              : filterType === 'meccan'
+              ? t('meccanSurahsList')
+              : t('medinanSurahsList')}
+            {` (${filteredSurahs.length})`}
+          </Text>
+        </View>
+
+        {loading && (
+          <View style={{ gap: spacing.md }}>
+            {[...Array(8)].map((_, i) => (
+              <View key={i} style={[styles.surahCard, { flexDirection: 'row', alignItems: 'center' }]}>
+                <SkeletonLoader width={50} height={50} borderRadius={25} />
+                <View style={{ marginLeft: spacing.md, flex: 1 }}>
+                  <SkeletonLoader width="60%" height={18} borderRadius={4} />
+                  <SkeletonLoader width="40%" height={14} borderRadius={4} style={{ marginTop: 6 }} />
+                </View>
+                <SkeletonLoader width={30} height={30} borderRadius={15} />
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    </>
+  ), [isRTL, t, searchQuery, filterType, surahs, filteredSurahs.length, loading, handleSurahPress]);
+
+  const keyExtractor = useCallback((item: typeof surahsInfo[0]) => item.number.toString(), []);
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, isRTL && styles.rtlText]}>{t('quranTitle')}</Text>
-          <Text style={styles.arabicTitle}>{t('quranArabicTitle')}</Text>
-          <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('surahsCount')}</Text>
-        </View>
-
-        <View style={styles.content}>
-          {/* Barre de recherche */}
-          <View style={[styles.searchContainer, isRTL && styles.searchContainerRTL]}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={[styles.searchInput, isRTL && styles.rtlText]}
-              placeholder={t('searchSurah')}
-              placeholderTextColor={colors.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              textAlign={isRTL ? 'right' : 'left'}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Text style={styles.clearIcon}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Filtres */}
-          <View style={[styles.filterContainer, isRTL && styles.filterContainerRTL]}>
-            {[
-              { id: 'all', labelKey: 'allFilter' },
-              { id: 'meccan', labelKey: 'meccanFilter' },
-              { id: 'medinan', labelKey: 'medinanFilter' },
-            ].map((filter) => (
-              <TouchableOpacity
-                key={filter.id}
-                style={[
-                  styles.filterButton,
-                  filterType === filter.id && styles.filterButtonActive,
-                ]}
-                onPress={() => setFilterType(filter.id as any)}
-              >
-                <Text
-                  style={[
-                    styles.filterButtonText,
-                    filterType === filter.id && styles.filterButtonTextActive,
-                  ]}
-                >
-                  {t(filter.labelKey as any)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Acces rapide aux sourates populaires */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('popularSurahs')}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={[styles.popularScroll, isRTL && { transform: [{ scaleX: -1 }] }]}
-            >
-              {[1, 36, 55, 56, 67, 112, 113, 114].map((num) => {
-                const surah = surahs.find((s) => s.number === num);
-                if (!surah) return null;
-                return (
-                  <TouchableOpacity
-                    key={num}
-                    style={[styles.popularCard, isRTL && { transform: [{ scaleX: -1 }] }]}
-                    onPress={() => handleSurahPress(num)}
-                  >
-                    <Text style={styles.popularNumber}>{num}</Text>
-                    <Text style={styles.popularName}>{surah.name}</Text>
-                    <Text style={[styles.popularEnglish, isRTL && styles.rtlText]}>{surah.englishName}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          {/* Liste des sourates */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
-              {filterType === 'all'
-                ? t('allSurahsList')
-                : filterType === 'meccan'
-                ? t('meccanSurahsList')
-                : t('medinanSurahsList')}
-              {` (${filteredSurahs.length})`}
-            </Text>
-
-            {loading && (
-              <ActivityIndicator
-                size="large"
-                color={colors.accent}
-                style={{ marginVertical: 20 }}
-              />
-            )}
-
-            {(filteredSurahs || []).map((surah) => (
-              <TouchableOpacity
-                key={surah.number}
-                style={[styles.surahCard, isRTL && styles.surahCardRTL]}
-                onPress={() => handleSurahPress(surah.number)}
-              >
-                <View style={styles.surahNumber}>
-                  <Text style={styles.surahNumberText}>{surah.number}</Text>
-                </View>
-                <View style={styles.surahInfo}>
-                  <View style={styles.surahNames}>
-                    <Text style={[styles.surahEnglish, isRTL && styles.rtlText]}>{surah.englishName}</Text>
-                    <Text style={[styles.surahTranslation, isRTL && styles.rtlText]}>{surah.translation}</Text>
-                  </View>
-                  <View style={[styles.surahMeta, isRTL && styles.surahMetaRTL]}>
-                    <Text style={styles.surahAyahs}>{surah.ayahs} {t('verses')}</Text>
-                    <View
-                      style={[
-                        styles.surahTypeBadge,
-                        surah.type === 'Mecquoise'
-                          ? styles.meccanBadge
-                          : styles.medinanBadge,
-                      ]}
-                    >
-                      <Text style={styles.surahTypeText}>
-                        {surah.type === 'Mecquoise' ? t('meccan') : t('medinan')}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                <Text style={styles.surahArabic}>{surah.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </ScrollView>
+      <FlatList
+        data={loading ? [] : filteredSurahs}
+        renderItem={renderSurahItem}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={ListHeaderComponent}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
+        getItemLayout={(_, index) => ({
+          length: 76, // Approximate height of each surah card
+          offset: 76 * index,
+          index,
+        })}
+      />
     </View>
   );
 };
@@ -209,9 +242,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  listContent: {
+    paddingBottom: 100,
+  },
+  sectionTitleContainer: {
+    marginBottom: spacing.md,
+  },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: HEADER_PADDING_TOP,
     paddingBottom: spacing.lg,
     alignItems: 'center',
   },
@@ -297,7 +336,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginRight: spacing.md,
-    width: 120,
+    width: wp(30),
+    minWidth: 100,
+    maxWidth: 140,
     alignItems: 'center',
   },
   popularNumber: {

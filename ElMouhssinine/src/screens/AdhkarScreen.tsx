@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
+import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
 import { adhkarCategories, AdhkarCategory } from '../data/adhkar';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: HEADER_PADDING_TOP,
     paddingBottom: spacing.lg,
     alignItems: 'center',
   },
@@ -260,9 +260,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   categoryIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: wp(13),
+    height: wp(13),
+    minWidth: 44,
+    minHeight: 44,
+    maxWidth: 56,
+    maxHeight: 56,
+    borderRadius: 999,
     backgroundColor: 'rgba(201,162,39,0.15)',
     alignItems: 'center',
     justifyContent: 'center',

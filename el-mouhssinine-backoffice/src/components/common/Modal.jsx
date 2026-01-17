@@ -27,7 +27,8 @@ export default function Modal({
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
-    full: 'max-w-6xl'
+    full: 'max-w-6xl',
+    preview: 'max-w-[80vw] min-w-[600px]'
   }
 
   return (
@@ -60,7 +61,7 @@ export default function Modal({
         </div>
 
         {/* Content */}
-        <div className="p-6 max-h-[70vh] overflow-y-auto">
+        <div className={`p-6 overflow-y-auto ${size === 'preview' ? 'max-h-[95vh]' : 'max-h-[90vh]'}`}>
           {children}
         </div>
       </div>

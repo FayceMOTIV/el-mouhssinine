@@ -24,13 +24,23 @@ export default function Card({ children, className = '', title, icon: Icon, acti
   )
 }
 
-export function StatCard({ icon: Icon, label, title, value, subvalue, trend, trendUp, className = '' }) {
+export function StatCard({ icon: Icon, label, title, value, subvalue, trend, trendUp, variant = 'default', className = '' }) {
   // Support both 'label' and 'title' props
   const displayLabel = label || title
 
   // Parse trend - can be string like "+12%" or number
   const trendValue = typeof trend === 'string' ? parseFloat(trend) : trend
   const isPositive = trendUp !== undefined ? trendUp : (trendValue > 0)
+
+  // Variant styles for icon background and color
+  const variantStyles = {
+    default: { bg: 'bg-secondary/20', text: 'text-secondary' },
+    success: { bg: 'bg-green-500/20', text: 'text-green-400' },
+    warning: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+    danger: { bg: 'bg-red-500/20', text: 'text-red-400' },
+    info: { bg: 'bg-blue-500/20', text: 'text-blue-400' }
+  }
+  const style = variantStyles[variant] || variantStyles.default
 
   return (
     <Card className={className}>
@@ -41,8 +51,8 @@ export function StatCard({ icon: Icon, label, title, value, subvalue, trend, tre
           {subvalue && <p className="text-white/50 text-sm mt-1">{subvalue}</p>}
         </div>
         {Icon && (
-          <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center">
-            <Icon className="w-6 h-6 text-secondary" />
+          <div className={`w-12 h-12 rounded-xl ${style.bg} flex items-center justify-center`}>
+            <Icon className={`w-6 h-6 ${style.text}`} />
           </div>
         )}
       </div>

@@ -1,11 +1,17 @@
 import React, { Component, ErrorInfo, ReactNode, useEffect, useState } from 'react';
 import { StatusBar, View, Text, StyleSheet, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StripeProvider } from '@stripe/stripe-react-native';
 import AppNavigator from './src/navigation/AppNavigator';
 import { colors } from './src/theme/colors';
 import { LanguageProvider } from './src/context/LanguageContext';
 import { initTTS } from './src/services/tts';
-import { initializeFCM, setupForegroundHandler } from './src/services/notifications';
+import { initializeFCM, setupForegroundHandler, clearBadgeCount } from './src/services/notifications';
+import { subscribeToGeneralSettings, MaintenanceSettings } from './src/services/firebase';
+
+// Clé publique Stripe (à remplacer par la vraie clé)
+// Pour obtenir la clé: https://dashboard.stripe.com/apikeys
+const STRIPE_PUBLISHABLE_KEY = 'pk_test_VOTRE_CLE_STRIPE';
 
 // Error Boundary pour capturer les crashes
 interface ErrorBoundaryState {
@@ -42,8 +48,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 }
 
 const App: React.FC = () => {
-  // Garder la splash native visible pendant 3 secondes
+  // Garder la splash native visible pendant 2 secondes
   const [appReady, setAppReady] = useState(false);
+  const [maintenance, setMaintenance] = useState<MaintenanceSettings>({
+    enabled: false,
+    message: '',
+  });
 
   useEffect(() => {
     const prepare = async () => {
@@ -53,8 +63,11 @@ const App: React.FC = () => {
       // Initialiser FCM pour les notifications push
       await initializeFCM();
 
-      // Attendre 3 secondes pour garder la splash visible
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Effacer le badge à l'ouverture de l'app
+      await clearBadgeCount();
+
+      // Attendre 2 secondes pour garder la splash visible
+      await new Promise(resolve => setTimeout(resolve, 2000));
       setAppReady(true);
     };
 
@@ -64,6 +77,16 @@ const App: React.FC = () => {
   // Gérer les notifications en foreground
   useEffect(() => {
     const unsubscribe = setupForegroundHandler();
+    return unsubscribe;
+  }, []);
+
+  // Écouter le mode maintenance
+  useEffect(() => {
+    const unsubscribe = subscribeToGeneralSettings((settings) => {
+      if (settings?.maintenance) {
+        setMaintenance(settings.maintenance);
+      }
+    });
     return unsubscribe;
   }, []);
 
@@ -81,14 +104,37 @@ const App: React.FC = () => {
     );
   }
 
+  // Mode maintenance activé depuis le backoffice
+  if (maintenance.enabled) {
+    return (
+      <View style={styles.maintenanceContainer}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        <Text style={styles.maintenanceIcon}>🛠️</Text>
+        <Text style={styles.maintenanceTitle}>Maintenance en cours</Text>
+        <Text style={styles.maintenanceMessage}>
+          {maintenance.message || "L'application est temporairement indisponible. Veuillez réessayer plus tard."}
+        </Text>
+        <Text style={styles.maintenanceArabic}>
+          التطبيق قيد الصيانة حاليًا. يرجى المحاولة لاحقًا.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <ErrorBoundary>
-      <LanguageProvider>
-        <SafeAreaProvider>
-          <StatusBar barStyle="light-content" backgroundColor={colors.background} />
-          <AppNavigator />
-        </SafeAreaProvider>
-      </LanguageProvider>
+      <StripeProvider
+        publishableKey={STRIPE_PUBLISHABLE_KEY}
+        merchantIdentifier="merchant.fr.elmouhssinine.mosquee"
+        urlScheme="elmouhssinine"
+      >
+        <LanguageProvider>
+          <SafeAreaProvider>
+            <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+            <AppNavigator />
+          </SafeAreaProvider>
+        </LanguageProvider>
+      </StripeProvider>
     </ErrorBoundary>
   );
 };
@@ -128,6 +174,38 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: 'rgba(255,255,255,0.7)',
     textAlign: 'left',
+  },
+  // Maintenance styles
+  maintenanceContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
+  maintenanceIcon: {
+    fontSize: 80,
+    marginBottom: 20,
+  },
+  maintenanceTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  maintenanceMessage: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 24,
+  },
+  maintenanceArabic: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
 

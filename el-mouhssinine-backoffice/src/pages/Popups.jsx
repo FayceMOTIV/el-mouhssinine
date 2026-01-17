@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
-import { MessageSquare, Plus, Pencil, Trash2, Eye, EyeOff } from 'lucide-react'
+import { MessageSquare, Plus, Pencil, Trash2, Eye, EyeOff, Copy } from 'lucide-react'
 import {
   Card,
   Button,
@@ -154,6 +154,24 @@ export default function Popups() {
     }
   }
 
+  const handleDuplicate = (popup) => {
+    setEditingPopup(null)
+    setFormData({
+      titre: `${popup.titre} (copie)`,
+      message: popup.message || '',
+      priorite: popup.priorite || PopupPriorite.NORMALE,
+      cible: popup.cible || PopupCible.TOUS,
+      frequence: popup.frequence || PopupFrequence.ALWAYS,
+      lienBouton: popup.lienBouton || '',
+      texteBouton: popup.texteBouton || '',
+      actif: true,
+      dateDebut: '',
+      dateFin: ''
+    })
+    setModalOpen(true)
+    toast.info('Popup dupliquée - modifiez et créez')
+  }
+
   const getPrioriteVariant = (priorite) => {
     switch (priorite) {
       case PopupPriorite.HAUTE: return 'danger'
@@ -238,14 +256,23 @@ export default function Popups() {
             )}
           </button>
           <button
+            onClick={() => handleDuplicate(row)}
+            className="p-2 hover:bg-blue-500/10 rounded-lg transition-colors"
+            title="Dupliquer"
+          >
+            <Copy className="w-4 h-4 text-blue-400" />
+          </button>
+          <button
             onClick={() => handleOpenModal(row)}
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            title="Modifier"
           >
             <Pencil className="w-4 h-4 text-white/50" />
           </button>
           <button
             onClick={() => setDeleteModal({ open: true, popup: row })}
             className="p-2 hover:bg-red-500/10 rounded-lg transition-colors"
+            title="Supprimer"
           >
             <Trash2 className="w-4 h-4 text-red-400" />
           </button>
@@ -295,7 +322,7 @@ export default function Popups() {
         isOpen={modalOpen}
         onClose={handleCloseModal}
         title={editingPopup ? 'Modifier la popup' : 'Nouvelle popup'}
-        size="lg"
+        size="xl"
       >
         <div className="space-y-4">
           <div className="relative">

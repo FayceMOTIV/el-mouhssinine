@@ -11,7 +11,7 @@ const pageTitles = {
   '/evenements': 'Événements',
   '/janaza': 'Salat Janaza',
   '/dons': 'Dons & Projets',
-  '/adherents': 'Adhérents',
+  '/adherents': 'Membres',
   '/notifications': 'Notifications',
   '/admins': 'Gestion Admins',
   '/parametres': 'Paramètres'
