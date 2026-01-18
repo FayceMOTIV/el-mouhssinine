@@ -21,7 +21,7 @@ import { makePayment, showPaymentError, showPaymentSuccess } from '../services/s
 import { subscribeToMembersTopic, unsubscribeFromMembersTopic, saveFCMTokenToFirestore } from '../services/notifications';
 import { Member } from '../types';
 import { useLanguage } from '../context/LanguageContext';
-import { SkeletonLoader, MemberProfileSkeleton } from '../components';
+import { SkeletonLoader, MemberProfileSkeleton, MemberCard } from '../components';
 
 // Type pour les membres supplémentaires
 interface AdditionalMember {
@@ -69,7 +69,13 @@ const MemberScreen = () => {
 
   // Validations
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const validatePhone = (phone: string) => /^(0[1-9])\d{8}$/.test(phone.replace(/\s/g, ''));
+  // Validation téléphone : FR (0X XX XX XX XX) ou international (+XX X XX XX XX XX)
+  const validatePhone = (phone: string) => {
+    const cleanPhone = phone.replace(/[\s.-]/g, '');
+    const frenchRegex = /^0[1-9]\d{8}$/;
+    const internationalRegex = /^\+[1-9]\d{6,14}$/;
+    return frenchRegex.test(cleanPhone) || internationalRegex.test(cleanPhone);
+  };
   const validateField = (value: string) => value.trim().length > 0;
 
   // Cotisation status
@@ -117,6 +123,10 @@ const MemberScreen = () => {
       }
     } catch (error) {
       console.error('Error loading member data:', error);
+      Alert.alert(
+        t('error'),
+        isRTL ? 'حدث خطأ أثناء تحميل الملف الشخصي' : 'Erreur lors du chargement du profil'
+      );
     }
   };
 
@@ -251,11 +261,14 @@ const MemberScreen = () => {
   };
 
   const handleCancelSubscription = async () => {
-    // TODO: Annuler via Stripe API quand configure
+    // Fonctionnalité non disponible pour l'instant - contacter l'admin
+    setShowCancelModal(false);
     Alert.alert(
-      'Abonnement annule',
-      'Votre abonnement sera actif jusqu\'a la fin de la periode en cours.',
-      [{ text: 'OK', onPress: () => setShowCancelModal(false) }]
+      isRTL ? 'غير متاح' : 'Non disponible',
+      isRTL
+        ? 'لإلغاء اشتراكك، يرجى الاتصال بإدارة المسجد مباشرة أو زيارة مكتب الاستقبال.'
+        : 'Pour annuler votre abonnement, veuillez contacter l\'administration de la mosquée ou vous rendre à l\'accueil.',
+      [{ text: 'OK' }]
     );
   };
 
@@ -775,6 +788,8 @@ const MemberScreen = () => {
             <TouchableOpacity
               style={styles.primaryBtn}
               onPress={() => { setIsRegistering(false); setShowLoginModal(true); }}
+              accessibilityLabel={t('login')}
+              accessibilityRole="button"
             >
               <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>{t('login')}</Text>
             </TouchableOpacity>
@@ -782,6 +797,8 @@ const MemberScreen = () => {
             <TouchableOpacity
               style={styles.secondaryBtn}
               onPress={() => { setIsRegistering(true); setShowLoginModal(true); }}
+              accessibilityLabel={t('createAccount')}
+              accessibilityRole="button"
             >
               <Text style={[styles.secondaryBtnText, isRTL && styles.rtlText]}>{t('createAccount')}</Text>
             </TouchableOpacity>
@@ -976,66 +993,57 @@ const MemberScreen = () => {
           <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('welcomeUser')} {member?.name?.split(' ')[0]}</Text>
         </View>
 
-        <View style={styles.content}>
-          {/* Carte membre */}
-          <View style={styles.memberCard}>
-            <View style={[styles.memberHeader, isRTL && styles.memberHeaderRTL]}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {member?.name?.split(' ').map(n => n[0]).join('').toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.memberInfo}>
-                <Text style={[styles.memberName, isRTL && styles.rtlText]}>{member?.name}</Text>
-                <Text style={[styles.memberEmail, isRTL && styles.rtlText]}>{member?.email}</Text>
-              </View>
-              <View style={[
-                styles.statusBadge,
-                isPaid ? styles.statusBadgeActive : styles.statusBadgeExpired
-              ]}>
-                <Text style={[
-                  styles.statusBadgeText,
-                  isPaid ? styles.statusBadgeTextActive : styles.statusBadgeTextExpired
-                ]}>
-                  {isPaid ? `✓ ${t('upToDate')}` : `✗ ${t('expired')}`}
-                </Text>
-              </View>
-            </View>
+        {/* Carte de membre virtuelle */}
+        <MemberCard
+          member={memberProfile ? {
+            name: memberProfile.name,
+            firstName: memberProfile.prenom,
+            lastName: memberProfile.nom,
+            memberId: memberProfile.memberId,
+            membershipExpirationDate: memberProfile.cotisationExpiry,
+          } : null}
+          onRenew={() => setShowCotisationModal(true)}
+          isRTL={isRTL}
+        />
 
-            <View style={styles.memberDetails}>
+        <View style={styles.content}>
+          {/* Détails complémentaires du membre */}
+          <View style={styles.memberDetailsCard}>
+            <View style={[styles.memberDetailRow, isRTL && styles.memberDetailRowRTL]}>
+              <Text style={[styles.memberDetailLabel, isRTL && styles.rtlText]}>{t('email')}</Text>
+              <Text style={[styles.memberDetailValue, isRTL && styles.rtlText]}>{member?.email}</Text>
+            </View>
+            <View style={[styles.memberDetailRow, isRTL && styles.memberDetailRowRTL]}>
+              <Text style={[styles.memberDetailLabel, isRTL && styles.rtlText]}>{t('type')}</Text>
+              <Text style={[styles.memberDetailValue, isRTL && styles.rtlText]}>
+                {member?.cotisationType === 'mensuel' ? `${t('monthly')} (${formulePrices.mensuel}€${t('perMonth')})` : `${t('yearly')} (${formulePrices.annuel}€${t('perYear')})`}
+              </Text>
+            </View>
+            {isPaid && member?.nextPaymentDate && (
               <View style={[styles.memberDetailRow, isRTL && styles.memberDetailRowRTL]}>
-                <Text style={[styles.memberDetailLabel, isRTL && styles.rtlText]}>{t('memberNumber')}</Text>
-                <Text style={styles.memberDetailValue}>{member?.memberId}</Text>
-              </View>
-              <View style={[styles.memberDetailRow, isRTL && styles.memberDetailRowRTL]}>
-                <Text style={[styles.memberDetailLabel, isRTL && styles.rtlText]}>{t('type')}</Text>
-                <Text style={[styles.memberDetailValue, isRTL && styles.rtlText]}>
-                  {member?.cotisationType === 'mensuel' ? `${t('monthly')} (${formulePrices.mensuel}€${t('perMonth')})` : `${t('yearly')} (${formulePrices.annuel}€${t('perYear')})`}
+                <Text style={[styles.memberDetailLabel, isRTL && styles.rtlText]}>{t('nextPaymentDate')}</Text>
+                <Text style={styles.memberDetailValue}>
+                  {member.nextPaymentDate.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}
                 </Text>
               </View>
-              {isPaid && member?.nextPaymentDate && (
-                <View style={[styles.memberDetailRow, isRTL && styles.memberDetailRowRTL]}>
-                  <Text style={[styles.memberDetailLabel, isRTL && styles.rtlText]}>{t('nextPaymentDate')}</Text>
-                  <Text style={styles.memberDetailValue}>
-                    {member.nextPaymentDate.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}
-                  </Text>
-                </View>
-              )}
-            </View>
+            )}
           </View>
 
           {/* Bouton Mes Adhésions */}
           <TouchableOpacity
             style={styles.myMembershipsBtn}
             onPress={() => navigation.navigate('MyMemberships')}
+            accessibilityLabel={t('manageMySubscriptions')}
+            accessibilityRole="button"
+            accessibilityHint={t('viewDetailsAndMembers')}
           >
             <Text style={styles.myMembershipsBtnIcon}>📋</Text>
             <View style={styles.myMembershipsBtnContent}>
               <Text style={[styles.myMembershipsBtnTitle, isRTL && styles.rtlText]}>
-                {isRTL ? 'إدارة عضوياتي' : 'Gérer mes adhésions'}
+                {t('manageMySubscriptions')}
               </Text>
               <Text style={[styles.myMembershipsBtnSubtitle, isRTL && styles.rtlText]}>
-                {isRTL ? 'عرض التفاصيل والأشخاص المسجلين' : 'Voir détails et personnes inscrites'}
+                {t('viewDetailsAndMembers')}
               </Text>
             </View>
             <Text style={styles.myMembershipsBtnArrow}>→</Text>
@@ -1120,50 +1128,57 @@ const MemberScreen = () => {
 
           {/* Section Multi-membres */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>👥 Inscrire des proches</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>👥 {t('registerFamily')}</Text>
             <Text style={[styles.sectionSubtitle, isRTL && styles.rtlText]}>
-              Payez l'adhésion pour votre famille ou vos amis
+              {t('registerFamilyDesc')}
             </Text>
             <TouchableOpacity
               style={styles.multiMemberBtn}
               onPress={() => setShowMultiMemberModal(true)}
+              accessibilityLabel={t('registerOtherMembers')}
+              accessibilityRole="button"
+              accessibilityHint={t('registerFamilyDesc')}
             >
               <Text style={styles.multiMemberBtnIcon}>👨‍👩‍👧‍👦</Text>
               <View style={styles.multiMemberBtnContent}>
                 <Text style={[styles.multiMemberBtnText, isRTL && styles.rtlText]}>
-                  Inscrire d'autres membres
+                  {t('registerOtherMembers')}
                 </Text>
                 <Text style={[styles.multiMemberBtnSubtext, isRTL && styles.rtlText]}>
-                  {getFormulePrice()}€ par personne
+                  {getFormulePrice()}€ {t('pricePerPerson')}
                 </Text>
               </View>
               <Text style={styles.multiMemberBtnArrow}>→</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Test buttons - à supprimer en prod */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🧪 Test (dev only)</Text>
-            <View style={styles.testButtons}>
-              <TouchableOpacity 
-                style={[styles.testBtn, isPaid && styles.testBtnActive]}
-                onPress={() => setIsPaid(true)}
-              >
-                <Text style={styles.testBtnText}>✓ Payé</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.testBtn, !isPaid && styles.testBtnDanger]}
-                onPress={() => setIsPaid(false)}
-              >
-                <Text style={styles.testBtnText}>✗ Non payé</Text>
-              </TouchableOpacity>
+{/* Boutons de test - uniquement en développement */}
+          {__DEV__ && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>🧪 Test (dev only)</Text>
+              <View style={styles.testButtons}>
+                <TouchableOpacity
+                  style={[styles.testBtn, isPaid && styles.testBtnActive]}
+                  onPress={() => setIsPaid(true)}
+                >
+                  <Text style={styles.testBtnText}>✓ Payé</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.testBtn, !isPaid && styles.testBtnDanger]}
+                  onPress={() => setIsPaid(false)}
+                >
+                  <Text style={styles.testBtnText}>✗ Non payé</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Deconnexion */}
           <TouchableOpacity
             style={styles.logoutBtn}
             onPress={handleLogout}
+            accessibilityLabel={t('logout')}
+            accessibilityRole="button"
           >
             <Text style={[styles.logoutBtnText, isRTL && styles.rtlText]}>{t('logout')}</Text>
           </TouchableOpacity>
@@ -1711,12 +1726,19 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.text,
   },
-  // Member card
+  // Member card (legacy - unused)
   memberCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
     marginBottom: spacing.xl,
+  },
+  // Détails complémentaires du membre (nouvelle version simplifiée)
+  memberDetailsCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
   },
   memberHeader: {
     flexDirection: 'row',
