@@ -185,6 +185,12 @@ export const translations = {
     cannotPlaySurah: 'Impossible de lire la sourate',
     cannotPlayAudio: 'Impossible de lire l\'audio',
     verse: 'Verset',
+    tapToShowActions: 'Appuyez pour afficher les actions',
+    playVerse: 'Écouter le verset',
+    pauseVerse: 'Mettre en pause',
+    addToFavorites: 'Ajouter aux favoris',
+    removeFromFavorites: 'Retirer des favoris',
+    copyVerse: 'Copier le verset',
 
     // Invocations
     invocations: 'Invocations',
@@ -357,6 +363,75 @@ export const translations = {
     // Common
     notAvailable: 'Non disponible',
     contactAdminToCancel: 'Pour annuler votre abonnement, veuillez contacter l\'administration de la mosquée ou vous rendre à l\'accueil.',
+    understood: 'J\'ai compris',
+    retry: 'Réessayer',
+
+    // Home Screen - Additional
+    dailyReminder: 'Rappel du jour',
+    fridayPrayer: 'Prière du Vendredi',
+    sermonStartsAt: 'Le sermon commence à',
+    arriveEarly: 'Arrivez tôt pour profiter des premières rangées',
+    prayer: 'Prière',
+    adhan: 'Adhan',
+    iqama: 'Iqama',
+    approximateDates: '(dates approximatives selon calcul astronomique)',
+    noJanaza: 'Aucune prière funéraire prévue',
+    noAnnouncements: 'Aucune annonce pour le moment',
+
+    // Spiritual Screen
+    islam: 'Islam',
+    islamArabic: 'الإسلام',
+    islamDesc: 'Coran, Invocations, Quiz & Apprentissage',
+    modules: 'Modules',
+    seeAll: 'Voir tout',
+    yourProgress: 'Votre progression',
+    surahsRead: 'Sourates lues',
+    lettersLearned: 'Lettres apprises',
+    daysStreak: 'Jours de suite',
+
+    // Quiz Screen
+    quizTitle: 'Quiz Islam',
+    quizArabicTitle: 'اختبار الإسلام',
+    quizSubtitle: 'Testez vos connaissances',
+    chooseLevel: 'Choisissez un niveau',
+    tip: 'Conseil',
+    tipText: 'Commencez par le niveau débutant pour consolider vos bases, puis progressez vers les niveaux supérieurs.',
+    beginnerLevel: 'Débutant',
+    intermediateLevel: 'Intermédiaire',
+    advancedLevel: 'Avancé',
+    trueAnswer: 'Vrai',
+    falseAnswer: 'Faux',
+    restart: 'Recommencer',
+    otherLevels: 'Autres niveaux',
+    nextQuestion: 'Question suivante',
+    seeResult: 'Voir le résultat',
+    answer: 'Réponse',
+    questions: 'Questions',
+    levels: 'Niveaux',
+    bilingual: 'Bilingue',
+    qcm: 'QCM',
+    trueFalse: 'Vrai/Faux',
+    correct: 'Correct !',
+    incorrect: 'Incorrect',
+    quizFinished: 'Quiz terminé !',
+    score: 'Score',
+
+    // Quran - Additional
+    errorLoadingSurah: 'Impossible de charger cette sourate. Vérifiez votre connexion.',
+
+    // Donations - Additional
+    viewTransferInfo: 'Voir les infos de virement',
+    acceptedPayments: 'Moyens de paiement acceptés',
+    externalTransferOnly: 'Projets externes : virement bancaire uniquement',
+    useProjectIban: 'Utilisez l\'IBAN du projet',
+    onlinePaymentSoon: 'Les paiements en ligne seront bientôt disponibles',
+    creditCard: 'Carte bancaire',
+    externalProjectNote: 'Ce projet est externe à notre mosquée. Effectuez votre don directement via virement.',
+    transferReference: 'Référence à indiquer',
+    cannotOpenFile: 'Impossible d\'ouvrir ce fichier',
+
+    // Errors
+    loadingFailed: 'Erreur de chargement. Tirez pour actualiser.',
   },
 
   ar: {
@@ -541,6 +616,12 @@ export const translations = {
     cannotPlaySurah: 'تعذر تشغيل السورة',
     cannotPlayAudio: 'تعذر تشغيل الصوت',
     verse: 'آية',
+    tapToShowActions: 'اضغط لإظهار الإجراءات',
+    playVerse: 'استمع إلى الآية',
+    pauseVerse: 'إيقاف مؤقت',
+    addToFavorites: 'إضافة إلى المفضلة',
+    removeFromFavorites: 'إزالة من المفضلة',
+    copyVerse: 'نسخ الآية',
 
     // Invocations
     invocations: 'الأذكار',
@@ -721,6 +802,75 @@ export const translations = {
     // Common
     notAvailable: 'غير متاح',
     contactAdminToCancel: 'لإلغاء اشتراكك، يرجى الاتصال بإدارة المسجد أو زيارة مكتب الاستقبال.',
+    understood: 'حسناً',
+    retry: 'إعادة المحاولة',
+
+    // Home Screen - Additional
+    dailyReminder: 'تذكير اليوم',
+    fridayPrayer: 'صلاة الجمعة',
+    sermonStartsAt: 'تبدأ الخطبة في',
+    arriveEarly: 'حاول الوصول مبكراً للصفوف الأمامية',
+    prayer: 'الصلاة',
+    adhan: 'أذان',
+    iqama: 'إقامة',
+    approximateDates: '(تواريخ تقريبية حسب الحساب الفلكي)',
+    noJanaza: 'لا توجد صلاة جنازة مقررة',
+    noAnnouncements: 'لا توجد إعلانات حالياً',
+
+    // Spiritual Screen
+    islam: 'إسلام',
+    islamArabic: 'الإسلام',
+    islamDesc: 'القرآن، الأذكار، الاختبارات والتعلم',
+    modules: 'الوحدات',
+    seeAll: 'عرض الكل',
+    yourProgress: 'تقدمك',
+    surahsRead: 'السور المقروءة',
+    lettersLearned: 'الحروف المتعلمة',
+    daysStreak: 'أيام متتالية',
+
+    // Quiz Screen
+    quizTitle: 'اختبار الإسلام',
+    quizArabicTitle: 'اختبار الإسلام',
+    quizSubtitle: 'اختبر معلوماتك',
+    chooseLevel: 'اختر المستوى',
+    tip: 'نصيحة',
+    tipText: 'ابدأ بالمستوى المبتدئ لتعزيز أساسياتك، ثم تقدم نحو المستويات الأعلى.',
+    beginnerLevel: 'مبتدئ',
+    intermediateLevel: 'متوسط',
+    advancedLevel: 'متقدم',
+    trueAnswer: 'صحيح',
+    falseAnswer: 'خطأ',
+    restart: 'إعادة البدء',
+    otherLevels: 'مستويات أخرى',
+    nextQuestion: 'السؤال التالي',
+    seeResult: 'عرض النتيجة',
+    answer: 'إجابة',
+    questions: 'أسئلة',
+    levels: 'مستويات',
+    bilingual: 'ثنائي اللغة',
+    qcm: 'اختيار متعدد',
+    trueFalse: 'صح/خطأ',
+    correct: 'صحيح!',
+    incorrect: 'خطأ',
+    quizFinished: 'انتهى الاختبار!',
+    score: 'النتيجة',
+
+    // Quran - Additional
+    errorLoadingSurah: 'تعذر تحميل هذه السورة. تحقق من اتصالك بالإنترنت.',
+
+    // Donations - Additional
+    viewTransferInfo: 'عرض معلومات التحويل',
+    acceptedPayments: 'طرق الدفع المقبولة',
+    externalTransferOnly: 'المشاريع الخارجية: تحويل بنكي فقط',
+    useProjectIban: 'استخدم IBAN المشروع',
+    onlinePaymentSoon: 'الدفع الإلكتروني سيكون متاحاً قريباً',
+    creditCard: 'بطاقة ائتمان',
+    externalProjectNote: 'هذا المشروع خارجي عن مسجدنا. قم بالتبرع مباشرة عبر التحويل البنكي.',
+    transferReference: 'المرجع المطلوب',
+    cannotOpenFile: 'تعذر فتح هذا الملف',
+
+    // Errors
+    loadingFailed: 'فشل التحميل. اسحب للتحديث.',
   },
 };
 

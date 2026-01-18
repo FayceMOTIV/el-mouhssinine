@@ -151,7 +151,15 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         translation: data.translation,
       });
     } catch (error) {
-      console.error('Erreur chargement sourate:', error);
+      if (__DEV__) console.error('Erreur chargement sourate:', error);
+      Alert.alert(
+        t('error') as string,
+        t('errorLoadingSurah') as string,
+        [
+          { text: t('retry') as string, onPress: () => loadSurah() },
+          { text: t('back') as string, onPress: () => navigation.goBack() },
+        ]
+      );
     } finally {
       setLoading(false);
     }
@@ -192,6 +200,9 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         style={[styles.ayahCard, isSelected && styles.ayahCardSelected]}
         onPress={() => handleAyahPress(ayah.numberInSurah)}
         activeOpacity={0.7}
+        accessibilityLabel={`${t('verse')} ${ayah.numberInSurah}${translation ? `: ${translation.text.substring(0, 100)}${translation.text.length > 100 ? '...' : ''}` : ''}`}
+        accessibilityRole="button"
+        accessibilityHint={t('tapToShowActions')}
       >
         <View style={styles.ayahHeader}>
           <View style={styles.ayahNumberBadge}>
@@ -202,18 +213,24 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
               <TouchableOpacity
                 style={[styles.ayahActionButton, playingAyah === ayah.numberInSurah && styles.ayahActionButtonActive]}
                 onPress={() => handlePlayAudio(ayah.numberInSurah)}
+                accessibilityLabel={playingAyah === ayah.numberInSurah ? t('pauseVerse') : t('playVerse')}
+                accessibilityRole="button"
               >
                 <Text style={styles.ayahActionIcon}>{playingAyah === ayah.numberInSurah ? '⏸️' : '▶️'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.ayahActionButton, isFavorite(ayah.numberInSurah) && styles.ayahActionButtonActive]}
                 onPress={() => handleToggleFavorite(ayah.numberInSurah)}
+                accessibilityLabel={isFavorite(ayah.numberInSurah) ? t('removeFromFavorites') : t('addToFavorites')}
+                accessibilityRole="button"
               >
                 <Text style={styles.ayahActionIcon}>{isFavorite(ayah.numberInSurah) ? '❤️' : '🤍'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.ayahActionButton}
                 onPress={() => handleCopyAyah(ayah.numberInSurah)}
+                accessibilityLabel={t('copyVerse')}
+                accessibilityRole="button"
               >
                 <Text style={styles.ayahActionIcon}>📋</Text>
               </TouchableOpacity>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
+import { useLanguage } from '../context/LanguageContext';
 import quizData from '../data/quizData.json';
 
 const { width } = Dimensions.get('window');
@@ -59,6 +60,7 @@ const levels = [
 ];
 
 const QuizScreen: React.FC = () => {
+  const { t, isRTL } = useLanguage();
   const [selectedLevel, setSelectedLevel] = useState<typeof levels[0] | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -152,30 +154,30 @@ const QuizScreen: React.FC = () => {
       <View style={styles.container}>
         <ScrollView showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <Text style={styles.title}>Quiz Islam</Text>
-            <Text style={styles.arabicTitle}>اختبار الإسلام</Text>
-            <Text style={styles.subtitle}>Testez vos connaissances</Text>
+            <Text style={[styles.title, isRTL && styles.rtlText]}>{t('quizTitle')}</Text>
+            <Text style={styles.arabicTitle}>{t('quizArabicTitle')}</Text>
+            <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('quizSubtitle')}</Text>
           </View>
 
           <View style={styles.content}>
             <View style={styles.statsCard}>
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>110</Text>
-                <Text style={styles.statLabel}>Questions</Text>
+                <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('questions')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>3</Text>
-                <Text style={styles.statLabel}>Niveaux</Text>
+                <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('levels')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>FR/AR</Text>
-                <Text style={styles.statLabel}>Bilingue</Text>
+                <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('bilingual')}</Text>
               </View>
             </View>
 
-            <Text style={styles.sectionTitle}>Choisissez un niveau</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('chooseLevel')}</Text>
 
             {levels.map((level) => (
               <TouchableOpacity
@@ -199,12 +201,12 @@ const QuizScreen: React.FC = () => {
               </TouchableOpacity>
             ))}
 
-            <View style={styles.tipCard}>
+            <View style={[styles.tipCard, isRTL && styles.tipCardRTL]}>
               <Text style={styles.tipIcon}>💡</Text>
               <View style={styles.tipContent}>
-                <Text style={styles.tipTitle}>Conseil</Text>
-                <Text style={styles.tipText}>
-                  Commencez par le niveau debutant pour consolider vos bases, puis progressez vers les niveaux superieurs.
+                <Text style={[styles.tipTitle, isRTL && styles.rtlText]}>{t('tip')}</Text>
+                <Text style={[styles.tipText, isRTL && styles.rtlText]}>
+                  {t('tipText')}
                 </Text>
               </View>
             </View>
@@ -224,7 +226,7 @@ const QuizScreen: React.FC = () => {
             <Text style={styles.finishedIcon}>
               {percentage >= 70 ? '🎉' : percentage >= 50 ? '👍' : '📖'}
             </Text>
-            <Text style={styles.finishedTitle}>Quiz termine !</Text>
+            <Text style={[styles.finishedTitle, isRTL && styles.rtlText]}>{t('quizFinished')}</Text>
             <Text style={styles.finishedSubtitle}>{selectedLevel.title}</Text>
 
             <View style={styles.scoreCircle}>
@@ -236,18 +238,22 @@ const QuizScreen: React.FC = () => {
 
             <Text style={styles.scoreMessage}>{getScoreMessage()}</Text>
 
-            <View style={styles.finishedButtons}>
+            <View style={[styles.finishedButtons, isRTL && styles.finishedButtonsRTL]}>
               <TouchableOpacity
                 style={[styles.finishedButton, styles.retryButton]}
                 onPress={() => handleSelectLevel(selectedLevel)}
+                accessibilityLabel={t('restart') as string}
+                accessibilityRole="button"
               >
-                <Text style={styles.retryButtonText}>Recommencer</Text>
+                <Text style={styles.retryButtonText}>{t('restart')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.finishedButton, styles.backButton]}
                 onPress={handleRestart}
+                accessibilityLabel={t('otherLevels') as string}
+                accessibilityRole="button"
               >
-                <Text style={styles.backButtonText}>Autres niveaux</Text>
+                <Text style={styles.backButtonText}>{t('otherLevels')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -293,7 +299,7 @@ const QuizScreen: React.FC = () => {
           <View style={styles.questionCard}>
             <View style={styles.questionTypeTag}>
               <Text style={styles.questionTypeText}>
-                {currentQuestion.type === 'qcm' ? 'QCM' : 'Vrai/Faux'}
+                {currentQuestion.type === 'qcm' ? t('qcm') : t('trueFalse')}
               </Text>
             </View>
             <Text style={styles.questionText}>{currentQuestion.question_fr}</Text>
@@ -327,6 +333,9 @@ const QuizScreen: React.FC = () => {
                     style={buttonStyle}
                     onPress={() => handleAnswer(index)}
                     disabled={answered}
+                    accessibilityLabel={`${t('answer')} ${index + 1}: ${choice}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
                   >
                     <View style={styles.answerIndex}>
                       <Text style={styles.answerIndexText}>
@@ -355,13 +364,16 @@ const QuizScreen: React.FC = () => {
                   ]}
                   onPress={() => handleAnswer(true)}
                   disabled={answered}
+                  accessibilityLabel={`${t('answer')}: ${t('trueAnswer')}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: selectedAnswer === true }}
                 >
                   <Text style={styles.booleanIcon}>✓</Text>
                   <Text style={[
                     styles.answerText,
                     answered && currentQuestion.correct === true && styles.correctAnswerText,
                     answered && selectedAnswer === true && currentQuestion.correct !== true && styles.wrongAnswerText,
-                  ]}>Vrai</Text>
+                  ]}>{t('trueAnswer')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -373,13 +385,16 @@ const QuizScreen: React.FC = () => {
                   ]}
                   onPress={() => handleAnswer(false)}
                   disabled={answered}
+                  accessibilityLabel={`${t('answer')}: ${t('falseAnswer')}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: selectedAnswer === false }}
                 >
                   <Text style={styles.booleanIcon}>✕</Text>
                   <Text style={[
                     styles.answerText,
                     answered && currentQuestion.correct === false && styles.correctAnswerText,
                     answered && selectedAnswer === false && currentQuestion.correct !== false && styles.wrongAnswerText,
-                  ]}>Faux</Text>
+                  ]}>{t('falseAnswer')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -388,8 +403,8 @@ const QuizScreen: React.FC = () => {
           {/* Explanation (shown after answering) */}
           {answered && (
             <View style={[styles.explanationCard, isCorrect ? styles.explanationCorrect : styles.explanationWrong]}>
-              <Text style={styles.explanationHeader}>
-                {isCorrect ? '✅ Correct !' : '❌ Incorrect'}
+              <Text style={[styles.explanationHeader, isRTL && styles.rtlText]}>
+                {isCorrect ? `✅ ${t('correct')}` : `❌ ${t('incorrect')}`}
               </Text>
               <Text style={styles.explanationText}>{currentQuestion.explication_fr}</Text>
               <Text style={styles.explanationTextAr}>{currentQuestion.explication_ar}</Text>
@@ -401,11 +416,13 @@ const QuizScreen: React.FC = () => {
             <TouchableOpacity
               style={[styles.nextButton, { backgroundColor: selectedLevel.color }]}
               onPress={handleNext}
+              accessibilityLabel={currentQuestionIndex < selectedLevel.questions.length - 1 ? t('nextQuestion') as string : t('seeResult') as string}
+              accessibilityRole="button"
             >
               <Text style={styles.nextButtonText}>
                 {currentQuestionIndex < selectedLevel.questions.length - 1
-                  ? 'Question suivante'
-                  : 'Voir le resultat'}
+                  ? t('nextQuestion')
+                  : t('seeResult')}
               </Text>
             </TouchableOpacity>
           )}
@@ -825,6 +842,17 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.text,
+  },
+  // RTL Styles
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  tipCardRTL: {
+    flexDirection: 'row-reverse',
+  },
+  finishedButtonsRTL: {
+    flexDirection: 'row-reverse',
   },
 });
 

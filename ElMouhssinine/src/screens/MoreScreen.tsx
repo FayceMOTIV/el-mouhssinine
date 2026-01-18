@@ -17,7 +17,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, platformShadow, isSmallScreen } from '../theme/colors';
 import { subscribeToMosqueeInfo, requestRecuFiscal } from '../services/firebase';
 import { AuthService } from '../services/auth';
-import { MosqueeInfo, NotificationSettings } from '../types';
+import { MosqueeInfo } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import {
   requestNotificationPermission,
@@ -35,6 +35,9 @@ import {
 } from '../services/prayerNotifications';
 import { PrayerAPI } from '../services/prayerApi';
 
+// @ts-ignore - Import version from package.json
+import { version as appVersion } from '../../package.json';
+
 const MoreScreen = () => {
   const navigation = useNavigation<any>();
   const { language, setLanguage, t, isRTL } = useLanguage();
@@ -50,13 +53,6 @@ const MoreScreen = () => {
     bic: 'AGRIFRPP',
     bankName: 'Crédit Agricole',
     accountHolder: 'Association El Mouhssinine',
-  });
-
-  const [notifications, setNotifications] = useState<NotificationSettings>({
-    enabled: true,
-    minutesBefore: 10,
-    adhanSound: true,
-    jumuaReminder: true,
   });
 
   const [copied, setCopied] = useState('');
@@ -274,10 +270,10 @@ const MoreScreen = () => {
                   <View style={styles.compass}>
                     <View style={styles.compassRing}>
                       {/* Points cardinaux plus visibles */}
-                      <Text style={[styles.cardinal, styles.cardinalN]}>N</Text>
-                      <Text style={[styles.cardinal, styles.cardinalS]}>S</Text>
-                      <Text style={[styles.cardinal, styles.cardinalE]}>E</Text>
-                      <Text style={[styles.cardinal, styles.cardinalO]}>O</Text>
+                      <Text style={[styles.cardinal, styles.cardinalN]}>{isRTL ? 'ش' : 'N'}</Text>
+                      <Text style={[styles.cardinal, styles.cardinalS]}>{isRTL ? 'ج' : 'S'}</Text>
+                      <Text style={[styles.cardinal, styles.cardinalE]}>{isRTL ? 'ق' : 'E'}</Text>
+                      <Text style={[styles.cardinal, styles.cardinalO]}>{isRTL ? 'غ' : 'O'}</Text>
 
                       {/* Grande flèche dorée animée vers la Qibla */}
                       <Animated.View style={[
@@ -497,7 +493,7 @@ const MoreScreen = () => {
                           </Text>
                         </TouchableOpacity>
                       ))}
-                      <Text style={styles.pickerUnit}>min</Text>
+                      <Text style={styles.pickerUnit}>{isRTL ? 'د' : 'min'}</Text>
                     </View>
                   </View>
 
@@ -690,7 +686,7 @@ const MoreScreen = () => {
 
           {/* Version */}
           <View style={styles.versionContainer}>
-            <Text style={styles.versionText}>{t('version')} 1.0.0</Text>
+            <Text style={styles.versionText}>{t('version')} {appVersion}</Text>
             <Text style={styles.copyrightText}>© 2026 El Mouhssinine</Text>
           </View>
         </View>

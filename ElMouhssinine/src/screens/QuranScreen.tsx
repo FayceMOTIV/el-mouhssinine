@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -46,20 +46,22 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
     }
   };
 
-  const filteredSurahs = surahs.filter((surah) => {
-    const matchesSearch =
-      surah.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      surah.englishName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      surah.translation?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      surah.number.toString().includes(searchQuery);
+  const filteredSurahs = useMemo(() => {
+    return surahs.filter((surah) => {
+      const matchesSearch =
+        surah.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        surah.englishName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        surah.translation?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        surah.number.toString().includes(searchQuery);
 
-    const matchesType =
-      filterType === 'all' ||
-      (filterType === 'meccan' && surah.type === 'Mecquoise') ||
-      (filterType === 'medinan' && surah.type === 'Medinoise');
+      const matchesType =
+        filterType === 'all' ||
+        (filterType === 'meccan' && surah.type === 'Mecquoise') ||
+        (filterType === 'medinan' && surah.type === 'Medinoise');
 
-    return matchesSearch && matchesType;
-  });
+      return matchesSearch && matchesType;
+    });
+  }, [surahs, searchQuery, filterType]);
 
   const handleSurahPress = useCallback((surahNumber: number) => {
     navigation.navigate('Surah', { surahNumber });

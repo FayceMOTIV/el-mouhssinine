@@ -58,6 +58,15 @@ const DonationsScreen = () => {
   const amounts = [10, 20, 50, 100, 200, 500];
   const nisab = 5000;
 
+  // Générer une référence unique pour les virements
+  const generateTransferReference = () => {
+    const date = new Date();
+    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `DON-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}-${random}`;
+  };
+
+  const [transferReference] = useState(generateTransferReference());
+
   // Données par défaut avec fichiers
   const defaultInternalProjects: Project[] = [
     {
@@ -106,7 +115,7 @@ const DonationsScreen = () => {
     // Subscription temps réel pour IBAN et infos mosquée
     const unsubMosqueeInfo = subscribeToMosqueeInfo((info) => {
       if (info) {
-        console.log('🏦 MosqueeInfo updated:', info.iban);
+        if (__DEV__) console.log('🏦 MosqueeInfo updated:', info.iban);
         setMosqueeInfo(info);
       }
     });
@@ -415,7 +424,7 @@ const DonationsScreen = () => {
               disabled={!selectedProject}
             >
               <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>
-                🏦 {isRTL ? 'عرض معلومات التحويل' : 'Voir les infos de virement'}
+                🏦 {t('viewTransferInfo')}
               </Text>
             </TouchableOpacity>
           )}
@@ -430,7 +439,7 @@ const DonationsScreen = () => {
           {/* Moyens de paiement - différent selon le type de projet */}
           <View style={styles.paymentSection}>
             <Text style={[styles.paymentSectionTitle, isRTL && styles.rtlText]}>
-              {isRTL ? 'طرق الدفع المقبولة' : 'Moyens de paiement acceptés'}
+              {t('acceptedPayments')}
             </Text>
             {projectType === 'externe' ? (
               // Projets externes : virement uniquement
@@ -438,34 +447,30 @@ const DonationsScreen = () => {
                 <View style={styles.externalPaymentNotice}>
                   <Text style={styles.externalPaymentNoticeIcon}>⚠️</Text>
                   <Text style={[styles.externalPaymentNoticeText, isRTL && styles.rtlText]}>
-                    {isRTL ? 'المشاريع الخارجية: التحويل البنكي فقط' : 'Projets externes : virement bancaire uniquement'}
+                    {t('externalTransferOnly')}
                   </Text>
                 </View>
                 <View style={[styles.paymentGrid, { justifyContent: 'center' }]}>
                   <View style={styles.paymentItem}>
                     <Text style={styles.paymentItemIcon}>🏦</Text>
                     <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>
-                      {isRTL ? 'تحويل بنكي' : 'Virement bancaire'}
+                      {t('bankTransfer')}
                     </Text>
                   </View>
                 </View>
                 <Text style={[styles.paymentNote, isRTL && styles.rtlText]}>
-                  {isRTL ? 'استخدم IBAN المشروع للتحويل' : "Utilisez l'IBAN du projet pour effectuer le virement"}
+                  {t('useProjectIban')}
                 </Text>
               </View>
             ) : (
-              // Projets internes : tous les moyens de paiement
+              // Projets internes : tous les moyens de paiement (sauf PayPal - non implémenté)
               <View>
                 <View style={styles.paymentGrid}>
                   <View style={styles.paymentItem}>
                     <Text style={styles.paymentItemIcon}>💳</Text>
                     <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>
-                      {isRTL ? 'بطاقة بنكية' : 'Carte bancaire'}
+                      {t('creditCard')}
                     </Text>
-                  </View>
-                  <View style={styles.paymentItem}>
-                    <Text style={styles.paymentItemIcon}>🅿️</Text>
-                    <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>PayPal</Text>
                   </View>
                   <View style={styles.applePayButton}>
                     <Image
@@ -477,12 +482,12 @@ const DonationsScreen = () => {
                   <View style={styles.paymentItem}>
                     <Text style={styles.paymentItemIcon}>🏦</Text>
                     <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>
-                      {isRTL ? 'تحويل بنكي' : 'Virement bancaire'}
+                      {t('bankTransfer')}
                     </Text>
                   </View>
                 </View>
                 <Text style={[styles.paymentNote, isRTL && styles.rtlText]}>
-                  {isRTL ? 'المدفوعات عبر الإنترنت ستكون متاحة قريباً' : 'Les paiements en ligne seront bientôt disponibles'}
+                  {t('onlinePaymentSoon')}
                 </Text>
               </View>
             )}
@@ -539,7 +544,7 @@ const DonationsScreen = () => {
                 </View>
 
                 <Text style={[styles.externalProjectNote, isRTL && styles.rtlText]}>
-                  ⚠️ Ce projet est externe à notre mosquée. Le don sera versé directement au bénéficiaire.
+                  ⚠️ {t('externalProjectNote')}
                 </Text>
               </View>
             ) : (
@@ -573,7 +578,7 @@ const DonationsScreen = () => {
                   </TouchableOpacity>
                 </View>
 
-                <View style={[styles.ribRow, styles.ribRowLast, isRTL && styles.ribRowRTL]}>
+                <View style={[styles.ribRow, isRTL && styles.ribRowRTL]}>
                   <View>
                     <Text style={[styles.ribLabel, isRTL && styles.rtlText]}>BIC</Text>
                     <Text style={styles.ribValue}>{mosqueeInfo?.bic || 'AGRIFRPP'}</Text>
@@ -586,6 +591,23 @@ const DonationsScreen = () => {
                     accessibilityHint="Copie le code BIC dans le presse-papier"
                   >
                     <Text style={styles.copyBtnText}>{copied === 'bic' ? '✓' : '📋'}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Référence virement */}
+                <View style={[styles.ribRow, styles.ribRowLast, isRTL && styles.ribRowRTL]}>
+                  <View>
+                    <Text style={[styles.ribLabel, isRTL && styles.rtlText]}>{t('transferReference')}</Text>
+                    <Text style={[styles.ribValue, styles.referenceValue]}>{transferReference}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.copyBtn}
+                    onPress={() => copyToClipboard(transferReference, 'reference')}
+                    accessibilityLabel={t('transferReference') as string}
+                    accessibilityRole="button"
+                    accessibilityHint="Copie la référence dans le presse-papier"
+                  >
+                    <Text style={styles.copyBtnText}>{copied === 'reference' ? '✓' : '📋'}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -631,7 +653,7 @@ const DonationsScreen = () => {
                     <View style={styles.externalPaymentNotice}>
                       <Text style={styles.externalPaymentNoticeIcon}>⚠️</Text>
                       <Text style={[styles.externalPaymentNoticeText, isRTL && styles.rtlText]}>
-                        {isRTL ? 'المشاريع الخارجية: التحويل البنكي فقط' : 'Projets externes : virement bancaire uniquement'}
+                        {t('externalTransferOnly')}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -641,10 +663,10 @@ const DonationsScreen = () => {
                       <Text style={styles.paymentIcon}>🏦</Text>
                       <View style={styles.paymentInfo}>
                         <Text style={[styles.paymentTitle, isRTL && styles.rtlText]}>
-                          {isRTL ? 'تحويل بنكي' : 'Virement bancaire'}
+                          {t('bankTransfer')}
                         </Text>
                         <Text style={[styles.paymentDesc, isRTL && styles.rtlText]}>
-                          {isRTL ? 'استخدم IBAN المشروع' : "Utilisez l'IBAN du projet"}
+                          {t('useProjectIban')}
                         </Text>
                       </View>
                       {paymentMethod === 'virement' && (
@@ -719,20 +741,20 @@ const DonationsScreen = () => {
                 style={[styles.fichierItem, isRTL && styles.fichierItemRTL]}
                 onPress={async () => {
                   if (fichier.url) {
-                    console.log('[Fichier] Ouverture URL:', fichier.url);
+                    if (__DEV__) console.log('[Fichier] Ouverture URL:', fichier.url);
                     try {
                       const canOpen = await Linking.canOpenURL(fichier.url);
                       if (canOpen) {
                         await Linking.openURL(fichier.url);
                       } else {
-                        Alert.alert('Erreur', `Impossible d'ouvrir ce type de fichier.\n\nURL: ${fichier.url.substring(0, 50)}...`);
+                        Alert.alert(t('error') as string, t('cannotOpenFile') as string);
                       }
                     } catch (err: any) {
-                      console.error('Erreur ouverture fichier:', err);
-                      Alert.alert('Erreur', `Échec de l'ouverture: ${err.message}`);
+                      if (__DEV__) console.error('Erreur ouverture fichier:', err);
+                      Alert.alert(t('error') as string, t('cannotOpenFile') as string);
                     }
                   } else {
-                    Alert.alert('Erreur', 'URL du fichier non disponible');
+                    Alert.alert(t('error') as string, t('cannotOpenFile') as string);
                   }
                 }}
               >
@@ -912,20 +934,20 @@ const DonationsScreen = () => {
                           style={[styles.fichierItem, isRTL && styles.fichierItemRTL]}
                           onPress={async () => {
                             if (fichier.url) {
-                              console.log('[Fichier] Ouverture URL:', fichier.url);
+                              if (__DEV__) console.log('[Fichier] Ouverture URL:', fichier.url);
                               try {
                                 const canOpen = await Linking.canOpenURL(fichier.url);
                                 if (canOpen) {
                                   await Linking.openURL(fichier.url);
                                 } else {
-                                  Alert.alert('Erreur', `Impossible d'ouvrir ce type de fichier.\n\nURL: ${fichier.url.substring(0, 50)}...`);
+                                  Alert.alert(t('error') as string, t('cannotOpenFile') as string);
                                 }
                               } catch (err: any) {
-                                console.error('Erreur ouverture fichier:', err);
-                                Alert.alert('Erreur', `Échec de l'ouverture: ${err.message}`);
+                                if (__DEV__) console.error('Erreur ouverture fichier:', err);
+                                Alert.alert(t('error') as string, t('cannotOpenFile') as string);
                               }
                             } else {
-                              Alert.alert('Erreur', 'URL du fichier non disponible');
+                              Alert.alert(t('error') as string, t('cannotOpenFile') as string);
                             }
                           }}
                         >
@@ -1325,6 +1347,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.text,
     fontWeight: '500',
+  },
+  referenceValue: {
+    color: colors.accent,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
   copyBtn: {
     backgroundColor: colors.accent,

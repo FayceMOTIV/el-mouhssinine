@@ -94,6 +94,7 @@ const HomeScreen = () => {
   const [janazaList, setJanazaList] = useState<Janaza[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Animation du countdown
   const countdownOpacity = useRef(new Animated.Value(1)).current;
@@ -196,7 +197,8 @@ const HomeScreen = () => {
         gregorian: `${today.getDate()} ${months[today.getMonth()]} ${today.getFullYear()}`
       });
     } catch (error) {
-      console.warn('API error, using mock data:', error);
+      if (__DEV__) console.warn('API error, using mock data:', error);
+      setLoadError(t('loadingFailed') as string);
       // Garde les donnees mockees en fallback
     } finally {
       setLoading(false);
@@ -341,6 +343,7 @@ const HomeScreen = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setLoadError(null); // Reset error on refresh
     await loadPrayerData();
     setRefreshing(false);
   };
@@ -468,7 +471,7 @@ const HomeScreen = () => {
               onPress={closePopup}
               activeOpacity={0.7}
             >
-              <Text style={styles.popupButtonText}>{isRTL ? 'حسنا' : "J'ai compris"}</Text>
+              <Text style={styles.popupButtonText}>{t('understood')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -505,7 +508,7 @@ const HomeScreen = () => {
 
             <Text style={[styles.upcomingLabel, isRTL && styles.rtlText]}>{t('upcomingEvents')}</Text>
             <Text style={styles.approximatif}>
-              {isRTL ? '(تواريخ تقريبية حسب الحساب الفلكي)' : '(dates approximatives selon calcul astronomique)'}
+              {t('approximateDates')}
             </Text>
 
             {(islamicEvents || []).slice(0, 3).map((event, index) => {
@@ -537,7 +540,7 @@ const HomeScreen = () => {
               onPress={() => setShowCalendar(false)}
               activeOpacity={0.7}
             >
-              <Text style={styles.calendarOkBtnText}>{isRTL ? 'حسنا' : 'Fermer'}</Text>
+              <Text style={styles.calendarOkBtnText}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -584,6 +587,13 @@ const HomeScreen = () => {
           <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('mosqueLocation')}</Text>
         </View>
 
+        {/* Error Banner */}
+        {loadError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{loadError}</Text>
+          </View>
+        )}
+
         <View style={styles.content}>
           {/* Prochaine prière */}
           <View style={styles.nextPrayerCard}>
@@ -604,7 +614,7 @@ const HomeScreen = () => {
 
           {/* Rappel du jour */}
           <View style={styles.rappelContainer}>
-            <Text style={[styles.rappelTitle, isRTL && styles.rtlText]}>📿 {isRTL ? 'تذكير اليوم' : 'Rappel du jour'}</Text>
+            <Text style={[styles.rappelTitle, isRTL && styles.rtlText]}>📿 {t('dailyReminder')}</Text>
             <Text style={[styles.rappelText, isRTL && styles.rtlText]}>
               "{currentRappel
                 ? (isRTL ? currentRappel.texteAr : currentRappel.texteFr)
@@ -654,11 +664,11 @@ const HomeScreen = () => {
             <View style={styles.prayerCard}>
               {/* En-tête des colonnes */}
               <View style={[styles.prayerHeaderRow, isRTL && styles.prayerRowRTL]}>
-                <Text style={[styles.prayerHeaderText, isRTL && styles.rtlText]}>{isRTL ? 'الصلاة' : 'Prière'}</Text>
+                <Text style={[styles.prayerHeaderText, isRTL && styles.rtlText]}>{t('prayer')}</Text>
                 <View style={styles.prayerTimesHeader}>
-                  <Text style={styles.prayerHeaderLabel}>{isRTL ? 'أذان' : 'Adhan'}</Text>
+                  <Text style={styles.prayerHeaderLabel}>{t('adhan')}</Text>
                   {displaySettings.showIqama && (
-                    <Text style={styles.prayerHeaderLabel}>{isRTL ? 'إقامة' : 'Iqama'}</Text>
+                    <Text style={styles.prayerHeaderLabel}>{t('iqama')}</Text>
                   )}
                 </View>
               </View>
@@ -700,15 +710,13 @@ const HomeScreen = () => {
                 <Text style={styles.jumuaIcon}>🕌</Text>
                 <View style={styles.jumuaInfo}>
                   <Text style={[styles.jumuaTitle, isRTL && styles.rtlText]}>
-                    {isRTL ? 'صلاة الجمعة' : 'Prière du Vendredi'}
+                    {t('fridayPrayer')}
                   </Text>
                   <Text style={[styles.jumuaTime, isRTL && styles.rtlText]}>
-                    {isRTL ? 'الخطبة' : 'Le sermon commence à'} {jumuaTimes.jumua1}
+                    {t('sermonStartsAt')} {jumuaTimes.jumua1}
                   </Text>
                   <Text style={[styles.jumuaMessage, isRTL && styles.rtlText]}>
-                    {isRTL
-                      ? '📍 حاول الوصول مبكراً للصفوف الأمامية'
-                      : '📍 Arrivez tôt pour profiter des premières rangées'}
+                    📍 {t('arriveEarly')}
                   </Text>
                 </View>
               </View>
@@ -717,11 +725,14 @@ const HomeScreen = () => {
 
           {/* Calendrier Hégirien est maintenant dans une Modal (voir ci-dessous) */}
 
-          {/* Salat Janaza - Utilise Firebase si disponible, sinon mock */}
-          {(janazaList.length > 0 || mockJanazaList.length > 0) && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>⚰️ {t('janazaUpcoming')}</Text>
-              {(janazaList.length > 0 ? janazaList : mockJanazaList).map((janazaItem: any) => {
+          {/* Salat Janaza - Affiche uniquement les données Firebase */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>⚰️ {t('janazaUpcoming')}</Text>
+            {janazaList.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={[styles.emptyText, isRTL && styles.rtlText]}>{t('noJanaza')}</Text>
+              </View>
+            ) : janazaList.map((janazaItem: any) => {
                 // Normaliser les champs (Firebase vs Mock)
                 const dateValue = janazaItem.prayerDate || janazaItem.date;
                 const dateObj = dateValue instanceof Date ? dateValue : new Date(dateValue);
@@ -768,8 +779,7 @@ const HomeScreen = () => {
                   </View>
                 );
               })}
-            </View>
-          )}
+          </View>
 
           {/* Annonces */}
           <View style={styles.section}>
@@ -785,22 +795,9 @@ const HomeScreen = () => {
                 </View>
               ))
             ) : (
-              <>
-                <View style={styles.card}>
-                  <Text style={[styles.announcementTitle, isRTL && styles.rtlText]}>{isRTL ? 'دروس القرآن للأطفال' : 'Cours de Coran pour enfants'}</Text>
-                  <Text style={[styles.announcementContent, isRTL && styles.rtlText]}>
-                    {isRTL ? 'استئناف الدروس كل سبت الساعة 14:00. التسجيل إلزامي.' : 'Reprise des cours chaque samedi à 14h. Inscription obligatoire.'}
-                  </Text>
-                  <Text style={[styles.announcementDate, isRTL && styles.rtlText]}>{t('publishedOn')} {isRTL ? '8 يناير 2026' : '8 janvier 2026'}</Text>
-                </View>
-                <View style={styles.card}>
-                  <Text style={[styles.announcementTitle, isRTL && styles.rtlText]}>{isRTL ? 'جمع الملابس الشتوية' : 'Collecte vêtements chauds'}</Text>
-                  <Text style={[styles.announcementContent, isRTL && styles.rtlText]}>
-                    {isRTL ? 'يمكن التبرع يومياً بعد صلاة المغرب.' : 'Dépôt possible tous les jours après la prière de Maghrib.'}
-                  </Text>
-                  <Text style={[styles.announcementDate, isRTL && styles.rtlText]}>{t('publishedOn')} {isRTL ? '5 يناير 2026' : '5 janvier 2026'}</Text>
-                </View>
-              </>
+              <View style={styles.emptyCard}>
+                <Text style={[styles.emptyText, isRTL && styles.rtlText]}>{t('noAnnouncements')}</Text>
+              </View>
             )}
           </View>
 
@@ -829,32 +826,9 @@ const HomeScreen = () => {
                 );
               })
             ) : (
-              <>
-                <View style={styles.card}>
-                  <View style={[styles.eventItem, isRTL && styles.eventItemRTL]}>
-                    <View style={styles.eventDateBox}>
-                      <Text style={styles.eventDay}>12</Text>
-                      <Text style={styles.eventMonth}>{isRTL ? 'يناير' : 'JAN'}</Text>
-                    </View>
-                    <View style={styles.eventDetails}>
-                      <Text style={[styles.eventTitle, isRTL && styles.rtlText]}>{isRTL ? 'محاضرة: الصبر في الإسلام' : 'Conférence : La patience en Islam'}</Text>
-                      <Text style={[styles.eventSubtitle, isRTL && styles.rtlText]}>{isRTL ? 'الأحد الساعة 15:00 • القاعة الرئيسية' : 'Dimanche à 15h00 • Salle principale'}</Text>
-                    </View>
-                  </View>
-                </View>
-                <View style={styles.card}>
-                  <View style={[styles.eventItem, isRTL && styles.eventItemRTL]}>
-                    <View style={styles.eventDateBox}>
-                      <Text style={styles.eventDay}>18</Text>
-                      <Text style={styles.eventMonth}>{isRTL ? 'يناير' : 'JAN'}</Text>
-                    </View>
-                    <View style={styles.eventDetails}>
-                      <Text style={[styles.eventTitle, isRTL && styles.rtlText]}>{isRTL ? 'وجبة جماعية' : 'Repas communautaire'}</Text>
-                      <Text style={[styles.eventSubtitle, isRTL && styles.rtlText]}>{isRTL ? 'السبت الساعة 19:30 • بعد المغرب' : 'Samedi à 19h30 • Après Maghrib'}</Text>
-                    </View>
-                  </View>
-                </View>
-              </>
+              <View style={styles.emptyCard}>
+                <Text style={[styles.emptyText, isRTL && styles.rtlText]}>{t('noEvents')}</Text>
+              </View>
             )}
           </View>
         </View>
@@ -1215,44 +1189,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
   },
-  // Activités
-  activitesSection: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  activiteItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-  },
-  activiteItemRTL: {
-    flexDirection: 'row-reverse',
-  },
-  activiteIcon: {
-    fontSize: 24,
-    marginRight: spacing.md,
-  },
-  activiteInfo: {
-    flex: 1,
-  },
-  activiteLabel: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  activiteDetail: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  chevronActivite: {
-    fontSize: 20,
-    color: colors.textMuted,
-  },
   prayerCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
@@ -1595,6 +1531,36 @@ const styles = StyleSheet.create({
   },
   janazaHeaderRTL: {
     flexDirection: 'row-reverse',
+  },
+  // Empty state styles
+  emptyCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyText: {
+    fontSize: fontSize.md,
+    color: colors.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  // Error banner
+  errorBanner: {
+    backgroundColor: 'rgba(231, 76, 60, 0.15)',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    borderLeftWidth: 4,
+    borderLeftColor: '#e74c3c',
+  },
+  errorBannerText: {
+    fontSize: fontSize.sm,
+    color: '#e74c3c',
+    textAlign: 'center',
   },
 });
 
