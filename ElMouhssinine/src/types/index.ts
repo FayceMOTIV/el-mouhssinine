@@ -29,7 +29,9 @@ export interface Event {
   date: Date;
   time: string;
   location: string;
-  requiresRegistration: boolean;
+  requiresRegistration?: boolean;
+  isActive?: boolean;
+  category?: string;
 }
 
 export interface Janaza {

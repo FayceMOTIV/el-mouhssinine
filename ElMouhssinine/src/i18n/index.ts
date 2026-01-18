@@ -432,6 +432,20 @@ export const translations = {
 
     // Errors
     loadingFailed: 'Erreur de chargement. Tirez pour actualiser.',
+
+    // Boost Prière (Rappels progressifs)
+    boostPrayer: 'Boost Prière',
+    enableProgressiveReminders: 'Activer les rappels progressifs',
+    reminderTypes: 'Types de rappels',
+    after30minAdhan: '30 min après l\'Adhan',
+    atMidTime: 'À mi-temps',
+    before15minEnd: '15 min avant la fin',
+    boostNote: 'Les rappels s\'arrêtent au début de la prière suivante',
+    boostReminderTitle: 'Rappel de prière',
+    boostUrgentTitle: 'URGENT - Prière',
+    boostAfter30min: 'N\'oublie pas {prayer} 🕌',
+    boostMidTime: 'Il reste encore du temps pour {prayer}',
+    boostBefore15min: 'Plus que 15 min pour {prayer} ! ⏰',
   },
 
   ar: {
@@ -871,6 +885,20 @@ export const translations = {
 
     // Errors
     loadingFailed: 'فشل التحميل. اسحب للتحديث.',
+
+    // Boost Prière (Rappels progressifs)
+    boostPrayer: 'تعزيز الصلاة',
+    enableProgressiveReminders: 'تفعيل التذكيرات المتتالية',
+    reminderTypes: 'أنواع التذكيرات',
+    after30minAdhan: '30 دقيقة بعد الأذان',
+    atMidTime: 'في منتصف الوقت',
+    before15minEnd: '15 دقيقة قبل النهاية',
+    boostNote: 'ستتوقف التذكيرات عند بداية الصلاة التالية',
+    boostReminderTitle: 'تذكير بالصلاة',
+    boostUrgentTitle: 'عاجل - الصلاة',
+    boostAfter30min: 'لا تنسَ صلاة {prayer} 🕌',
+    boostMidTime: 'لا يزال هناك وقت لصلاة {prayer}',
+    boostBefore15min: 'باقي 15 دقيقة فقط لصلاة {prayer}! ⏰',
   },
 };
 

@@ -212,7 +212,7 @@ export const AuthService = {
       const docRef = firestore().collection('members').doc(uid);
       const doc = await docRef.get();
 
-      if (doc.exists) {
+      if (doc.exists()) {
         return processAndReturnProfile({ ref: docRef }, doc.data());
       }
 

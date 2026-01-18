@@ -3,6 +3,7 @@
 // Fallback sur données mock si Firebase vide ou erreur
 
 import firestore from '@react-native-firebase/firestore';
+import functions from '@react-native-firebase/functions';
 import {
   Project,
   Announcement,
@@ -35,9 +36,9 @@ const FORCE_DEMO_MODE = false;
 // Helper pour fusionner Firebase + Mock (Firebase prioritaire, mock en fallback)
 const mergeWithMock = <T>(firebaseData: T[], mockData: T[]): T[] => {
   if (firebaseData && firebaseData.length > 0) {
-    return firebaseData;
+    return firebaseData as T[];
   }
-  return mockData;
+  return mockData as T[];
 };
 
 // Helper: Convert Firestore timestamp to Date
@@ -248,7 +249,7 @@ export const getEvents = async (): Promise<Event[]> => {
       .where('actif', '==', true)
       .orderBy('date', 'asc')
       .get();
-    const data = snapshot.docs.map(doc => ({
+    const data: Event[] = snapshot.docs.map(doc => ({
       id: doc.id,
       title: doc.data().titre,
       description: doc.data().description,
@@ -429,7 +430,7 @@ export const subscribeToProjects = (callback: (data: Project[]) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          const data = snapshot.docs.map(doc => ({
+          const data: Project[] = snapshot.docs.map(doc => ({
             id: doc.id,
             name: doc.data().titre,
             description: doc.data().description,
@@ -468,7 +469,7 @@ export const getProjects = async (isExternal?: boolean): Promise<Project[]> => {
       .collection('projects')
       .where('actif', '==', true)
       .get();
-    let data = snapshot.docs.map(doc => ({
+    let data: Project[] = snapshot.docs.map(doc => ({
       id: doc.id,
       name: doc.data().titre,
       description: doc.data().description,
@@ -544,7 +545,7 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
 
     // Vérifier si donation existe déjà (idempotence)
     const existingDoc = await donationRef.get();
-    if (existingDoc.exists) {
+    if (existingDoc.exists()) {
       console.log('[Firebase] Don déjà existant (idempotent):', docId);
       return docId;
     }
@@ -570,7 +571,7 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
       // 2. Mettre à jour le montant collecté du projet (dans la même transaction)
       if (projectRef) {
         const projectDoc = await transaction.get(projectRef);
-        if (projectDoc.exists) {
+        if (projectDoc.exists()) {
           transaction.update(projectRef, {
             montantActuel: firestore.FieldValue.increment(params.amount),
           });
@@ -608,7 +609,7 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
 
     // Vérifier si paiement existe déjà (idempotence)
     const existingDoc = await paymentRef.get();
-    if (existingDoc.exists) {
+    if (existingDoc.exists()) {
       console.log('[Firebase] Paiement déjà existant (idempotent):', docId);
       return docId;
     }
@@ -643,7 +644,7 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
       // 2. Mettre à jour le statut du membre (dans la même transaction)
       if (memberRef) {
         const memberDoc = await transaction.get(memberRef);
-        if (memberDoc.exists) {
+        if (memberDoc.exists()) {
           transaction.update(memberRef, {
             statut: 'actif',
             status: 'actif',
@@ -688,7 +689,7 @@ export const subscribeToPopups = (callback: (data: Popup[]) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          const data = snapshot.docs
+          const data: Popup[] = snapshot.docs
             .map(doc => ({
               id: doc.id,
               titre: doc.data().titre,
@@ -795,7 +796,7 @@ export const subscribeToMosqueeInfo = (callback: (data: MosqueeInfo & { headerIm
       .doc('mosqueeInfo')
       .onSnapshot(
         doc => {
-          if (doc.exists) {
+          if (doc.exists()) {
             const data = doc.data();
             callback({
               name: data?.nom || mockMosqueeInfo.name,
@@ -851,7 +852,7 @@ export const subscribeToCotisationPrices = (callback: (data: CotisationPrices) =
       .doc('cotisation')
       .onSnapshot(
         doc => {
-          if (doc.exists) {
+          if (doc.exists()) {
             const data = doc.data();
             callback({
               mensuel: data?.mensuel ?? defaultCotisationPrices.mensuel,
@@ -881,7 +882,7 @@ export const getMosqueeInfo = async (): Promise<MosqueeInfo> => {
   try {
     const doc = await firestore().collection('settings').doc('mosqueeInfo').get();
     console.log('🏦 [Firebase] Doc exists:', doc.exists);
-    if (doc.exists) {
+    if (doc.exists()) {
       const data = doc.data();
       console.log('🏦 [Firebase] Raw data:', JSON.stringify(data));
       console.log('🏦 [Firebase] IBAN from Firebase:', data?.iban);
@@ -925,7 +926,7 @@ export const subscribeToIqama = (callback: (data: HorairesData) => void) => {
       .doc('prayerTimes')
       .onSnapshot(
         doc => {
-          if (doc.exists && doc.data()?.iqama) {
+          if (doc.exists() && doc.data()?.iqama) {
             callback({
               iqama: doc.data()?.iqama || mockIqama,
               jumua: doc.data()?.jumua || mockJumua,
@@ -953,7 +954,7 @@ export const getPrayerTimes = async (): Promise<HorairesData> => {
   }
   try {
     const doc = await firestore().collection('settings').doc('prayerTimes').get();
-    if (doc.exists && doc.data()?.iqama) {
+    if (doc.exists() && doc.data()?.iqama) {
       return {
         iqama: doc.data()?.iqama || mockIqama,
         jumua: doc.data()?.jumua || mockJumua,
@@ -1012,7 +1013,7 @@ export const subscribeToGeneralSettings = (callback: (data: GeneralSettings) => 
       .doc('general')
       .onSnapshot(
         doc => {
-          if (doc.exists) {
+          if (doc.exists()) {
             const data = doc.data();
             callback({
               display: {
@@ -1047,7 +1048,7 @@ export const getGeneralSettings = async (): Promise<GeneralSettings> => {
   }
   try {
     const doc = await firestore().collection('settings').doc('general').get();
-    if (doc.exists) {
+    if (doc.exists()) {
       const data = doc.data();
       return {
         display: {
@@ -1083,7 +1084,7 @@ export const subscribeToIslamicDates = (callback: (data: DateIslamique[]) => voi
       .orderBy('dateGregorien', 'asc')
       .onSnapshot(
         snapshot => {
-          const data = snapshot.docs.map(doc => ({
+          const data: DateIslamique[] = snapshot.docs.map(doc => ({
             id: doc.id,
             nom: doc.data().nom,
             nomAr: doc.data().nomAr,
@@ -1115,7 +1116,7 @@ export const getIslamicDates = async (): Promise<DateIslamique[]> => {
       .collection('dates_islamiques')
       .orderBy('dateGregorien', 'asc')
       .get();
-    const data = snapshot.docs.map(doc => ({
+    const data: DateIslamique[] = snapshot.docs.map(doc => ({
       id: doc.id,
       nom: doc.data().nom,
       nomAr: doc.data().nomAr,
@@ -1140,7 +1141,7 @@ export const getMember = async (memberId: string): Promise<Member | null> => {
   }
   try {
     const doc = await firestore().collection('members').doc(memberId).get();
-    if (!doc.exists) return null;
+    if (!doc.exists()) return null;
     const data = doc.data();
     return {
       id: doc.id,
@@ -1251,11 +1252,12 @@ export const createMember = async (member: CreateMemberData | Omit<Member, 'id' 
         dateFin: member.cotisation.dateFin,
       };
     } else if ('cotisationType' in member) {
+      const cotisationType = member.cotisationType ?? null;
       cotisationData = {
-        type: member.cotisationType,
-        montant: member.cotisationType === 'annuel' ? 100 : 20,
+        type: cotisationType,
+        montant: cotisationType === 'annuel' ? 100 : 20,
         dateDebut: firestore.FieldValue.serverTimestamp(),
-        dateFin: getNextPaymentDate(member.cotisationType),
+        dateFin: getNextPaymentDate(cotisationType),
       };
     }
 
@@ -1735,7 +1737,7 @@ export const addUserReplyToMessage = async (
     const messageRef = firestore().collection('messages').doc(messageId);
     const doc = await messageRef.get();
 
-    if (!doc.exists) {
+    if (!doc.exists()) {
       return { success: false, error: 'Message introuvable' };
     }
 
@@ -1775,7 +1777,7 @@ export const getMessage = async (messageId: string): Promise<UserMessage | null>
   try {
     const doc = await firestore().collection('messages').doc(messageId).get();
 
-    if (!doc.exists) return null;
+    if (!doc.exists()) return null;
 
     const data = doc.data();
     return {
@@ -1816,7 +1818,7 @@ export const deleteMessage = async (
     // SÉCURITÉ: Vérifier que l'utilisateur est le propriétaire du message
     if (userId) {
       const doc = await messageRef.get();
-      if (!doc.exists) {
+      if (!doc.exists()) {
         return { success: false, error: 'Message introuvable' };
       }
       const data = doc.data();
@@ -1854,7 +1856,7 @@ export const subscribeToMessage = (
       .doc(messageId)
       .onSnapshot(
         doc => {
-          if (!doc.exists) {
+          if (!doc.exists()) {
             callback(null);
             return;
           }

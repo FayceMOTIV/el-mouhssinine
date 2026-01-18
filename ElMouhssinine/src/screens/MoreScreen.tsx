@@ -32,6 +32,13 @@ import {
   schedulePrayerNotifications,
   cancelAllPrayerNotifications,
   requestNotificationPermission as requestPrayerNotifPermission,
+  // Boost Prière
+  PrayerBoostSettings,
+  DEFAULT_PRAYER_BOOST_SETTINGS,
+  getBoostSettings,
+  saveBoostSettings,
+  scheduleBoostNotifications,
+  cancelBoostNotifications,
 } from '../services/prayerNotifications';
 import { PrayerAPI } from '../services/prayerApi';
 
@@ -62,6 +69,9 @@ const MoreScreen = () => {
     minutesBefore: 15,
     prayers: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
   });
+
+  // Boost Prière (feature optionnelle)
+  const [boostSettings, setBoostSettings] = useState<PrayerBoostSettings>(DEFAULT_PRAYER_BOOST_SETTINGS);
   const [compassHeading, setCompassHeading] = useState(0);
   const [compassError, setCompassError] = useState<string | null>(null);
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -93,7 +103,7 @@ const MoreScreen = () => {
   useEffect(() => {
     const degree_update_rate = 3; // Mise à jour toutes les 3 degrés
 
-    CompassHeading.start(degree_update_rate, ({ heading, accuracy }) => {
+    CompassHeading.start(degree_update_rate, ({ heading, accuracy }: { heading: number; accuracy: number }) => {
       setCompassHeading(heading);
       setCompassError(null);
 
@@ -127,6 +137,11 @@ const MoreScreen = () => {
     getPrayerNotificationSettings().then(setPrayerNotifSettings);
   }, []);
 
+  // Charger les settings boost
+  useEffect(() => {
+    getBoostSettings().then(setBoostSettings);
+  }, []);
+
   // Mettre a jour les settings de notifications de priere
   const updatePrayerNotifSettings = async (newSettings: PrayerNotificationSettings) => {
     setPrayerNotifSettings(newSettings);
@@ -145,6 +160,34 @@ const MoreScreen = () => {
       }
     } else {
       await cancelAllPrayerNotifications();
+    }
+  };
+
+  // Mettre à jour les settings boost
+  const updateBoostSettings = async (newSettings: PrayerBoostSettings) => {
+    setBoostSettings(newSettings);
+    await saveBoostSettings(newSettings);
+
+    // Re-scheduler les notifications boost
+    if (newSettings.enabled) {
+      const hasPermission = await requestPrayerNotifPermission();
+      if (hasPermission) {
+        try {
+          const timings = await PrayerAPI.getTimesByCity('Bourg-en-Bresse', 'France');
+          const translations = {
+            reminderTitle: t('boostReminderTitle'),
+            urgentTitle: t('boostUrgentTitle'),
+            after30min: t('boostAfter30min'),
+            midTime: t('boostMidTime'),
+            before15min: t('boostBefore15min'),
+          };
+          await scheduleBoostNotifications(timings, newSettings, translations);
+        } catch (error) {
+          console.warn('[MoreScreen] Erreur boost scheduling:', error);
+        }
+      }
+    } else {
+      await cancelBoostNotifications();
     }
   };
 
@@ -565,6 +608,90 @@ const MoreScreen = () => {
                       active={jumuaReminderEnabled}
                       onToggle={handleJumuaToggle}
                     />
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+
+          {/* Boost Prière - Rappels progressifs (OPTIONNEL) */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
+              🚀 {t('boostPrayer')}
+            </Text>
+            <View style={styles.card}>
+              {/* Toggle principal */}
+              <View style={styles.settingRow}>
+                <View style={styles.settingLeft}>
+                  <Text style={styles.settingIcon}>🚀</Text>
+                  <Text style={styles.settingLabel}>{t('enableProgressiveReminders')}</Text>
+                </View>
+                <Switch
+                  active={boostSettings.enabled}
+                  onToggle={() => updateBoostSettings({
+                    ...boostSettings,
+                    enabled: !boostSettings.enabled
+                  })}
+                />
+              </View>
+
+              {/* Options détaillées (visibles seulement si activé) */}
+              {boostSettings.enabled && (
+                <>
+                  <Text style={[styles.prayerTogglesTitle, isRTL && styles.textRTL, { marginTop: spacing.md }]}>
+                    {t('reminderTypes')}
+                  </Text>
+
+                  {/* 30 min après Adhan */}
+                  <View style={styles.prayerToggleRow}>
+                    <View style={styles.settingLeft}>
+                      <Text style={styles.settingIcon}>⏰</Text>
+                      <Text style={styles.settingLabel}>{t('after30minAdhan')}</Text>
+                    </View>
+                    <Switch
+                      active={boostSettings.reminders.after30min}
+                      onToggle={() => updateBoostSettings({
+                        ...boostSettings,
+                        reminders: { ...boostSettings.reminders, after30min: !boostSettings.reminders.after30min }
+                      })}
+                    />
+                  </View>
+
+                  {/* À mi-temps */}
+                  <View style={styles.prayerToggleRow}>
+                    <View style={styles.settingLeft}>
+                      <Text style={styles.settingIcon}>🕐</Text>
+                      <Text style={styles.settingLabel}>{t('atMidTime')}</Text>
+                    </View>
+                    <Switch
+                      active={boostSettings.reminders.atMidTime}
+                      onToggle={() => updateBoostSettings({
+                        ...boostSettings,
+                        reminders: { ...boostSettings.reminders, atMidTime: !boostSettings.reminders.atMidTime }
+                      })}
+                    />
+                  </View>
+
+                  {/* 15 min avant fin */}
+                  <View style={[styles.prayerToggleRow, styles.prayerToggleRowLast]}>
+                    <View style={styles.settingLeft}>
+                      <Text style={styles.settingIcon}>⚠️</Text>
+                      <Text style={styles.settingLabel}>{t('before15minEnd')}</Text>
+                    </View>
+                    <Switch
+                      active={boostSettings.reminders.before15minEnd}
+                      onToggle={() => updateBoostSettings({
+                        ...boostSettings,
+                        reminders: { ...boostSettings.reminders, before15minEnd: !boostSettings.reminders.before15minEnd }
+                      })}
+                    />
+                  </View>
+
+                  {/* Note explicative */}
+                  <View style={styles.prayerNotifNote}>
+                    <Text style={styles.prayerNotifNoteText}>
+                      💡 {t('boostNote')}
+                    </Text>
                   </View>
                 </>
               )}

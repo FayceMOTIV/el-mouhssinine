@@ -67,7 +67,7 @@ const App: React.FC = () => {
       await clearBadgeCount();
 
       // Attendre 2 secondes pour garder la splash visible
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise<void>(resolve => setTimeout(resolve, 2000));
       setAppReady(true);
     };
 

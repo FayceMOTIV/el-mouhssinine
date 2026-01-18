@@ -71,7 +71,7 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
     <TouchableOpacity
       style={[styles.surahCard, isRTL && styles.surahCardRTL]}
       onPress={() => handleSurahPress(surah.number)}
-      accessibilityLabel={`Sourate ${surah.number}, ${surah.translation || surah.englishName}, ${surah.ayahs || surah.numberOfAyahs} versets`}
+      accessibilityLabel={`Sourate ${surah.number}, ${surah.translation || surah.englishName}, ${surah.ayahs} versets`}
       accessibilityRole="button"
       accessibilityHint="Appuyez pour lire cette sourate"
     >

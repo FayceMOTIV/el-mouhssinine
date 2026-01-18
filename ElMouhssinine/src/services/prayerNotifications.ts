@@ -28,6 +28,42 @@ export interface PrayerNotificationSettings {
 
 type PrayerKey = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 
+// ==================== BOOST TYPES (Feature optionnelle) ====================
+
+export interface PrayerBoostSettings {
+  enabled: boolean;                    // Feature activée ou non
+  reminders: {
+    atAdhan: boolean;                  // Rappel à l'Adhan (déjà géré par l'existant)
+    after30min: boolean;               // Rappel 30 min après Adhan
+    atMidTime: boolean;                // Rappel à mi-temps
+    before15minEnd: boolean;           // Rappel urgent 15 min avant fin
+  };
+  prayers: {
+    fajr: boolean;
+    dhuhr: boolean;
+    asr: boolean;
+    maghrib: boolean;
+    isha: boolean;
+  };
+}
+
+export const DEFAULT_PRAYER_BOOST_SETTINGS: PrayerBoostSettings = {
+  enabled: false,  // DÉSACTIVÉ par défaut
+  reminders: {
+    atAdhan: true,
+    after30min: true,
+    atMidTime: true,
+    before15minEnd: true,
+  },
+  prayers: {
+    fajr: true,
+    dhuhr: true,
+    asr: true,
+    maghrib: true,
+    isha: true,
+  },
+};
+
 // ==================== CONSTANTES ====================
 
 const SETTINGS_KEY = '@prayer_notification_settings';
@@ -357,6 +393,326 @@ export const getScheduledPrayerNotifications = async (): Promise<string[]> => {
     return triggers.filter(id => id.startsWith('prayer-'));
   } catch (error) {
     console.error('[PrayerNotif] Erreur getTriggers:', error);
+    return [];
+  }
+};
+
+// ==================== BOOST PRIÈRE (Feature optionnelle) ====================
+// Cette section est 100% indépendante du système de notifications classique
+// Elle utilise ses propres préfixes, channel et clé de stockage
+
+// Ordre des prières pour calculer les fins
+const PRAYER_ORDER = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
+// Clé AsyncStorage pour les settings boost (séparée des settings classiques)
+const BOOST_SETTINGS_KEY = 'prayer_boost_settings';
+
+/**
+ * Calcule la fin d'une prière (= début de la suivante)
+ */
+export const getPrayerEndTime = (
+  prayerName: string,
+  prayerTimings: PrayerTimings | Record<string, string>
+): string | null => {
+  const timings = prayerTimings as Record<string, string>;
+  const prayerLower = prayerName.toLowerCase();
+  const currentIndex = PRAYER_ORDER.indexOf(prayerLower);
+  if (currentIndex === -1) return null;
+
+  // Cas spéciaux
+  if (prayerLower === 'fajr') {
+    return timings.Sunrise || timings.sunrise || null;
+  }
+  if (prayerLower === 'isha') {
+    // Isha se termine à minuit ou Fajr du lendemain (on prend 23:59)
+    return '23:59';
+  }
+
+  // Sinon, fin = début de la prière suivante
+  const nextPrayer = PRAYER_ORDER[currentIndex + 1];
+  const nextKey = nextPrayer.charAt(0).toUpperCase() + nextPrayer.slice(1);
+  return timings[nextKey] || timings[nextPrayer] || null;
+};
+
+/**
+ * Calcule les moments de rappel pour une prière
+ */
+export const calculateBoostReminders = (
+  prayerName: string,
+  startTime: string,  // "13:15"
+  endTime: string,    // "16:30"
+  settings: PrayerBoostSettings
+): { time: string; type: 'after30min' | 'midTime' | 'before15min' }[] => {
+  const reminders: { time: string; type: 'after30min' | 'midTime' | 'before15min' }[] = [];
+
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+
+  let startMinutes = startH * 60 + startM;
+  let endMinutes = endH * 60 + endM;
+
+  // Gestion du passage à minuit (ex: Isha 20:00 -> 23:59)
+  if (endMinutes < startMinutes) {
+    endMinutes += 24 * 60; // Ajouter 24h
+  }
+
+  const totalMinutes = endMinutes - startMinutes;
+
+  // Rappel 30 min après Adhan
+  if (settings.reminders.after30min && totalMinutes > 30) {
+    const reminderMinutes = startMinutes + 30;
+    const h = Math.floor(reminderMinutes / 60) % 24;
+    const m = reminderMinutes % 60;
+    reminders.push({
+      time: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`,
+      type: 'after30min'
+    });
+  }
+
+  // Rappel à mi-temps
+  if (settings.reminders.atMidTime && totalMinutes > 60) {
+    const midMinutes = startMinutes + Math.floor(totalMinutes / 2);
+    const h = Math.floor(midMinutes / 60) % 24;
+    const m = midMinutes % 60;
+    reminders.push({
+      time: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`,
+      type: 'midTime'
+    });
+  }
+
+  // Rappel 15 min avant la fin
+  if (settings.reminders.before15minEnd && totalMinutes > 20) {
+    const urgentMinutes = endMinutes - 15;
+    const h = Math.floor(urgentMinutes / 60) % 24;
+    const m = urgentMinutes % 60;
+    reminders.push({
+      time: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`,
+      type: 'before15min'
+    });
+  }
+
+  return reminders;
+};
+
+/**
+ * Créer le channel Android pour les notifications boost
+ */
+const ensureBoostChannel = async (): Promise<string> => {
+  const channelId = await notifee.createChannel({
+    id: 'prayer-boost',
+    name: 'Boost Prière',
+    description: 'Rappels progressifs pour les prières',
+    importance: AndroidImportance.HIGH,
+    sound: 'default',
+  });
+  return channelId;
+};
+
+/**
+ * Annule uniquement les notifications boost (pas les classiques)
+ */
+export const cancelBoostNotifications = async (): Promise<void> => {
+  try {
+    const notifications = await notifee.getTriggerNotificationIds();
+    for (const id of notifications) {
+      if (id.startsWith('boost_')) {
+        await notifee.cancelTriggerNotification(id);
+      }
+    }
+    console.log('[PrayerBoost] Notifications boost annulées');
+  } catch (error) {
+    console.error('[PrayerBoost] Erreur annulation:', error);
+  }
+};
+
+/**
+ * Programme les notifications boost pour les prières
+ * Fonction SÉPARÉE qui n'affecte pas les notifications classiques
+ */
+export const scheduleBoostNotifications = async (
+  prayerTimings: PrayerTimings | Record<string, string>,
+  settings: PrayerBoostSettings,
+  translations: {
+    reminderTitle: string;
+    urgentTitle: string;
+    after30min: string;
+    midTime: string;
+    before15min: string;
+  }
+): Promise<void> => {
+  try {
+    // Si désactivé, annuler les notifications boost existantes
+    if (!settings.enabled) {
+      await cancelBoostNotifications();
+      console.log('[PrayerBoost] Feature désactivée');
+      return;
+    }
+
+    console.log('[PrayerBoost] ======== SCHEDULING START ========');
+
+    // Vérifier les permissions
+    const hasPermission = await requestNotificationPermission();
+    if (!hasPermission) {
+      console.log('[PrayerBoost] Permissions refusées');
+      return;
+    }
+
+    // Créer le channel Android
+    const channelId = await ensureBoostChannel();
+
+    // Annuler les anciennes notifications boost
+    await cancelBoostNotifications();
+
+    // Cast pour accès flexible aux propriétés
+    const timings = prayerTimings as Record<string, string>;
+
+    const prayers = [
+      { key: 'fajr', name: 'Fajr' },
+      { key: 'dhuhr', name: 'Dhuhr' },
+      { key: 'asr', name: 'Asr' },
+      { key: 'maghrib', name: 'Maghrib' },
+      { key: 'isha', name: 'Isha' },
+    ];
+
+    const now = new Date();
+    let scheduledCount = 0;
+
+    // Scheduler pour aujourd'hui et demain
+    const daysToSchedule = [
+      { date: new Date(), suffix: 'today' },
+      { date: addDays(new Date(), 1), suffix: 'tomorrow' },
+    ];
+
+    for (const { date: baseDate, suffix: daySuffix } of daysToSchedule) {
+      for (const prayer of prayers) {
+        // Vérifier si cette prière est activée dans les settings boost
+        if (!settings.prayers[prayer.key as keyof typeof settings.prayers]) {
+          continue;
+        }
+
+        const startTime = timings[prayer.name];
+        const endTime = getPrayerEndTime(prayer.key, timings);
+
+        if (!startTime || !endTime) {
+          console.log(`[PrayerBoost] Temps manquant pour ${prayer.name}`);
+          continue;
+        }
+
+        // Nettoyer l'heure (enlever timezone si présent)
+        const cleanStartTime = startTime.split(' ')[0];
+        const cleanEndTime = endTime.split(' ')[0];
+
+        const reminders = calculateBoostReminders(prayer.key, cleanStartTime, cleanEndTime, settings);
+
+        for (const reminder of reminders) {
+          const [h, m] = reminder.time.split(':').map(Number);
+          const notifDate = new Date(baseDate);
+          notifDate.setHours(h, m, 0, 0);
+
+          // Si l'heure est passée pour aujourd'hui, skip
+          if (notifDate <= now) {
+            continue;
+          }
+
+          // Message selon le type de rappel
+          let title = '';
+          let body = '';
+
+          switch (reminder.type) {
+            case 'after30min':
+              title = translations.reminderTitle;
+              body = translations.after30min.replace('{prayer}', prayer.name);
+              break;
+            case 'midTime':
+              title = translations.reminderTitle;
+              body = translations.midTime.replace('{prayer}', prayer.name);
+              break;
+            case 'before15min':
+              title = '⚠️ ' + translations.urgentTitle;
+              body = translations.before15min.replace('{prayer}', prayer.name);
+              break;
+          }
+
+          const trigger: TimestampTrigger = {
+            type: TriggerType.TIMESTAMP,
+            timestamp: notifDate.getTime(),
+          };
+
+          await notifee.createTriggerNotification(
+            {
+              id: `boost_${prayer.key}_${reminder.type}_${daySuffix}`,
+              title,
+              body,
+              android: {
+                channelId,
+                smallIcon: 'ic_notification',
+                importance: AndroidImportance.HIGH,
+                pressAction: { id: 'default' },
+              },
+              ios: {
+                sound: 'default',
+              },
+            },
+            trigger
+          );
+
+          scheduledCount++;
+          console.log(`[PrayerBoost] ✅ ${prayer.name} ${reminder.type} (${daySuffix}) at ${notifDate.toLocaleString('fr-FR')}`);
+        }
+      }
+    }
+
+    console.log('[PrayerBoost] ======== SCHEDULING COMPLETE ========');
+    console.log(`[PrayerBoost] Total scheduled: ${scheduledCount}`);
+  } catch (error) {
+    console.error('[PrayerBoost] Erreur scheduling:', error);
+  }
+};
+
+/**
+ * Sauvegarder les settings boost
+ */
+export const saveBoostSettings = async (settings: PrayerBoostSettings): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(BOOST_SETTINGS_KEY, JSON.stringify(settings));
+    console.log('[PrayerBoost] Settings sauvegardés');
+  } catch (error) {
+    console.error('[PrayerBoost] Erreur sauvegarde settings:', error);
+  }
+};
+
+/**
+ * Récupérer les settings boost
+ */
+export const getBoostSettings = async (): Promise<PrayerBoostSettings> => {
+  try {
+    const stored = await AsyncStorage.getItem(BOOST_SETTINGS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Merge avec defaults pour les nouvelles propriétés
+      return {
+        ...DEFAULT_PRAYER_BOOST_SETTINGS,
+        ...parsed,
+        reminders: { ...DEFAULT_PRAYER_BOOST_SETTINGS.reminders, ...parsed.reminders },
+        prayers: { ...DEFAULT_PRAYER_BOOST_SETTINGS.prayers, ...parsed.prayers },
+      };
+    }
+    return DEFAULT_PRAYER_BOOST_SETTINGS;
+  } catch (error) {
+    console.error('[PrayerBoost] Erreur lecture settings:', error);
+    return DEFAULT_PRAYER_BOOST_SETTINGS;
+  }
+};
+
+/**
+ * Vérifier les notifications boost schedulées (debug)
+ */
+export const getScheduledBoostNotifications = async (): Promise<string[]> => {
+  try {
+    const triggers = await notifee.getTriggerNotificationIds();
+    return triggers.filter(id => id.startsWith('boost_'));
+  } catch (error) {
+    console.error('[PrayerBoost] Erreur getTriggers:', error);
     return [];
   }
 };

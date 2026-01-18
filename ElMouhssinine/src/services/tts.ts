@@ -35,12 +35,11 @@ export const speakArabic = async (text: string): Promise<void> => {
     // Stop any current speech
     await Tts.stop();
 
-    // Speak the text with language option
+    // Speak the text (language already set via setDefaultLanguage in initTTS)
     console.log('[TTS] Speaking:', text);
     await Tts.speak(text, {
-      language: 'ar-SA',
       rate: 0.4,
-    });
+    } as any);
   } catch (error) {
     console.error('[TTS] Error speaking:', error);
     // Fallback: try without options
