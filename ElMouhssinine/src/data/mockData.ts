@@ -512,13 +512,15 @@ export const mockActivites = [
 ];
 
 // ==================== DATES ISLAMIQUES ====================
+// Dates islamiques 2026 - Sources: islamicfinder.org, mawaqit.net
+// Ces dates sont approximatives et doivent être confirmées par observation lunaire
 export const mockDatesIslamiques = [
   {
     id: '1',
     nom: 'Début Ramadan',
     nomAr: 'بداية رمضان',
     dateHijri: '1 Ramadan 1447',
-    dateGregorien: '2026-03-01',
+    dateGregorien: '2026-02-18',
     icon: '🌙',
     approximatif: true,
   },
@@ -527,7 +529,7 @@ export const mockDatesIslamiques = [
     nom: 'Aïd al-Fitr',
     nomAr: 'عيد الفطر',
     dateHijri: '1 Shawwal 1447',
-    dateGregorien: '2026-03-30',
+    dateGregorien: '2026-03-20',
     icon: '🎉',
     approximatif: true,
   },
@@ -536,7 +538,7 @@ export const mockDatesIslamiques = [
     nom: 'Aïd al-Adha',
     nomAr: 'عيد الأضحى',
     dateHijri: '10 Dhul Hijja 1447',
-    dateGregorien: '2026-06-07',
+    dateGregorien: '2026-05-27',
     icon: '🐑',
     approximatif: true,
   },
@@ -545,7 +547,7 @@ export const mockDatesIslamiques = [
     nom: 'Nouvel An Hégirien',
     nomAr: 'رأس السنة الهجرية',
     dateHijri: '1 Muharram 1448',
-    dateGregorien: '2026-06-27',
+    dateGregorien: '2026-06-17',
     icon: '📅',
     approximatif: true,
   },

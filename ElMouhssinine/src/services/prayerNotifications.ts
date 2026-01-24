@@ -408,7 +408,7 @@ const PRAYER_ORDER = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
 const BOOST_SETTINGS_KEY = 'prayer_boost_settings';
 
 /**
- * Calcule la fin d'une prière (= début de la suivante)
+ * Calcule la fin d'une prière selon le madhab Malikite
  */
 export const getPrayerEndTime = (
   prayerName: string,
@@ -421,21 +421,40 @@ export const getPrayerEndTime = (
 
   // Cas spéciaux
   if (prayerLower === 'fajr') {
+    // Fajr se termine au lever du soleil
     return timings.Sunrise || timings.sunrise || null;
   }
-  if (prayerLower === 'isha') {
-    // Isha se termine à minuit ou Fajr du lendemain (on prend 23:59)
-    return '23:59';
+
+  if (prayerLower === 'maghrib') {
+    // MALIKITES: Maghrib a une fenêtre TRÈS COURTE (~20 min après le coucher du soleil)
+    const maghribTime = timings.Maghrib || timings.maghrib;
+    if (!maghribTime) return null;
+    const [h, m] = maghribTime.split(':').map(Number);
+    const endMinutes = h * 60 + m + 20; // +20 minutes
+    const endH = Math.floor(endMinutes / 60) % 24;
+    const endM = endMinutes % 60;
+    return `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
   }
 
-  // Sinon, fin = début de la prière suivante
+  if (prayerLower === 'isha') {
+    // Isha: on utilise juste 1h après pour le calcul (mais on n'enverra qu'une notif)
+    const ishaTime = timings.Isha || timings.isha;
+    if (!ishaTime) return null;
+    const [h, m] = ishaTime.split(':').map(Number);
+    const endMinutes = h * 60 + m + 60; // +60 minutes pour le calcul
+    const endH = Math.floor(endMinutes / 60) % 24;
+    const endM = endMinutes % 60;
+    return `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+  }
+
+  // Dhuhr et Asr: fin = début de la prière suivante
   const nextPrayer = PRAYER_ORDER[currentIndex + 1];
   const nextKey = nextPrayer.charAt(0).toUpperCase() + nextPrayer.slice(1);
   return timings[nextKey] || timings[nextPrayer] || null;
 };
 
 /**
- * Calcule les moments de rappel pour une prière
+ * Calcule les moments de rappel pour une prière (adapté Malikites)
  */
 export const calculateBoostReminders = (
   prayerName: string,
@@ -444,6 +463,7 @@ export const calculateBoostReminders = (
   settings: PrayerBoostSettings
 ): { time: string; type: 'after30min' | 'midTime' | 'before15min' }[] => {
   const reminders: { time: string; type: 'after30min' | 'midTime' | 'before15min' }[] = [];
+  const prayerLower = prayerName.toLowerCase();
 
   const [startH, startM] = startTime.split(':').map(Number);
   const [endH, endM] = endTime.split(':').map(Number);
@@ -451,12 +471,45 @@ export const calculateBoostReminders = (
   let startMinutes = startH * 60 + startM;
   let endMinutes = endH * 60 + endM;
 
-  // Gestion du passage à minuit (ex: Isha 20:00 -> 23:59)
+  // Gestion du passage à minuit
   if (endMinutes < startMinutes) {
-    endMinutes += 24 * 60; // Ajouter 24h
+    endMinutes += 24 * 60;
   }
 
   const totalMinutes = endMinutes - startMinutes;
+
+  // ============ CAS SPÉCIAUX ============
+
+  // ISHA: Une seule notification 30 min après (pas de mi-temps ni urgence)
+  if (prayerLower === 'isha') {
+    if (settings.reminders.after30min) {
+      const reminderMinutes = startMinutes + 30;
+      const h = Math.floor(reminderMinutes / 60) % 24;
+      const m = reminderMinutes % 60;
+      reminders.push({
+        time: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`,
+        type: 'after30min'
+      });
+    }
+    return reminders; // Retourne uniquement cette notif pour Isha
+  }
+
+  // MAGHRIB (Malikites): Fenêtre très courte (~20 min)
+  // Juste une notif 5 min après l'adhan pour rappeler de prier rapidement
+  if (prayerLower === 'maghrib') {
+    if (settings.reminders.after30min) { // On réutilise le toggle after30min
+      const reminderMinutes = startMinutes + 5; // 5 min après Maghrib
+      const h = Math.floor(reminderMinutes / 60) % 24;
+      const m = reminderMinutes % 60;
+      reminders.push({
+        time: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`,
+        type: 'after30min'
+      });
+    }
+    return reminders; // Retourne uniquement cette notif pour Maghrib
+  }
+
+  // ============ CAS NORMAUX (Fajr, Dhuhr, Asr) ============
 
   // Rappel 30 min après Adhan
   if (settings.reminders.after30min && totalMinutes > 30) {
@@ -614,23 +667,36 @@ export const scheduleBoostNotifications = async (
             continue;
           }
 
-          // Message selon le type de rappel
+          // Message selon le type de rappel et la prière
           let title = '';
           let body = '';
 
-          switch (reminder.type) {
-            case 'after30min':
-              title = translations.reminderTitle;
-              body = translations.after30min.replace('{prayer}', prayer.name);
-              break;
-            case 'midTime':
-              title = translations.reminderTitle;
-              body = translations.midTime.replace('{prayer}', prayer.name);
-              break;
-            case 'before15min':
-              title = '⚠️ ' + translations.urgentTitle;
-              body = translations.before15min.replace('{prayer}', prayer.name);
-              break;
+          // MAGHRIB (Malikites): Message URGENT car fenêtre très courte
+          if (prayer.key === 'maghrib') {
+            title = '⚠️ ' + translations.urgentTitle;
+            body = translations.before15min.replace('{prayer}', prayer.name); // "Plus que 15 min pour Maghrib !"
+          }
+          // ISHA: Message simple 30 min après
+          else if (prayer.key === 'isha') {
+            title = translations.reminderTitle;
+            body = translations.after30min.replace('{prayer}', prayer.name);
+          }
+          // Autres prières (Fajr, Dhuhr, Asr): comportement normal
+          else {
+            switch (reminder.type) {
+              case 'after30min':
+                title = translations.reminderTitle;
+                body = translations.after30min.replace('{prayer}', prayer.name);
+                break;
+              case 'midTime':
+                title = translations.reminderTitle;
+                body = translations.midTime.replace('{prayer}', prayer.name);
+                break;
+              case 'before15min':
+                title = '⚠️ ' + translations.urgentTitle;
+                body = translations.before15min.replace('{prayer}', prayer.name);
+                break;
+            }
           }
 
           const trigger: TimestampTrigger = {
@@ -714,5 +780,325 @@ export const getScheduledBoostNotifications = async (): Promise<string[]> => {
   } catch (error) {
     console.error('[PrayerBoost] Erreur getTriggers:', error);
     return [];
+  }
+};
+
+// ==================== RAPPEL CORAN (Quran Reading Reminders) ====================
+
+export interface QuranReminderSettings {
+  enabled: boolean;
+  hour: number; // 8, 12, 18, 20, 22
+  frequency: 'daily' | 'friday';
+}
+
+export const DEFAULT_QURAN_REMINDER_SETTINGS: QuranReminderSettings = {
+  enabled: false,
+  hour: 20,
+  frequency: 'daily',
+};
+
+const QURAN_REMINDER_SETTINGS_KEY = 'quran_reminder_settings';
+
+/**
+ * Créer le channel Android pour les rappels Coran
+ */
+const ensureQuranChannel = async (): Promise<string> => {
+  const channelId = await notifee.createChannel({
+    id: 'quran-reminder',
+    name: 'Rappels Coran',
+    description: 'Rappels quotidiens de lecture du Coran',
+    importance: AndroidImportance.DEFAULT,
+    sound: 'default',
+  });
+  return channelId;
+};
+
+/**
+ * Annuler les notifications de rappel Coran
+ */
+export const cancelQuranReminders = async (): Promise<void> => {
+  try {
+    const notifications = await notifee.getTriggerNotificationIds();
+    for (const id of notifications) {
+      if (id.startsWith('quran_reminder_')) {
+        await notifee.cancelTriggerNotification(id);
+      }
+    }
+    console.log('[QuranReminder] Notifications annulées');
+  } catch (error) {
+    console.error('[QuranReminder] Erreur annulation:', error);
+  }
+};
+
+/**
+ * Programmer les rappels de lecture du Coran
+ */
+export const scheduleQuranReminders = async (
+  settings: QuranReminderSettings,
+  translations: {
+    title: string;
+    body: string;
+  }
+): Promise<void> => {
+  try {
+    // Si désactivé, annuler les notifications existantes
+    if (!settings.enabled) {
+      await cancelQuranReminders();
+      console.log('[QuranReminder] Feature désactivée');
+      return;
+    }
+
+    console.log('[QuranReminder] ======== SCHEDULING START ========');
+
+    // Vérifier les permissions
+    const hasPermission = await requestNotificationPermission();
+    if (!hasPermission) {
+      console.log('[QuranReminder] Permissions refusées');
+      return;
+    }
+
+    // Créer le channel Android
+    const channelId = await ensureQuranChannel();
+
+    // Annuler les anciennes notifications
+    await cancelQuranReminders();
+
+    const now = new Date();
+    let scheduledCount = 0;
+
+    // Scheduler pour les 7 prochains jours
+    for (let i = 0; i < 7; i++) {
+      const notifDate = new Date();
+      notifDate.setDate(notifDate.getDate() + i);
+      notifDate.setHours(settings.hour, 0, 0, 0);
+
+      // Skip si déjà passé
+      if (notifDate <= now) continue;
+
+      // Si frequency = friday, vérifier que c'est un vendredi
+      if (settings.frequency === 'friday' && notifDate.getDay() !== 5) {
+        continue;
+      }
+
+      const trigger: TimestampTrigger = {
+        type: TriggerType.TIMESTAMP,
+        timestamp: notifDate.getTime(),
+      };
+
+      await notifee.createTriggerNotification(
+        {
+          id: `quran_reminder_day${i}`,
+          title: translations.title,
+          body: translations.body,
+          android: {
+            channelId,
+            importance: AndroidImportance.DEFAULT,
+            pressAction: { id: 'default' },
+          },
+          ios: {
+            sound: 'default',
+          },
+        },
+        trigger
+      );
+
+      scheduledCount++;
+      console.log(`[QuranReminder] ✅ Scheduled for ${notifDate.toLocaleString('fr-FR')}`);
+    }
+
+    console.log('[QuranReminder] ======== SCHEDULING COMPLETE ========');
+    console.log(`[QuranReminder] Total scheduled: ${scheduledCount}`);
+  } catch (error) {
+    console.error('[QuranReminder] Erreur scheduling:', error);
+  }
+};
+
+/**
+ * Sauvegarder les settings de rappel Coran
+ */
+export const saveQuranReminderSettings = async (settings: QuranReminderSettings): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(QURAN_REMINDER_SETTINGS_KEY, JSON.stringify(settings));
+    console.log('[QuranReminder] Settings sauvegardés');
+  } catch (error) {
+    console.error('[QuranReminder] Erreur sauvegarde settings:', error);
+  }
+};
+
+/**
+ * Récupérer les settings de rappel Coran
+ */
+export const getQuranReminderSettings = async (): Promise<QuranReminderSettings> => {
+  try {
+    const stored = await AsyncStorage.getItem(QURAN_REMINDER_SETTINGS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return { ...DEFAULT_QURAN_REMINDER_SETTINGS, ...parsed };
+    }
+    return DEFAULT_QURAN_REMINDER_SETTINGS;
+  } catch (error) {
+    console.error('[QuranReminder] Erreur lecture settings:', error);
+    return DEFAULT_QURAN_REMINDER_SETTINGS;
+  }
+};
+
+// ==================== MODE SILENCIEUX MOSQUÉE (Proximity Detection) ====================
+
+export interface MosqueProximitySettings {
+  enabled: boolean;
+}
+
+export const DEFAULT_MOSQUE_PROXIMITY_SETTINGS: MosqueProximitySettings = {
+  enabled: true, // Activé par défaut
+};
+
+const MOSQUE_PROXIMITY_SETTINGS_KEY = 'mosque_proximity_settings';
+const LAST_MOSQUE_NOTIF_KEY = 'last_mosque_proximity_notif';
+
+// Coordonnées de la Mosquée El Mouhssinine
+const MOSQUE_COORDS = {
+  latitude: 46.2055668,
+  longitude: 5.2477947,
+};
+
+// Rayon de détection en mètres
+const PROXIMITY_RADIUS_METERS = 100;
+
+// Intervalle minimum entre 2 notifications (30 minutes)
+const MIN_NOTIF_INTERVAL_MS = 30 * 60 * 1000;
+
+/**
+ * Calcule la distance entre deux points GPS (formule Haversine)
+ */
+const calculateDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 6371000; // Rayon de la Terre en mètres
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance en mètres
+};
+
+/**
+ * Créer le channel Android pour les notifications mosquée
+ */
+const ensureMosqueChannel = async (): Promise<string> => {
+  const channelId = await notifee.createChannel({
+    id: 'mosque-proximity',
+    name: 'Mode Silencieux Mosquée',
+    description: 'Rappels quand vous êtes proche de la mosquée',
+    importance: AndroidImportance.HIGH,
+    sound: 'default',
+  });
+  return channelId;
+};
+
+/**
+ * Vérifie si l'utilisateur est proche de la mosquée et envoie une notification
+ */
+export const checkMosqueProximity = async (
+  latitude: number,
+  longitude: number,
+  translations: {
+    title: string;
+    body: string;
+  }
+): Promise<boolean> => {
+  try {
+    // Vérifier si la feature est activée
+    const settings = await getMosqueProximitySettings();
+    if (!settings.enabled) {
+      return false;
+    }
+
+    // Calculer la distance
+    const distance = calculateDistance(
+      latitude,
+      longitude,
+      MOSQUE_COORDS.latitude,
+      MOSQUE_COORDS.longitude
+    );
+
+    console.log(`[MosqueProximity] Distance: ${Math.round(distance)}m`);
+
+    // Vérifier si dans le rayon
+    if (distance > PROXIMITY_RADIUS_METERS) {
+      return false;
+    }
+
+    // Vérifier le délai depuis la dernière notification
+    const lastNotifTime = await AsyncStorage.getItem(LAST_MOSQUE_NOTIF_KEY);
+    if (lastNotifTime) {
+      const elapsed = Date.now() - parseInt(lastNotifTime, 10);
+      if (elapsed < MIN_NOTIF_INTERVAL_MS) {
+        console.log('[MosqueProximity] Notification récente, skip');
+        return false;
+      }
+    }
+
+    // Créer le channel et envoyer la notification
+    const channelId = await ensureMosqueChannel();
+
+    await notifee.displayNotification({
+      title: translations.title,
+      body: translations.body,
+      android: {
+        channelId,
+        smallIcon: 'ic_notification',
+        importance: AndroidImportance.HIGH,
+        pressAction: { id: 'default' },
+      },
+      ios: {
+        sound: 'default',
+      },
+    });
+
+    // Enregistrer le timestamp
+    await AsyncStorage.setItem(LAST_MOSQUE_NOTIF_KEY, Date.now().toString());
+    console.log('[MosqueProximity] ✅ Notification envoyée !');
+
+    return true;
+  } catch (error) {
+    console.error('[MosqueProximity] Erreur:', error);
+    return false;
+  }
+};
+
+/**
+ * Sauvegarder les settings de proximité mosquée
+ */
+export const saveMosqueProximitySettings = async (settings: MosqueProximitySettings): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(MOSQUE_PROXIMITY_SETTINGS_KEY, JSON.stringify(settings));
+    console.log('[MosqueProximity] Settings sauvegardés');
+  } catch (error) {
+    console.error('[MosqueProximity] Erreur sauvegarde settings:', error);
+  }
+};
+
+/**
+ * Récupérer les settings de proximité mosquée
+ */
+export const getMosqueProximitySettings = async (): Promise<MosqueProximitySettings> => {
+  try {
+    const stored = await AsyncStorage.getItem(MOSQUE_PROXIMITY_SETTINGS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return { ...DEFAULT_MOSQUE_PROXIMITY_SETTINGS, ...parsed };
+    }
+    return DEFAULT_MOSQUE_PROXIMITY_SETTINGS;
+  } catch (error) {
+    console.error('[MosqueProximity] Erreur lecture settings:', error);
+    return DEFAULT_MOSQUE_PROXIMITY_SETTINGS;
   }
 };

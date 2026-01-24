@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, MODAL_WIDTH, platformShadow, isSmallScreen } from '../theme/colors';
@@ -93,6 +95,11 @@ const MemberScreen = () => {
 
   // Infos mosquée (IBAN, BIC, etc.)
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
+
+  // Carousel des cartes membres
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const cardsListRef = useRef<FlatList>(null);
+  const { width: screenWidth } = useWindowDimensions();
 
   // Charger les donnees du membre depuis Firestore
   const loadMemberData = async (uid: string) => {
@@ -993,18 +1000,93 @@ const MemberScreen = () => {
           <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('welcomeUser')} {member?.name?.split(' ')[0]}</Text>
         </View>
 
-        {/* Carte de membre virtuelle */}
-        <MemberCard
-          member={memberProfile ? {
-            name: memberProfile.name,
-            firstName: memberProfile.prenom,
-            lastName: memberProfile.nom,
-            memberId: memberProfile.memberId,
-            membershipExpirationDate: memberProfile.cotisationExpiry,
-          } : null}
-          onRenew={() => setShowCotisationModal(true)}
-          isRTL={isRTL}
-        />
+        {/* Cartes de membre - Carousel swipable */}
+        {(() => {
+          // Préparer les données des cartes
+          const allCards = [
+            // Carte principale de l'utilisateur
+            {
+              id: 'main',
+              type: 'main' as const,
+              member: memberProfile ? {
+                name: memberProfile.name,
+                firstName: memberProfile.prenom,
+                lastName: memberProfile.nom,
+                memberId: memberProfile.memberId,
+                membershipExpirationDate: memberProfile.cotisationExpiry,
+                status: memberProfile.cotisationStatus === 'pending' ? 'unpaid' : memberProfile.cotisationStatus,
+              } : null,
+            },
+            // Cartes des membres inscrits
+            ...inscribedMembers.map(m => ({
+              id: m.id,
+              type: 'inscribed' as const,
+              member: {
+                name: `${m.prenom} ${m.nom}`,
+                firstName: m.prenom,
+                lastName: m.nom,
+                memberId: m.id,
+                membershipExpirationDate: m.dateFin || null,
+                status: m.status,
+              },
+            })),
+          ];
+
+          const cardWidth = screenWidth;
+
+          return (
+            <View>
+              <FlatList
+                ref={cardsListRef}
+                data={allCards}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item) => item.id}
+                onMomentumScrollEnd={(event) => {
+                  const index = Math.round(event.nativeEvent.contentOffset.x / cardWidth);
+                  setActiveCardIndex(index);
+                }}
+                renderItem={({ item }) => (
+                  <View style={{ width: cardWidth, minHeight: Math.max(220, screenWidth * 0.58) + 100 }}>
+                    <MemberCard
+                      member={item.member}
+                      onRenew={item.type === 'main' ? () => setShowCotisationModal(true) : undefined}
+                      onPay={item.type === 'main' && memberProfile?.cotisationStatus === 'pending' ? () => setShowCotisationModal(true) : undefined}
+                      isRTL={isRTL}
+                    />
+                  </View>
+                )}
+              />
+              {/* Pagination dots si plusieurs cartes */}
+              {allCards.length > 1 && (
+                <View style={styles.paginationDots}>
+                  {allCards.map((_, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => {
+                        cardsListRef.current?.scrollToIndex({ index, animated: true });
+                        setActiveCardIndex(index);
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.paginationDot,
+                          activeCardIndex === index && styles.paginationDotActive,
+                        ]}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                  <Text style={styles.paginationLabel}>
+                    {activeCardIndex === 0
+                      ? (isRTL ? 'بطاقتي' : 'Ma carte')
+                      : (isRTL ? `عضو ${activeCardIndex}` : `Membre ${activeCardIndex}`)}
+                  </Text>
+                </View>
+              )}
+            </View>
+          );
+        })()}
 
         <View style={styles.content}>
           {/* Détails complémentaires du membre */}
@@ -1684,6 +1766,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff',
     marginBottom: spacing.md,
+  },
+  // Pagination dots pour carousel cartes membres
+  paginationDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    marginTop: -spacing.sm,
+  },
+  paginationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 4,
+  },
+  paginationDotActive: {
+    backgroundColor: colors.accent,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  paginationLabel: {
+    marginLeft: spacing.md,
+    color: colors.textOnDarkMuted,
+    fontSize: fontSize.sm,
+    fontStyle: 'italic',
   },
   // Not logged in
   notLoggedInCard: {

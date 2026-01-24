@@ -23,7 +23,7 @@
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
-	<string>73</string>
+	<string>137</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
@@ -39,6 +39,8 @@
 	<string>El Mouhssinine utilise la caméra pour scanner les QR codes de paiement</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>El Mouhssinine utilise Face ID pour sécuriser vos paiements</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>El Mouhssinine utilise votre position pour calculer la direction de la Qibla, les horaires de prière et vous rappeler de mettre votre téléphone en silencieux à la mosquée</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>El Mouhssinine utilise votre position pour calculer la direction de la Qibla et les horaires de prière</string>
 	<key>NSPhotoLibraryUsageDescription</key>

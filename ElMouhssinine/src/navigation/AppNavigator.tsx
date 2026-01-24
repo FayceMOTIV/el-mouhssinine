@@ -21,6 +21,8 @@ import MoreScreen from '../screens/MoreScreen';
 // Quran Screens
 import QuranScreen from '../screens/QuranScreen';
 import SurahScreen from '../screens/SurahScreen';
+import QuranHomeScreen from '../screens/QuranHomeScreen';
+import QuranReadScreen from '../screens/QuranReadScreen';
 
 // Adhkar Screens
 import AdhkarScreen from '../screens/AdhkarScreen';
@@ -72,9 +74,19 @@ const SpiritualStack = () => {
       />
       {/* Quran */}
       <Stack.Screen
+        name="QuranHome"
+        component={QuranHomeScreen}
+        options={{ title: 'Coran' }}
+      />
+      <Stack.Screen
         name="Quran"
         component={QuranScreen}
-        options={{ title: 'Coran' }}
+        options={{ title: 'Écouter le Coran' }}
+      />
+      <Stack.Screen
+        name="QuranRead"
+        component={QuranReadScreen}
+        options={{ title: 'Lire le Coran', headerShown: false }}
       />
       <Stack.Screen
         name="Surah"

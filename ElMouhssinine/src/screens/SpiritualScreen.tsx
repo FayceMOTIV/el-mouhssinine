@@ -20,9 +20,9 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
       id: 'quran',
       title: 'Le Saint Coran',
       titleAr: 'القرآن الكريم',
-      description: '114 sourates avec traduction francaise',
+      description: 'Lire ou écouter les 114 sourates',
       icon: '📖',
-      screen: 'Quran',
+      screen: 'QuranHome',
       color: colors.accent,
     },
     {

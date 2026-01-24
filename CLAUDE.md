@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 74
+- **Build actuel** : 107
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -462,6 +462,211 @@ Dans le dashboard Stripe (https://dashboard.stripe.com/webhooks):
 - [x] ~~Config emails SMTP (Brevo)~~ DONE (Build 74)
 - [x] ~~Recu fiscal PDF~~ DONE (Build 74)
 - [x] ~~Dashboard stats backoffice~~ DONE (Build 74)
+
+## Corrige (18 Jan 2026 - Build 87)
+
+### Fix Coran - Erreur hooks (SurahScreen.tsx)
+- [x] "Rendered more hooks than during the previous render" → CORRIGÉ
+- [x] useCallback hooks déplacés AVANT le return conditionnel `if (loading)`
+- [x] Règle React: tous les hooks doivent être appelés avant tout return
+
+### Carte Membre améliorée (MemberCard.tsx)
+- [x] Carte visible pour membres inscrits même sans paiement (status 'unpaid')
+- [x] Couleur orange/ambre au lieu de rouge (moins agressif pour association)
+- [x] Design oriental avec cadre doré et étoiles ✦ aux coins
+- [x] Nom arabe المحسنين + EL MOUHSSININE
+- [x] Badge "MEMBRE" doré
+- [x] Ligne séparatrice dorée
+- [x] Bouton "Payer ma cotisation" pour status unpaid
+
+### Boost Prière synchronisé (HomeScreen.tsx)
+- [x] Bouton "J'ai prié" lié aux settings boost
+- [x] useFocusEffect pour recharger les settings quand l'écran redevient actif
+- [x] Le bouton disparaît si l'option boost est désactivée dans les paramètres
+
+## Ajoute (19 Jan 2026 - Build 90-91)
+
+### Boost Prière - Notifications au démarrage (HomeScreen.tsx)
+- [x] scheduleBoostNotifications() appelé au démarrage de l'app
+- [x] Les notifications boost sont programmées automatiquement si activées
+- [x] Avant: ne se programmaient que lors du changement de toggle
+
+### Boost Coran - Rappels de lecture (prayerNotifications.ts + MoreScreen.tsx)
+- [x] Nouvelle section "Rappel Coran" dans Plus
+- [x] Toggle pour activer les rappels quotidiens
+- [x] Choix de l'heure (8h, 12h, 18h, 20h, 22h)
+- [x] Fréquence: Quotidien ou Vendredi seulement
+- [x] Notification: "C'est l'heure de lire le Coran - même une page 🌙"
+- [x] Traductions FR/AR
+
+### Mode Silencieux Mosquée (prayerNotifications.ts + MoreScreen.tsx)
+- [x] Nouvelle section "Mode Silencieux" dans Plus
+- [x] Toggle pour activer la détection de proximité
+- [x] Géolocalisation avec formule Haversine (calcul distance)
+- [x] Rayon de détection: 100 mètres autour de la mosquée
+- [x] Notification: "🕌 Vous êtes à la mosquée - Pensez à mettre votre téléphone en silencieux"
+- [x] Limite: 1 notification max toutes les 30 min (anti-spam)
+- [x] Installation @react-native-community/geolocation
+
+## Ajoute (20 Jan 2026 - Build 92)
+
+### Mode Lecture Coran - Page par page (QuranReadScreen.tsx)
+- [x] Nouveau bouton "📖 Lire comme un livre" dans QuranScreen
+- [x] Navigation page par page (604 pages du Mushaf)
+- [x] Arabe + Français avec toggle
+- [x] Navigation: Précédent / Suivant / Aller à...
+- [x] Barre de progression visuelle
+- [x] Sauvegarde de la progression (AsyncStorage)
+- [x] Bouton "Reprendre à la page X" si lecture en cours
+- [x] Affichage nom sourate + Bismillah au début de chaque sourate
+- [x] Route QuranRead ajoutée dans AppNavigator
+
+## Optimise (20 Jan 2026 - Build 93)
+
+### Optimisations App - Audit de performance et robustesse
+
+#### QuranReadScreen.tsx - Mode lecture Coran
+- [x] Mode offline avec cache AsyncStorage des pages
+- [x] Retry automatique (3 tentatives avec délai croissant)
+- [x] Détection réseau avec @react-native-community/netinfo
+- [x] Bannière erreur + bouton réessayer
+- [x] Protection mémoire (isMountedRef pour éviter updates après unmount)
+- [x] Accessibilité complète FR/AR (tous les boutons)
+
+#### HomeScreen.tsx - Géolocalisation
+- [x] Timeout sécurisé (20 secondes max)
+- [x] Gestion codes erreurs: PERMISSION_DENIED, POSITION_UNAVAILABLE, TIMEOUT
+- [x] Cleanup si écran quitté (isCancelled)
+
+#### QuranScreen.tsx - Accessibilité RTL
+- [x] Labels arabes pour VoiceOver
+- [x] Hints bilingues FR/AR
+
+#### Dépendances
+- [x] @react-native-community/netinfo installé
+
+#### Résultats
+- TypeScript: 0 erreurs
+- Build iOS: SUCCESS
+- TestFlight: Build 93 uploadé
+
+## Corrige (20 Jan 2026 - Build 94)
+
+### Bug pages vides Coran (QuranReadScreen.tsx)
+- [x] Suppression du finally block qui causait setLoading(false) pendant les retries
+- [x] Correction des dépendances useCallback (supprimé arabicAyahs.length et currentPage)
+- [x] Loading n'est mis à true qu'au premier essai (retryCount === 0)
+- [x] Chaque branche du code gère explicitement setLoading(false)
+- [x] Fix du retry récursif qui ne mettait pas loading à false correctement
+
+#### Cause du bug
+Le `finally` block s'exécutait même pendant les appels récursifs de retry, mettant `loading: false` alors que le chargement était encore en cours. Cela causait un affichage de page vide au lieu du loader.
+
+#### Résultats
+- TypeScript: 0 erreurs
+- Build iOS: SUCCESS
+- TestFlight: Build 94 uploadé
+
+## Corrige (20 Jan 2026 - Build 95)
+
+### Corrections robustesse Coran (QuranScreen.tsx + quranApi.ts + SurahScreen.tsx)
+
+#### QuranScreen.tsx
+- [x] FlatList affiche toujours `filteredSurahs` (plus de `loading ? [] : filteredSurahs`)
+- [x] Données statiques (surahsInfo) toujours visibles même si API échoue
+- [x] Validation des données API avant merge
+- [x] ListEmptyComponent pour afficher "Aucune sourate trouvée"
+
+#### quranApi.ts
+- [x] `fetchWithTimeout()` helper avec timeout 15 secondes
+- [x] Tous les appels API utilisent fetchWithTimeout
+- [x] Validation `response.ok` avant parsing JSON
+- [x] Validation des données reçues (json.data existe)
+- [x] Logs d'erreur uniquement en `__DEV__`
+
+#### SurahScreen.tsx
+- [x] Retry automatique (max 2 fois avec délai croissant)
+- [x] Validation des données reçues avant setState
+- [x] Message d'erreur spécifique si timeout
+
+#### Résultats
+- TypeScript: 0 erreurs
+- Build iOS: SUCCESS
+- TestFlight: Build 95 uploadé
+
+## Corrige (20 Jan 2026 - Build 96)
+
+### Fix pages blanches Coran - CORRECTIF COMPLET (QuranReadScreen.tsx)
+
+#### Cause identifiée
+Cache corrompu des builds précédents + absence de validation des données API + pas de message d'erreur visible quand les données sont vides.
+
+#### Corrections apportées
+- [x] **Validation stricte du cache** : Vérifie que arabic/french sont des tableaux non-vides
+- [x] **Suppression automatique du cache corrompu** : Si données invalides, le cache est supprimé
+- [x] **Validation stricte des réponses API** : Vérifie `data.ayahs` existe et est un tableau non-vide
+- [x] **Nettoyage automatique au démarrage** : Supprime tout l'ancien cache au premier lancement (clé `quran_cache_cleanup_v96`)
+- [x] **État vide avec UI** : Si aucun contenu, affiche message d'erreur + bouton Réessayer (au lieu de page blanche)
+- [x] **Protection null dans le rendu** : `data.ayahs[0]?.arabic` au lieu de `data.ayahs[0].arabic`
+
+#### Nouvelle page d'accueil Coran (QuranHomeScreen.tsx)
+- [x] Nouvelle page d'accueil avec deux boutons : "Lire le Coran" et "Écouter le Coran"
+- [x] Navigation : Lire → QuranReadScreen (page par page), Écouter → QuranScreen (liste sourates)
+- [x] Design élégant avec citation coranique
+
+#### Résultats
+- TypeScript: 0 erreurs
+- Build iOS: SUCCESS
+- TestFlight: Build 96 uploadé
+
+## Ajoute (21 Jan 2026 - Build 107)
+
+### Lecteur Coran Professionnel (QuranReadScreen.tsx - Refonte complète)
+
+#### Navigation complète
+- [x] Boutons Précédent/Suivant avec état désactivé aux bornes
+- [x] Gestes swipe (PanResponder) avec animation de transition
+- [x] Callback fonctionnel `setCurrentPage(prev => prev + 1)`
+
+#### Recherche multi-critères (Modal)
+- [x] 3 onglets : Sourate, Page, Juz
+- [x] Liste des 114 sourates avec numéro de page de début
+- [x] Navigation directe vers n'importe quelle page (1-604)
+- [x] Liste des 30 Juz avec numéro de page
+
+#### Système de marque-pages
+- [x] Bouton ☆/★ pour ajouter/retirer des favoris
+- [x] Modal de gestion des favoris avec liste
+- [x] Suppression individuelle des marque-pages
+- [x] Sauvegarde persistante AsyncStorage
+
+#### Toggle AR/FR exclusif
+- [x] Lecture arabe seul OU français seul (pas les deux)
+- [x] Bouton العربية / Français avec état actif
+- [x] Mémorisation de la préférence
+
+#### UX améliorée
+- [x] Barre de progression visuelle (page courante / 604)
+- [x] Sauvegarde automatique de la dernière page
+- [x] Reprise à la page sauvegardée au lancement
+- [x] Design Mushaf avec bordure ornementale
+
+### Fix bouton "J'ai prié" (HomeScreen.tsx + prayerApi.ts)
+
+#### Problème identifié
+Le bouton "J'ai prié" annulait les notifications boost de la PROCHAINE prière au lieu de la prière EN COURS.
+
+#### Solution
+- [x] Ajout fonction `getCurrentPrayer()` dans prayerApi.ts
+- [x] Calcul de la fenêtre de prière active (Fajr→Sunrise, Dhuhr→Asr, etc.)
+- [x] HomeScreen utilise `currentPrayer` au lieu de `nextPrayer`
+- [x] Bouton affiche "✅ J'ai prié {nom de la prière en cours}"
+- [x] Bouton masqué si hors fenêtre de prière (ex: entre Sunrise et Dhuhr)
+
+#### Résultats
+- TypeScript: 0 erreurs
+- Build iOS: SUCCESS
+- TestFlight: Build 107 uploadé
 
 ## TODO Futur
 - [ ] Verifier expediteur Brevo (centreculturelislamique@orange.fr)

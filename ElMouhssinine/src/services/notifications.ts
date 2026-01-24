@@ -165,6 +165,15 @@ export const saveFCMTokenToFirestore = async (userId: string): Promise<boolean> 
   }
 };
 
+// Callback pour afficher les notifications en modal dans l'app
+let inAppNotificationCallback: ((notification: { title: string; body: string; data?: Record<string, string> }) => void) | null = null;
+
+export const setInAppNotificationCallback = (
+  callback: ((notification: { title: string; body: string; data?: Record<string, string> }) => void) | null
+) => {
+  inAppNotificationCallback = callback;
+};
+
 // Gérer les messages FCM en foreground
 export const setupForegroundHandler = () => {
   return messaging().onMessage(async (remoteMessage) => {
@@ -195,6 +204,15 @@ export const setupForegroundHandler = () => {
         },
         data: data as Record<string, string>,
       });
+
+      // Appeler le callback pour afficher en modal dans l'app
+      if (inAppNotificationCallback) {
+        inAppNotificationCallback({
+          title: notification.title || 'El Mouhssinine',
+          body: notification.body || '',
+          data: data as Record<string, string>,
+        });
+      }
     }
   });
 };

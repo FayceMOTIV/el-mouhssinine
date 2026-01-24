@@ -23,6 +23,7 @@ import {
   InscribedMember,
   MosqueeInfo,
 } from '../services/firebase';
+import MemberCard, { getMembershipStatus } from '../components/MemberCard';
 
 const MyMembershipsScreen = () => {
   const navigation = useNavigation<any>();
@@ -226,105 +227,88 @@ const MyMembershipsScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
-        {/* Mon Adhésion */}
+        {/* Mon Adhésion - Carte de membre */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
-            👤 {language === 'ar' ? 'عضويتي' : 'Mon Adhésion'}
+            👤 {language === 'ar' ? 'بطاقة عضويتي' : 'Ma Carte de Membre'}
           </Text>
 
           {myMembership ? (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={[styles.cardName, isRTL && styles.rtlText]}>
-                  {myMembership.prenom} {myMembership.nom}
+            <>
+              {/* Carte de membre avec design professionnel */}
+              <MemberCard
+                member={{
+                  name: `${myMembership.prenom} ${myMembership.nom}`,
+                  memberId: myMembership.id,
+                  membershipExpirationDate: myMembership.dateFin || null,
+                  status: myMembership.status === 'en_attente_paiement' ? 'en_attente_paiement' : myMembership.status,
+                }}
+                isRTL={isRTL}
+                onPay={myMembership.status === 'en_attente_paiement' ? () => navigation.navigate('Member') : undefined}
+                onRenew={['expire', 'expired', 'inactive', 'none'].includes(myMembership.status) ? () => navigation.navigate('Member') : undefined}
+              />
+
+              {/* Détails supplémentaires */}
+              <View style={styles.detailsCard}>
+                <Text style={[styles.detailsTitle, isRTL && styles.rtlText]}>
+                  📋 {language === 'ar' ? 'التفاصيل' : 'Détails'}
                 </Text>
-                {getStatusBadge(myMembership.status)}
-              </View>
 
-              <View style={styles.infoGrid}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>
-                    {language === 'ar' ? 'البريد الإلكتروني' : 'Email'}
-                  </Text>
-                  <Text style={[styles.infoValue, isRTL && styles.rtlText]}>
-                    {myMembership.email}
-                  </Text>
-                </View>
-
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>
-                    {language === 'ar' ? 'الهاتف' : 'Téléphone'}
-                  </Text>
-                  <Text style={styles.infoValue}>{myMembership.telephone || '-'}</Text>
-                </View>
-
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>
-                    {language === 'ar' ? 'نوع الاشتراك' : 'Type d\'abonnement'}
-                  </Text>
-                  <Text style={[styles.infoValue, styles.infoHighlight]}>
-                    {formatFormule(myMembership.formule)}
-                  </Text>
-                </View>
-
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>
-                    {language === 'ar' ? 'المبلغ' : 'Montant'}
-                  </Text>
-                  <Text style={[styles.infoValue, styles.infoHighlight]}>
-                    {myMembership.montant ? `${myMembership.montant} €` : '-'}
-                    {myMembership.formule === 'mensuel' ? '/mois' : '/an'}
-                  </Text>
-                </View>
-
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>
-                    {language === 'ar' ? 'تاريخ التسجيل' : 'Date d\'inscription'}
-                  </Text>
-                  <Text style={styles.infoValue}>
-                    {formatDate(myMembership.dateInscription)}
-                  </Text>
-                </View>
-
-                {myMembership.dateFin && (
+                <View style={styles.infoGrid}>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>
-                      {language === 'ar' ? 'صالح حتى' : 'Valide jusqu\'au'}
+                      {language === 'ar' ? 'البريد الإلكتروني' : 'Email'}
                     </Text>
-                    <Text style={[styles.infoValue, styles.infoDate]}>
-                      {formatDate(myMembership.dateFin)}
+                    <Text style={[styles.infoValue, isRTL && styles.rtlText]} numberOfLines={1}>
+                      {myMembership.email}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>
+                      {language === 'ar' ? 'الهاتف' : 'Téléphone'}
+                    </Text>
+                    <Text style={styles.infoValue}>{myMembership.telephone || '-'}</Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>
+                      {language === 'ar' ? 'نوع الاشتراك' : 'Formule'}
+                    </Text>
+                    <Text style={[styles.infoValue, styles.infoHighlight]}>
+                      {formatFormule(myMembership.formule)} • {myMembership.montant ? `${myMembership.montant} €` : '-'}
+                    </Text>
+                  </View>
+
+                  {myMembership.modePaiement && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>
+                        {language === 'ar' ? 'طريقة الدفع' : 'Paiement'}
+                      </Text>
+                      <Text style={styles.infoValue}>{myMembership.modePaiement}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Bouton résilier pour tout abonnement actif */}
+                {(myMembership.status === 'actif' || myMembership.status === 'active') && (
+                  <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelSubscription}>
+                    <Text style={styles.cancelBtnText}>
+                      {language === 'ar' ? 'إلغاء الاشتراك' : 'Résilier l\'abonnement'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Si inscrit par quelqu'un d'autre */}
+                {myMembership.inscritPar && (
+                  <View style={styles.inscritParBanner}>
+                    <Text style={[styles.inscritParText, isRTL && styles.rtlText]}>
+                      ℹ️ {language === 'ar' ? 'مسجل بواسطة' : 'Inscrit par'}{' '}
+                      {myMembership.inscritPar.prenom} {myMembership.inscritPar.nom}
                     </Text>
                   </View>
                 )}
-
-                {myMembership.modePaiement && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>
-                      {language === 'ar' ? 'طريقة الدفع' : 'Mode de paiement'}
-                    </Text>
-                    <Text style={styles.infoValue}>{myMembership.modePaiement}</Text>
-                  </View>
-                )}
               </View>
-
-              {/* Bouton résilier pour tout abonnement actif */}
-              {(myMembership.status === 'actif' || myMembership.status === 'active') && (
-                <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelSubscription}>
-                  <Text style={styles.cancelBtnText}>
-                    {language === 'ar' ? 'إلغاء الاشتراك' : 'Résilier l\'abonnement'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Si inscrit par quelqu'un d'autre */}
-              {myMembership.inscritPar && (
-                <View style={styles.inscritParBanner}>
-                  <Text style={[styles.inscritParText, isRTL && styles.rtlText]}>
-                    ℹ️ {language === 'ar' ? 'مسجل بواسطة' : 'Inscrit par'}{' '}
-                    {myMembership.inscritPar.prenom} {myMembership.inscritPar.nom}
-                  </Text>
-                </View>
-              )}
 
               {/* Banner virement si en attente de paiement */}
               {myMembership.status === 'en_attente_paiement' && mosqueeInfo && (
@@ -396,7 +380,7 @@ const MyMembershipsScreen = () => {
                   </Text>
                 </View>
               )}
-            </View>
+            </>
           ) : (
             <View style={styles.noMembershipCard}>
               <Text style={styles.noMembershipIcon}>📋</Text>
@@ -431,41 +415,35 @@ const MyMembershipsScreen = () => {
               </View>
             </View>
 
-            {inscribedMembers.map((member, index) => (
-              <View key={member.id} style={styles.memberCard}>
-                <View style={styles.memberHeader}>
-                  <Text style={[styles.memberName, isRTL && styles.rtlText]}>
-                    {member.prenom} {member.nom}
-                  </Text>
-                  {getStatusBadge(member.status)}
-                </View>
+            {inscribedMembers.map((member) => (
+              <View key={member.id}>
+                {/* Carte de membre avec design identique */}
+                <MemberCard
+                  member={{
+                    name: `${member.prenom} ${member.nom}`,
+                    memberId: member.id,
+                    membershipExpirationDate: member.dateFin || null,
+                    status: member.status === 'en_attente_paiement' ? 'en_attente_paiement' : member.status,
+                  }}
+                  isRTL={isRTL}
+                />
 
-                <View style={styles.memberDetails}>
-                  <Text style={styles.memberDetail}>
+                {/* Infos supplémentaires sous la carte */}
+                <View style={styles.inscribedMemberInfo}>
+                  <Text style={styles.inscribedMemberDetail}>
                     📞 {member.telephone || '-'}
                   </Text>
-                  <Text style={styles.memberDetail}>
-                    💰 {member.montant ? `${member.montant} €` : '-'}
-                    {member.formule ? ` (${formatFormule(member.formule)})` : ''}
+                  <Text style={styles.inscribedMemberDetail}>
+                    💰 {formatFormule(member.formule)} • {member.montant ? `${member.montant} €` : '-'}
                   </Text>
-                  <Text style={styles.memberDetail}>
-                    📅 {formatDate(member.dateInscription)}
-                  </Text>
-                  {member.dateFin && (
-                    <Text style={styles.memberDetail}>
-                      ⏰ {language === 'ar' ? 'حتى' : 'Jusqu\'au'} {formatDate(member.dateFin)}
-                    </Text>
+                  {(member.status === 'actif' || member.status === 'active') && (
+                    <TouchableOpacity style={styles.cancelBtnSmall} onPress={handleCancelSubscription}>
+                      <Text style={styles.cancelBtnText}>
+                        {language === 'ar' ? 'إلغاء' : 'Résilier'}
+                      </Text>
+                    </TouchableOpacity>
                   )}
                 </View>
-
-                {/* Bouton résilier pour membre actif */}
-                {(member.status === 'actif' || member.status === 'active') && (
-                  <TouchableOpacity style={styles.cancelBtnSmall} onPress={handleCancelSubscription}>
-                    <Text style={styles.cancelBtnText}>
-                      {language === 'ar' ? 'إلغاء' : 'Résilier'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
               </View>
             ))}
           </View>
@@ -573,25 +551,33 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: 'bold',
   },
-  card: {
+  detailsCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: isSmallScreen ? spacing.md : spacing.lg,
+    marginTop: spacing.sm,
+    marginHorizontal: 24,
     ...platformShadow(3),
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
-  cardName: {
-    fontSize: fontSize.lg,
+  detailsTitle: {
+    fontSize: fontSize.md,
     fontWeight: 'bold',
     color: colors.accent,
+    marginBottom: spacing.md,
+  },
+  inscribedMemberInfo: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginHorizontal: 24,
+    marginTop: -spacing.md,
+    marginBottom: spacing.lg,
+    ...platformShadow(2),
+  },
+  inscribedMemberDetail: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
   },
   statusBadge: {
     paddingHorizontal: spacing.sm,

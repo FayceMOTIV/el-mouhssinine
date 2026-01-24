@@ -5,8 +5,12 @@
 import { AppRegistry, LogBox } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import notifee from '@notifee/react-native';
+import TrackPlayer from 'react-native-track-player';
 import App from './App';
 import { name as appName } from './app.json';
+
+// IMPORTANT: Enregistrer le service de lecture audio (Coran)
+TrackPlayer.registerPlaybackService(() => require('./service'));
 
 // Ignore specific warnings
 LogBox.ignoreLogs([

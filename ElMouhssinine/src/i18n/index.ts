@@ -444,7 +444,7 @@ export const translations = {
     boostReminderTitle: 'Rappel de prière',
     boostUrgentTitle: 'URGENT - Prière',
     boostAfter30min: 'N\'oublie pas {prayer} 🕌',
-    boostMidTime: 'Il reste encore du temps pour {prayer}',
+    boostMidTime: 'Tu as un RDV important qui t\'attend ! 🤝',
     boostBefore15min: 'Plus que 15 min pour {prayer} ! ⏰',
   },
 
@@ -897,7 +897,7 @@ export const translations = {
     boostReminderTitle: 'تذكير بالصلاة',
     boostUrgentTitle: 'عاجل - الصلاة',
     boostAfter30min: 'لا تنسَ صلاة {prayer} 🕌',
-    boostMidTime: 'لا يزال هناك وقت لصلاة {prayer}',
+    boostMidTime: 'لديك موعد مهم ينتظرك! 🤝',
     boostBefore15min: 'باقي 15 دقيقة فقط لصلاة {prayer}! ⏰',
   },
 };

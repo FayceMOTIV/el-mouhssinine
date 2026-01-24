@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, shadows, MIN_TOUCH_SIZE } from '../theme/colors';
 import {
   subscribeToAnnouncements,
@@ -38,7 +39,15 @@ import { useLanguage } from '../context/LanguageContext';
 import {
   getPrayerNotificationSettings,
   schedulePrayerNotifications,
+  getBoostSettings,
+  cancelBoostNotifications,
+  scheduleBoostNotifications,
+  PrayerBoostSettings,
+  checkMosqueProximity,
+  getMosqueProximitySettings,
 } from '../services/prayerNotifications';
+import Geolocation from '@react-native-community/geolocation';
+import { setInAppNotificationCallback } from '../services/notifications';
 import { HomeScreenSkeleton } from '../components';
 
 // Donnees mockees par defaut (fallback)
@@ -101,10 +110,12 @@ const HomeScreen = () => {
   const [islamicDate, setIslamicDate] = useState(mockIslamicDate);
   const [iqamaDelays, setIqamaDelays] = useState<IqamaDelays | null>(null);
   const [jumuaTimes, setJumuaTimes] = useState<JumuaTimes | null>(null);
+  // Dates islamiques 2026 selon le calendrier Umm al-Qura (ajustées pour la France)
+  // Source: islamicfinder.org / mawaqit.net
   const [islamicEvents, setIslamicEvents] = useState<DateIslamique[]>([
-    { id: '1', nom: 'Ramadan', nomAr: 'رمضان', dateHijri: '1 Ramadan', dateGregorien: '2026-02-28', icon: '🌙' },
-    { id: '2', nom: 'Aïd al-Fitr', nomAr: 'عيد الفطر', dateHijri: '1 Shawwal', dateGregorien: '2026-03-30', icon: '🎉' },
-    { id: '3', nom: 'Aïd al-Adha', nomAr: 'عيد الأضحى', dateHijri: '10 Dhul Hijja', dateGregorien: '2026-06-06', icon: '🐑' },
+    { id: '1', nom: 'Ramadan', nomAr: 'رمضان', dateHijri: '1 Ramadan 1447', dateGregorien: '2026-02-18', icon: '🌙' },
+    { id: '2', nom: 'Aïd al-Fitr', nomAr: 'عيد الفطر', dateHijri: '1 Shawwal 1447', dateGregorien: '2026-03-20', icon: '🎉' },
+    { id: '3', nom: 'Aïd al-Adha', nomAr: 'عيد الأضحى', dateHijri: '10 Dhul Hijja 1447', dateGregorien: '2026-05-27', icon: '🐑' },
   ]);
   const [activePopup, setActivePopup] = useState<Popup | null>(null);
   const [showPopup, setShowPopup] = useState(false);
@@ -120,6 +131,14 @@ const HomeScreen = () => {
     showSunrise: true,
     darkMode: true,
   });
+
+  // Boost prière
+  const [boostSettings, setBoostSettings] = useState<PrayerBoostSettings | null>(null);
+  const [currentPrayer, setCurrentPrayer] = useState<{ name: string; time: string; nameAr: string } | null>(null);
+  const [hasPrayedCurrentPrayer, setHasPrayedCurrentPrayer] = useState(false);
+
+  // Notification in-app
+  const [inAppNotification, setInAppNotification] = useState<{ title: string; body: string } | null>(null);
 
   // Traduction des noms de prière
   const getPrayerName = (name: string) => {
@@ -327,19 +346,171 @@ const HomeScreen = () => {
     };
   }, [loadPrayerData, calculateCountdown]);
 
-  // Scheduler les notifications locales de priere
+  // Scheduler les notifications locales de priere à chaque focus de l'écran
+  // IMPORTANT: Les notifications iOS expirent, il faut les reprogrammer régulièrement
+  useFocusEffect(
+    useCallback(() => {
+      const scheduleNotifications = async () => {
+        if (!rawPrayerTimings) return;
+        try {
+          console.log('[HomeScreen] Re-scheduling prayer notifications...');
+          const settings = await getPrayerNotificationSettings();
+          await schedulePrayerNotifications(rawPrayerTimings, settings);
+        } catch (error) {
+          console.warn('[HomeScreen] Erreur scheduling notifications:', error);
+        }
+      };
+      scheduleNotifications();
+    }, [rawPrayerTimings])
+  );
+
+  // Charger les paramètres boost quand l'écran revient au premier plan
+  useFocusEffect(
+    useCallback(() => {
+      const loadBoostSettings = async () => {
+        try {
+          const settings = await getBoostSettings();
+          setBoostSettings(settings);
+        } catch (error) {
+          console.warn('[HomeScreen] Erreur chargement boost settings:', error);
+        }
+      };
+      loadBoostSettings();
+    }, [])
+  );
+
+  // Re-programmer les notifications boost à chaque focus de l'écran
+  useFocusEffect(
+    useCallback(() => {
+      if (!rawPrayerTimings || !boostSettings?.enabled) return;
+
+      const refreshBoostNotifications = async () => {
+        try {
+          const translations = {
+            reminderTitle: t('boostReminderTitle'),
+            urgentTitle: t('boostUrgentTitle'),
+            after30min: t('boostAfter30min'),
+            midTime: t('boostMidTime'),
+            before15min: t('boostBefore15min'),
+          };
+          await scheduleBoostNotifications(rawPrayerTimings, boostSettings, translations);
+          console.log('[HomeScreen] Boost notifications reprogrammées');
+        } catch (error) {
+          console.warn('[HomeScreen] Erreur refresh boost notifications:', error);
+        }
+      };
+
+      refreshBoostNotifications();
+    }, [rawPrayerTimings, boostSettings, t])
+  );
+
+  // Mettre à jour la prière en cours quand les horaires changent
   useEffect(() => {
-    const scheduleNotifications = async () => {
-      if (!rawPrayerTimings) return;
+    if (!rawPrayerTimings) return;
+    const current = PrayerAPI.getCurrentPrayer(rawPrayerTimings);
+
+    // Charger l'état "J'ai prié" depuis AsyncStorage
+    const loadPrayedState = async () => {
       try {
-        const settings = await getPrayerNotificationSettings();
-        await schedulePrayerNotifications(rawPrayerTimings, settings);
+        const savedPrayer = await AsyncStorage.getItem('prayed_prayer_name');
+        if (current && savedPrayer === current.name) {
+          setHasPrayedCurrentPrayer(true);
+        } else {
+          setHasPrayedCurrentPrayer(false);
+          // Nettoyer si la prière a changé
+          if (savedPrayer && savedPrayer !== current?.name) {
+            await AsyncStorage.removeItem('prayed_prayer_name');
+          }
+        }
       } catch (error) {
-        console.warn('[HomeScreen] Erreur scheduling notifications:', error);
+        console.warn('[HomeScreen] Erreur chargement état prié:', error);
       }
     };
-    scheduleNotifications();
+
+    loadPrayedState();
+    setCurrentPrayer(current);
+
+    // Mettre à jour toutes les minutes
+    const interval = setInterval(async () => {
+      const updated = PrayerAPI.getCurrentPrayer(rawPrayerTimings);
+
+      // Réinitialiser si la prière a changé
+      setCurrentPrayer(prev => {
+        if (updated?.name !== prev?.name) {
+          setHasPrayedCurrentPrayer(false);
+          // Nettoyer AsyncStorage
+          AsyncStorage.removeItem('prayed_prayer_name').catch(() => {});
+        }
+        return updated;
+      });
+    }, 60000);
+
+    return () => clearInterval(interval);
   }, [rawPrayerTimings]);
+
+  // Configurer le callback pour les notifications in-app
+  useEffect(() => {
+    setInAppNotificationCallback((notification) => {
+      setInAppNotification(notification);
+    });
+
+    return () => {
+      setInAppNotificationCallback(null);
+    };
+  }, []);
+
+  // Vérifier la proximité de la mosquée au démarrage
+  useEffect(() => {
+    const checkProximity = async () => {
+      try {
+        // Vérifier si la feature est activée
+        const settings = await getMosqueProximitySettings();
+        if (!settings.enabled) return;
+
+        // Demander la position actuelle
+        Geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            console.log(`[HomeScreen] Position: ${latitude}, ${longitude}`);
+
+            await checkMosqueProximity(latitude, longitude, {
+              title: '🕌 Vous êtes à la mosquée',
+              body: 'Pensez à mettre votre téléphone en mode silencieux',
+            });
+          },
+          (error) => {
+            console.log('[HomeScreen] Erreur géolocalisation:', error.code, error.message);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 20000,
+            maximumAge: 60000,
+          }
+        );
+      } catch (error) {
+        console.warn('[HomeScreen] Erreur check proximité:', error);
+      }
+    };
+
+    checkProximity();
+  }, []);
+
+  // Gérer le clic sur "J'ai prié" - annule les notifications boost et masque le bouton
+  const handlePrayed = useCallback(async () => {
+    if (!currentPrayer || !boostSettings?.enabled) return;
+
+    try {
+      // Marquer comme prié (masque le bouton jusqu'à la prochaine prière)
+      setHasPrayedCurrentPrayer(true);
+      // Sauvegarder dans AsyncStorage pour persister entre les sessions
+      await AsyncStorage.setItem('prayed_prayer_name', currentPrayer.name);
+      // Annuler toutes les notifications boost programmées
+      await cancelBoostNotifications();
+      Vibration.vibrate(100); // Feedback haptique
+    } catch (error) {
+      console.warn('[HomeScreen] Erreur annulation boost:', error);
+    }
+  }, [currentPrayer, boostSettings?.enabled]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -546,6 +717,39 @@ const HomeScreen = () => {
         </View>
       </Modal>
 
+      {/* Modal Notification In-App */}
+      <Modal
+        visible={inAppNotification !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setInAppNotification(null)}
+      >
+        <View style={styles.notifModalOverlay}>
+          <View style={styles.notifModalContainer}>
+            <TouchableOpacity
+              style={styles.notifCloseBtn}
+              onPress={() => setInAppNotification(null)}
+              accessibilityLabel="Fermer"
+              accessibilityRole="button"
+            >
+              <Text style={styles.notifCloseBtnText}>×</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.notifIcon}>🔔</Text>
+            <Text style={styles.notifTitle}>{inAppNotification?.title}</Text>
+            <Text style={styles.notifBody}>{inAppNotification?.body}</Text>
+
+            <TouchableOpacity
+              style={styles.notifOkBtn}
+              onPress={() => setInAppNotification(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.notifOkBtnText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     <View style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -610,6 +814,19 @@ const HomeScreen = () => {
             <Text style={styles.dateHijri}>
               {islamicDate.day} {isRTL ? islamicDate.monthAr : islamicDate.month} {islamicDate.year}
             </Text>
+
+            {/* Bouton J'ai prié - masqué après le clic jusqu'à la prochaine prière */}
+            {boostSettings?.enabled && currentPrayer && !hasPrayedCurrentPrayer && (
+              <TouchableOpacity
+                style={[styles.prayedButton, { marginTop: 12 }]}
+                onPress={handlePrayed}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.prayedButtonText}>
+                  ✅ {isRTL ? `صليت ${currentPrayer.nameAr}` : `J'ai prié ${getPrayerName(currentPrayer.name)}`}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Rappel du jour */}
@@ -954,6 +1171,71 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1a1a2e',
   },
+  // Notification In-App Modal styles
+  notifModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notifModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 20,
+    maxWidth: 350,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  notifCloseBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifCloseBtnText: {
+    fontSize: 22,
+    color: '#666',
+    lineHeight: 24,
+  },
+  notifIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  notifTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  notifBody: {
+    fontSize: 15,
+    color: '#555',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  notifOkBtn: {
+    backgroundColor: colors.accent,
+    paddingVertical: 12,
+    paddingHorizontal: 50,
+    borderRadius: 25,
+  },
+  notifOkBtnText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+  },
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1128,6 +1410,21 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textMuted,
     marginTop: 4,
+  },
+  prayedButton: {
+    marginTop: spacing.md,
+    backgroundColor: 'rgba(39, 174, 96, 0.2)',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(39, 174, 96, 0.4)',
+  },
+  prayedButtonText: {
+    color: '#27ae60',
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   rappelContainer: {
     backgroundColor: 'rgba(201, 162, 39, 0.2)',

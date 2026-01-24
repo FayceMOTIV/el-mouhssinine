@@ -1,6 +1,6 @@
 /**
  * MemberCard - Carte de membre virtuelle El Mouhssinine
- * Style carte bancaire/badge avec gradient et animations
+ * Design premium style carte bancaire
  */
 import React, { useEffect, useRef } from 'react';
 import {
@@ -9,14 +9,12 @@ import {
   StyleSheet,
   Animated,
   TouchableOpacity,
-  Dimensions,
-  I18nManager,
+  useWindowDimensions,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { colors, spacing, borderRadius, fontSize, platformShadow, isSmallScreen } from '../theme/colors';
+import { colors, spacing, borderRadius, platformShadow } from '../theme/colors';
 
-// Types pour le statut de la carte
-export type MembershipStatus = 'active' | 'expiring' | 'expired' | 'inactive' | 'none';
+export type MembershipStatus = 'active' | 'expiring' | 'expired' | 'inactive' | 'unpaid' | 'none';
 
 interface MemberCardProps {
   member: {
@@ -26,18 +24,20 @@ interface MemberCardProps {
     memberId?: string;
     odIdNumber?: string;
     membershipExpirationDate?: Date | { toDate: () => Date } | string | null;
+    status?: string;
   } | null;
   onRenew?: () => void;
+  onPay?: () => void;
   isRTL?: boolean;
 }
 
-// Calcul du statut de l'adhesion
 export const getMembershipStatus = (member: MemberCardProps['member']): MembershipStatus => {
+  if (member?.status === 'en_attente_paiement' || member?.status === 'unpaid') {
+    return 'unpaid';
+  }
   if (!member?.membershipExpirationDate) return 'none';
 
   let expiration: Date;
-
-  // Gerer les differents formats de date (Firestore Timestamp, Date, string)
   if (typeof member.membershipExpirationDate === 'object' && 'toDate' in member.membershipExpirationDate) {
     expiration = member.membershipExpirationDate.toDate();
   } else if (member.membershipExpirationDate instanceof Date) {
@@ -51,97 +51,90 @@ export const getMembershipStatus = (member: MemberCardProps['member']): Membersh
   const now = new Date();
   const diffDays = Math.floor((expiration.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (diffDays > 30) return 'active';      // Plus de 30 jours restants
-  if (diffDays > 0) return 'expiring';     // Moins de 30 jours (avertissement)
-  if (diffDays > -30) return 'expired';    // Expire depuis moins de 30 jours
-  return 'inactive';                        // Expire depuis plus de 30 jours
+  if (diffDays > 30) return 'active';
+  if (diffDays > 0) return 'expiring';
+  if (diffDays > -30) return 'expired';
+  return 'inactive';
 };
 
-// Configuration des statuts
 const STATUS_CONFIG: Record<MembershipStatus, {
   badge: string;
+  badgeAr: string;
   badgeColor: string;
-  badgeBgColor: string;
   gradient: string[];
-  message: string;
-  messageAr: string;
+  accentColor: string;
 }> = {
   active: {
-    badge: 'ACTIVE',
-    badgeColor: '#ffffff',
-    badgeBgColor: 'rgba(76, 175, 80, 0.9)',
-    gradient: ['#1B5E20', '#2E7D32'],
-    message: 'Valide jusqu\'au',
-    messageAr: 'صالحة حتى',
+    badge: 'MEMBRE ACTIF',
+    badgeAr: 'عضو نشط',
+    badgeColor: '#4CAF50',
+    gradient: ['#0D1B2A', '#1B2838', '#243447'],
+    accentColor: '#C9A227',
   },
   expiring: {
-    badge: 'EXPIRE BIENTOT',
-    badgeColor: '#ffffff',
-    badgeBgColor: 'rgba(255, 152, 0, 0.9)',
-    gradient: ['#1B5E20', '#2E7D32'],
-    message: 'Expire dans',
-    messageAr: 'تنتهي في',
+    badge: 'EXPIRE BIENTÔT',
+    badgeAr: 'تنتهي قريباً',
+    badgeColor: '#FF9800',
+    gradient: ['#0D1B2A', '#1B2838', '#243447'],
+    accentColor: '#FF9800',
   },
   expired: {
-    badge: 'A RENOUVELER',
-    badgeColor: '#ffffff',
-    badgeBgColor: 'rgba(244, 67, 54, 0.9)',
-    gradient: ['#616161', '#9E9E9E'],
-    message: 'Cotisation a renouveler',
-    messageAr: 'يجب تجديد الاشتراك',
+    badge: 'À RENOUVELER',
+    badgeAr: 'يجب التجديد',
+    badgeColor: '#F44336',
+    gradient: ['#2C1810', '#3D2317', '#4A2C1C'],
+    accentColor: '#C9A227',
   },
   inactive: {
-    badge: 'EXPIREE',
-    badgeColor: '#ffffff',
-    badgeBgColor: 'rgba(158, 158, 158, 0.9)',
-    gradient: ['#616161', '#9E9E9E'],
-    message: 'Cotisation expiree',
-    messageAr: 'انتهى الاشتراك',
+    badge: 'EXPIRÉE',
+    badgeAr: 'منتهية',
+    badgeColor: '#9E9E9E',
+    gradient: ['#2A2A2A', '#3A3A3A', '#4A4A4A'],
+    accentColor: '#888888',
+  },
+  unpaid: {
+    badge: 'EN ATTENTE',
+    badgeAr: 'في انتظار',
+    badgeColor: '#FF9800',
+    gradient: ['#1A1A2E', '#25253D', '#2D2D4A'],
+    accentColor: '#C9A227',
   },
   none: {
-    badge: '',
-    badgeColor: '#ffffff',
-    badgeBgColor: 'rgba(158, 158, 158, 0.9)',
-    gradient: ['#616161', '#9E9E9E'],
-    message: 'Aucune adhesion',
-    messageAr: 'لا يوجد اشتراك',
+    badge: 'MEMBRE',
+    badgeAr: 'عضو',
+    badgeColor: '#888888',
+    gradient: ['#2A2A2A', '#3A3A3A', '#4A4A4A'],
+    accentColor: '#888888',
   },
 };
 
-// Formater le numero de membre
-const formatMemberNumber = (memberId?: string | null, odIdNumber?: string | number | null): string => {
-  if (odIdNumber) {
-    const num = typeof odIdNumber === 'number' ? odIdNumber : parseInt(odIdNumber, 10);
-    return `N° ${String(num).padStart(5, '0')}`;
+const generateMemberNumber = (memberId?: string | null): string => {
+  if (!memberId) return '00000';
+  const digits = memberId.replace(/[^0-9]/g, '');
+  if (digits.length > 0) {
+    return digits.substring(0, 5).padStart(5, '0');
   }
-  if (memberId) {
-    // Si c'est un format ELM-YYYY-XXXX, extraire le numero
-    const match = memberId.match(/(\d+)$/);
-    if (match) {
-      return `N° ${match[1].padStart(5, '0')}`;
-    }
-    return `N° ${memberId}`;
+  let hash = 0;
+  for (let i = 0; i < memberId.length; i++) {
+    hash = ((hash << 5) - hash) + memberId.charCodeAt(i);
+    hash = hash & hash;
   }
-  return 'N° -----';
+  return Math.abs(hash % 100000).toString().padStart(5, '0');
 };
 
-// Formater la date
-const formatDate = (date: Date, isRTL: boolean): string => {
-  return date.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+const formatDate = (date: Date): string => {
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear().toString().slice(-2);
+  return `${month}/${year}`;
 };
 
-// Calculer les jours restants
-const getDaysRemaining = (expirationDate: Date): number => {
-  const now = new Date();
-  return Math.floor((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-};
+const MemberCard: React.FC<MemberCardProps> = ({ member, onRenew, onPay, isRTL = false }) => {
+  const { width: screenWidth } = useWindowDimensions();
+  const cardMargin = 16;
+  const cardWidth = screenWidth - (cardMargin * 2);
+  // Hauteur minimum garantie de 220pt + ratio pour écrans larges
+  const cardHeight = Math.max(220, cardWidth * 0.58);
 
-const MemberCard: React.FC<MemberCardProps> = ({ member, onRenew, isRTL = false }) => {
-  // Animation d'apparition
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
@@ -164,292 +157,299 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, onRenew, isRTL = false 
   const status = getMembershipStatus(member);
   const config = STATUS_CONFIG[status];
 
-  // Obtenir le nom complet
   const fullName = member?.name ||
     (member?.firstName && member?.lastName
       ? `${member.firstName} ${member.lastName}`
-      : member?.firstName || member?.lastName || '---');
+      : member?.firstName || member?.lastName || 'MEMBRE');
 
-  // Obtenir le numero de membre
-  const memberNumber = formatMemberNumber(member?.memberId, member?.odIdNumber);
+  const memberNumber = generateMemberNumber(member?.memberId);
 
-  // Calculer le message de validite
-  const getValidityMessage = (): string => {
-    if (!member?.membershipExpirationDate) {
-      return isRTL ? config.messageAr : config.message;
-    }
-
-    let expiration: Date;
+  let validityText = '--/--';
+  if (member?.membershipExpirationDate) {
+    let expDate: Date | null = null;
     if (typeof member.membershipExpirationDate === 'object' && 'toDate' in member.membershipExpirationDate) {
-      expiration = member.membershipExpirationDate.toDate();
+      expDate = member.membershipExpirationDate.toDate();
     } else if (member.membershipExpirationDate instanceof Date) {
-      expiration = member.membershipExpirationDate;
+      expDate = member.membershipExpirationDate;
     } else if (typeof member.membershipExpirationDate === 'string') {
-      expiration = new Date(member.membershipExpirationDate);
-    } else {
-      return isRTL ? config.messageAr : config.message;
+      expDate = new Date(member.membershipExpirationDate);
     }
-
-    if (status === 'active') {
-      return `${isRTL ? config.messageAr : config.message} ${formatDate(expiration, isRTL)}`;
+    if (expDate && !isNaN(expDate.getTime())) {
+      validityText = formatDate(expDate);
     }
-    if (status === 'expiring') {
-      const days = getDaysRemaining(expiration);
-      return isRTL
-        ? `${config.messageAr} ${days} يوم`
-        : `${config.message} ${days} jour${days > 1 ? 's' : ''}`;
-    }
-    return isRTL ? config.messageAr : config.message;
-  };
+  }
 
   const showRenewButton = status === 'expired' || status === 'inactive' || status === 'none';
+  const showPayButton = status === 'unpaid';
 
   return (
-    <Animated.View
-      style={[
-        styles.cardContainer,
-        {
-          opacity: fadeAnim,
-          transform: [{ scale: scaleAnim }],
-        },
-      ]}
-    >
-      <LinearGradient
-        colors={config.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.card}
-      >
-        {/* Header: Logo + Badge */}
-        <View style={[styles.cardHeader, isRTL && styles.cardHeaderRTL]}>
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>EL MOUHSSININE</Text>
-            <Text style={styles.logoSubtext}>MOSQUEE</Text>
+    <Animated.View style={[
+      styles.container,
+      {
+        opacity: fadeAnim,
+        transform: [{ scale: scaleAnim }],
+        marginHorizontal: cardMargin,
+      }
+    ]}>
+      <View style={styles.cardShadow}>
+        <LinearGradient
+          colors={config.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.card, { width: cardWidth, minHeight: cardHeight }]}
+        >
+          {/* Motif décoratif fond */}
+          <View style={styles.patternContainer}>
+            <Text style={[styles.patternText, { color: config.accentColor }]}>۞</Text>
+            <Text style={[styles.patternText2, { color: config.accentColor }]}>۞</Text>
           </View>
-          <View style={styles.cardTypeContainer}>
-            <Text style={[styles.cardType, isRTL && styles.rtlText]}>CARTE DE MEMBRE</Text>
-            <Text style={[styles.cardTypeAr, !isRTL && { fontSize: 10 }]}>بطاقة العضوية</Text>
-          </View>
-        </View>
 
-        {/* Nom du membre */}
-        <View style={styles.nameContainer}>
-          <Text style={[styles.memberName, isRTL && styles.rtlText]} numberOfLines={1}>
-            {fullName.toUpperCase()}
-          </Text>
-        </View>
-
-        {/* Numero + Validite */}
-        <View style={[styles.cardFooter, isRTL && styles.cardFooterRTL]}>
-          <View style={styles.infoBlock}>
-            <Text style={[styles.infoLabel, isRTL && styles.rtlText]}>
-              {isRTL ? 'رقم العضوية' : 'N° MEMBRE'}
-            </Text>
-            <Text style={[styles.infoValue, isRTL && styles.rtlText]}>{memberNumber}</Text>
+          {/* Header - Logo et nom mosquée */}
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <View style={[styles.logoCircle, { borderColor: config.accentColor }]}>
+                <Text style={[styles.logoText, { color: config.accentColor }]}>م</Text>
+              </View>
+            </View>
+            <View style={styles.headerText}>
+              <Text style={[styles.mosqueName, { color: config.accentColor }]}>EL MOUHSSININE</Text>
+              <Text style={styles.mosqueSubtitle}>Centre Islamique • Bourg-en-Bresse</Text>
+            </View>
+            <View style={styles.statusBadge}>
+              <View style={[styles.statusDot, { backgroundColor: config.badgeColor }]} />
+            </View>
           </View>
-          <View style={[styles.infoBlock, styles.infoBlockRight]}>
-            <Text style={[styles.infoLabel, isRTL && styles.rtlText]}>
-              {isRTL ? 'الصلاحية' : 'VALIDITE'}
-            </Text>
-            <Text style={[styles.infoValue, isRTL && styles.rtlText]} numberOfLines={1}>
-              {getValidityMessage()}
+
+          {/* Numéro de membre style carte */}
+          <View style={styles.numberSection}>
+            <Text style={styles.memberNumberLabel}>N° ADHÉRENT</Text>
+            <Text style={styles.memberNumber}>
+              {memberNumber.split('').map((digit, i) => (
+                <Text key={i}>
+                  {digit}
+                  {i < memberNumber.length - 1 && i % 4 === 3 ? '  ' : ' '}
+                </Text>
+              ))}
             </Text>
           </View>
-        </View>
 
-        {/* Badge de statut */}
-        {status !== 'none' && (
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: config.badgeBgColor },
-              isRTL && styles.statusBadgeRTL,
-            ]}
+          {/* Footer - Nom et validité */}
+          <View style={styles.footer}>
+            <View style={styles.footerLeft}>
+              <Text style={styles.label}>TITULAIRE</Text>
+              <Text style={styles.memberName} numberOfLines={1} adjustsFontSizeToFit>
+                {fullName.toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.footerRight}>
+              <Text style={styles.label}>VALIDE</Text>
+              <Text style={styles.validity}>{validityText}</Text>
+            </View>
+          </View>
+
+          {/* Badge statut */}
+          <View style={[styles.badge, { borderColor: config.badgeColor }]}>
+            <Text style={[styles.badgeText, { color: config.badgeColor }]}>
+              {isRTL ? config.badgeAr : config.badge}
+            </Text>
+          </View>
+
+          {/* Ligne décorative */}
+          <View style={[styles.decorLine, { backgroundColor: config.accentColor }]} />
+        </LinearGradient>
+      </View>
+
+      {/* Boutons d'action */}
+      {showPayButton && onPay && (
+        <TouchableOpacity style={styles.actionBtn} onPress={onPay} activeOpacity={0.8}>
+          <LinearGradient
+            colors={['#C9A227', '#D4AF37', '#C9A227']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.actionBtnGradient}
           >
-            <Text style={[styles.statusBadgeText, { color: config.badgeColor }]}>
-              {status === 'active' && '✅ '}
-              {status === 'expiring' && '⚠️ '}
-              {status === 'expired' && '🔴 '}
-              {status === 'inactive' && '❌ '}
-              {config.badge}
-            </Text>
-          </View>
-        )}
+            <Text style={styles.actionBtnText}>Payer ma cotisation</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
 
-        {/* Motif decoratif */}
-        <View style={styles.decorativePattern}>
-          <View style={styles.circle1} />
-          <View style={styles.circle2} />
-        </View>
-      </LinearGradient>
-
-      {/* Bouton Renouveler */}
       {showRenewButton && onRenew && (
-        <TouchableOpacity style={styles.renewButton} onPress={onRenew} activeOpacity={0.8}>
-          <Text style={[styles.renewButtonText, isRTL && styles.rtlText]}>
-            {isRTL ? 'تجديد الاشتراك' : 'Renouveler mon adhesion'}
-          </Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={onRenew} activeOpacity={0.8}>
+          <LinearGradient
+            colors={['#C9A227', '#D4AF37', '#C9A227']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.actionBtnGradient}
+          >
+            <Text style={styles.actionBtnText}>Renouveler mon adhésion</Text>
+          </LinearGradient>
         </TouchableOpacity>
       )}
     </Animated.View>
   );
 };
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_RATIO = 1.586; // Ratio carte de credit standard (85.6mm x 54mm)
-const CARD_WIDTH = Math.min(SCREEN_WIDTH - 32, 400);
-const CARD_HEIGHT = CARD_WIDTH / CARD_RATIO;
-
 const styles = StyleSheet.create({
-  cardContainer: {
-    marginHorizontal: spacing.lg,
+  container: {
     marginBottom: spacing.lg,
     alignItems: 'center',
   },
-  card: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
+  cardShadow: {
     borderRadius: 16,
-    padding: isSmallScreen ? spacing.md : spacing.lg,
+    ...platformShadow(12),
+  },
+  card: {
+    borderRadius: 16,
+    padding: 20,
     overflow: 'hidden',
-    position: 'relative',
-    ...platformShadow(8),
-  },
-  cardHeader: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
   },
-  cardHeaderRTL: {
-    flexDirection: 'row-reverse',
+  patternContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  patternText: {
+    position: 'absolute',
+    right: -20,
+    top: -20,
+    fontSize: 120,
+    opacity: 0.03,
+  },
+  patternText2: {
+    position: 'absolute',
+    left: -30,
+    bottom: -30,
+    fontSize: 100,
+    opacity: 0.02,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   logoContainer: {
-    alignItems: 'flex-start',
+    marginRight: 12,
+  },
+  logoCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoText: {
-    color: '#ffffff',
-    fontSize: isSmallScreen ? 12 : 14,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  headerText: {
+    flex: 1,
+  },
+  mosqueName: {
+    fontSize: 14,
     fontWeight: '800',
-    letterSpacing: 1,
-  },
-  logoSubtext: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: isSmallScreen ? 8 : 9,
-    fontWeight: '600',
     letterSpacing: 2,
+  },
+  mosqueSubtitle: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.5)',
     marginTop: 2,
-  },
-  cardTypeContainer: {
-    alignItems: 'flex-end',
-  },
-  cardType: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: isSmallScreen ? 9 : 10,
-    fontWeight: '600',
     letterSpacing: 0.5,
   },
-  cardTypeAr: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: isSmallScreen ? 8 : 9,
-    marginTop: 2,
-    fontFamily: I18nManager.isRTL ? undefined : 'System',
+  statusBadge: {
+    padding: 4,
   },
-  nameContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  memberName: {
-    color: '#ffffff',
-    fontSize: isSmallScreen ? 18 : 22,
-    fontWeight: '700',
+  numberSection: {
+    marginTop: 8,
+  },
+  memberNumberLabel: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.4)',
     letterSpacing: 1,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    marginBottom: 4,
   },
-  cardFooter: {
+  memberNumber: {
+    fontSize: 24,
+    color: '#ffffff',
+    fontWeight: '300',
+    letterSpacing: 4,
+    fontFamily: 'Courier',
+  },
+  footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
   },
-  cardFooterRTL: {
-    flexDirection: 'row-reverse',
-  },
-  infoBlock: {
+  footerLeft: {
     flex: 1,
   },
-  infoBlockRight: {
+  footerRight: {
     alignItems: 'flex-end',
   },
-  infoLabel: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: isSmallScreen ? 8 : 9,
-    fontWeight: '500',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+  label: {
+    fontSize: 8,
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 1,
+    marginBottom: 4,
   },
-  infoValue: {
+  memberName: {
+    fontSize: 14,
     color: '#ffffff',
-    fontSize: isSmallScreen ? 11 : 13,
     fontWeight: '600',
+    letterSpacing: 1,
+    maxWidth: 180,
   },
-  statusBadge: {
+  validity: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  badge: {
     position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    paddingHorizontal: isSmallScreen ? 8 : 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    top: 16,
+    right: 16,
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  statusBadgeRTL: {
-    right: 'auto',
-    left: spacing.md,
-  },
-  statusBadgeText: {
-    fontSize: isSmallScreen ? 9 : 10,
+  badgeText: {
+    fontSize: 8,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
-  decorativePattern: {
+  decorLine: {
     position: 'absolute',
-    right: -40,
-    bottom: -40,
-    width: 160,
-    height: 160,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    opacity: 0.8,
   },
-  circle1: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  circle2: {
-    position: 'absolute',
-    left: 40,
-    top: 40,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  renewButton: {
+  actionBtn: {
     marginTop: spacing.md,
-    backgroundColor: colors.accent,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
+    overflow: 'hidden',
     ...platformShadow(4),
   },
-  renewButtonText: {
-    color: '#1a1a2e',
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    textAlign: 'center',
+  actionBtnGradient: {
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    alignItems: 'center',
   },
-  rtlText: {
-    textAlign: 'right',
+  actionBtnText: {
+    color: '#1a1a2e',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
 

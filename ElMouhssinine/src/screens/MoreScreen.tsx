@@ -39,6 +39,13 @@ import {
   saveBoostSettings,
   scheduleBoostNotifications,
   cancelBoostNotifications,
+  // Rappel Coran
+  QuranReminderSettings,
+  DEFAULT_QURAN_REMINDER_SETTINGS,
+  getQuranReminderSettings,
+  saveQuranReminderSettings,
+  scheduleQuranReminders,
+  cancelQuranReminders,
 } from '../services/prayerNotifications';
 import { PrayerAPI } from '../services/prayerApi';
 
@@ -72,6 +79,8 @@ const MoreScreen = () => {
 
   // Boost Prière (feature optionnelle)
   const [boostSettings, setBoostSettings] = useState<PrayerBoostSettings>(DEFAULT_PRAYER_BOOST_SETTINGS);
+  // Rappel Coran
+  const [quranReminderSettings, setQuranReminderSettings] = useState<QuranReminderSettings>(DEFAULT_QURAN_REMINDER_SETTINGS);
   const [compassHeading, setCompassHeading] = useState(0);
   const [compassError, setCompassError] = useState<string | null>(null);
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -142,6 +151,11 @@ const MoreScreen = () => {
     getBoostSettings().then(setBoostSettings);
   }, []);
 
+  // Charger les settings rappel Coran
+  useEffect(() => {
+    getQuranReminderSettings().then(setQuranReminderSettings);
+  }, []);
+
   // Mettre a jour les settings de notifications de priere
   const updatePrayerNotifSettings = async (newSettings: PrayerNotificationSettings) => {
     setPrayerNotifSettings(newSettings);
@@ -188,6 +202,26 @@ const MoreScreen = () => {
       }
     } else {
       await cancelBoostNotifications();
+    }
+  };
+
+  // Mettre à jour les settings rappel Coran
+  const updateQuranReminderSettings = async (newSettings: QuranReminderSettings) => {
+    setQuranReminderSettings(newSettings);
+    await saveQuranReminderSettings(newSettings);
+
+    // Re-scheduler les notifications
+    if (newSettings.enabled) {
+      const hasPermission = await requestPrayerNotifPermission();
+      if (hasPermission) {
+        const translations = {
+          title: language === 'ar' ? '📖 وقت القراءة' : '📖 Rappel Coran',
+          body: language === 'ar' ? 'حان وقت قراءة القرآن - ولو صفحة واحدة 🌙' : 'C\'est l\'heure de lire le Coran - même une page 🌙',
+        };
+        await scheduleQuranReminders(newSettings, translations);
+      }
+    } else {
+      await cancelQuranReminders();
     }
   };
 
@@ -635,62 +669,144 @@ const MoreScreen = () => {
                 />
               </View>
 
-              {/* Options détaillées (visibles seulement si activé) */}
+              {/* Détail des rappels par prière (visible si activé) */}
               {boostSettings.enabled && (
-                <>
-                  <Text style={[styles.prayerTogglesTitle, isRTL && styles.textRTL, { marginTop: spacing.md }]}>
-                    {t('reminderTypes')}
+                <View style={styles.prayerNotifNote}>
+                  <Text style={[styles.prayerNotifNoteText, { fontWeight: '600', marginBottom: 8 }]}>
+                    📋 {language === 'ar' ? 'التفاصيل:' : 'Détails des rappels :'}
                   </Text>
+                  <Text style={styles.prayerNotifNoteText}>
+                    🌅 Fajr, Dhuhr, Asr : {language === 'ar' ? '3 تذكيرات' : '3 rappels'}
+                  </Text>
+                  <Text style={styles.prayerNotifNoteText}>
+                    {language === 'ar' ? '   • 30 د بعد الأذان' : '   • 30 min après l\'adhan'}
+                  </Text>
+                  <Text style={styles.prayerNotifNoteText}>
+                    {language === 'ar' ? '   • في منتصف الوقت' : '   • À mi-temps'}
+                  </Text>
+                  <Text style={styles.prayerNotifNoteText}>
+                    {language === 'ar' ? '   • 15 د قبل النهاية' : '   • 15 min avant la fin'}
+                  </Text>
+                  <Text style={[styles.prayerNotifNoteText, { marginTop: 6 }]}>
+                    🌅 Maghrib : {language === 'ar' ? '1 تذكير عاجل (مالكية)' : '1 rappel urgent (Malikites)'}
+                  </Text>
+                  <Text style={[styles.prayerNotifNoteText, { marginTop: 6 }]}>
+                    🌙 Isha : {language === 'ar' ? '1 تذكير (30 د بعد)' : '1 rappel (30 min après)'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
 
-                  {/* 30 min après Adhan */}
-                  <View style={styles.prayerToggleRow}>
+          {/* Rappel Coran */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
+              📖 {language === 'ar' ? 'تذكير القرآن' : 'Rappel Coran'}
+            </Text>
+            <View style={styles.card}>
+              {/* Toggle principal */}
+              <View style={styles.settingRow}>
+                <View style={styles.settingLeft}>
+                  <Text style={styles.settingIcon}>📖</Text>
+                  <Text style={styles.settingLabel}>
+                    {language === 'ar' ? 'تفعيل التذكير اليومي' : 'Activer le rappel quotidien'}
+                  </Text>
+                </View>
+                <Switch
+                  active={quranReminderSettings.enabled}
+                  onToggle={() => updateQuranReminderSettings({
+                    ...quranReminderSettings,
+                    enabled: !quranReminderSettings.enabled
+                  })}
+                />
+              </View>
+
+              {quranReminderSettings.enabled && (
+                <>
+                  {/* Choix de l'heure */}
+                  <View style={styles.settingRow}>
                     <View style={styles.settingLeft}>
                       <Text style={styles.settingIcon}>⏰</Text>
-                      <Text style={styles.settingLabel}>{t('after30minAdhan')}</Text>
+                      <Text style={styles.settingLabel}>
+                        {language === 'ar' ? 'الساعة' : 'Heure'}
+                      </Text>
                     </View>
-                    <Switch
-                      active={boostSettings.reminders.after30min}
-                      onToggle={() => updateBoostSettings({
-                        ...boostSettings,
-                        reminders: { ...boostSettings.reminders, after30min: !boostSettings.reminders.after30min }
-                      })}
-                    />
+                    <View style={styles.picker}>
+                      {[8, 12, 18, 20, 22].map((hour) => (
+                        <TouchableOpacity
+                          key={hour}
+                          style={[
+                            styles.pickerOption,
+                            quranReminderSettings.hour === hour && styles.pickerOptionActive
+                          ]}
+                          onPress={() => updateQuranReminderSettings({
+                            ...quranReminderSettings,
+                            hour
+                          })}
+                        >
+                          <Text style={[
+                            styles.pickerOptionText,
+                            quranReminderSettings.hour === hour && styles.pickerOptionTextActive
+                          ]}>
+                            {hour}h
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   </View>
 
-                  {/* À mi-temps */}
-                  <View style={styles.prayerToggleRow}>
+                  {/* Fréquence */}
+                  <View style={[styles.settingRow, styles.settingRowLast]}>
                     <View style={styles.settingLeft}>
-                      <Text style={styles.settingIcon}>🕐</Text>
-                      <Text style={styles.settingLabel}>{t('atMidTime')}</Text>
+                      <Text style={styles.settingIcon}>📅</Text>
+                      <Text style={styles.settingLabel}>
+                        {language === 'ar' ? 'التكرار' : 'Fréquence'}
+                      </Text>
                     </View>
-                    <Switch
-                      active={boostSettings.reminders.atMidTime}
-                      onToggle={() => updateBoostSettings({
-                        ...boostSettings,
-                        reminders: { ...boostSettings.reminders, atMidTime: !boostSettings.reminders.atMidTime }
-                      })}
-                    />
+                    <View style={styles.picker}>
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerOption,
+                          quranReminderSettings.frequency === 'daily' && styles.pickerOptionActive
+                        ]}
+                        onPress={() => updateQuranReminderSettings({
+                          ...quranReminderSettings,
+                          frequency: 'daily'
+                        })}
+                      >
+                        <Text style={[
+                          styles.pickerOptionText,
+                          quranReminderSettings.frequency === 'daily' && styles.pickerOptionTextActive
+                        ]}>
+                          {language === 'ar' ? 'يومي' : 'Quotidien'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerOption,
+                          quranReminderSettings.frequency === 'friday' && styles.pickerOptionActive
+                        ]}
+                        onPress={() => updateQuranReminderSettings({
+                          ...quranReminderSettings,
+                          frequency: 'friday'
+                        })}
+                      >
+                        <Text style={[
+                          styles.pickerOptionText,
+                          quranReminderSettings.frequency === 'friday' && styles.pickerOptionTextActive
+                        ]}>
+                          {language === 'ar' ? 'الجمعة' : 'Vendredi'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
-                  {/* 15 min avant fin */}
-                  <View style={[styles.prayerToggleRow, styles.prayerToggleRowLast]}>
-                    <View style={styles.settingLeft}>
-                      <Text style={styles.settingIcon}>⚠️</Text>
-                      <Text style={styles.settingLabel}>{t('before15minEnd')}</Text>
-                    </View>
-                    <Switch
-                      active={boostSettings.reminders.before15minEnd}
-                      onToggle={() => updateBoostSettings({
-                        ...boostSettings,
-                        reminders: { ...boostSettings.reminders, before15minEnd: !boostSettings.reminders.before15minEnd }
-                      })}
-                    />
-                  </View>
-
-                  {/* Note explicative */}
+                  {/* Note */}
                   <View style={styles.prayerNotifNote}>
                     <Text style={styles.prayerNotifNoteText}>
-                      💡 {t('boostNote')}
+                      {language === 'ar'
+                        ? '💡 \"إِنَّا نَحْنُ نَزَّلْنَا الذِّكْرَ وَإِنَّا لَهُ لَحَافِظُونَ\"'
+                        : '💡 "Certes, c\'est Nous qui avons fait descendre le Coran"'}
                     </Text>
                   </View>
                 </>

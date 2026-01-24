@@ -1577,3 +1577,140 @@ exports.getDonsByYear = functions
     }
   });
 
+// ==================== CACHE HORAIRES DE PRIÈRE ====================
+// Cache quotidien des horaires pour éviter les appels API directs
+// Exécuté tous les jours à 0h05 (après minuit pour le nouveau jour)
+
+exports.cachePrayerTimesDaily = functions
+  .region('europe-west1')
+  .pubsub
+  .schedule('5 0 * * *') // 0h05 chaque jour
+  .timeZone('Europe/Paris')
+  .onRun(async (context) => {
+    console.log('🕌 Début du cache quotidien des horaires de prière');
+
+    try {
+      // Récupérer les horaires depuis Aladhan API
+      const timings = await fetchPrayerTimes();
+
+      // Récupérer la date hégirien
+      const today = new Date();
+      const dateKey = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+      const hijriResponse = await fetch(`https://api.aladhan.com/v1/gToH/${dateKey}?adjustment=-1`);
+      const hijriData = await hijriResponse.json();
+
+      let hijriDate = null;
+      if (hijriData.code === 200 && hijriData.data) {
+        const h = hijriData.data.hijri;
+        hijriDate = {
+          day: h.day,
+          month: h.month.number,
+          monthAr: h.month.ar,
+          monthEn: h.month.en,
+          year: h.year,
+          designation: h.designation?.abbreviated || 'H',
+        };
+      }
+
+      // Sauvegarder dans Firestore
+      const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      await admin.firestore()
+        .collection('cached_prayer_times')
+        .doc(todayStr)
+        .set({
+          timings: {
+            Fajr: timings.Fajr,
+            Sunrise: timings.Sunrise,
+            Dhuhr: timings.Dhuhr,
+            Asr: timings.Asr,
+            Maghrib: timings.Maghrib,
+            Isha: timings.Isha,
+          },
+          hijri: hijriDate,
+          cachedAt: admin.firestore.FieldValue.serverTimestamp(),
+          source: 'aladhan_api',
+        });
+
+      console.log('✅ Cache horaires sauvegardé pour', todayStr);
+
+      // Nettoyer les anciens caches (garder 7 jours)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const oldCacheSnapshot = await admin.firestore()
+        .collection('cached_prayer_times')
+        .where('cachedAt', '<', sevenDaysAgo)
+        .get();
+
+      if (!oldCacheSnapshot.empty) {
+        const batch = admin.firestore().batch();
+        oldCacheSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        console.log(`🧹 ${oldCacheSnapshot.size} anciens caches supprimés`);
+      }
+
+      return null;
+    } catch (error) {
+      console.error('❌ Erreur cache horaires:', error);
+      return null;
+    }
+  });
+
+// Fonction pour forcer le cache (callable depuis le backoffice si besoin)
+exports.forceCachePrayerTimes = functions
+  .region('europe-west1')
+  .https.onCall(async (data, context) => {
+    // Vérifier admin
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentification requise');
+    }
+
+    const adminCheck = await isAdmin(context.auth.uid);
+    if (!adminCheck) {
+      throw new functions.https.HttpsError('permission-denied', 'Réservé aux admins');
+    }
+
+    try {
+      const timings = await fetchPrayerTimes();
+
+      const today = new Date();
+      const dateKey = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+      const hijriResponse = await fetch(`https://api.aladhan.com/v1/gToH/${dateKey}?adjustment=-1`);
+      const hijriData = await hijriResponse.json();
+
+      let hijriDate = null;
+      if (hijriData.code === 200 && hijriData.data) {
+        const h = hijriData.data.hijri;
+        hijriDate = {
+          day: h.day,
+          month: h.month.number,
+          monthAr: h.month.ar,
+          monthEn: h.month.en,
+          year: h.year,
+          designation: h.designation?.abbreviated || 'H',
+        };
+      }
+
+      const todayStr = today.toISOString().split('T')[0];
+      await admin.firestore()
+        .collection('cached_prayer_times')
+        .doc(todayStr)
+        .set({
+          timings: {
+            Fajr: timings.Fajr,
+            Sunrise: timings.Sunrise,
+            Dhuhr: timings.Dhuhr,
+            Asr: timings.Asr,
+            Maghrib: timings.Maghrib,
+            Isha: timings.Isha,
+          },
+          hijri: hijriDate,
+          cachedAt: admin.firestore.FieldValue.serverTimestamp(),
+          source: 'manual_refresh',
+        });
+
+      return { success: true, date: todayStr };
+    } catch (error) {
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+

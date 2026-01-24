@@ -131,65 +131,23 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
 
   const isFavorite = (ayahNumber: number) => favorites.has(`${surahNumber}:${ayahNumber}`);
 
-  useEffect(() => {
-    loadSurah();
-  }, [surahNumber]);
-
-  // Cleanup: arrêter l'audio quand on quitte l'écran
-  useEffect(() => {
-    return () => {
-      stopAudio();
-    };
-  }, []);
-
-  const loadSurah = async () => {
-    try {
-      setLoading(true);
-      const data = await QuranAPI.getSurahFull(surahNumber);
-      setSurahData({
-        arabic: data.arabic,
-        translation: data.translation,
-      });
-    } catch (error) {
-      if (__DEV__) console.error('Erreur chargement sourate:', error);
-      Alert.alert(
-        t('error') as string,
-        t('errorLoadingSurah') as string,
-        [
-          { text: t('retry') as string, onPress: () => loadSurah() },
-          { text: t('back') as string, onPress: () => navigation.goBack() },
-        ]
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleAyahPress = (ayahNumber: number) => {
     setSelectedAyah(selectedAyah === ayahNumber ? null : ayahNumber);
   };
 
-  const handlePreviousSurah = () => {
+  const handlePreviousSurah = useCallback(() => {
     if (surahNumber > 1) {
       navigation.replace('Surah', { surahNumber: surahNumber - 1 });
     }
-  };
+  }, [surahNumber, navigation]);
 
-  const handleNextSurah = () => {
+  const handleNextSurah = useCallback(() => {
     if (surahNumber < 114) {
       navigation.replace('Surah', { surahNumber: surahNumber + 1 });
     }
-  };
+  }, [surahNumber, navigation]);
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={[styles.loadingText, isRTL && styles.rtlText]}>{t('loadingSurah')}</Text>
-      </View>
-    );
-  }
-
+  // IMPORTANT: Tous les useCallback AVANT le return conditionnel
   // Render individual ayah
   const renderAyah = useCallback(({ item: ayah, index }: { item: any; index: number }) => {
     const translation = surahData?.translation?.ayahs?.[index];
@@ -245,7 +203,7 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         )}
       </TouchableOpacity>
     );
-  }, [surahData?.translation?.ayahs, selectedAyah, playingAyah, showTranslation, favorites]);
+  }, [surahData?.translation?.ayahs, selectedAyah, playingAyah, showTranslation, favorites, t]);
 
   const ListHeaderComponent = useCallback(() => (
     <>
@@ -317,7 +275,7 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         </View>
       )}
     </>
-  ), [isRTL, t, surahNumber, surahInfo, showTranslation, isPlayingSurah, selectedReciter, navigation]);
+  ), [isRTL, t, surahNumber, surahInfo, showTranslation, isPlayingSurah, selectedReciter, navigation, handlePlaySurah]);
 
   const ListFooterComponent = useCallback(() => (
     <View style={[styles.navigationContainer, isRTL && styles.navigationContainerRTL]}>
@@ -340,9 +298,54 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         </Text>
       </TouchableOpacity>
     </View>
-  ), [isRTL, t, surahNumber]);
+  ), [isRTL, t, surahNumber, handlePreviousSurah, handleNextSurah]);
 
   const keyExtractor = useCallback((item: any) => item.numberInSurah.toString(), []);
+
+  // Chargement de la sourate
+  const loadSurah = async () => {
+    try {
+      setLoading(true);
+      const data = await QuranAPI.getSurahFull(surahNumber);
+      setSurahData({
+        arabic: data.arabic,
+        translation: data.translation,
+      });
+    } catch (error) {
+      if (__DEV__) console.error('Erreur chargement sourate:', error);
+      Alert.alert(
+        t('error') as string,
+        t('errorLoadingSurah') as string,
+        [
+          { text: t('retry') as string, onPress: () => loadSurah() },
+          { text: t('back') as string, onPress: () => navigation.goBack() },
+        ]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSurah();
+  }, [surahNumber]);
+
+  // Cleanup: arrêter l'audio quand on quitte l'écran
+  useEffect(() => {
+    return () => {
+      stopAudio();
+    };
+  }, []);
+
+  // Écran de chargement APRÈS tous les hooks
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={[styles.loadingText, isRTL && styles.rtlText]}>{t('loadingSurah')}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
