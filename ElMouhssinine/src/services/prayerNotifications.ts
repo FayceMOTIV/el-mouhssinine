@@ -579,6 +579,28 @@ export const cancelBoostNotifications = async (): Promise<void> => {
 };
 
 /**
+ * Annule les notifications boost pour une prière spécifique uniquement
+ * Les notifications des autres prières restent actives
+ */
+export const cancelBoostNotificationsForPrayer = async (prayerKey: string): Promise<void> => {
+  try {
+    const notifications = await notifee.getTriggerNotificationIds();
+    const prefix = `boost_${prayerKey.toLowerCase()}_`;
+    let cancelledCount = 0;
+
+    for (const id of notifications) {
+      if (id.startsWith(prefix)) {
+        await notifee.cancelTriggerNotification(id);
+        cancelledCount++;
+      }
+    }
+    console.log(`[PrayerBoost] ${cancelledCount} notifications annulées pour ${prayerKey}`);
+  } catch (error) {
+    console.error('[PrayerBoost] Erreur annulation prière:', error);
+  }
+};
+
+/**
  * Programme les notifications boost pour les prières
  * Fonction SÉPARÉE qui n'affecte pas les notifications classiques
  */

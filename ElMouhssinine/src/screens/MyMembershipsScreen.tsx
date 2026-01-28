@@ -9,6 +9,7 @@ import {
   Alert,
   RefreshControl,
   Vibration,
+  useWindowDimensions,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useNavigation } from '@react-navigation/native';
@@ -28,6 +29,9 @@ import MemberCard, { getMembershipStatus } from '../components/MemberCard';
 const MyMembershipsScreen = () => {
   const navigation = useNavigation<any>();
   const { t, language, isRTL } = useLanguage();
+  const { width: screenWidth } = useWindowDimensions();
+  const CARD_HORIZONTAL_PADDING = 20;
+  const cardWidth = screenWidth - (CARD_HORIZONTAL_PADDING * 2);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -236,17 +240,20 @@ const MyMembershipsScreen = () => {
           {myMembership ? (
             <>
               {/* Carte de membre avec design professionnel */}
-              <MemberCard
-                member={{
-                  name: `${myMembership.prenom} ${myMembership.nom}`,
-                  memberId: myMembership.id,
-                  membershipExpirationDate: myMembership.dateFin || null,
-                  status: myMembership.status === 'en_attente_paiement' ? 'en_attente_paiement' : myMembership.status,
-                }}
-                isRTL={isRTL}
-                onPay={myMembership.status === 'en_attente_paiement' ? () => navigation.navigate('Member') : undefined}
-                onRenew={['expire', 'expired', 'inactive', 'none'].includes(myMembership.status) ? () => navigation.navigate('Member') : undefined}
-              />
+              <View style={{ paddingHorizontal: CARD_HORIZONTAL_PADDING }}>
+                <MemberCard
+                  member={{
+                    name: `${myMembership.prenom} ${myMembership.nom}`,
+                    memberId: myMembership.id,
+                    membershipExpirationDate: myMembership.dateFin || null,
+                    status: myMembership.status === 'en_attente_paiement' ? 'en_attente_paiement' : myMembership.status,
+                  }}
+                  cardWidth={cardWidth}
+                  isRTL={isRTL}
+                  onPay={myMembership.status === 'en_attente_paiement' ? () => navigation.navigate('Member') : undefined}
+                  onRenew={['expire', 'expired', 'inactive', 'none'].includes(myMembership.status) ? () => navigation.navigate('Member') : undefined}
+                />
+              </View>
 
               {/* Détails supplémentaires */}
               <View style={styles.detailsCard}>
@@ -418,15 +425,18 @@ const MyMembershipsScreen = () => {
             {inscribedMembers.map((member) => (
               <View key={member.id}>
                 {/* Carte de membre avec design identique */}
-                <MemberCard
-                  member={{
-                    name: `${member.prenom} ${member.nom}`,
-                    memberId: member.id,
-                    membershipExpirationDate: member.dateFin || null,
-                    status: member.status === 'en_attente_paiement' ? 'en_attente_paiement' : member.status,
-                  }}
-                  isRTL={isRTL}
-                />
+                <View style={{ paddingHorizontal: CARD_HORIZONTAL_PADDING }}>
+                  <MemberCard
+                    member={{
+                      name: `${member.prenom} ${member.nom}`,
+                      memberId: member.id,
+                      membershipExpirationDate: member.dateFin || null,
+                      status: member.status === 'en_attente_paiement' ? 'en_attente_paiement' : member.status,
+                    }}
+                    cardWidth={cardWidth}
+                    isRTL={isRTL}
+                  />
+                </View>
 
                 {/* Infos supplémentaires sous la carte */}
                 <View style={styles.inscribedMemberInfo}>

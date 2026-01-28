@@ -40,7 +40,7 @@ import {
   getPrayerNotificationSettings,
   schedulePrayerNotifications,
   getBoostSettings,
-  cancelBoostNotifications,
+  cancelBoostNotificationsForPrayer,
   scheduleBoostNotifications,
   PrayerBoostSettings,
   checkMosqueProximity,
@@ -364,28 +364,21 @@ const HomeScreen = () => {
     }, [rawPrayerTimings])
   );
 
-  // Charger les paramètres boost quand l'écran revient au premier plan
+  // Charger les paramètres boost ET programmer les notifications à chaque focus
   useFocusEffect(
     useCallback(() => {
-      const loadBoostSettings = async () => {
+      const loadAndScheduleBoost = async () => {
         try {
+          // 1. Charger les settings
           const settings = await getBoostSettings();
           setBoostSettings(settings);
-        } catch (error) {
-          console.warn('[HomeScreen] Erreur chargement boost settings:', error);
-        }
-      };
-      loadBoostSettings();
-    }, [])
-  );
 
-  // Re-programmer les notifications boost à chaque focus de l'écran
-  useFocusEffect(
-    useCallback(() => {
-      if (!rawPrayerTimings || !boostSettings?.enabled) return;
+          // 2. Programmer les notifications si activé
+          if (!rawPrayerTimings || !settings.enabled) {
+            console.log('[HomeScreen] Boost désactivé ou pas de timings');
+            return;
+          }
 
-      const refreshBoostNotifications = async () => {
-        try {
           const translations = {
             reminderTitle: t('boostReminderTitle'),
             urgentTitle: t('boostUrgentTitle'),
@@ -393,15 +386,15 @@ const HomeScreen = () => {
             midTime: t('boostMidTime'),
             before15min: t('boostBefore15min'),
           };
-          await scheduleBoostNotifications(rawPrayerTimings, boostSettings, translations);
-          console.log('[HomeScreen] Boost notifications reprogrammées');
+          await scheduleBoostNotifications(rawPrayerTimings, settings, translations);
+          console.log('[HomeScreen] Boost notifications reprogrammées avec succès');
         } catch (error) {
-          console.warn('[HomeScreen] Erreur refresh boost notifications:', error);
+          console.warn('[HomeScreen] Erreur boost:', error);
         }
       };
 
-      refreshBoostNotifications();
-    }, [rawPrayerTimings, boostSettings, t])
+      loadAndScheduleBoost();
+    }, [rawPrayerTimings, t])
   );
 
   // Mettre à jour la prière en cours quand les horaires changent
@@ -504,8 +497,9 @@ const HomeScreen = () => {
       setHasPrayedCurrentPrayer(true);
       // Sauvegarder dans AsyncStorage pour persister entre les sessions
       await AsyncStorage.setItem('prayed_prayer_name', currentPrayer.name);
-      // Annuler toutes les notifications boost programmées
-      await cancelBoostNotifications();
+      // Annuler les notifications boost de cette prière UNIQUEMENT
+      // Les notifications des prières futures restent actives
+      await cancelBoostNotificationsForPrayer(currentPrayer.name);
       Vibration.vibrate(100); // Feedback haptique
     } catch (error) {
       console.warn('[HomeScreen] Erreur annulation boost:', error);

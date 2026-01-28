@@ -23,7 +23,8 @@ import { makePayment, showPaymentError, showPaymentSuccess } from '../services/s
 import { subscribeToMembersTopic, unsubscribeFromMembersTopic, saveFCMTokenToFirestore } from '../services/notifications';
 import { Member } from '../types';
 import { useLanguage } from '../context/LanguageContext';
-import { SkeletonLoader, MemberProfileSkeleton, MemberCard } from '../components';
+import { SkeletonLoader, MemberProfileSkeleton } from '../components';
+import MemberCardFullScreen from '../components/MemberCardFullScreen';
 
 // Type pour les membres supplémentaires
 interface AdditionalMember {
@@ -97,8 +98,7 @@ const MemberScreen = () => {
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
 
   // Carousel des cartes membres
-  const [activeCardIndex, setActiveCardIndex] = useState(0);
-  const cardsListRef = useRef<FlatList>(null);
+  const [showCardFullScreen, setShowCardFullScreen] = useState(false);
   const { width: screenWidth } = useWindowDimensions();
 
   // Charger les donnees du membre depuis Firestore
@@ -987,6 +987,22 @@ const MemberScreen = () => {
     );
   }
 
+  // Préparer les données des cartes pour le modal plein écran
+  const membersForCard = [
+    memberProfile ? {
+      name: memberProfile.name || `${memberProfile.prenom} ${memberProfile.nom}`,
+      memberId: memberProfile.memberId,
+      membershipExpirationDate: memberProfile.cotisationExpiry,
+      status: memberProfile.cotisationStatus === 'pending' ? 'unpaid' : memberProfile.cotisationStatus,
+    } : null,
+    ...inscribedMembers.map(m => ({
+      name: `${m.prenom} ${m.nom}`,
+      memberId: m.id,
+      membershipExpirationDate: m.dateFin || null,
+      status: m.status,
+    })),
+  ].filter((m): m is NonNullable<typeof m> => m !== null);
+
   // Si connecté
   return (
     <KeyboardAvoidingView
@@ -1000,93 +1016,23 @@ const MemberScreen = () => {
           <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('welcomeUser')} {member?.name?.split(' ')[0]}</Text>
         </View>
 
-        {/* Cartes de membre - Carousel swipable */}
-        {(() => {
-          // Préparer les données des cartes
-          const allCards = [
-            // Carte principale de l'utilisateur
-            {
-              id: 'main',
-              type: 'main' as const,
-              member: memberProfile ? {
-                name: memberProfile.name,
-                firstName: memberProfile.prenom,
-                lastName: memberProfile.nom,
-                memberId: memberProfile.memberId,
-                membershipExpirationDate: memberProfile.cotisationExpiry,
-                status: memberProfile.cotisationStatus === 'pending' ? 'unpaid' : memberProfile.cotisationStatus,
-              } : null,
-            },
-            // Cartes des membres inscrits
-            ...inscribedMembers.map(m => ({
-              id: m.id,
-              type: 'inscribed' as const,
-              member: {
-                name: `${m.prenom} ${m.nom}`,
-                firstName: m.prenom,
-                lastName: m.nom,
-                memberId: m.id,
-                membershipExpirationDate: m.dateFin || null,
-                status: m.status,
-              },
-            })),
-          ];
-
-          const cardWidth = screenWidth;
-
-          return (
-            <View>
-              <FlatList
-                ref={cardsListRef}
-                data={allCards}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                keyExtractor={(item) => item.id}
-                onMomentumScrollEnd={(event) => {
-                  const index = Math.round(event.nativeEvent.contentOffset.x / cardWidth);
-                  setActiveCardIndex(index);
-                }}
-                renderItem={({ item }) => (
-                  <View style={{ width: cardWidth, minHeight: Math.max(220, screenWidth * 0.58) + 100 }}>
-                    <MemberCard
-                      member={item.member}
-                      onRenew={item.type === 'main' ? () => setShowCotisationModal(true) : undefined}
-                      onPay={item.type === 'main' && memberProfile?.cotisationStatus === 'pending' ? () => setShowCotisationModal(true) : undefined}
-                      isRTL={isRTL}
-                    />
-                  </View>
-                )}
-              />
-              {/* Pagination dots si plusieurs cartes */}
-              {allCards.length > 1 && (
-                <View style={styles.paginationDots}>
-                  {allCards.map((_, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      onPress={() => {
-                        cardsListRef.current?.scrollToIndex({ index, animated: true });
-                        setActiveCardIndex(index);
-                      }}
-                    >
-                      <View
-                        style={[
-                          styles.paginationDot,
-                          activeCardIndex === index && styles.paginationDotActive,
-                        ]}
-                      />
-                    </TouchableOpacity>
-                  ))}
-                  <Text style={styles.paginationLabel}>
-                    {activeCardIndex === 0
-                      ? (isRTL ? 'بطاقتي' : 'Ma carte')
-                      : (isRTL ? `عضو ${activeCardIndex}` : `Membre ${activeCardIndex}`)}
-                  </Text>
-                </View>
-              )}
-            </View>
-          );
-        })()}
+        {/* Bouton voir carte de membre */}
+        <TouchableOpacity
+          style={styles.viewCardButton}
+          onPress={() => setShowCardFullScreen(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={{ fontSize: 28 }}>💳</Text>
+          <View style={styles.viewCardButtonTextContainer}>
+            <Text style={styles.viewCardButtonTitle}>
+              {isRTL ? 'بطاقة العضوية' : 'Ma carte de membre'}
+            </Text>
+            <Text style={styles.viewCardButtonSubtitle}>
+              {isRTL ? 'اضغط للعرض بملء الشاشة' : 'Appuyez pour voir en plein écran'}
+            </Text>
+          </View>
+          <Text style={{ fontSize: 20, color: '#C9A227' }}>↗</Text>
+        </TouchableOpacity>
 
         <View style={styles.content}>
           {/* Détails complémentaires du membre */}
@@ -1266,6 +1212,14 @@ const MemberScreen = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Modal Carte Membre Plein Écran */}
+      <MemberCardFullScreen
+        visible={showCardFullScreen}
+        onClose={() => setShowCardFullScreen(false)}
+        members={membersForCard}
+        isRTL={isRTL}
+      />
 
       {/* Modal Cotisation */}
       <Modal visible={showCotisationModal} transparent animationType="fade">
@@ -1793,6 +1747,32 @@ const styles = StyleSheet.create({
     color: colors.textOnDarkMuted,
     fontSize: fontSize.sm,
     fontStyle: 'italic',
+  },
+  // Bouton carte membre plein écran
+  viewCardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(201, 162, 39, 0.12)',
+    marginHorizontal: 16,
+    marginVertical: 16,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(201, 162, 39, 0.4)',
+  },
+  viewCardButtonTextContainer: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  viewCardButtonTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#C9A227',
+  },
+  viewCardButtonSubtitle: {
+    fontSize: 13,
+    color: 'rgba(201, 162, 39, 0.7)',
+    marginTop: 4,
   },
   // Not logged in
   notLoggedInCard: {
