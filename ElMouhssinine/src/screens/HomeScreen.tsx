@@ -10,6 +10,7 @@ import {
   Image,
   Animated,
   Vibration,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
@@ -459,6 +460,11 @@ const HomeScreen = () => {
         // Vérifier si la feature est activée
         const settings = await getMosqueProximitySettings();
         if (!settings.enabled) return;
+
+        // Demander la permission de géolocalisation (iOS)
+        if (Platform.OS === 'ios') {
+          Geolocation.requestAuthorization('whenInUse');
+        }
 
         // Demander la position actuelle
         Geolocation.getCurrentPosition(

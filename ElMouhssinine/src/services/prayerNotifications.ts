@@ -337,10 +337,11 @@ export const schedulePrayerNotifications = async (
       }
     }
 
-    // ========== NOTIFICATION DE RAPPEL : Ouvrir l'app (jour 5) ==========
-    // Rappel au jour 5 (dernier jour planifié) pour que l'utilisateur ouvre l'app
+    // ========== NOTIFICATION DE RAPPEL : Ouvrir l'app (dernier jour) ==========
+    // Rappel à l'avant-dernier jour planifié pour que l'utilisateur ouvre l'app
     // et re-planifie les notifications pour les jours suivants
-    const reminderDate = addDays(today, MAX_DAYS - 1); // jour 5
+    // Si boost activé: jour 2 | Si boost désactivé: jour 5
+    const reminderDate = addDays(today, MAX_DAYS - 1);
     reminderDate.setHours(12, 0, 0, 0); // À midi
 
     if (reminderDate > now) {
