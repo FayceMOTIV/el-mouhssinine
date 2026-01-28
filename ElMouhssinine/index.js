@@ -6,11 +6,21 @@ import { AppRegistry, LogBox } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import notifee from '@notifee/react-native';
 import TrackPlayer from 'react-native-track-player';
+import BackgroundFetch from 'react-native-background-fetch';
 import App from './App';
 import { name as appName } from './app.json';
 
 // IMPORTANT: Enregistrer le service de lecture audio (Coran)
 TrackPlayer.registerPlaybackService(() => require('./service'));
+
+// IMPORTANT: Enregistrer le headless task pour le background fetch (Android)
+// Permet de vérifier la proximité de la mosquée même si l'app est fermée
+BackgroundFetch.registerHeadlessTask(async ({ taskId }) => {
+  console.log(`[BackgroundFetch] Headless task ${taskId}`);
+  // La logique de proximité est gérée dans backgroundLocation.ts
+  // Ce handler est appelé automatiquement par le système
+  BackgroundFetch.finish(taskId);
+});
 
 // Ignore specific warnings
 LogBox.ignoreLogs([

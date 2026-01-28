@@ -6,6 +6,7 @@ import FirebaseCore
 import FirebaseMessaging
 import AVFoundation
 import UserNotifications
+import TSBackgroundFetch
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
@@ -103,6 +104,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   // Handle notification tap
   func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
     completionHandler()
+  }
+
+  // MARK: - Background Fetch
+  func application(_ application: UIApplication, performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+    print("📍 [BackgroundFetch] Received background fetch event")
+    TSBackgroundFetch.sharedInstance().performFetchWithCompletionHandler(completionHandler)
   }
 }
 

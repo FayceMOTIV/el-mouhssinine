@@ -8,6 +8,7 @@ import { LanguageProvider } from './src/context/LanguageContext';
 import { initTTS } from './src/services/tts';
 import { initializeFCM, setupForegroundHandler, clearBadgeCount } from './src/services/notifications';
 import { subscribeToGeneralSettings, MaintenanceSettings } from './src/services/firebase';
+import { initBackgroundLocation } from './src/services/backgroundLocation';
 
 // Clé publique Stripe (à remplacer par la vraie clé)
 // Pour obtenir la clé: https://dashboard.stripe.com/apikeys
@@ -62,6 +63,9 @@ const App: React.FC = () => {
 
       // Initialiser FCM pour les notifications push
       await initializeFCM();
+
+      // Initialiser le background location pour les rappels de proximité mosquée
+      await initBackgroundLocation();
 
       // Effacer le badge à l'ouverture de l'app
       await clearBadgeCount();

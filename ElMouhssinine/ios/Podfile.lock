@@ -3997,6 +3997,9 @@ PODS:
     - React-utils (= 0.83.1)
     - SocketRocket
   - RecaptchaInterop (101.0.0)
+  - RNBackgroundFetch (4.3.0):
+    - React-Core
+    - TSBackgroundFetch (~> 4.0.0)
   - RNCAsyncStorage (1.24.0):
     - boost
     - DoubleConversion
@@ -4289,6 +4292,7 @@ PODS:
   - SwiftAudioEx (1.1.0)
   - TextToSpeech (4.1.1):
     - React-Core
+  - TSBackgroundFetch (4.0.6)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -4374,6 +4378,7 @@ DEPENDENCIES:
   - ReactAppDependencyProvider (from `build/generated/ios/ReactAppDependencyProvider`)
   - ReactCodegen (from `build/generated/ios/ReactCodegen`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
+  - RNBackgroundFetch (from `../node_modules/react-native-background-fetch`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - "RNCClipboard (from `../node_modules/@react-native-clipboard/clipboard`)"
   - "RNFBApp (from `../node_modules/@react-native-firebase/app`)"
@@ -4426,6 +4431,7 @@ SPEC REPOS:
     - StripePaymentsUI
     - StripeUICore
     - SwiftAudioEx
+    - TSBackgroundFetch
 
 EXTERNAL SOURCES:
   boost:
@@ -4591,6 +4597,8 @@ EXTERNAL SOURCES:
     :path: build/generated/ios/ReactCodegen
   ReactCommon:
     :path: "../node_modules/react-native/ReactCommon"
+  RNBackgroundFetch:
+    :path: "../node_modules/react-native-background-fetch"
   RNCAsyncStorage:
     :path: "../node_modules/@react-native-async-storage/async-storage"
   RNCClipboard:
@@ -4725,6 +4733,7 @@ SPEC CHECKSUMS:
   ReactCodegen: d663254bf59e57e5ed7c65638bd45f358a373bba
   ReactCommon: 15e1e727fa34f760beb7dd52928687fda8edf8dc
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
+  RNBackgroundFetch: a5c9975c270d869a666364ade366d92f7435dd74
   RNCAsyncStorage: 87d51a3aa982dd38d07ecb588aa67821a4a14eee
   RNCClipboard: e560338bf6cc4656a09ff90610b62ddc0dbdad65
   RNFBApp: 6e0c3ee6cfbc76b5d1237ebf37240cd48a55c6e2
@@ -4747,6 +4756,7 @@ SPEC CHECKSUMS:
   StripeUICore: 30f8352fd7a5cf1541b7777a57b3ad1133bf6763
   SwiftAudioEx: f6aa653770f3a0d3851edaf8d834a30aee4a7646
   TextToSpeech: 89b239221ec378d213af422d14789a729705360b
+  TSBackgroundFetch: 0afbeaae4e1132866e1d4b6e55265af26b5958ae
   Yoga: 33b53536a0500d039f2cd78caf1d5d68712d3af7
 
 PODFILE CHECKSUM: c86763ecbaf02f4da86eb2da750bd9297172bb21
