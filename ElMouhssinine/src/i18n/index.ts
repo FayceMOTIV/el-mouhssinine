@@ -446,6 +446,13 @@ export const translations = {
     boostAfter30min: 'N\'oublie pas {prayer} 🕌',
     boostMidTime: 'Tu as un RDV important qui t\'attend ! 🤝',
     boostBefore15min: 'Plus que 15 min pour {prayer} ! ⏰',
+
+    // Mode Silencieux Mosquée (Géolocalisation)
+    mosqueSilentMode: 'Mode Silencieux Mosquée',
+    enableMosqueProximity: 'Rappel à 100m de la mosquée',
+    mosqueSilentModeDescription: '📍 Quand vous êtes à moins de 100m de la mosquée, vous recevrez un rappel pour mettre votre téléphone en silencieux.',
+    mosqueSilentModeTitle: 'Vous êtes à la mosquée',
+    mosqueSilentModeBody: 'N\'oubliez pas de mettre votre téléphone en mode silencieux 🔕',
   },
 
   ar: {
@@ -899,6 +906,13 @@ export const translations = {
     boostAfter30min: 'لا تنسَ صلاة {prayer} 🕌',
     boostMidTime: 'لديك موعد مهم ينتظرك! 🤝',
     boostBefore15min: 'باقي 15 دقيقة فقط لصلاة {prayer}! ⏰',
+
+    // Mode Silencieux Mosquée (Géolocalisation)
+    mosqueSilentMode: 'وضع الصمت في المسجد',
+    enableMosqueProximity: 'تذكير على بعد 100م من المسجد',
+    mosqueSilentModeDescription: '📍 عندما تكون على بعد أقل من 100 متر من المسجد، ستتلقى تذكيراً لوضع هاتفك على الصامت.',
+    mosqueSilentModeTitle: 'أنت في المسجد',
+    mosqueSilentModeBody: 'لا تنسَ وضع هاتفك على الصامت 🔕',
   },
 };
 

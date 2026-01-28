@@ -46,6 +46,11 @@ import {
   saveQuranReminderSettings,
   scheduleQuranReminders,
   cancelQuranReminders,
+  // Proximité Mosquée (mode silencieux)
+  MosqueProximitySettings,
+  DEFAULT_MOSQUE_PROXIMITY_SETTINGS,
+  getMosqueProximitySettings,
+  saveMosqueProximitySettings,
 } from '../services/prayerNotifications';
 import { PrayerAPI } from '../services/prayerApi';
 
@@ -81,6 +86,8 @@ const MoreScreen = () => {
   const [boostSettings, setBoostSettings] = useState<PrayerBoostSettings>(DEFAULT_PRAYER_BOOST_SETTINGS);
   // Rappel Coran
   const [quranReminderSettings, setQuranReminderSettings] = useState<QuranReminderSettings>(DEFAULT_QURAN_REMINDER_SETTINGS);
+  // Proximité Mosquée (mode silencieux)
+  const [mosqueProximitySettings, setMosqueProximitySettings] = useState<MosqueProximitySettings>(DEFAULT_MOSQUE_PROXIMITY_SETTINGS);
   const [compassHeading, setCompassHeading] = useState(0);
   const [compassError, setCompassError] = useState<string | null>(null);
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -156,6 +163,11 @@ const MoreScreen = () => {
     getQuranReminderSettings().then(setQuranReminderSettings);
   }, []);
 
+  // Charger les settings proximité mosquée
+  useEffect(() => {
+    getMosqueProximitySettings().then(setMosqueProximitySettings);
+  }, []);
+
   // Mettre a jour les settings de notifications de priere
   const updatePrayerNotifSettings = async (newSettings: PrayerNotificationSettings) => {
     setPrayerNotifSettings(newSettings);
@@ -223,6 +235,12 @@ const MoreScreen = () => {
     } else {
       await cancelQuranReminders();
     }
+  };
+
+  // Mettre à jour les settings proximité mosquée
+  const updateMosqueProximitySettings = async (newSettings: MosqueProximitySettings) => {
+    setMosqueProximitySettings(newSettings);
+    await saveMosqueProximitySettings(newSettings);
   };
 
   // Gérer le toggle du rappel Jumu'a
@@ -811,6 +829,35 @@ const MoreScreen = () => {
                   </View>
                 </>
               )}
+            </View>
+          </View>
+
+          {/* Mode Silencieux Mosquée - Géolocalisation */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
+              📍 {t('mosqueSilentMode')}
+            </Text>
+            <View style={styles.card}>
+              <View style={styles.settingRow}>
+                <View style={styles.settingLeft}>
+                  <Text style={styles.settingIcon}>🔕</Text>
+                  <Text style={styles.settingLabel}>{t('enableMosqueProximity')}</Text>
+                </View>
+                <Switch
+                  active={mosqueProximitySettings.enabled}
+                  onToggle={() => updateMosqueProximitySettings({
+                    ...mosqueProximitySettings,
+                    enabled: !mosqueProximitySettings.enabled
+                  })}
+                />
+              </View>
+
+              {/* Note explicative */}
+              <View style={styles.prayerNotifNote}>
+                <Text style={styles.prayerNotifNoteText}>
+                  {t('mosqueSilentModeDescription')}
+                </Text>
+              </View>
             </View>
           </View>
 

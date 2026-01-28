@@ -242,10 +242,13 @@ export const schedulePrayerNotifications = async (
     console.log('[PrayerNotif] Current time:', now.toLocaleString('fr-FR'));
     const scheduledPrayers: string[] = [];
 
-    // Scheduler pour les 6 prochains jours maximum
+    // Scheduler pour les prochains jours
     // IMPORTANT: iOS limite à 64 notifications locales planifiées par app
-    // 5 prières × 2 notifs × 6 jours = 60 notifications (sous la limite)
-    const MAX_DAYS = 6;
+    // Si boost est activé, on réduit à 3 jours (30 notifs) pour laisser place au boost (~30 notifs)
+    // Si boost désactivé, on utilise 6 jours (60 notifs)
+    const boostSettings = await getBoostSettings();
+    const MAX_DAYS = boostSettings.enabled ? 3 : 6;
+    console.log(`[PrayerNotif] MAX_DAYS: ${MAX_DAYS} (boost ${boostSettings.enabled ? 'enabled' : 'disabled'})`);
     const daysToSchedule: { date: Date; suffix: string }[] = [];
     for (let i = 0; i < MAX_DAYS; i++) {
       daysToSchedule.push({

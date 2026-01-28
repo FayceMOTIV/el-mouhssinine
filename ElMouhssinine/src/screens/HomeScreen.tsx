@@ -467,8 +467,8 @@ const HomeScreen = () => {
             console.log(`[HomeScreen] Position: ${latitude}, ${longitude}`);
 
             await checkMosqueProximity(latitude, longitude, {
-              title: '🕌 Vous êtes à la mosquée',
-              body: 'Pensez à mettre votre téléphone en mode silencieux',
+              title: `🕌 ${t('mosqueSilentModeTitle')}`,
+              body: t('mosqueSilentModeBody'),
             });
           },
           (error) => {
@@ -486,7 +486,7 @@ const HomeScreen = () => {
     };
 
     checkProximity();
-  }, []);
+  }, [t]);
 
   // Gérer le clic sur "J'ai prié" - annule les notifications boost et masque le bouton
   const handlePrayed = useCallback(async () => {
