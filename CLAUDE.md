@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 107
+- **Build actuel** : 167
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -667,6 +667,39 @@ Le bouton "J'ai prié" annulait les notifications boost de la PROCHAINE prière 
 - TypeScript: 0 erreurs
 - Build iOS: SUCCESS
 - TestFlight: Build 107 uploadé
+
+## Ajoute (28 Jan 2026 - Build 167)
+
+### Carte membre plein écran (MemberCardFullScreen.tsx - Refonte complète)
+
+#### Design plein écran
+- [x] Suppression du cadre/carte - utilisation du fond d'écran comme "carte"
+- [x] Couleur de fond dynamique selon le statut :
+  - 🟢 Vert foncé (#065F46) = ACTIF
+  - 🟠 Orange (#B45309) = EXPIRE BIENTÔT
+  - 🔴 Rouge (#991B1B) = EXPIRÉ
+  - ⚫ Gris (#374151) = INACTIF
+  - 🟤 Ambre (#92400E) = EN ATTENTE PAIEMENT
+- [x] Support paysage (supportedOrientations)
+- [x] Texte centré : logo, nom mosquée, badge statut, numéro, titulaire, validité
+
+#### Swipe entre membres
+- [x] FlatList horizontal avec pagination
+- [x] snapToInterval + decelerationRate="fast"
+- [x] Dots animés (scale + opacity) pour indiquer la position
+- [x] Compteur "1 / 3" à côté des dots
+- [x] Message "Swipez pour voir les autres membres" (affiché seulement sur 1ère carte)
+- [x] Fond qui change de couleur selon le statut du membre affiché
+
+#### Enquête notifications
+- [x] Confirmé : notifications 100% locales (AsyncStorage + notifee)
+- [x] Bouton "J'ai prié" n'affecte que le téléphone local
+- [x] Bouton masqué entre Sunrise et Dhuhr (comportement normal - pas de prière en cours)
+
+#### Résultats
+- TypeScript: 0 erreurs
+- Build iOS: SUCCESS
+- TestFlight: Build 167 uploadé
 
 ## TODO Futur
 - [ ] Verifier expediteur Brevo (centreculturelislamique@orange.fr)
