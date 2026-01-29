@@ -1192,6 +1192,7 @@ export interface CreateMemberData {
   telephone?: string;
   adresse?: string;
   email?: string;
+  accepteReglement?: boolean; // A accepté le règlement intérieur
   // Ancien format
   name?: string;
   phone?: string;

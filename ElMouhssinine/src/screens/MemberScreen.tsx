@@ -79,6 +79,7 @@ const MemberScreen = () => {
 
   // Famille
   const [familyMembers, setFamilyMembers] = useState<{id: string; nom: string; prenom: string; telephone: string; adresse: string; accepte: boolean}[]>([]);
+  const [familyFormule, setFamilyFormule] = useState<'mensuel' | 'annuel'>('annuel');
 
   // ============================================================
   // EFFECTS
@@ -258,13 +259,16 @@ const MemberScreen = () => {
 
     setIsProcessingPayment(true);
     try {
-      const paymentResult = await makePayment(
+      const paymentResult = await makePayment({
         amount,
-        `Cotisation ${selectedFormule} - El Mouhssinine`,
-        memberProfile.uid,
-        memberProfile.email,
-        'cotisation'
-      );
+        description: `Cotisation ${selectedFormule} - El Mouhssinine`,
+        type: 'cotisation',
+        metadata: {
+          memberId: memberProfile.memberId || '',
+          memberName: memberProfile.name,
+          period: selectedFormule,
+        },
+      });
 
       if (paymentResult.success && paymentResult.paymentIntentId) {
         await addPayment({
@@ -330,13 +334,17 @@ const MemberScreen = () => {
       }
     }
 
-    const totalAmount = familyMembers.length * formulePrices[selectedFormule];
+    const totalAmount = familyMembers.length * formulePrices[familyFormule];
     const paiementId = `PAY-${Date.now()}`;
 
     if (method === 'virement') {
       const reference = `FAM-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
       // Créer les membres en attente
+      const nameParts = memberProfile.name.split(' ');
+      const payeurPrenom = nameParts[0] || '';
+      const payeurNom = nameParts.slice(1).join(' ') || memberProfile.name;
+
       for (const member of familyMembers) {
         await createMember({
           email: `${member.prenom.toLowerCase()}.${member.nom.toLowerCase()}@inscrit-par-${memberProfile.email}`,
@@ -345,15 +353,17 @@ const MemberScreen = () => {
           telephone: member.telephone,
           adresse: member.adresse,
           accepteReglement: true,
-          inscritPar: { odUserId: memberProfile.uid, nom: memberProfile.name },
+          inscritPar: { odUserId: memberProfile.uid, nom: payeurNom, prenom: payeurPrenom },
           status: 'en_attente_paiement',
           referenceVirement: reference,
+          formule: familyFormule,
+          montant: formulePrices[familyFormule],
         });
       }
 
       Alert.alert(
         '🏦 Virement bancaire',
-        `Montant total: ${totalAmount}€ (${familyMembers.length} membre${familyMembers.length > 1 ? 's' : ''})\n\nIBAN: ${mosqueeInfo?.iban || 'FR76 XXXX XXXX XXXX'}\nRéférence: ${reference}`,
+        `Montant total: ${totalAmount}€ (${familyMembers.length} membre${familyMembers.length > 1 ? 's' : ''} - ${familyFormule})\n\nIBAN: ${mosqueeInfo?.iban || 'FR76 XXXX XXXX XXXX'}\nRéférence: ${reference}`,
         [{ text: 'Compris' }]
       );
 
@@ -367,22 +377,30 @@ const MemberScreen = () => {
 
     setIsProcessingPayment(true);
     try {
-      const paymentResult = await makePayment(
-        totalAmount,
-        `Cotisation famille (${familyMembers.length}) - El Mouhssinine`,
-        memberProfile.uid,
-        memberProfile.email,
-        'cotisation'
-      );
+      const paymentResult = await makePayment({
+        amount: totalAmount,
+        description: `Cotisation famille ${familyFormule} (${familyMembers.length}) - El Mouhssinine`,
+        type: 'cotisation',
+        metadata: {
+          memberId: memberProfile.memberId || '',
+          memberName: memberProfile.name,
+          period: familyFormule,
+          membersCount: familyMembers.length.toString(),
+        },
+      });
 
       if (paymentResult.success && paymentResult.paymentIntentId) {
         const timestamp = new Date();
         const getDateFin = () => {
           const d = new Date();
-          if (selectedFormule === 'mensuel') d.setMonth(d.getMonth() + 1);
+          if (familyFormule === 'mensuel') d.setMonth(d.getMonth() + 1);
           else d.setFullYear(d.getFullYear() + 1);
           return d;
         };
+
+        const nameParts2 = memberProfile.name.split(' ');
+        const payeurPrenom2 = nameParts2[0] || '';
+        const payeurNom2 = nameParts2.slice(1).join(' ') || memberProfile.name;
 
         for (const member of familyMembers) {
           await createMember({
@@ -392,17 +410,17 @@ const MemberScreen = () => {
             telephone: member.telephone,
             adresse: member.adresse,
             accepteReglement: true,
-            inscritPar: { odUserId: memberProfile.uid, nom: memberProfile.name },
+            inscritPar: { odUserId: memberProfile.uid, nom: payeurNom2, prenom: payeurPrenom2 },
             status: 'en_attente_signature',
             dateInscription: timestamp,
             datePaiement: timestamp,
             paiementId,
-            montant: formulePrices[selectedFormule],
+            montant: formulePrices[familyFormule],
             modePaiement: method === 'apple' ? 'Apple Pay' : 'CB',
-            formule: selectedFormule,
+            formule: familyFormule,
             cotisation: {
-              type: selectedFormule,
-              montant: formulePrices[selectedFormule],
+              type: familyFormule,
+              montant: formulePrices[familyFormule],
               dateDebut: timestamp,
               dateFin: getDateFin(),
             },
@@ -498,6 +516,14 @@ const MemberScreen = () => {
   // RENDER: LOGGED IN - NO SUBSCRIPTION
   // ============================================================
 
+  // Préparation de la carte de membre (utilisée dans les deux états)
+  const memberForCard = memberProfile ? {
+    name: memberProfile.name,
+    memberId: memberProfile.memberId,
+    membershipExpirationDate: memberProfile.cotisationExpiry,
+    status: memberProfile.cotisationStatus || 'inactive',
+  } : null;
+
   if (!isPaid) {
     return (
       <View style={styles.container}>
@@ -509,10 +535,51 @@ const MemberScreen = () => {
             </Text>
           </View>
 
+          {/* CARTE DE MEMBRE */}
+          <View style={styles.memberCardSection}>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>🪪 Ma carte de membre</Text>
+
+            <TouchableOpacity
+              onPress={() => setShowCardFullScreen(true)}
+              activeOpacity={0.9}
+            >
+              <MemberCard
+                member={memberForCard}
+                cardWidth={screenWidth - 40}
+                isRTL={isRTL}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.viewCardButton}
+              onPress={() => setShowCardFullScreen(true)}
+            >
+              <Text style={styles.viewCardButtonText}>Voir ma carte en grand</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Bouton voir mes adhésions */}
+          <TouchableOpacity
+            style={styles.membershipsButton}
+            onPress={() => navigation.navigate('MyMemberships')}
+          >
+            <Text style={styles.membershipsButtonIcon}>👥</Text>
+            <View style={styles.membershipsButtonContent}>
+              <Text style={[styles.membershipsButtonText, isRTL && styles.rtlText]}>
+                Voir mes adhésions
+              </Text>
+              <Text style={[styles.membershipsButtonSubtext, isRTL && styles.rtlText]}>
+                {inscribedMembersCount > 0
+                  ? `${inscribedMembersCount + 1} membre${inscribedMembersCount > 0 ? 's' : ''}`
+                  : 'Détails et statuts'}
+              </Text>
+            </View>
+            <Text style={styles.membershipsButtonArrow}>→</Text>
+          </TouchableOpacity>
+
           {/* Card Devenir membre */}
           <View style={styles.card}>
-            <Text style={styles.cardIcon}>🎫</Text>
-            <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Devenir membre</Text>
+            <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Activer ma cotisation</Text>
             <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
               Choisissez votre formule d'adhésion
             </Text>
@@ -566,7 +633,7 @@ const MemberScreen = () => {
             <View style={styles.familyButtonContent}>
               <Text style={[styles.familyButtonText, isRTL && styles.rtlText]}>{t('registerFamily')}</Text>
               <Text style={[styles.familyButtonSubtext, isRTL && styles.rtlText]}>
-                {formulePrices[selectedFormule]}€ par personne
+                Inscrire famille, amis...
               </Text>
             </View>
             <Text style={styles.familyButtonArrow}>→</Text>
@@ -578,6 +645,14 @@ const MemberScreen = () => {
           </TouchableOpacity>
         </ScrollView>
 
+        {/* Modales */}
+        <MemberCardFullScreen
+          visible={showCardFullScreen}
+          onClose={() => setShowCardFullScreen(false)}
+          members={memberForCard ? [memberForCard] : []}
+          isRTL={isRTL}
+        />
+
         {renderPaymentModal()}
         {renderFamilyModal()}
       </View>
@@ -587,13 +662,6 @@ const MemberScreen = () => {
   // ============================================================
   // RENDER: LOGGED IN - WITH SUBSCRIPTION (MAIN VIEW)
   // ============================================================
-
-  const memberForCard = memberProfile ? {
-    name: memberProfile.name,
-    memberId: memberProfile.memberId,
-    membershipExpirationDate: memberProfile.cotisationExpiry,
-    status: memberProfile.cotisationStatus,
-  } : null;
 
   return (
     <View style={styles.container}>
@@ -664,9 +732,10 @@ const MemberScreen = () => {
 
         {/* Renouveler si bientôt expiré */}
         {memberProfile?.cotisationExpiry && (() => {
-          const expiry = memberProfile.cotisationExpiry instanceof Date
-            ? memberProfile.cotisationExpiry
-            : memberProfile.cotisationExpiry?.toDate?.() || new Date(memberProfile.cotisationExpiry);
+          const expiryValue = memberProfile.cotisationExpiry as any;
+          const expiry = expiryValue instanceof Date
+            ? expiryValue
+            : expiryValue?.toDate?.() || new Date(expiryValue);
           const daysLeft = Math.floor((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
           if (daysLeft <= 30 && daysLeft > 0) {
@@ -728,6 +797,7 @@ const MemberScreen = () => {
                 <TextInput
                   style={styles.input}
                   placeholder="votre@email.com"
+                  placeholderTextColor="#999"
                   value={forgotEmail}
                   onChangeText={setForgotEmail}
                   keyboardType="email-address"
@@ -763,6 +833,7 @@ const MemberScreen = () => {
                     <TextInput
                       style={styles.input}
                       placeholder="Votre nom de famille"
+                      placeholderTextColor="#999"
                       value={registerNom}
                       onChangeText={setRegisterNom}
                     />
@@ -771,6 +842,7 @@ const MemberScreen = () => {
                     <TextInput
                       style={styles.input}
                       placeholder="Votre prénom"
+                      placeholderTextColor="#999"
                       value={registerPrenom}
                       onChangeText={setRegisterPrenom}
                     />
@@ -779,6 +851,7 @@ const MemberScreen = () => {
                     <TextInput
                       style={styles.input}
                       placeholder="0612345678"
+                      placeholderTextColor="#999"
                       value={registerTelephone}
                       onChangeText={setRegisterTelephone}
                       keyboardType="phone-pad"
@@ -788,6 +861,7 @@ const MemberScreen = () => {
                     <TextInput
                       style={styles.input}
                       placeholder="Votre adresse"
+                      placeholderTextColor="#999"
                       value={registerAdresse}
                       onChangeText={setRegisterAdresse}
                     />
@@ -798,6 +872,7 @@ const MemberScreen = () => {
                 <TextInput
                   style={styles.input}
                   placeholder="votre@email.com"
+                  placeholderTextColor="#999"
                   value={loginEmail}
                   onChangeText={setLoginEmail}
                   keyboardType="email-address"
@@ -808,6 +883,7 @@ const MemberScreen = () => {
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
+                  placeholderTextColor="#999"
                   value={loginPassword}
                   onChangeText={setLoginPassword}
                   secureTextEntry
@@ -930,22 +1006,58 @@ const MemberScreen = () => {
   // ============================================================
 
   function renderFamilyModal() {
-    const totalAmount = familyMembers.length * formulePrices[selectedFormule];
+    const totalAmount = familyMembers.length * formulePrices[familyFormule];
 
     return (
-      <Modal visible={showFamilyModal} transparent animationType="fade">
+      <Modal visible={showFamilyModal} transparent animationType="slide">
         <KeyboardAvoidingView
-          style={styles.modalOverlay}
+          style={styles.familyModalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
-            <TouchableOpacity style={styles.closeButton} onPress={() => { setShowFamilyModal(false); setFamilyMembers([]); }}>
-              <Text style={styles.closeButtonText}>×</Text>
-            </TouchableOpacity>
+          <View style={styles.familyModalContent}>
+            {/* Header */}
+            <View style={styles.familyModalHeader}>
+              <Text style={[styles.familyModalTitle, isRTL && styles.rtlText]}>👨‍👩‍👧‍👦 Inscrire des proches</Text>
+              <TouchableOpacity
+                style={styles.familyCloseButton}
+                onPress={() => { setShowFamilyModal(false); setFamilyMembers([]); }}
+              >
+                <Text style={styles.familyCloseButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
-            <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>👨‍👩‍👧‍👦 Inscrire des membres</Text>
+            {/* Sélecteur de formule */}
+            <View style={styles.familyFormuleSelector}>
+              <TouchableOpacity
+                style={[styles.familyFormuleOption, familyFormule === 'mensuel' && styles.familyFormuleSelected]}
+                onPress={() => setFamilyFormule('mensuel')}
+              >
+                <Text style={[styles.familyFormuleLabel, familyFormule === 'mensuel' && styles.familyFormuleLabelSelected]}>
+                  Mensuel
+                </Text>
+                <Text style={[styles.familyFormulePrice, familyFormule === 'mensuel' && styles.familyFormulePriceSelected]}>
+                  {formulePrices.mensuel}€/mois
+                </Text>
+              </TouchableOpacity>
 
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <TouchableOpacity
+                style={[styles.familyFormuleOption, familyFormule === 'annuel' && styles.familyFormuleSelected]}
+                onPress={() => setFamilyFormule('annuel')}
+              >
+                <Text style={[styles.familyFormuleLabel, familyFormule === 'annuel' && styles.familyFormuleLabelSelected]}>
+                  Annuel
+                </Text>
+                <Text style={[styles.familyFormulePrice, familyFormule === 'annuel' && styles.familyFormulePriceSelected]}>
+                  {formulePrices.annuel}€/an
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.familyScrollContent}
+            >
               {familyMembers.map((member, index) => (
                 <View key={member.id} style={styles.familyMemberCard}>
                   <View style={styles.familyMemberHeader}>
@@ -958,18 +1070,21 @@ const MemberScreen = () => {
                   <TextInput
                     style={styles.familyInput}
                     placeholder="Nom"
+                    placeholderTextColor="#999"
                     value={member.nom}
                     onChangeText={(v) => updateFamilyMember(member.id, 'nom', v)}
                   />
                   <TextInput
                     style={styles.familyInput}
                     placeholder="Prénom"
+                    placeholderTextColor="#999"
                     value={member.prenom}
                     onChangeText={(v) => updateFamilyMember(member.id, 'prenom', v)}
                   />
                   <TextInput
                     style={styles.familyInput}
                     placeholder="Téléphone"
+                    placeholderTextColor="#999"
                     value={member.telephone}
                     onChangeText={(v) => updateFamilyMember(member.id, 'telephone', v)}
                     keyboardType="phone-pad"
@@ -977,6 +1092,7 @@ const MemberScreen = () => {
                   <TextInput
                     style={styles.familyInput}
                     placeholder="Adresse"
+                    placeholderTextColor="#999"
                     value={member.adresse}
                     onChangeText={(v) => updateFamilyMember(member.id, 'adresse', v)}
                   />
@@ -988,44 +1104,57 @@ const MemberScreen = () => {
                     <View style={[styles.checkbox, member.accepte && styles.checkboxChecked]}>
                       {member.accepte && <Text style={styles.checkboxCheck}>✓</Text>}
                     </View>
-                    <Text style={styles.checkboxLabel}>Accepte le règlement</Text>
+                    <Text style={styles.checkboxLabel}>Accepte le règlement intérieur</Text>
                   </TouchableOpacity>
                 </View>
               ))}
 
               <TouchableOpacity style={styles.addMemberButton} onPress={addFamilyMember}>
-                <Text style={styles.addMemberButtonText}>+ Ajouter un membre</Text>
+                <Text style={styles.addMemberButtonText}>+ Ajouter une personne</Text>
               </TouchableOpacity>
+            </ScrollView>
 
-              {familyMembers.length > 0 && (
-                <View style={styles.familySummary}>
-                  <Text style={styles.familySummaryText}>
-                    {familyMembers.length} membre{familyMembers.length > 1 ? 's' : ''} × {formulePrices[selectedFormule]}€
+            {/* Footer avec total et boutons */}
+            {familyMembers.length > 0 && (
+              <View style={styles.familyFooter}>
+                <View style={styles.familyTotalRow}>
+                  <Text style={styles.familyTotalLabel}>
+                    {familyMembers.length} personne{familyMembers.length > 1 ? 's' : ''} × {formulePrices[familyFormule]}€
                   </Text>
-                  <Text style={styles.familySummaryTotal}>Total: {totalAmount}€</Text>
+                  <Text style={styles.familyTotalAmount}>{totalAmount}€</Text>
+                </View>
 
+                <TouchableOpacity
+                  style={styles.familyPayButton}
+                  onPress={() => handlePayFamily('card')}
+                  disabled={isProcessingPayment}
+                >
+                  {isProcessingPayment ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.familyPayButtonText}>💳 Payer par carte</Text>
+                  )}
+                </TouchableOpacity>
+
+                <View style={styles.familyPaymentOptions}>
                   <TouchableOpacity
-                    style={styles.primaryButton}
-                    onPress={() => handlePayFamily('card')}
+                    style={styles.familyPayOptionButton}
+                    onPress={() => handlePayFamily('apple')}
                     disabled={isProcessingPayment}
                   >
-                    {isProcessingPayment ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.primaryButtonText}>💳 Payer {totalAmount}€</Text>
-                    )}
+                    <Text style={styles.familyPayOptionText}> Pay</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.secondaryButton}
+                    style={styles.familyPayOptionButton}
                     onPress={() => handlePayFamily('virement')}
                     disabled={isProcessingPayment}
                   >
-                    <Text style={styles.secondaryButtonText}>🏦 Payer par virement</Text>
+                    <Text style={styles.familyPayOptionText}>🏦 Virement</Text>
                   </TouchableOpacity>
                 </View>
-              )}
-            </ScrollView>
+              </View>
+            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1293,16 +1422,16 @@ const styles = StyleSheet.create({
 
   // Renew button
   renewButton: {
-    backgroundColor: colors.warning + '20',
+    backgroundColor: '#F5920020',
     borderWidth: 1,
-    borderColor: colors.warning,
+    borderColor: '#F59200',
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
     marginBottom: spacing.md,
   },
   renewButtonText: {
-    color: colors.warning,
+    color: '#F59200',
     fontSize: fontSize.sm,
     fontWeight: '600',
   },
@@ -1479,12 +1608,87 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
-  // Family modal
-  familyMemberCard: {
+  // Family modal - Full screen
+  familyModalOverlay: {
+    flex: 1,
     backgroundColor: colors.background,
+  },
+  familyModalContent: {
+    flex: 1,
+    paddingTop: HEADER_PADDING_TOP,
+  },
+  familyModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  familyModalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  familyCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  familyCloseButtonText: {
+    fontSize: 18,
+    color: colors.textMuted,
+  },
+  familyFormuleSelector: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  familyFormuleOption: {
+    flex: 1,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
     padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  familyFormuleSelected: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent + '15',
+  },
+  familyFormuleLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  familyFormuleLabelSelected: {
+    color: colors.accent,
+    fontWeight: '600',
+  },
+  familyFormulePrice: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  familyFormulePriceSelected: {
+    color: colors.accent,
+  },
+  familyScrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  familyMemberCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
     marginBottom: spacing.md,
+    ...platformShadow(2),
   },
   familyMemberHeader: {
     flexDirection: 'row',
@@ -1493,22 +1697,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   familyMemberNumber: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
+    fontSize: fontSize.md,
+    fontWeight: '700',
     color: colors.accent,
   },
   removeButton: {
-    fontSize: fontSize.lg,
+    fontSize: 20,
     color: colors.error,
     padding: spacing.xs,
   },
   familyInput: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    padding: spacing.sm,
-    fontSize: fontSize.sm,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: fontSize.md,
     color: colors.text,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -1516,32 +1720,68 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.accent,
     borderStyle: 'dashed',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
   },
   addMemberButtonText: {
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.accent,
   },
-  familySummary: {
+  familyFooter: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
   },
-  familySummaryText: {
+  familyTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  familyTotalLabel: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
-    textAlign: 'center',
   },
-  familySummaryTotal: {
-    fontSize: fontSize.xl,
+  familyTotalAmount: {
+    fontSize: fontSize.xxl,
     fontWeight: '700',
     color: colors.text,
-    textAlign: 'center',
-    marginVertical: spacing.md,
+  },
+  familyPayButton: {
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  familyPayButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  familyPaymentOptions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  familyPayOptionButton: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  familyPayOptionText: {
+    fontSize: fontSize.sm,
+    fontWeight: '500',
+    color: colors.text,
   },
 
   // RTL
