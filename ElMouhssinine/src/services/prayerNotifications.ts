@@ -200,10 +200,63 @@ export const cancelAllPrayerNotifications = async (): Promise<void> => {
 };
 
 /**
+ * Récupérer les notifications schedulées avec leurs timestamps
+ * Retourne un Map: notificationId -> timestamp
+ */
+const getScheduledNotificationsMap = async (): Promise<Map<string, number>> => {
+  const map = new Map<string, number>();
+  try {
+    const notifications = await notifee.getTriggerNotifications();
+    for (const notif of notifications) {
+      if (notif.notification.id && notif.trigger.type === TriggerType.TIMESTAMP) {
+        const trigger = notif.trigger as TimestampTrigger;
+        map.set(notif.notification.id, trigger.timestamp);
+      }
+    }
+  } catch (error) {
+    console.error('[PrayerNotif] Erreur récupération map:', error);
+  }
+  return map;
+};
+
+/**
+ * Annuler uniquement les notifications obsolètes (passées ou jours trop anciens)
+ * Garde les notifications futures valides
+ */
+const cleanupObsoleteNotifications = async (validIds: Set<string>): Promise<void> => {
+  try {
+    const triggers = await notifee.getTriggerNotificationIds();
+    const now = Date.now();
+    const existingMap = await getScheduledNotificationsMap();
+
+    for (const id of triggers) {
+      if (!id.startsWith('prayer-')) continue;
+
+      // Supprimer si:
+      // 1. L'ID n'est pas dans la liste des IDs valides pour cette session
+      // 2. OU le timestamp est déjà passé
+      const timestamp = existingMap.get(id);
+      const isObsolete = !validIds.has(id) || (timestamp && timestamp <= now);
+
+      if (isObsolete) {
+        await notifee.cancelTriggerNotification(id);
+        console.log(`[PrayerNotif] Removed obsolete: ${id}`);
+      }
+    }
+  } catch (error) {
+    console.error('[PrayerNotif] Erreur cleanup:', error);
+  }
+};
+
+/**
  * Scheduler les notifications de priere pour aujourd'hui ET demain
  * 2 notifications par prière :
  * 1. RAPPEL : X minutes avant (configurable)
  * 2. À L'HEURE : pile à l'heure de la prière
+ *
+ * IMPORTANT: Utilise une approche de réconciliation intelligente
+ * pour ne pas supprimer les notifications encore valides quand l'utilisateur
+ * ouvre l'app fréquemment.
  */
 export const schedulePrayerNotifications = async (
   prayerTimes: PrayerTimings,
@@ -232,15 +285,17 @@ export const schedulePrayerNotifications = async (
     // Creer le channel Android
     const channelId = await ensureChannel();
 
-    // Annuler les anciennes notifs
-    await cancelAllPrayerNotifications();
+    // NOUVEAU: Récupérer les notifications existantes pour comparaison
+    // On ne supprime plus aveuglément, on fait une réconciliation intelligente
+    const existingNotifs = await getScheduledNotificationsMap();
+    console.log(`[PrayerNotif] Existing notifications: ${existingNotifs.size}`);
 
     const now = new Date();
     const today = new Date();
-    const tomorrow = addDays(today, 1);
 
     console.log('[PrayerNotif] Current time:', now.toLocaleString('fr-FR'));
     const scheduledPrayers: string[] = [];
+    const validNotificationIds = new Set<string>(); // IDs qui doivent rester
 
     // Scheduler pour les prochains jours
     // IMPORTANT: iOS limite à 64 notifications locales planifiées par app
@@ -277,19 +332,81 @@ export const schedulePrayerNotifications = async (
         // ========== NOTIFICATION 1 : RAPPEL (X minutes avant) ==========
         if (settings.minutesBefore > 0) {
           const reminderTime = subMinutes(prayerTime, settings.minutesBefore);
+          const reminderId = `prayer-${prayerKey}-reminder-${daySuffix}`;
+          const reminderTimestamp = reminderTime.getTime();
 
           // Ne scheduler que si pas encore passé
           if (reminderTime > now) {
-            const reminderTrigger: TimestampTrigger = {
+            validNotificationIds.add(reminderId);
+
+            // Vérifier si déjà schedulée avec le bon timestamp
+            const existingTimestamp = existingNotifs.get(reminderId);
+            const alreadyScheduled = existingTimestamp && Math.abs(existingTimestamp - reminderTimestamp) < 60000; // 1 min tolerance
+
+            if (!alreadyScheduled) {
+              // Supprimer l'ancienne si elle existe avec un mauvais timestamp
+              if (existingTimestamp) {
+                await notifee.cancelTriggerNotification(reminderId);
+              }
+
+              const reminderTrigger: TimestampTrigger = {
+                type: TriggerType.TIMESTAMP,
+                timestamp: reminderTimestamp,
+              };
+
+              await notifee.createTriggerNotification(
+                {
+                  id: reminderId,
+                  title: prayerName,
+                  body: `${prayerName} dans ${settings.minutesBefore} mn`,
+                  android: {
+                    channelId,
+                    importance: AndroidImportance.HIGH,
+                    pressAction: { id: 'default' },
+                  },
+                  ios: {
+                    sound: 'default',
+                  },
+                },
+                reminderTrigger
+              );
+
+              console.log(`[PrayerNotif] ✅ Scheduled REMINDER for ${prayerKey} (${daySuffix}) at ${reminderTime.toLocaleString('fr-FR')}`);
+            } else {
+              console.log(`[PrayerNotif] ⏭️ REMINDER already scheduled for ${prayerKey} (${daySuffix})`);
+            }
+            scheduledPrayers.push(`${prayerKey}-rappel-${daySuffix}`);
+          }
+        }
+
+        // ========== NOTIFICATION 2 : À L'HEURE (pile à l'heure) ==========
+        const nowId = `prayer-${prayerKey}-now-${daySuffix}`;
+        const nowTimestamp = prayerTime.getTime();
+
+        // Ne scheduler que si pas encore passé
+        if (prayerTime > now) {
+          validNotificationIds.add(nowId);
+
+          // Vérifier si déjà schedulée avec le bon timestamp
+          const existingTimestamp = existingNotifs.get(nowId);
+          const alreadyScheduled = existingTimestamp && Math.abs(existingTimestamp - nowTimestamp) < 60000; // 1 min tolerance
+
+          if (!alreadyScheduled) {
+            // Supprimer l'ancienne si elle existe avec un mauvais timestamp
+            if (existingTimestamp) {
+              await notifee.cancelTriggerNotification(nowId);
+            }
+
+            const exactTrigger: TimestampTrigger = {
               type: TriggerType.TIMESTAMP,
-              timestamp: reminderTime.getTime(),
+              timestamp: nowTimestamp,
             };
 
             await notifee.createTriggerNotification(
               {
-                id: `prayer-${prayerKey}-reminder-${daySuffix}`,
-                title: prayerName,
-                body: `${prayerName} dans ${settings.minutesBefore} mn`,
+                id: nowId,
+                title: `${prayerName} maintenant`,
+                body: `Prière ${prayerName} maintenant`,
                 android: {
                   channelId,
                   importance: AndroidImportance.HIGH,
@@ -299,39 +416,13 @@ export const schedulePrayerNotifications = async (
                   sound: 'default',
                 },
               },
-              reminderTrigger
+              exactTrigger
             );
 
-            console.log(`[PrayerNotif] ✅ Scheduled REMINDER for ${prayerKey} (${daySuffix}) at ${reminderTime.toLocaleString('fr-FR')}`);
-            scheduledPrayers.push(`${prayerKey}-rappel-${daySuffix}`);
+            console.log(`[PrayerNotif] ✅ Scheduled NOW for ${prayerKey} (${daySuffix}) at ${prayerTime.toLocaleString('fr-FR')}`);
+          } else {
+            console.log(`[PrayerNotif] ⏭️ NOW already scheduled for ${prayerKey} (${daySuffix})`);
           }
-        }
-
-        // ========== NOTIFICATION 2 : À L'HEURE (pile à l'heure) ==========
-        // Ne scheduler que si pas encore passé
-        if (prayerTime > now) {
-          const exactTrigger: TimestampTrigger = {
-            type: TriggerType.TIMESTAMP,
-            timestamp: prayerTime.getTime(),
-          };
-
-          await notifee.createTriggerNotification(
-            {
-              id: `prayer-${prayerKey}-now-${daySuffix}`,
-              title: `${prayerName} maintenant`,
-              body: `Prière ${prayerName} maintenant`,
-              android: {
-                channelId,
-                importance: AndroidImportance.HIGH,
-                pressAction: { id: 'default' },
-              },
-              ios: {
-                sound: 'default',
-              },
-            },
-            exactTrigger
-          );
-
           scheduledPrayers.push(`${prayerKey}-maintenant-${daySuffix}`);
         }
       }
@@ -343,32 +434,50 @@ export const schedulePrayerNotifications = async (
     // Si boost activé: jour 2 | Si boost désactivé: jour 5
     const reminderDate = addDays(today, MAX_DAYS - 1);
     reminderDate.setHours(12, 0, 0, 0); // À midi
+    const appReminderId = 'prayer-app-reminder';
 
     if (reminderDate > now) {
-      const appReminderTrigger: TimestampTrigger = {
-        type: TriggerType.TIMESTAMP,
-        timestamp: reminderDate.getTime(),
-      };
+      validNotificationIds.add(appReminderId);
+      const appReminderTimestamp = reminderDate.getTime();
+      const existingTimestamp = existingNotifs.get(appReminderId);
+      const alreadyScheduled = existingTimestamp && Math.abs(existingTimestamp - appReminderTimestamp) < 60000;
 
-      await notifee.createTriggerNotification(
-        {
-          id: 'prayer-app-reminder',
-          title: '🕌 El Mouhssinine',
-          body: 'Ouvrez l\'app pour continuer à recevoir les rappels de prière\nافتح التطبيق لمواصلة تلقي تذكيرات الصلاة',
-          android: {
-            channelId,
-            importance: AndroidImportance.DEFAULT,
-            pressAction: { id: 'default' },
+      if (!alreadyScheduled) {
+        if (existingTimestamp) {
+          await notifee.cancelTriggerNotification(appReminderId);
+        }
+
+        const appReminderTrigger: TimestampTrigger = {
+          type: TriggerType.TIMESTAMP,
+          timestamp: appReminderTimestamp,
+        };
+
+        await notifee.createTriggerNotification(
+          {
+            id: appReminderId,
+            title: '🕌 El Mouhssinine',
+            body: 'Ouvrez l\'app pour continuer à recevoir les rappels de prière\nافتح التطبيق لمواصلة تلقي تذكيرات الصلاة',
+            android: {
+              channelId,
+              importance: AndroidImportance.DEFAULT,
+              pressAction: { id: 'default' },
+            },
+            ios: {
+              sound: 'default',
+            },
           },
-          ios: {
-            sound: 'default',
-          },
-        },
-        appReminderTrigger
-      );
-      console.log(`[PrayerNotif] ✅ Scheduled APP REMINDER for ${reminderDate.toLocaleString('fr-FR')}`);
+          appReminderTrigger
+        );
+        console.log(`[PrayerNotif] ✅ Scheduled APP REMINDER for ${reminderDate.toLocaleString('fr-FR')}`);
+      } else {
+        console.log('[PrayerNotif] ⏭️ APP REMINDER already scheduled');
+      }
       scheduledPrayers.push('app-reminder');
     }
+
+    // NOUVEAU: Nettoyer uniquement les notifications obsolètes
+    // (celles qui ne sont plus dans la liste des IDs valides)
+    await cleanupObsoleteNotifications(validNotificationIds);
 
     console.log('[PrayerNotif] ======== SCHEDULING COMPLETE ========');
     console.log('[PrayerNotif] Total scheduled:', scheduledPrayers.length);
@@ -583,6 +692,31 @@ export const cancelBoostNotifications = async (): Promise<void> => {
 };
 
 /**
+ * Nettoyer les notifications boost obsolètes (garde celles valides)
+ */
+const cleanupObsoleteBoostNotifications = async (validIds: Set<string>): Promise<void> => {
+  try {
+    const triggers = await notifee.getTriggerNotificationIds();
+    const now = Date.now();
+    const existingMap = await getScheduledNotificationsMap();
+
+    for (const id of triggers) {
+      if (!id.startsWith('boost_')) continue;
+
+      const timestamp = existingMap.get(id);
+      const isObsolete = !validIds.has(id) || (timestamp && timestamp <= now);
+
+      if (isObsolete) {
+        await notifee.cancelTriggerNotification(id);
+        console.log(`[PrayerBoost] Removed obsolete: ${id}`);
+      }
+    }
+  } catch (error) {
+    console.error('[PrayerBoost] Erreur cleanup:', error);
+  }
+};
+
+/**
  * Annule les notifications boost pour une prière spécifique uniquement
  * Les notifications des autres prières restent actives
  */
@@ -607,6 +741,9 @@ export const cancelBoostNotificationsForPrayer = async (prayerKey: string): Prom
 /**
  * Programme les notifications boost pour les prières
  * Fonction SÉPARÉE qui n'affecte pas les notifications classiques
+ *
+ * IMPORTANT: Utilise une approche de réconciliation intelligente
+ * pour ne pas supprimer les notifications encore valides
  */
 export const scheduleBoostNotifications = async (
   prayerTimings: PrayerTimings | Record<string, string>,
@@ -639,8 +776,9 @@ export const scheduleBoostNotifications = async (
     // Créer le channel Android
     const channelId = await ensureBoostChannel();
 
-    // Annuler les anciennes notifications boost
-    await cancelBoostNotifications();
+    // NOUVEAU: Réconciliation intelligente au lieu de tout annuler
+    const existingNotifs = await getScheduledNotificationsMap();
+    const validNotificationIds = new Set<string>();
 
     // Cast pour accès flexible aux propriétés
     const timings = prayerTimings as Record<string, string>;
@@ -693,6 +831,25 @@ export const scheduleBoostNotifications = async (
             continue;
           }
 
+          const boostId = `boost_${prayer.key}_${reminder.type}_${daySuffix}`;
+          const boostTimestamp = notifDate.getTime();
+          validNotificationIds.add(boostId);
+
+          // Vérifier si déjà schedulée avec le bon timestamp
+          const existingTimestamp = existingNotifs.get(boostId);
+          const alreadyScheduled = existingTimestamp && Math.abs(existingTimestamp - boostTimestamp) < 60000;
+
+          if (alreadyScheduled) {
+            console.log(`[PrayerBoost] ⏭️ Already scheduled ${prayer.name} ${reminder.type} (${daySuffix})`);
+            scheduledCount++;
+            continue;
+          }
+
+          // Supprimer l'ancienne si elle existe avec un mauvais timestamp
+          if (existingTimestamp) {
+            await notifee.cancelTriggerNotification(boostId);
+          }
+
           // Message selon le type de rappel et la prière
           let title = '';
           let body = '';
@@ -727,12 +884,12 @@ export const scheduleBoostNotifications = async (
 
           const trigger: TimestampTrigger = {
             type: TriggerType.TIMESTAMP,
-            timestamp: notifDate.getTime(),
+            timestamp: boostTimestamp,
           };
 
           await notifee.createTriggerNotification(
             {
-              id: `boost_${prayer.key}_${reminder.type}_${daySuffix}`,
+              id: boostId,
               title,
               body,
               android: {
@@ -753,6 +910,9 @@ export const scheduleBoostNotifications = async (
         }
       }
     }
+
+    // NOUVEAU: Nettoyer uniquement les notifications boost obsolètes
+    await cleanupObsoleteBoostNotifications(validNotificationIds);
 
     console.log('[PrayerBoost] ======== SCHEDULING COMPLETE ========');
     console.log(`[PrayerBoost] Total scheduled: ${scheduledCount}`);
