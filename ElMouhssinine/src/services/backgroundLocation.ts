@@ -31,7 +31,7 @@ const getCurrentPosition = (): Promise<{ latitude: number; longitude: number } |
   return new Promise((resolve) => {
     // Demander la permission iOS si nécessaire
     if (Platform.OS === 'ios') {
-      Geolocation.requestAuthorization('always');
+      (Geolocation.requestAuthorization as any)('always');
     }
 
     Geolocation.getCurrentPosition(

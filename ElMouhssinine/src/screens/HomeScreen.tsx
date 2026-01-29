@@ -463,7 +463,7 @@ const HomeScreen = () => {
 
         // Demander la permission de géolocalisation (iOS)
         if (Platform.OS === 'ios') {
-          Geolocation.requestAuthorization('whenInUse');
+          (Geolocation.requestAuthorization as any)('whenInUse');
         }
 
         // Demander la position actuelle

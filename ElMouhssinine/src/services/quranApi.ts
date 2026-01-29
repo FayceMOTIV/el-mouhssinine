@@ -47,19 +47,31 @@ export interface SearchResult {
   }[];
 }
 
-// Cache pour les donnees
+// Cache pour les donnees avec limite de taille (évite memory leak)
 const cache: Map<string, { data: any; timestamp: number }> = new Map();
-const CACHE_DURATION = 1000 * 60 * 60; // 1 heure
+const CACHE_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 jours (le Coran ne change pas)
+const MAX_CACHE_SIZE = 150; // Limite max d'entrées dans le cache
 
 const getCached = <T>(key: string): T | null => {
   const cached = cache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     return cached.data as T;
   }
+  // Supprimer l'entrée expirée
+  if (cached) {
+    cache.delete(key);
+  }
   return null;
 };
 
 const setCache = (key: string, data: any) => {
+  // Si cache plein, supprimer les entrées les plus anciennes (LRU simple)
+  if (cache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey) {
+      cache.delete(oldestKey);
+    }
+  }
   cache.set(key, { data, timestamp: Date.now() });
 };
 

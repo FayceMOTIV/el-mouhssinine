@@ -56,6 +56,13 @@ const MyMembershipsScreen = () => {
     let unsubscribeMembership: (() => void) | null = null;
 
     const unsubscribeAuth = AuthService.onAuthStateChanged(async (user) => {
+      // IMPORTANT: Nettoyer le listener précédent AVANT d'en créer un nouveau
+      // Évite les memory leaks lors de changements d'utilisateur (logout/login)
+      if (unsubscribeMembership) {
+        unsubscribeMembership();
+        unsubscribeMembership = null;
+      }
+
       if (user && user.email) {
         setUserEmail(user.email);
         setUserId(user.uid);
@@ -73,6 +80,7 @@ const MyMembershipsScreen = () => {
         setUserEmail(null);
         setUserId(null);
         setMyMembership(null);
+        setInscribedMembers([]);
         setLoading(false);
       }
     });
