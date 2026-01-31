@@ -596,7 +596,7 @@ export const PrayerAPI = {
   },
 
   // Retourne la prière en cours (fenêtre active)
-  // Fajr: de Fajr à Sunrise
+  // Fajr: de Fajr à Fajr+1h (max 1 heure pour prier)
   // Dhuhr: de Dhuhr à Asr
   // Asr: de Asr à Maghrib
   // Maghrib: de Maghrib à Isha
@@ -617,8 +617,9 @@ export const PrayerAPI = {
     const maghribMin = toMinutes(timings.Maghrib);
     const ishaMin = toMinutes(timings.Isha);
 
-    // Fenêtre Fajr: de Fajr à Sunrise
-    if (currentMinutes >= fajrMin && currentMinutes < sunriseMin) {
+    // Fenêtre Fajr: de Fajr à Fajr+1h (max 1 heure, ne dépasse pas Sunrise)
+    const fajrEndMin = Math.min(fajrMin + 60, sunriseMin);
+    if (currentMinutes >= fajrMin && currentMinutes < fajrEndMin) {
       return { name: 'Fajr', nameAr: 'الفجر', time: timings.Fajr };
     }
     // Fenêtre Dhuhr: de Dhuhr à Asr
