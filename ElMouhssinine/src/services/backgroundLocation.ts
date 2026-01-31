@@ -42,7 +42,7 @@ const getCurrentPosition = (): Promise<{ latitude: number; longitude: number } |
         });
       },
       (error) => {
-        console.log('[BackgroundLocation] Erreur géolocalisation:', error.message);
+        if (__DEV__) console.log('[BackgroundLocation] Erreur géolocalisation:', error.message);
         resolve(null);
       },
       {
@@ -59,23 +59,19 @@ const getCurrentPosition = (): Promise<{ latitude: number; longitude: number } |
  */
 const checkMosqueProximityTask = async (): Promise<void> => {
   try {
-    console.log('[BackgroundLocation] Starting proximity check...');
-
     // Vérifier si la feature est activée
     const settings = await getMosqueProximitySettings();
     if (!settings.enabled) {
-      console.log('[BackgroundLocation] Feature disabled, skipping');
       return;
     }
 
     // Obtenir la position
     const position = await getCurrentPosition();
     if (!position) {
-      console.log('[BackgroundLocation] Could not get position');
       return;
     }
 
-    console.log(`[BackgroundLocation] Position: ${position.latitude}, ${position.longitude}`);
+    // Note: On ne log JAMAIS les coordonnées GPS (vie privée)
 
     // Vérifier la proximité et envoyer la notification si nécessaire
     // Utiliser les traductions françaises par défaut (la plupart des utilisateurs)
@@ -85,11 +81,10 @@ const checkMosqueProximityTask = async (): Promise<void> => {
       PROXIMITY_TRANSLATIONS.fr
     );
 
-    if (sent) {
-      console.log('[BackgroundLocation] ✅ Notification de proximité envoyée');
-    }
+    // Notification envoyée si sent === true
   } catch (error) {
-    console.error('[BackgroundLocation] Error:', error);
+    // Erreur silencieuse en production
+    if (__DEV__) console.error('[BackgroundLocation] Error:', error);
   }
 };
 
@@ -98,8 +93,6 @@ const checkMosqueProximityTask = async (): Promise<void> => {
  */
 export const initBackgroundLocation = async (): Promise<void> => {
   try {
-    console.log('[BackgroundLocation] Initializing...');
-
     // Configuration du Background Fetch
     const status = await BackgroundFetch.configure(
       {
@@ -115,41 +108,21 @@ export const initBackgroundLocation = async (): Promise<void> => {
       },
       async (taskId) => {
         // Tâche exécutée en background
-        console.log(`[BackgroundLocation] Task ${taskId} started`);
-
         await checkMosqueProximityTask();
-
         // IMPORTANT: Signaler que la tâche est terminée
         BackgroundFetch.finish(taskId);
       },
       (taskId) => {
         // Timeout - la tâche a pris trop de temps
-        console.warn(`[BackgroundLocation] Task ${taskId} TIMEOUT`);
         BackgroundFetch.finish(taskId);
       }
     );
 
-    console.log(`[BackgroundLocation] Configure status: ${status}`);
-
-    // Vérifier le statut
-    switch (status) {
-      case BackgroundFetch.STATUS_RESTRICTED:
-        console.log('[BackgroundLocation] Status: RESTRICTED');
-        break;
-      case BackgroundFetch.STATUS_DENIED:
-        console.log('[BackgroundLocation] Status: DENIED');
-        break;
-      case BackgroundFetch.STATUS_AVAILABLE:
-        console.log('[BackgroundLocation] Status: AVAILABLE ✅');
-        break;
-    }
-
     // Démarrer le scheduling
     await BackgroundFetch.start();
-    console.log('[BackgroundLocation] Started successfully');
 
   } catch (error) {
-    console.error('[BackgroundLocation] Init error:', error);
+    if (__DEV__) console.error('[BackgroundLocation] Init error:', error);
   }
 };
 
@@ -159,9 +132,8 @@ export const initBackgroundLocation = async (): Promise<void> => {
 export const stopBackgroundLocation = async (): Promise<void> => {
   try {
     await BackgroundFetch.stop();
-    console.log('[BackgroundLocation] Stopped');
   } catch (error) {
-    console.error('[BackgroundLocation] Stop error:', error);
+    if (__DEV__) console.error('[BackgroundLocation] Stop error:', error);
   }
 };
 
@@ -177,10 +149,7 @@ export const getBackgroundLocationStatus = async (): Promise<number> => {
  */
 export const registerHeadlessTask = (): void => {
   BackgroundFetch.registerHeadlessTask(async ({ taskId }) => {
-    console.log(`[BackgroundLocation] Headless task ${taskId}`);
-
     await checkMosqueProximityTask();
-
     BackgroundFetch.finish(taskId);
   });
 };
