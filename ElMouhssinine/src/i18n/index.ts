@@ -433,6 +433,9 @@ export const translations = {
     // Errors
     loadingFailed: 'Erreur de chargement. Tirez pour actualiser.',
 
+    // Notification History
+    notificationHistory: 'Historique des notifications',
+
     // Boost Prière (Rappels progressifs)
     boostPrayer: 'Boost Prière',
     enableProgressiveReminders: 'Activer les rappels progressifs',
@@ -453,6 +456,17 @@ export const translations = {
     mosqueSilentModeDescription: '📍 Quand vous êtes à moins de 100m de la mosquée, vous recevrez un rappel pour mettre votre téléphone en silencieux.',
     mosqueSilentModeTitle: 'Vous êtes à la mosquée',
     mosqueSilentModeBody: 'N\'oubliez pas de mettre votre téléphone en mode silencieux 🔕',
+
+    // Permission localisation (premier lancement)
+    locationFeatureTitle: 'Rappel Mosquée',
+    locationFeatureExplanation: 'Souhaitez-vous recevoir un rappel automatique pour mettre votre téléphone en silencieux quand vous arrivez à la mosquée ?\n\nCette fonctionnalité utilise votre position GPS (uniquement quand l\'app est ouverte) pour détecter quand vous êtes à moins de 100m de la mosquée.',
+    locationPermissionTitle: 'Permission de localisation',
+    locationPermissionMessage: 'L\'application a besoin de votre position pour vous envoyer un rappel quand vous êtes proche de la mosquée (100m) afin de mettre votre téléphone en silencieux.',
+    notNow: 'Pas maintenant',
+    enable: 'Activer',
+    later: 'Plus tard',
+    refuse: 'Refuser',
+    allow: 'Autoriser',
   },
 
   ar: {
@@ -893,6 +907,9 @@ export const translations = {
     // Errors
     loadingFailed: 'فشل التحميل. اسحب للتحديث.',
 
+    // Notification History
+    notificationHistory: 'سجل الإشعارات',
+
     // Boost Prière (Rappels progressifs)
     boostPrayer: 'تعزيز الصلاة',
     enableProgressiveReminders: 'تفعيل التذكيرات المتتالية',
@@ -913,6 +930,17 @@ export const translations = {
     mosqueSilentModeDescription: '📍 عندما تكون على بعد أقل من 100 متر من المسجد، ستتلقى تذكيراً لوضع هاتفك على الصامت.',
     mosqueSilentModeTitle: 'أنت في المسجد',
     mosqueSilentModeBody: 'لا تنسَ وضع هاتفك على الصامت 🔕',
+
+    // Permission localisation (premier lancement)
+    locationFeatureTitle: 'تذكير المسجد',
+    locationFeatureExplanation: 'هل تريد تلقي تذكير تلقائي لوضع هاتفك على الصامت عند وصولك إلى المسجد؟\n\nهذه الميزة تستخدم موقعك GPS (فقط عندما يكون التطبيق مفتوحًا) للكشف عندما تكون على بعد أقل من 100 متر من المسجد.',
+    locationPermissionTitle: 'إذن الموقع',
+    locationPermissionMessage: 'يحتاج التطبيق إلى موقعك لإرسال تذكير عندما تكون قريبًا من المسجد (100م) لوضع هاتفك على الصامت.',
+    notNow: 'ليس الآن',
+    enable: 'تفعيل',
+    later: 'لاحقاً',
+    refuse: 'رفض',
+    allow: 'موافق',
   },
 };
 

@@ -790,16 +790,33 @@ exports.onMessageReply = functions
       console.log('Réponse de l\'utilisateur, notification aux admins');
 
       try {
-        // Récupérer tous les admins avec leur token FCM
+        // Récupérer tous les admins avec leur token FCM (optimisé - évite N+1 query)
         const adminsSnapshot = await admin.firestore().collection('admins').get();
-        const adminTokens = [];
 
-        for (const adminDoc of adminsSnapshot.docs) {
-          const adminId = adminDoc.id;
-          const memberDoc = await admin.firestore().collection('members').doc(adminId).get();
-          if (memberDoc.exists && memberDoc.data().fcmToken) {
-            adminTokens.push(memberDoc.data().fcmToken);
-          }
+        if (adminsSnapshot.empty) {
+          console.log('Aucun admin trouvé');
+          return null;
+        }
+
+        const adminIds = adminsSnapshot.docs.map(doc => doc.id);
+
+        // Batch query: récupérer tous les membres admins en une seule requête
+        // Firestore limite 'in' à 30 éléments, donc on divise si nécessaire
+        const adminTokens = [];
+        const batchSize = 30;
+
+        for (let i = 0; i < adminIds.length; i += batchSize) {
+          const batchIds = adminIds.slice(i, i + batchSize);
+          const membersSnapshot = await admin.firestore()
+            .collection('members')
+            .where(admin.firestore.FieldPath.documentId(), 'in', batchIds)
+            .get();
+
+          membersSnapshot.docs.forEach(memberDoc => {
+            if (memberDoc.data().fcmToken) {
+              adminTokens.push(memberDoc.data().fcmToken);
+            }
+          });
         }
 
         if (adminTokens.length === 0) {

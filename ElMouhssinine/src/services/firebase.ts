@@ -878,15 +878,11 @@ export const getMosqueeInfo = async (): Promise<MosqueeInfo> => {
   if (FORCE_DEMO_MODE) {
     return mockMosqueeInfo;
   }
-  console.log('🏦 [Firebase] Getting mosquee info...');
   try {
     const doc = await firestore().collection('settings').doc('mosqueeInfo').get();
-    console.log('🏦 [Firebase] Doc exists:', doc.exists);
     if (doc.exists()) {
       const data = doc.data();
-      console.log('🏦 [Firebase] Raw data:', JSON.stringify(data));
-      console.log('🏦 [Firebase] IBAN from Firebase:', data?.iban);
-      const result = {
+      return {
         name: data?.nom || mockMosqueeInfo.name,
         address: data?.adresse || mockMosqueeInfo.address,
         postalCode: data?.codePostal || mockMosqueeInfo.postalCode,
@@ -899,10 +895,7 @@ export const getMosqueeInfo = async (): Promise<MosqueeInfo> => {
         bankName: data?.bankName || mockMosqueeInfo.bankName,
         accountHolder: data?.accountHolder || mockMosqueeInfo.accountHolder,
       };
-      console.log('🏦 [Firebase] Final IBAN:', result.iban);
-      return result;
     }
-    console.log('🏦 [Firebase] Doc does not exist, using mock');
     return mockMosqueeInfo;
   } catch (error: any) {
     console.error('❌ [Firebase] getMosqueeInfo error:', error?.message);

@@ -50,9 +50,35 @@ const createPaymentIntent = async (
   }
 };
 
+// Limites de montant (en euros)
+const MIN_AMOUNT = 1;
+const MAX_AMOUNT = 10000;
+
 // Initialiser et présenter le Payment Sheet
 export const makePayment = async (params: PaymentParams): Promise<PaymentResult> => {
   const { amount, description, type, metadata = {} } = params;
+
+  // Validation du montant
+  if (typeof amount !== 'number' || isNaN(amount)) {
+    return {
+      success: false,
+      error: 'Montant invalide',
+    };
+  }
+
+  if (amount < MIN_AMOUNT) {
+    return {
+      success: false,
+      error: `Le montant minimum est de ${MIN_AMOUNT}€`,
+    };
+  }
+
+  if (amount > MAX_AMOUNT) {
+    return {
+      success: false,
+      error: `Le montant maximum est de ${MAX_AMOUNT}€`,
+    };
+  }
 
   try {
     // 1. Créer le PaymentIntent via Cloud Function

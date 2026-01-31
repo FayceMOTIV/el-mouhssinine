@@ -175,11 +175,29 @@ export default function Rappels() {
   const handleImportDefaults = async () => {
     setImporting(true)
     try {
+      // Vérifier les doublons existants
+      const existingSnapshot = await getDocs(collection(db, 'rappels'))
+      const existingTexts = new Set(
+        existingSnapshot.docs.map(doc => doc.data().texteFr?.toLowerCase().trim())
+      )
+
+      // Filtrer les hadiths déjà existants
+      const newHadiths = defaultHadiths.filter(
+        hadith => !existingTexts.has(hadith.texteFr?.toLowerCase().trim())
+      )
+
+      if (newHadiths.length === 0) {
+        toast.info('Tous les hadiths existent déjà dans la collection')
+        setShowImportConfirm(false)
+        setImporting(false)
+        return
+      }
+
       const batch = writeBatch(db)
       const rappelsRef = collection(db, 'rappels')
 
-      // Ajouter chaque hadith
-      for (const hadith of defaultHadiths) {
+      // Ajouter uniquement les nouveaux hadiths
+      for (const hadith of newHadiths) {
         const newDocRef = doc(rappelsRef)
         batch.set(newDocRef, {
           ...hadith,
@@ -188,7 +206,13 @@ export default function Rappels() {
       }
 
       await batch.commit()
-      toast.success(`${defaultHadiths.length} hadiths importés avec succès`)
+
+      const skipped = defaultHadiths.length - newHadiths.length
+      if (skipped > 0) {
+        toast.success(`${newHadiths.length} hadiths importés (${skipped} doublons ignorés)`)
+      } else {
+        toast.success(`${newHadiths.length} hadiths importés avec succès`)
+      }
       setShowImportConfirm(false)
     } catch (err) {
       console.error('Error importing hadiths:', err)

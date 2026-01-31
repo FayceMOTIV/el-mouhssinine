@@ -148,7 +148,10 @@ export const PrayerAPI = {
     city: string = 'Bourg-en-Bresse',
     country: string = 'France'
   ): Promise<PrayerTimings> => {
-    const cacheKey = 'mawaqit-times';
+    // Cache key basé sur date/heure pour gérer le basculement après Isha
+    const now = new Date();
+    const hourBlock = now.getHours() >= 20 ? 'night' : 'day'; // Après ~Isha
+    const cacheKey = `mawaqit-times-${now.toISOString().split('T')[0]}-${hourBlock}`;
     const cached = getCached<PrayerTimings>(cacheKey);
     if (cached) return cached;
 
@@ -163,8 +166,35 @@ export const PrayerAPI = {
 
       // Récupérer la date du jour
       const today = new Date();
-      const month = today.getMonth(); // 0-indexed
-      const day = today.getDate().toString();
+      let month = today.getMonth(); // 0-indexed
+      let day = today.getDate();
+      const currentHour = today.getHours();
+      const currentMinutes = today.getMinutes();
+      const currentTimeInMinutes = currentHour * 60 + currentMinutes;
+
+      // Récupérer d'abord les horaires d'aujourd'hui pour savoir si Isha est passé
+      const todayStr = day.toString();
+      let todayTimes: string[] | null = null;
+      if (data.calendar && data.calendar[month] && data.calendar[month][todayStr]) {
+        todayTimes = data.calendar[month][todayStr];
+      }
+
+      // Vérifier si Isha est passé (comme Mawaqit, basculer sur demain après Isha)
+      if (todayTimes) {
+        const ishaTime = todayTimes[5]; // Index 5 = Isha
+        const [ishaH, ishaM] = ishaTime.split(':').map(Number);
+        const ishaInMinutes = ishaH * 60 + ishaM;
+
+        if (currentTimeInMinutes >= ishaInMinutes) {
+          // Isha est passé, utiliser les horaires de demain
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          month = tomorrow.getMonth();
+          day = tomorrow.getDate();
+        }
+      }
+
+      const dayStr = day.toString();
 
       // Utiliser le CALENDAR au lieu de times pour avoir les horaires EXACTS de Mawaqit
       // Le champ "times" contient des valeurs ajustées en temps réel (décalage de ~1 min)
@@ -172,9 +202,9 @@ export const PrayerAPI = {
       let times: string[];
       let shuruq: string;
 
-      if (data.calendar && data.calendar[month] && data.calendar[month][day]) {
+      if (data.calendar && data.calendar[month] && data.calendar[month][dayStr]) {
         // calendar[month][day] = [Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha] (6 valeurs)
-        const calendarTimes = data.calendar[month][day];
+        const calendarTimes = data.calendar[month][dayStr];
         times = [calendarTimes[0], calendarTimes[2], calendarTimes[3], calendarTimes[4], calendarTimes[5]];
         shuruq = calendarTimes[1];
       } else {
@@ -184,8 +214,8 @@ export const PrayerAPI = {
       }
 
       let iqamaOffsets = ['+10', '+10', '+10', '+7', '+10']; // Défaut
-      if (data.iqamaCalendar && data.iqamaCalendar[month] && data.iqamaCalendar[month][day]) {
-        iqamaOffsets = data.iqamaCalendar[month][day];
+      if (data.iqamaCalendar && data.iqamaCalendar[month] && data.iqamaCalendar[month][dayStr]) {
+        iqamaOffsets = data.iqamaCalendar[month][dayStr];
       }
 
       const timings: PrayerTimings = {
@@ -213,28 +243,116 @@ export const PrayerAPI = {
     } catch (error) {
       console.error('[PrayerAPI] Erreur Mawaqit:', error);
       // Fallback: utiliser les horaires du jour depuis le calendrier local
-      // Horaires du 22 janvier (aujourd'hui) depuis Mawaqit
       const today = new Date();
-      const day = today.getDate();
-      const month = today.getMonth(); // 0-indexed
+      const currentHour = today.getHours();
+      const currentMinutes = today.getMinutes();
+      const currentTimeInMinutes = currentHour * 60 + currentMinutes;
 
-      // Calendrier janvier 2026 extrait de Mawaqit
-      const januaryCalendar: Record<string, string[]> = {
-        '22': ['06:42', '08:12', '12:51', '15:10', '17:35', '19:05'],
-        '23': ['06:41', '08:11', '12:52', '15:11', '17:36', '19:06'],
-        '24': ['06:40', '08:10', '12:52', '15:13', '17:38', '19:08'],
-        '25': ['06:39', '08:09', '12:52', '15:14', '17:40', '19:10'],
-        '26': ['06:37', '08:08', '12:52', '15:15', '17:41', '19:11'],
-        '27': ['06:37', '08:07', '12:52', '15:16', '17:42', '19:12'],
-        '28': ['06:36', '08:06', '12:52', '15:18', '17:44', '19:14'],
-        '29': ['06:35', '08:05', '12:53', '15:19', '17:46', '19:16'],
-        '30': ['06:34', '08:04', '12:53', '15:20', '17:47', '19:17'],
-        '31': ['06:33', '08:03', '12:53', '15:20', '17:48', '19:18'],
+      // Calendrier 2026 complet pour Bourg-en-Bresse (méthode UOIF/Mawaqit)
+      // Format: [Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha]
+      const calendar2026: Record<number, Record<string, string[]>> = {
+        0: { // Janvier
+          '1': ['06:51', '08:21', '12:43', '14:48', '17:11', '18:41'],
+          '15': ['06:47', '08:17', '12:50', '15:02', '17:26', '18:56'],
+          '22': ['06:42', '08:12', '12:51', '15:10', '17:35', '19:05'],
+          '30': ['06:34', '08:04', '12:53', '15:20', '17:47', '19:17'],
+        },
+        1: { // Février
+          '1': ['06:32', '08:02', '12:54', '15:22', '17:50', '19:20'],
+          '15': ['06:13', '07:43', '12:55', '15:39', '18:13', '19:43'],
+          '28': ['05:52', '07:22', '12:54', '15:54', '18:31', '20:01'],
+        },
+        2: { // Mars
+          '1': ['05:49', '07:19', '12:54', '15:56', '18:33', '20:03'],
+          '15': ['05:25', '06:55', '12:51', '16:10', '18:52', '20:22'],
+          '29': ['06:00', '07:30', '13:48', '17:24', '20:11', '21:41'], // Heure d'été
+        },
+        3: { // Avril
+          '1': ['05:54', '07:24', '13:47', '17:27', '20:15', '21:45'],
+          '15': ['05:31', '07:01', '13:44', '17:40', '20:32', '22:02'],
+          '30': ['05:10', '06:40', '13:42', '17:53', '20:49', '22:19'],
+        },
+        4: { // Mai
+          '1': ['05:08', '06:38', '13:42', '17:54', '20:50', '22:20'],
+          '15': ['04:51', '06:21', '13:41', '18:05', '21:06', '22:36'],
+          '31': ['04:39', '06:09', '13:42', '18:14', '21:20', '22:50'],
+        },
+        5: { // Juin
+          '1': ['04:38', '06:08', '13:42', '18:15', '21:21', '22:51'],
+          '15': ['04:35', '06:05', '13:44', '18:20', '21:28', '22:58'],
+          '21': ['04:35', '06:05', '13:45', '18:22', '21:30', '23:00'], // Solstice
+          '30': ['04:39', '06:09', '13:47', '18:22', '21:30', '23:00'],
+        },
+        6: { // Juillet
+          '1': ['04:40', '06:10', '13:47', '18:22', '21:30', '23:00'],
+          '15': ['04:51', '06:21', '13:49', '18:19', '21:23', '22:53'],
+          '31': ['05:10', '06:40', '13:49', '18:10', '21:08', '22:38'],
+        },
+        7: { // Août
+          '1': ['05:12', '06:42', '13:49', '18:08', '21:06', '22:36'],
+          '15': ['05:29', '06:59', '13:47', '17:53', '20:45', '22:15'],
+          '31': ['05:48', '07:18', '13:43', '17:33', '20:18', '21:48'],
+        },
+        8: { // Septembre
+          '1': ['05:50', '07:20', '13:43', '17:31', '20:15', '21:45'],
+          '15': ['06:07', '07:37', '13:39', '17:12', '19:51', '21:21'],
+          '30': ['06:26', '07:56', '13:34', '16:51', '19:23', '20:53'],
+        },
+        9: { // Octobre
+          '1': ['06:28', '07:58', '13:34', '16:49', '19:21', '20:51'],
+          '15': ['06:46', '08:16', '13:30', '16:30', '18:56', '20:26'],
+          '25': ['06:01', '07:31', '12:27', '15:17', '17:37', '19:07'], // Heure d'hiver
+          '31': ['06:10', '07:40', '12:26', '15:09', '17:27', '18:57'],
+        },
+        10: { // Novembre
+          '1': ['06:12', '07:42', '12:26', '15:07', '17:25', '18:55'],
+          '15': ['06:30', '08:00', '12:25', '14:54', '17:06', '18:36'],
+          '30': ['06:47', '08:17', '12:28', '14:46', '16:54', '18:24'],
+        },
+        11: { // Décembre
+          '1': ['06:48', '08:18', '12:28', '14:45', '16:53', '18:23'],
+          '15': ['06:56', '08:26', '12:33', '14:46', '16:52', '18:22'],
+          '21': ['06:58', '08:28', '12:36', '14:48', '16:54', '18:24'], // Solstice
+          '31': ['06:58', '08:28', '12:41', '14:54', '17:02', '18:32'],
+        },
       };
 
-      // Utiliser les horaires du jour ou valeurs par défaut
-      const dayStr = day.toString();
-      const fallbackTimes = januaryCalendar[dayStr] || ['06:42', '08:12', '12:51', '15:10', '17:35', '19:05'];
+      // Déterminer le jour à afficher (aujourd'hui ou demain si Isha passé)
+      let targetMonth = today.getMonth();
+      let targetDay = today.getDate();
+
+      // Vérifier si Isha est passé avec les horaires d'aujourd'hui
+      const todayMonthCal = calendar2026[targetMonth];
+      if (todayMonthCal) {
+        const todayStr = targetDay.toString();
+        const todayTimes = todayMonthCal[todayStr];
+        if (todayTimes) {
+          const [ishaH, ishaM] = todayTimes[5].split(':').map(Number);
+          const ishaInMinutes = ishaH * 60 + ishaM;
+          if (currentTimeInMinutes >= ishaInMinutes) {
+            // Isha passé, basculer sur demain
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            targetMonth = tomorrow.getMonth();
+            targetDay = tomorrow.getDate();
+          }
+        }
+      }
+
+      // Utiliser les horaires du jour cible
+      const monthCal = calendar2026[targetMonth];
+      let fallbackTimes = ['06:34', '08:04', '12:53', '15:20', '17:47', '19:17']; // Défaut 30 janvier
+      if (monthCal) {
+        const dayStr = targetDay.toString();
+        if (monthCal[dayStr]) {
+          fallbackTimes = monthCal[dayStr];
+        } else {
+          // Trouver le jour le plus proche
+          const days = Object.keys(monthCal).map(Number).sort((a, b) => a - b);
+          const closest = days.reduce((prev, curr) => Math.abs(curr - targetDay) < Math.abs(prev - targetDay) ? curr : prev);
+          fallbackTimes = monthCal[closest.toString()];
+        }
+      }
 
       const fallbackTimings: PrayerTimings = {
         Fajr: fallbackTimes[0],

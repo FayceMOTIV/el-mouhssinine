@@ -1,97 +1,137 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# El Mouhssinine - Application Mobile
 
-# Getting Started
+Application mobile React Native pour la Mosquee El Mouhssinine.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Informations
 
-## Step 1: Start Metro
+- **Bundle ID** : fr.elmouhssinine.mosquee
+- **Build** : 167
+- **React Native** : 0.83.1
+- **TypeScript** : Oui
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## Fonctionnalites
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+### Priere
+- Horaires de priere (methode Mawaqit/UOIF - 12 degres)
+- Notifications configurables (avant/a l'heure)
+- Boost de priere ("J'ai prie")
+- Notification speciale Jumu'a le vendredi
 
-```sh
-# Using npm
+### Coran
+- 114 sourates avec audio
+- Mode lecture page par page (604 pages du Mushaf)
+- Marque-pages et sauvegarde de progression
+- Affichage arabe seul ou francais seul
+
+### Adhesion
+- Inscription membre avec paiement Stripe
+- Multi-adherents (inscrire plusieurs personnes)
+- Carte membre digitale avec QR code
+- Gestion des cotisations
+
+### Autres
+- Messages prives avec la mosquee
+- Adhkar et invocations
+- Apprentissage alphabet arabe
+- Dates islamiques avec countdown
+- Rappels du jour (hadiths)
+- Recus fiscaux par email
+
+## Installation
+
+### Prerequisites
+
+- Node.js 18+
+- Xcode 15+ (pour iOS)
+- CocoaPods
+- Compte Apple Developer (pour TestFlight)
+
+### Lancer en developpement
+
+```bash
+# Installer les dependances
+npm install
+
+# Installer les pods iOS
+cd ios && pod install && cd ..
+
+# Lancer Metro
 npm start
 
-# OR using Yarn
-yarn start
-```
-
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
-```
-
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
+# Lancer sur iOS
 npm run ios
 
-# OR using Yarn
-yarn ios
+# Lancer sur Android
+npm run android
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+### Build iOS Production
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+```bash
+cd ios
+pod install
+xcodebuild archive \
+  -workspace ElMouhssinine.xcworkspace \
+  -scheme ElMouhssinine \
+  -configuration Release \
+  -destination 'generic/platform=iOS' \
+  -archivePath ./build/ElMouhssinine.xcarchive
 
-## Step 3: Modify your app
+xcodebuild -exportArchive \
+  -archivePath ./build/ElMouhssinine.xcarchive \
+  -exportOptionsPlist ExportOptions.plist \
+  -exportPath ./build/export
 
-Now that you have successfully run the app, let's make changes!
+# Upload TestFlight
+xcrun altool --upload-app \
+  -f ./build/export/ElMouhssinine.ipa \
+  -t ios \
+  -u EMAIL \
+  -p APP_SPECIFIC_PASSWORD
+```
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+## Architecture
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+```
+src/
+├── components/          # Composants reutilisables
+├── screens/             # Ecrans de l'app
+├── services/            # Services (Firebase, API, notifications)
+├── i18n/                # Traductions FR/AR
+├── navigation/          # React Navigation
+├── theme/               # Couleurs et styles
+└── types/               # Types TypeScript
+```
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+## Services principaux
 
-## Congratulations! :tada:
+- `auth.ts` - Authentification Firebase
+- `firebase.ts` - Operations Firestore
+- `notifications.ts` - Push notifications FCM
+- `prayerNotifications.ts` - Notifications de priere locales
+- `prayerApi.ts` - API horaires de priere
+- `stripe.ts` - Paiements Stripe
 
-You've successfully run and modified your React Native App. :partying_face:
+## Configuration
 
-### Now what?
+### Firebase
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+Le fichier `GoogleService-Info.plist` doit etre present dans `ios/`.
 
-# Troubleshooting
+### Stripe
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+La cle publishable est configuree dans `App.tsx`.
 
-# Learn More
+### APNs
 
-To learn more about React Native, take a look at the following resources:
+- Key ID : 4YY44LG5M5
+- Team ID : 5ZR87TPM89
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+## Dependances principales
+
+- `@react-navigation/native` - Navigation
+- `@react-native-firebase/*` - Firebase
+- `@stripe/stripe-react-native` - Paiements
+- `@notifee/react-native` - Notifications locales
+- `react-native-localize` - i18n
+- `@react-native-async-storage/async-storage` - Stockage local

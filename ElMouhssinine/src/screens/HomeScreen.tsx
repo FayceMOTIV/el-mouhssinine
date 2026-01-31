@@ -50,6 +50,12 @@ import {
 import Geolocation from '@react-native-community/geolocation';
 import { setInAppNotificationCallback } from '../services/notifications';
 import { HomeScreenSkeleton } from '../components';
+import {
+  getNotificationHistory,
+  markAllNotificationsAsRead,
+  getUnreadCount,
+  StoredNotification,
+} from '../services/notificationHistory';
 
 // Donnees mockees par defaut (fallback)
 const mockPrayerTimes: PrayerTime[] = [
@@ -140,6 +146,11 @@ const HomeScreen = () => {
 
   // Notification in-app
   const [inAppNotification, setInAppNotification] = useState<{ title: string; body: string } | null>(null);
+
+  // Historique des notifications
+  const [showNotificationHistory, setShowNotificationHistory] = useState(false);
+  const [notificationHistory, setNotificationHistory] = useState<StoredNotification[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   // Traduction des noms de prière
   const getPrayerName = (name: string) => {
@@ -453,7 +464,35 @@ const HomeScreen = () => {
     };
   }, []);
 
-  // Vérifier la proximité de la mosquée au démarrage
+  // Charger l'historique des notifications et le compteur de non lus
+  useFocusEffect(
+    useCallback(() => {
+      const loadNotificationHistory = async () => {
+        try {
+          const history = await getNotificationHistory();
+          setNotificationHistory(history);
+          const unread = await getUnreadCount();
+          setUnreadNotifCount(unread);
+        } catch (error) {
+          console.warn('[HomeScreen] Erreur chargement historique notifs:', error);
+        }
+      };
+      loadNotificationHistory();
+    }, [])
+  );
+
+  // Ouvrir l'historique des notifications
+  const openNotificationHistory = useCallback(async () => {
+    const history = await getNotificationHistory();
+    setNotificationHistory(history);
+    setShowNotificationHistory(true);
+    // Marquer toutes comme lues
+    await markAllNotificationsAsRead();
+    setUnreadNotifCount(0);
+  }, []);
+
+  // Vérifier la proximité de la mosquée au démarrage (si feature activée)
+  // Note: Le service backgroundLocation.ts gère aussi la vérification en arrière-plan
   useEffect(() => {
     const checkProximity = async () => {
       try {
@@ -461,12 +500,7 @@ const HomeScreen = () => {
         const settings = await getMosqueProximitySettings();
         if (!settings.enabled) return;
 
-        // Demander la permission de géolocalisation (iOS)
-        if (Platform.OS === 'ios') {
-          (Geolocation.requestAuthorization as any)('whenInUse');
-        }
-
-        // Demander la position actuelle
+        // Faire un check quand l'app s'ouvre (en complément du background)
         Geolocation.getCurrentPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
@@ -481,8 +515,8 @@ const HomeScreen = () => {
             console.log('[HomeScreen] Erreur géolocalisation:', error.code, error.message);
           },
           {
-            enableHighAccuracy: true,
-            timeout: 20000,
+            enableHighAccuracy: false,
+            timeout: 15000,
             maximumAge: 60000,
           }
         );
@@ -750,6 +784,94 @@ const HomeScreen = () => {
         </View>
       </Modal>
 
+      {/* Modal Historique des Notifications */}
+      <Modal
+        visible={showNotificationHistory}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowNotificationHistory(false)}
+      >
+        <View style={styles.historyModalOverlay}>
+          <View style={styles.historyModalContainer}>
+            <TouchableOpacity
+              style={styles.historyCloseBtn}
+              onPress={() => setShowNotificationHistory(false)}
+              accessibilityLabel="Fermer"
+              accessibilityRole="button"
+            >
+              <Text style={styles.historyCloseBtnText}>×</Text>
+            </TouchableOpacity>
+
+            <Text style={[styles.historyModalTitle, isRTL && styles.rtlText]}>
+              🔔 {isRTL ? 'سجل الإشعارات' : 'Historique des notifications'}
+            </Text>
+            <Text style={styles.historySubtitle}>
+              {isRTL ? 'آخر 24 ساعة' : 'Dernières 24 heures'}
+            </Text>
+
+            <ScrollView style={styles.historyScroll} showsVerticalScrollIndicator={false}>
+              {notificationHistory.length === 0 ? (
+                <View style={styles.historyEmptyContainer}>
+                  <Text style={styles.historyEmptyIcon}>📭</Text>
+                  <Text style={[styles.historyEmptyText, isRTL && styles.rtlText]}>
+                    {isRTL ? 'لا توجد إشعارات' : 'Aucune notification récente'}
+                  </Text>
+                </View>
+              ) : (
+                notificationHistory.map((notif, index) => {
+                  const date = new Date(notif.timestamp);
+                  const timeStr = date.toLocaleTimeString(isRTL ? 'ar-SA' : 'fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                  const isToday = new Date().toDateString() === date.toDateString();
+                  const dateStr = isToday
+                    ? (isRTL ? 'اليوم' : "Aujourd'hui")
+                    : date.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR', { day: 'numeric', month: 'short' });
+
+                  // Icône selon le type
+                  let typeIcon = '📢';
+                  if (notif.type === 'prayer') typeIcon = '🕌';
+                  else if (notif.type === 'message') typeIcon = '💬';
+
+                  return (
+                    <View
+                      key={notif.id}
+                      style={[
+                        styles.historyItem,
+                        index === notificationHistory.length - 1 && styles.historyItemLast,
+                        !notif.read && styles.historyItemUnread,
+                      ]}
+                    >
+                      <Text style={styles.historyItemIcon}>{typeIcon}</Text>
+                      <View style={styles.historyItemContent}>
+                        <Text style={[styles.historyItemTitle, isRTL && styles.rtlText]} numberOfLines={1}>
+                          {notif.title}
+                        </Text>
+                        <Text style={[styles.historyItemBody, isRTL && styles.rtlText]} numberOfLines={2}>
+                          {notif.body}
+                        </Text>
+                        <Text style={[styles.historyItemTime, isRTL && styles.rtlText]}>
+                          {dateStr} • {timeStr}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.historyOkBtn}
+              onPress={() => setShowNotificationHistory(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.historyOkBtnText}>{isRTL ? 'إغلاق' : 'Fermer'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     <View style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -785,9 +907,26 @@ const HomeScreen = () => {
           </LinearGradient>
         )}
 
-        {/* Titre */}
+        {/* Titre avec icône cloche */}
         <View style={styles.header}>
-          <Text style={[styles.title, isRTL && styles.rtlText]}>🕌 {t('mosqueName')}</Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={[styles.title, isRTL && styles.rtlText]}>🕌 {t('mosqueName')}</Text>
+            <TouchableOpacity
+              onPress={openNotificationHistory}
+              style={styles.bellButton}
+              accessibilityLabel={t('notificationHistory')}
+              accessibilityRole="button"
+            >
+              <Text style={styles.bellIcon}>🔔</Text>
+              {unreadNotifCount > 0 && (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>
+                    {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
           <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('mosqueLocation')}</Text>
         </View>
 
@@ -1289,11 +1428,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bellButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(201,162,39,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  bellIcon: {
+    fontSize: 22,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#e74c3c',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  bellBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
   title: {
     fontSize: fontSize.title,
     fontWeight: 'bold',
     color: colors.accent,
     marginBottom: 4,
+    flex: 1,
   },
   subtitle: {
     fontSize: fontSize.md,
@@ -1858,6 +2032,121 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: '#e74c3c',
     textAlign: 'center',
+  },
+  // Notification History Modal
+  historyModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  historyModalContainer: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+    minHeight: 300,
+  },
+  historyCloseBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  historyCloseBtnText: {
+    fontSize: 24,
+    color: colors.textMuted,
+    lineHeight: 26,
+  },
+  historyModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.accent,
+    textAlign: 'center',
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  historySubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  historyScroll: {
+    flex: 1,
+    marginBottom: 16,
+  },
+  historyEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  historyEmptyIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  historyEmptyText: {
+    fontSize: fontSize.md,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  historyItemLast: {
+    borderBottomWidth: 0,
+  },
+  historyItemUnread: {
+    backgroundColor: 'rgba(201,162,39,0.1)',
+    marginHorizontal: -12,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.sm,
+  },
+  historyItemIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  historyItemContent: {
+    flex: 1,
+  },
+  historyItemTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  historyItemBody: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  historyItemTime: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+  },
+  historyOkBtn: {
+    backgroundColor: colors.accent,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 25,
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  historyOkBtnText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
   },
 });
 

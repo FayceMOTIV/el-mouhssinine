@@ -48,7 +48,7 @@ const MemberScreen = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(null);
   const [isPaid, setIsPaid] = useState(false);
-  const [inscribedMembersCount, setInscribedMembersCount] = useState(0);
+  const [inscribedMembers, setInscribedMembers] = useState<InscribedMember[]>([]);
 
   // Prix et infos
   const [formulePrices, setFormulePrices] = useState<CotisationPrices>({ mensuel: 10, annuel: 100 });
@@ -114,7 +114,10 @@ const MemberScreen = () => {
   // DATA LOADING
   // ============================================================
 
-  const loadMemberData = async (uid: string) => {
+  const loadMemberData = async (uid: string, retryCount = 0) => {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 500; // ms
+
     try {
       const profile = await AuthService.getMemberProfile(uid);
       if (profile) {
@@ -123,11 +126,20 @@ const MemberScreen = () => {
         await subscribeToMembersTopic();
         await saveFCMTokenToFirestore(uid);
 
-        // Compter les membres inscrits
+        // Récupérer les membres inscrits
         const inscribed = await getMembersInscribedBy(uid);
-        setInscribedMembersCount(inscribed.length);
+        setInscribedMembers(inscribed);
+      } else if (retryCount < MAX_RETRIES) {
+        // Race condition: le document Firestore n'est peut-être pas encore créé
+        // Attendre et réessayer
+        await new Promise<void>(resolve => setTimeout(() => resolve(), RETRY_DELAY));
+        return loadMemberData(uid, retryCount + 1);
       }
     } catch (error) {
+      if (retryCount < MAX_RETRIES) {
+        await new Promise<void>(resolve => setTimeout(() => resolve(), RETRY_DELAY));
+        return loadMemberData(uid, retryCount + 1);
+      }
       console.error('Error loading member data:', error);
     }
   };
@@ -516,13 +528,44 @@ const MemberScreen = () => {
   // RENDER: LOGGED IN - NO SUBSCRIPTION
   // ============================================================
 
-  // Préparation de la carte de membre (utilisée dans les deux états)
+  // Préparation des cartes de membre (utilisateur + inscrits)
+  const getPaymentStatus = (profile: MemberProfile | InscribedMember): 'paid' | 'pending' | 'virement_pending' | 'unpaid' => {
+    // Pour MemberProfile
+    if ('cotisationStatus' in profile) {
+      const status = profile.cotisationStatus as string;
+      if (status === 'actif' || status === 'active') return 'paid';
+      if (status === 'en_attente_paiement') return 'pending';
+      return 'unpaid';
+    }
+    // Pour InscribedMember
+    if (profile.status === 'actif' || profile.status === 'active') return 'paid';
+    if (profile.status === 'en_attente_paiement') return 'virement_pending';
+    if (profile.status === 'en_attente_signature') return 'paid'; // Payé mais pas encore signé
+    if (profile.datePaiement) return 'paid';
+    return 'unpaid';
+  };
+
   const memberForCard = memberProfile ? {
     name: memberProfile.name,
     memberId: memberProfile.memberId,
     membershipExpirationDate: memberProfile.cotisationExpiry,
     status: memberProfile.cotisationStatus || 'inactive',
+    paymentStatus: getPaymentStatus(memberProfile),
+    subscriptionType: memberProfile.cotisationType || undefined,
   } : null;
+
+  // Tous les membres pour le swipe (utilisateur + inscrits)
+  const allMembersForCard = [
+    ...(memberForCard ? [memberForCard] : []),
+    ...inscribedMembers.map(m => ({
+      name: `${m.prenom} ${m.nom}`,
+      memberId: m.id,
+      membershipExpirationDate: m.dateFin,
+      status: m.status,
+      paymentStatus: getPaymentStatus(m),
+      subscriptionType: m.formule || undefined,
+    })),
+  ];
 
   if (!isPaid) {
     return (
@@ -535,28 +578,22 @@ const MemberScreen = () => {
             </Text>
           </View>
 
-          {/* CARTE DE MEMBRE */}
-          <View style={styles.memberCardSection}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>🪪 Ma carte de membre</Text>
-
-            <TouchableOpacity
-              onPress={() => setShowCardFullScreen(true)}
-              activeOpacity={0.9}
-            >
-              <MemberCard
-                member={memberForCard}
-                cardWidth={screenWidth - 40}
-                isRTL={isRTL}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.viewCardButton}
-              onPress={() => setShowCardFullScreen(true)}
-            >
-              <Text style={styles.viewCardButtonText}>Voir ma carte en grand</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Bouton voir ma carte de membre */}
+          <TouchableOpacity
+            style={styles.memberCardButton}
+            onPress={() => setShowCardFullScreen(true)}
+          >
+            <Text style={styles.memberCardButtonIcon}>🪪</Text>
+            <View style={styles.memberCardButtonContent}>
+              <Text style={[styles.memberCardButtonText, isRTL && styles.rtlText]}>
+                Voir ma carte de membre
+              </Text>
+              <Text style={[styles.memberCardButtonSubtext, isRTL && styles.rtlText]}>
+                Afficher en plein écran
+              </Text>
+            </View>
+            <Text style={styles.memberCardButtonArrow}>→</Text>
+          </TouchableOpacity>
 
           {/* Bouton voir mes adhésions */}
           <TouchableOpacity
@@ -569,8 +606,8 @@ const MemberScreen = () => {
                 Voir mes adhésions
               </Text>
               <Text style={[styles.membershipsButtonSubtext, isRTL && styles.rtlText]}>
-                {inscribedMembersCount > 0
-                  ? `${inscribedMembersCount + 1} membre${inscribedMembersCount > 0 ? 's' : ''}`
+                {inscribedMembers.length > 0
+                  ? `${inscribedMembers.length + 1} membre${inscribedMembers.length > 0 ? 's' : ''}`
                   : 'Détails et statuts'}
               </Text>
             </View>
@@ -649,7 +686,7 @@ const MemberScreen = () => {
         <MemberCardFullScreen
           visible={showCardFullScreen}
           onClose={() => setShowCardFullScreen(false)}
-          members={memberForCard ? [memberForCard] : []}
+          members={allMembersForCard}
           isRTL={isRTL}
         />
 
@@ -673,28 +710,22 @@ const MemberScreen = () => {
           </Text>
         </View>
 
-        {/* CARTE DE MEMBRE */}
-        <View style={styles.memberCardSection}>
-          <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>🎫 Ma carte de membre</Text>
-
-          <TouchableOpacity
-            onPress={() => setShowCardFullScreen(true)}
-            activeOpacity={0.9}
-          >
-            <MemberCard
-              member={memberForCard}
-              cardWidth={screenWidth - 40}
-              isRTL={isRTL}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.viewCardButton}
-            onPress={() => setShowCardFullScreen(true)}
-          >
-            <Text style={styles.viewCardButtonText}>Voir ma carte en grand</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Bouton voir ma carte de membre */}
+        <TouchableOpacity
+          style={styles.memberCardButton}
+          onPress={() => setShowCardFullScreen(true)}
+        >
+          <Text style={styles.memberCardButtonIcon}>🪪</Text>
+          <View style={styles.memberCardButtonContent}>
+            <Text style={[styles.memberCardButtonText, isRTL && styles.rtlText]}>
+              Voir ma carte de membre
+            </Text>
+            <Text style={[styles.memberCardButtonSubtext, isRTL && styles.rtlText]}>
+              {inscribedMembers.length > 0 ? `${inscribedMembers.length + 1} cartes disponibles` : 'Afficher en plein écran'}
+            </Text>
+          </View>
+          <Text style={styles.memberCardButtonArrow}>→</Text>
+        </TouchableOpacity>
 
         {/* Bouton voir mes adhésions */}
         <TouchableOpacity
@@ -707,8 +738,8 @@ const MemberScreen = () => {
               Voir mes adhésions
             </Text>
             <Text style={[styles.membershipsButtonSubtext, isRTL && styles.rtlText]}>
-              {inscribedMembersCount > 0
-                ? `${inscribedMembersCount + 1} membre${inscribedMembersCount > 0 ? 's' : ''} (vous + ${inscribedMembersCount} inscrit${inscribedMembersCount > 1 ? 's' : ''})`
+              {inscribedMembers.length > 0
+                ? `${inscribedMembers.length + 1} membre${inscribedMembers.length > 0 ? 's' : ''} (vous + ${inscribedMembers.length} inscrit${inscribedMembers.length > 1 ? 's' : ''})`
                 : 'Détails et statuts'}
             </Text>
           </View>
@@ -763,7 +794,7 @@ const MemberScreen = () => {
       <MemberCardFullScreen
         visible={showCardFullScreen}
         onClose={() => setShowCardFullScreen(false)}
-        members={memberForCard ? [memberForCard] : []}
+        members={allMembersForCard}
         isRTL={isRTL}
       />
 
@@ -1339,6 +1370,38 @@ const styles = StyleSheet.create({
   economyText: {
     fontSize: 10,
     fontWeight: '700',
+    color: '#fff',
+  },
+
+  // Member card button
+  memberCardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...platformShadow(3),
+  },
+  memberCardButtonIcon: {
+    fontSize: 28,
+    marginRight: spacing.md,
+  },
+  memberCardButtonContent: {
+    flex: 1,
+  },
+  memberCardButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  memberCardButtonSubtext: {
+    fontSize: fontSize.xs,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  memberCardButtonArrow: {
+    fontSize: fontSize.lg,
     color: '#fff',
   },
 

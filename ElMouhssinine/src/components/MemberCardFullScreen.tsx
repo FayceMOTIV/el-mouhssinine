@@ -17,6 +17,8 @@ interface Member {
   memberId?: string;
   membershipExpirationDate?: any;
   status?: string;
+  paymentStatus?: 'paid' | 'pending' | 'virement_pending' | 'unpaid';
+  subscriptionType?: 'mensuel' | 'annuel';
 }
 
 interface Props {
@@ -59,11 +61,40 @@ const getStatusText = (status?: string) => {
       return 'EXPIRÉ';
     case 'inactive':
       return 'INACTIF';
-    case 'unpaid':
+    case 'en_attente_signature':
+      return 'EN ATTENTE SIGNATURE';
     case 'en_attente_paiement':
-      return 'EN ATTENTE';
+      return 'EN ATTENTE PAIEMENT';
     default:
       return 'ACTIF';
+  }
+};
+
+const getPaymentStatusText = (paymentStatus?: string) => {
+  switch (paymentStatus) {
+    case 'paid':
+      return 'PAYÉ';
+    case 'pending':
+    case 'virement_pending':
+      return 'EN ATTENTE';
+    case 'unpaid':
+      return 'NON PAYÉ';
+    default:
+      return null; // Ne pas afficher si pas de statut
+  }
+};
+
+const getPaymentStatusColor = (paymentStatus?: string) => {
+  switch (paymentStatus) {
+    case 'paid':
+      return '#10B981'; // Vert
+    case 'pending':
+    case 'virement_pending':
+      return '#F59E0B'; // Orange
+    case 'unpaid':
+      return '#EF4444'; // Rouge
+    default:
+      return 'rgba(255,255,255,0.5)';
   }
 };
 
@@ -116,6 +147,13 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
     const memberId = member.memberId || '00000';
     const digits = memberId.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
     const statusText = getStatusText(member.status);
+    const paymentStatusText = getPaymentStatusText(member.paymentStatus);
+    const paymentStatusColor = getPaymentStatusColor(member.paymentStatus);
+
+    // Type d'abonnement (seulement si payé)
+    const subscriptionText = member.paymentStatus === 'paid' && member.subscriptionType
+      ? member.subscriptionType === 'mensuel' ? 'MENSUEL' : 'ANNUEL'
+      : null;
 
     let dateStr = '--/--';
     if (member.membershipExpirationDate) {
@@ -141,9 +179,23 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
             <Text style={styles.mosqueCity}>Bourg-en-Bresse</Text>
           </View>
 
-          {/* STATUT */}
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>{statusText}</Text>
+          {/* STATUTS (Adhésion + Paiement + Type abonnement) */}
+          <View style={styles.statusSection}>
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusText}>{statusText}</Text>
+            </View>
+            <View style={styles.statusRow}>
+              {paymentStatusText && (
+                <View style={[styles.paymentBadge, { backgroundColor: paymentStatusColor }]}>
+                  <Text style={styles.paymentText}>{paymentStatusText}</Text>
+                </View>
+              )}
+              {subscriptionText && (
+                <View style={styles.subscriptionBadge}>
+                  <Text style={styles.subscriptionText}>{subscriptionText}</Text>
+                </View>
+              )}
+            </View>
           </View>
 
           {/* NUMÉRO */}
@@ -324,7 +376,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // STATUT
+  // STATUTS
+  statusSection: {
+    alignItems: 'center',
+    gap: 10,
+  },
   statusBadge: {
     paddingHorizontal: 24,
     paddingVertical: 12,
@@ -338,6 +394,36 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 2,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  paymentBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  paymentText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  subscriptionBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  subscriptionText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
 
   // NUMÉRO

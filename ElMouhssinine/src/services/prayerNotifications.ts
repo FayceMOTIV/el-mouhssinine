@@ -299,10 +299,11 @@ export const schedulePrayerNotifications = async (
 
     // Scheduler pour les prochains jours
     // IMPORTANT: iOS limite à 64 notifications locales planifiées par app
-    // Si boost est activé, on réduit à 3 jours (30 notifs) pour laisser place au boost (~30 notifs)
-    // Si boost désactivé, on utilise 6 jours (60 notifs)
+    // Calcul: 2 notifs/prière × 5 prières × jours + app reminder + marge boost
+    // Si boost activé: 3 jours (30 notifs prière + ~20 boost = 50, marge pour app reminder)
+    // Si boost désactivé: 4 jours (40 notifs prière + 1 app reminder = 41, large marge)
     const boostSettings = await getBoostSettings();
-    const MAX_DAYS = boostSettings.enabled ? 3 : 6;
+    const MAX_DAYS = boostSettings.enabled ? 3 : 4;
     console.log(`[PrayerNotif] MAX_DAYS: ${MAX_DAYS} (boost ${boostSettings.enabled ? 'enabled' : 'disabled'})`);
     const daysToSchedule: { date: Date; suffix: string }[] = [];
     for (let i = 0; i < MAX_DAYS; i++) {
@@ -354,11 +355,19 @@ export const schedulePrayerNotifications = async (
                 timestamp: reminderTimestamp,
               };
 
+              // Vendredi + Dhuhr = Jumu'a
+              const isFriday = baseDate.getDay() === 5;
+              const isJumua = isFriday && prayerKey === 'dhuhr';
+              const notifTitle = isJumua ? "🕌 Jumu'a" : prayerName;
+              const notifBody = isJumua
+                ? `Sermon 13h30 - Prière ~14h (dans ${settings.minutesBefore} mn)`
+                : `${prayerName} dans ${settings.minutesBefore} mn`;
+
               await notifee.createTriggerNotification(
                 {
                   id: reminderId,
-                  title: prayerName,
-                  body: `${prayerName} dans ${settings.minutesBefore} mn`,
+                  title: notifTitle,
+                  body: notifBody,
                   android: {
                     channelId,
                     importance: AndroidImportance.HIGH,
@@ -371,7 +380,7 @@ export const schedulePrayerNotifications = async (
                 reminderTrigger
               );
 
-              console.log(`[PrayerNotif] ✅ Scheduled REMINDER for ${prayerKey} (${daySuffix}) at ${reminderTime.toLocaleString('fr-FR')}`);
+              console.log(`[PrayerNotif] ✅ Scheduled REMINDER for ${prayerKey} (${daySuffix}) at ${reminderTime.toLocaleString('fr-FR')}${isJumua ? ' [JUMUA]' : ''}`);
             } else {
               console.log(`[PrayerNotif] ⏭️ REMINDER already scheduled for ${prayerKey} (${daySuffix})`);
             }
@@ -402,11 +411,19 @@ export const schedulePrayerNotifications = async (
               timestamp: nowTimestamp,
             };
 
+            // Vendredi + Dhuhr = Jumu'a
+            const isFriday = baseDate.getDay() === 5;
+            const isJumua = isFriday && prayerKey === 'dhuhr';
+            const nowTitle = isJumua ? "🕌 Jumu'a maintenant" : `${prayerName} maintenant`;
+            const nowBody = isJumua
+              ? 'Sermon en cours - Prière collective ~14h'
+              : `Prière ${prayerName} maintenant`;
+
             await notifee.createTriggerNotification(
               {
                 id: nowId,
-                title: `${prayerName} maintenant`,
-                body: `Prière ${prayerName} maintenant`,
+                title: nowTitle,
+                body: nowBody,
                 android: {
                   channelId,
                   importance: AndroidImportance.HIGH,
@@ -419,7 +436,7 @@ export const schedulePrayerNotifications = async (
               exactTrigger
             );
 
-            console.log(`[PrayerNotif] ✅ Scheduled NOW for ${prayerKey} (${daySuffix}) at ${prayerTime.toLocaleString('fr-FR')}`);
+            console.log(`[PrayerNotif] ✅ Scheduled NOW for ${prayerKey} (${daySuffix}) at ${prayerTime.toLocaleString('fr-FR')}${isJumua ? ' [JUMUA]' : ''}`);
           } else {
             console.log(`[PrayerNotif] ⏭️ NOW already scheduled for ${prayerKey} (${daySuffix})`);
           }

@@ -3,10 +3,15 @@ import notifee, {
   RepeatFrequency,
   AndroidImportance,
   TimestampTrigger,
+  EventType,
 } from '@notifee/react-native';
 import messaging from '@react-native-firebase/messaging';
 import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  addNotificationToHistory,
+  detectNotificationType,
+} from './notificationHistory';
 
 // ==================== FCM TOPICS ====================
 
@@ -183,6 +188,9 @@ export const setupForegroundHandler = () => {
     const { notification, data } = remoteMessage;
 
     if (notification) {
+      const title = notification.title || 'El Mouhssinine';
+      const body = notification.body || '';
+
       // Déterminer le channel basé sur le type
       let channelId = 'general';
       if (data?.type === 'announcement') channelId = 'announcements';
@@ -192,8 +200,8 @@ export const setupForegroundHandler = () => {
       else if (data?.type === 'fajr_reminder') channelId = 'fajr';
 
       await notifee.displayNotification({
-        title: notification.title || 'El Mouhssinine',
-        body: notification.body || '',
+        title,
+        body,
         android: {
           channelId,
           importance: data?.type === 'janaza' ? AndroidImportance.HIGH : AndroidImportance.DEFAULT,
@@ -205,11 +213,16 @@ export const setupForegroundHandler = () => {
         data: data as Record<string, string>,
       });
 
+      // Stocker dans l'historique (notifications push du backoffice)
+      const notifType = detectNotificationType(title, body);
+      await addNotificationToHistory(title, body, notifType);
+      console.log('[Notifications] Push notification ajoutée à l\'historique');
+
       // Appeler le callback pour afficher en modal dans l'app
       if (inAppNotificationCallback) {
         inAppNotificationCallback({
-          title: notification.title || 'El Mouhssinine',
-          body: notification.body || '',
+          title,
+          body,
           data: data as Record<string, string>,
         });
       }

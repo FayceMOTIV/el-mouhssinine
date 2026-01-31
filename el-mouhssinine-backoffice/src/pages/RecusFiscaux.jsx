@@ -92,9 +92,21 @@ export default function RecusFiscaux() {
     }
   }
 
+  // Validation email
+  const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
   const handleSendRecu = async () => {
     if (!emailManuel) {
       toast.error('Veuillez saisir un email')
+      return
+    }
+
+    // Validation format email
+    if (!isValidEmail(emailManuel)) {
+      toast.error('Format d\'email invalide')
       return
     }
 

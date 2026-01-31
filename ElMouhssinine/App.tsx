@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode, useEffect, useState } from 'rea
 import { StatusBar, View, Text, StyleSheet, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import notifee, { EventType } from '@notifee/react-native';
 import AppNavigator from './src/navigation/AppNavigator';
 import { colors } from './src/theme/colors';
 import { LanguageProvider } from './src/context/LanguageContext';
@@ -9,6 +10,7 @@ import { initTTS } from './src/services/tts';
 import { initializeFCM, setupForegroundHandler, clearBadgeCount } from './src/services/notifications';
 import { subscribeToGeneralSettings, MaintenanceSettings } from './src/services/firebase';
 import { initBackgroundLocation } from './src/services/backgroundLocation';
+import { addNotificationToHistory, detectNotificationType } from './src/services/notificationHistory';
 
 // Clé publique Stripe (à remplacer par la vraie clé)
 // Pour obtenir la clé: https://dashboard.stripe.com/apikeys
@@ -78,10 +80,26 @@ const App: React.FC = () => {
     prepare();
   }, []);
 
-  // Gérer les notifications en foreground
+  // Gérer les notifications en foreground (FCM)
   useEffect(() => {
     const unsubscribe = setupForegroundHandler();
     return unsubscribe;
+  }, []);
+
+  // Intercepter les notifications locales (notifee) pour l'historique
+  useEffect(() => {
+    const unsubscribe = notifee.onForegroundEvent(async ({ type, detail }) => {
+      // Quand une notification locale est délivrée (prière, etc.)
+      if (type === EventType.DELIVERED && detail.notification) {
+        const { title, body } = detail.notification;
+        if (title && body) {
+          const notifType = detectNotificationType(title, body);
+          await addNotificationToHistory(title, body, notifType);
+          console.log('[App] Notification locale ajoutée à l\'historique:', title);
+        }
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   // Écouter le mode maintenance

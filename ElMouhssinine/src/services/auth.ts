@@ -39,6 +39,14 @@ const generateMemberId = (): string => {
   return `ELM-${year}-${random}`;
 };
 
+// Masquer email pour logs (privacy)
+const maskEmail = (email: string): string => {
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return '***';
+  const maskedLocal = local.length > 2 ? local[0] + '***' + local[local.length - 1] : '***';
+  return `${maskedLocal}@${domain}`;
+};
+
 // Mapper les codes d'erreur Firebase vers des messages français
 const getErrorMessage = (errorCode: string): string => {
   const errorMessages: Record<string, string> = {
@@ -102,7 +110,7 @@ export const AuthService = {
         source: 'mobile_app'
       });
 
-      console.log('[Auth] ✅ Inscription réussie:', email, memberId);
+      console.log('[Auth] ✅ Inscription réussie:', maskEmail(email), memberId);
       return { success: true, user };
     } catch (error: any) {
       console.error('[Auth] ❌ Erreur inscription:', error.code, error.message);
@@ -119,7 +127,7 @@ export const AuthService = {
   signIn: async (email: string, password: string): Promise<AuthResult> => {
     try {
       const userCredential = await auth().signInWithEmailAndPassword(email, password);
-      console.log('[Auth] ✅ Connexion réussie:', email);
+      console.log('[Auth] ✅ Connexion réussie:', maskEmail(email));
       return { success: true, user: userCredential.user };
     } catch (error: any) {
       console.error('[Auth] ❌ Erreur connexion:', error.code, error.message);
@@ -149,7 +157,7 @@ export const AuthService = {
   resetPassword: async (email: string): Promise<AuthResult> => {
     try {
       await auth().sendPasswordResetEmail(email);
-      console.log('[Auth] Email de réinitialisation envoyé à:', email);
+      console.log('[Auth] Email de réinitialisation envoyé à:', maskEmail(email));
       return { success: true };
     } catch (error: any) {
       console.error('[Auth] Erreur reset password:', error.code);
@@ -238,7 +246,7 @@ export const AuthService = {
 
         if (!emailQuery.empty) {
           const memberDoc = emailQuery.docs[0];
-          console.log('[Auth] Membre trouvé par email:', userEmail);
+          console.log('[Auth] Membre trouvé par email:', userEmail ? maskEmail(userEmail) : 'N/A');
           return processAndReturnProfile(memberDoc, memberDoc.data());
         }
       }
@@ -246,7 +254,7 @@ export const AuthService = {
       // Pas de profil trouvé - CRÉER UN PROFIL DE BASE
       // (Cas où le compte Auth existe mais pas le document Firestore)
       if (user) {
-        console.log('[Auth] Création profil de base pour:', uid, userEmail);
+        console.log('[Auth] Création profil de base pour:', uid.substring(0, 8) + '...', userEmail ? maskEmail(userEmail) : 'N/A');
         const memberId = generateMemberId();
         const displayName = user.displayName || 'Membre';
         const nameParts = displayName.split(' ');

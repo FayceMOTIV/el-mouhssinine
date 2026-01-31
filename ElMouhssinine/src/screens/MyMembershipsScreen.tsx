@@ -9,7 +9,6 @@ import {
   Alert,
   RefreshControl,
   Vibration,
-  useWindowDimensions,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useNavigation } from '@react-navigation/native';
@@ -24,14 +23,11 @@ import {
   InscribedMember,
   MosqueeInfo,
 } from '../services/firebase';
-import MemberCard, { getMembershipStatus } from '../components/MemberCard';
+// MemberCard supprimé - affichage liste uniquement
 
 const MyMembershipsScreen = () => {
   const navigation = useNavigation<any>();
   const { t, language, isRTL } = useLanguage();
-  const { width: screenWidth } = useWindowDimensions();
-  const CARD_HORIZONTAL_PADDING = 20;
-  const cardWidth = screenWidth - (CARD_HORIZONTAL_PADDING * 2);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -239,28 +235,60 @@ const MyMembershipsScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
-        {/* Mon Adhésion - Carte de membre */}
+        {/* Mon Adhésion */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
-            👤 {language === 'ar' ? 'بطاقة عضويتي' : 'Ma Carte de Membre'}
+            👤 {language === 'ar' ? 'عضويتي' : 'Mon Adhésion'}
           </Text>
 
           {myMembership ? (
             <>
-              {/* Carte de membre avec design professionnel */}
-              <View style={{ paddingHorizontal: CARD_HORIZONTAL_PADDING }}>
-                <MemberCard
-                  member={{
-                    name: `${myMembership.prenom} ${myMembership.nom}`,
-                    memberId: myMembership.id,
-                    membershipExpirationDate: myMembership.dateFin || null,
-                    status: myMembership.status === 'en_attente_paiement' ? 'en_attente_paiement' : myMembership.status,
-                  }}
-                  cardWidth={cardWidth}
-                  isRTL={isRTL}
-                  onPay={myMembership.status === 'en_attente_paiement' ? () => navigation.navigate('Member') : undefined}
-                  onRenew={['expire', 'expired', 'inactive', 'none'].includes(myMembership.status) ? () => navigation.navigate('Member') : undefined}
-                />
+              {/* Mon adhésion - Liste simple */}
+              <View style={styles.memberListItem}>
+                <View style={styles.memberListHeader}>
+                  <Text style={[styles.memberListName, isRTL && styles.rtlText]}>
+                    {myMembership.prenom} {myMembership.nom}
+                  </Text>
+                  {getStatusBadge(myMembership.status)}
+                </View>
+
+                {/* Statut paiement */}
+                <View style={styles.paymentStatusRow}>
+                  <Text style={styles.paymentStatusLabel}>
+                    {language === 'ar' ? 'حالة الدفع:' : 'Paiement:'}
+                  </Text>
+                  {myMembership.datePaiement ? (
+                    <View style={[styles.paymentBadge, styles.paymentPaid]}>
+                      <Text style={styles.paymentBadgeText}>✓ Payé</Text>
+                    </View>
+                  ) : myMembership.status === 'en_attente_paiement' ? (
+                    <View style={[styles.paymentBadge, styles.paymentPending]}>
+                      <Text style={styles.paymentBadgeText}>⏳ En attente</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.paymentBadge, styles.paymentUnpaid]}>
+                      <Text style={styles.paymentBadgeText}>Non payé</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Boutons d'action */}
+                {myMembership.status === 'en_attente_paiement' && (
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => navigation.navigate('Member')}
+                  >
+                    <Text style={styles.actionBtnText}>💳 Payer maintenant</Text>
+                  </TouchableOpacity>
+                )}
+                {['expire', 'expired', 'inactive', 'none'].includes(myMembership.status) && (
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => navigation.navigate('Member')}
+                  >
+                    <Text style={styles.actionBtnText}>🔄 Renouveler</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Détails supplémentaires */}
@@ -431,37 +459,55 @@ const MyMembershipsScreen = () => {
             </View>
 
             {inscribedMembers.map((member) => (
-              <View key={member.id}>
-                {/* Carte de membre avec design identique */}
-                <View style={{ paddingHorizontal: CARD_HORIZONTAL_PADDING }}>
-                  <MemberCard
-                    member={{
-                      name: `${member.prenom} ${member.nom}`,
-                      memberId: member.id,
-                      membershipExpirationDate: member.dateFin || null,
-                      status: member.status === 'en_attente_paiement' ? 'en_attente_paiement' : member.status,
-                    }}
-                    cardWidth={cardWidth}
-                    isRTL={isRTL}
-                  />
+              <View key={member.id} style={styles.memberListItem}>
+                <View style={styles.memberListHeader}>
+                  <Text style={[styles.memberListName, isRTL && styles.rtlText]}>
+                    {member.prenom} {member.nom}
+                  </Text>
+                  {getStatusBadge(member.status)}
                 </View>
 
-                {/* Infos supplémentaires sous la carte */}
-                <View style={styles.inscribedMemberInfo}>
-                  <Text style={styles.inscribedMemberDetail}>
-                    📞 {member.telephone || '-'}
+                {/* Statut paiement */}
+                <View style={styles.paymentStatusRow}>
+                  <Text style={styles.paymentStatusLabel}>
+                    {language === 'ar' ? 'حالة الدفع:' : 'Paiement:'}
                   </Text>
-                  <Text style={styles.inscribedMemberDetail}>
-                    💰 {formatFormule(member.formule)} • {member.montant ? `${member.montant} €` : '-'}
-                  </Text>
-                  {(member.status === 'actif' || member.status === 'active') && (
-                    <TouchableOpacity style={styles.cancelBtnSmall} onPress={handleCancelSubscription}>
-                      <Text style={styles.cancelBtnText}>
-                        {language === 'ar' ? 'إلغاء' : 'Résilier'}
-                      </Text>
-                    </TouchableOpacity>
+                  {member.datePaiement ? (
+                    <View style={[styles.paymentBadge, styles.paymentPaid]}>
+                      <Text style={styles.paymentBadgeText}>✓ Payé</Text>
+                    </View>
+                  ) : member.status === 'en_attente_paiement' ? (
+                    <View style={[styles.paymentBadge, styles.paymentPending]}>
+                      <Text style={styles.paymentBadgeText}>⏳ En attente virement</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.paymentBadge, styles.paymentPaid]}>
+                      <Text style={styles.paymentBadgeText}>✓ Payé</Text>
+                    </View>
                   )}
                 </View>
+
+                {/* Infos */}
+                <View style={styles.memberListDetails}>
+                  <Text style={styles.memberListDetail}>📞 {member.telephone || '-'}</Text>
+                  <Text style={styles.memberListDetail}>
+                    💰 {formatFormule(member.formule)} • {member.montant ? `${member.montant} €` : '-'}
+                  </Text>
+                  {member.dateFin && (
+                    <Text style={styles.memberListDetail}>
+                      📅 Expire: {formatDate(member.dateFin)}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Bouton résilier si actif */}
+                {(member.status === 'actif' || member.status === 'active') && (
+                  <TouchableOpacity style={styles.cancelBtnSmall} onPress={handleCancelSubscription}>
+                    <Text style={styles.cancelBtnText}>
+                      {language === 'ar' ? 'إلغاء' : 'Résilier'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
           </View>
@@ -777,6 +823,78 @@ const styles = StyleSheet.create({
   rtlText: {
     textAlign: 'right',
     writingDirection: 'rtl',
+  },
+  // Membre liste item
+  memberListItem: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...platformShadow(2),
+  },
+  memberListHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  memberListName: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+    flex: 1,
+  },
+  paymentStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  paymentStatusLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginRight: spacing.sm,
+  },
+  paymentBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  paymentPaid: {
+    backgroundColor: 'rgba(34,197,94,0.15)',
+  },
+  paymentPending: {
+    backgroundColor: 'rgba(245,158,11,0.15)',
+  },
+  paymentUnpaid: {
+    backgroundColor: 'rgba(239,68,68,0.15)',
+  },
+  paymentBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  memberListDetails: {
+    gap: spacing.xs,
+  },
+  memberListDetail: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+  },
+  actionBtn: {
+    backgroundColor: colors.accent,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  actionBtnText: {
+    color: '#1a1a2e',
+    fontSize: fontSize.sm,
+    fontWeight: '600',
   },
 });
 

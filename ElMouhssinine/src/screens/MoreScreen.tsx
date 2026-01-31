@@ -10,7 +10,9 @@ import {
   Animated,
   Platform,
   ActivityIndicator,
+  PermissionsAndroid,
 } from 'react-native';
+import Geolocation from '@react-native-community/geolocation';
 import { useNavigation } from '@react-navigation/native';
 import CompassHeading from 'react-native-compass-heading';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -52,6 +54,10 @@ import {
   getMosqueProximitySettings,
   saveMosqueProximitySettings,
 } from '../services/prayerNotifications';
+import {
+  initBackgroundLocation,
+  stopBackgroundLocation,
+} from '../services/backgroundLocation';
 import { PrayerAPI } from '../services/prayerApi';
 
 // @ts-ignore - Import version from package.json
@@ -237,10 +243,124 @@ const MoreScreen = () => {
     }
   };
 
-  // Mettre à jour les settings proximité mosquée
+  // Demander la permission de localisation avec explication
+  const requestLocationPermission = async (): Promise<boolean> => {
+    try {
+      if (Platform.OS === 'ios') {
+        // iOS - demander l'autorisation "always" pour le background
+        return new Promise((resolve) => {
+          (Geolocation.requestAuthorization as any)('always');
+          // Sur iOS, on teste si la permission est accordée en essayant d'obtenir la position
+          setTimeout(() => {
+            Geolocation.getCurrentPosition(
+              () => resolve(true),
+              (error) => {
+                console.log('[Location] iOS permission error:', error.code);
+                if (error.code === 1) { // PERMISSION_DENIED
+                  resolve(false);
+                } else {
+                  resolve(true); // Autre erreur, mais permission OK
+                }
+              },
+              { timeout: 5000, maximumAge: 60000 }
+            );
+          }, 1000); // Attendre 1s que l'utilisateur réponde à la popup iOS
+        });
+      } else {
+        // Android - demander FINE_LOCATION d'abord
+        const fineGranted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: language === 'ar' ? 'إذن الموقع' : 'Permission de localisation',
+            message: language === 'ar'
+              ? 'التطبيق يحتاج إلى موقعك لإرسال تذكير عندما تكون قريبًا من المسجد.'
+              : 'L\'application a besoin de votre position pour vous envoyer un rappel quand vous êtes proche de la mosquée.',
+            buttonNeutral: language === 'ar' ? 'اسألني لاحقًا' : 'Plus tard',
+            buttonNegative: language === 'ar' ? 'رفض' : 'Refuser',
+            buttonPositive: language === 'ar' ? 'موافق' : 'Autoriser',
+          }
+        );
+
+        if (fineGranted !== PermissionsAndroid.RESULTS.GRANTED) {
+          return false;
+        }
+
+        // Android 10+ (API 29+) - demander aussi ACCESS_BACKGROUND_LOCATION
+        if (typeof Platform.Version === 'number' && Platform.Version >= 29) {
+          const bgGranted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+            {
+              title: language === 'ar' ? 'إذن الموقع في الخلفية' : 'Localisation en arrière-plan',
+              message: language === 'ar'
+                ? 'للحصول على تذكير حتى عندما يكون التطبيق مغلقًا، يرجى السماح بـ "السماح طوال الوقت".'
+                : 'Pour recevoir le rappel même quand l\'app est fermée, veuillez autoriser "Toujours".',
+              buttonNeutral: language === 'ar' ? 'اسألني لاحقًا' : 'Plus tard',
+              buttonNegative: language === 'ar' ? 'رفض' : 'Refuser',
+              buttonPositive: language === 'ar' ? 'موافق' : 'Autoriser',
+            }
+          );
+          return bgGranted === PermissionsAndroid.RESULTS.GRANTED;
+        }
+
+        return true;
+      }
+    } catch (error) {
+      console.error('[Location] Permission error:', error);
+      return false;
+    }
+  };
+
+  // Mettre à jour les settings proximité mosquée avec demande de permission
   const updateMosqueProximitySettings = async (newSettings: MosqueProximitySettings) => {
-    setMosqueProximitySettings(newSettings);
-    await saveMosqueProximitySettings(newSettings);
+    // Si on active la feature, demander la permission d'abord
+    if (newSettings.enabled && !mosqueProximitySettings.enabled) {
+      // Afficher explication avant de demander
+      Alert.alert(
+        language === 'ar' ? '📍 الموقع الجغرافي' : '📍 Localisation',
+        language === 'ar'
+          ? 'هذه الميزة ترسل لك تذكيرًا عندما تكون على بعد 100 متر من المسجد لوضع هاتفك في الوضع الصامت.\n\n⚠️ تحتاج إلى إذن "دائمًا" للعمل في الخلفية.'
+          : 'Cette fonctionnalité vous enverra un rappel quand vous serez à moins de 100m de la mosquée.\n\n⚠️ Nécessite la permission "Toujours" pour fonctionner en arrière-plan.',
+        [
+          {
+            text: language === 'ar' ? 'إلغاء' : 'Annuler',
+            style: 'cancel',
+          },
+          {
+            text: language === 'ar' ? 'تفعيل' : 'Activer',
+            onPress: async () => {
+              const hasPermission = await requestLocationPermission();
+              if (hasPermission) {
+                setMosqueProximitySettings(newSettings);
+                await saveMosqueProximitySettings(newSettings);
+                // IMPORTANT: Démarrer le service de localisation en arrière-plan
+                await initBackgroundLocation();
+                Alert.alert(
+                  language === 'ar' ? '✅ تم التفعيل' : '✅ Activé',
+                  language === 'ar'
+                    ? 'ستتلقى تذكيرًا عند اقترابك من المسجد (حتى عندما يكون التطبيق مغلقًا)'
+                    : 'Vous recevrez un rappel quand vous approcherez de la mosquée (même app fermée)'
+                );
+              } else {
+                Alert.alert(
+                  language === 'ar' ? '❌ إذن مرفوض' : '❌ Permission refusée',
+                  language === 'ar'
+                    ? 'يرجى تفعيل الموقع "دائمًا" في إعدادات هاتفك لاستخدام هذه الميزة'
+                    : 'Veuillez autoriser la localisation "Toujours" dans les paramètres pour utiliser cette fonctionnalité'
+                );
+              }
+            },
+          },
+        ]
+      );
+    } else if (!newSettings.enabled && mosqueProximitySettings.enabled) {
+      // Désactivation - arrêter le service background
+      setMosqueProximitySettings(newSettings);
+      await saveMosqueProximitySettings(newSettings);
+      await stopBackgroundLocation();
+    } else {
+      setMosqueProximitySettings(newSettings);
+      await saveMosqueProximitySettings(newSettings);
+    }
   };
 
   // Gérer le toggle du rappel Jumu'a
