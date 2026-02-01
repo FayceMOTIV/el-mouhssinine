@@ -29,7 +29,7 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
       descriptionKey: 'alphabetDescription',
       icon: 'ا ب ت',
       count: `${arabicAlphabet.length} ${t('letters')}`,
-      progress: 45,
+      progress: userProgress.lettersLearned.length / arabicAlphabet.length * 100,
       screen: 'Alphabet',
       color: colors.accent,
     },
@@ -51,7 +51,7 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
       descriptionKey: 'vocabularyDescription',
       icon: '📖',
       count: `${Object.values(vocabulary).reduce((acc, words) => acc + words.length, 0)} ${t('words')}`,
-      progress: 20,
+      progress: 0, // Pas de tracking vocabulaire implémenté
       screen: 'Vocabulary',
       color: '#3498db',
     },

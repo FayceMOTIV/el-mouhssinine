@@ -21,6 +21,7 @@ import Rappels from './pages/Rappels'
 import Messages from './pages/Messages'
 import Revenus from './pages/Revenus'
 import RecusFiscaux from './pages/RecusFiscaux'
+import Notifications from './pages/Notifications'
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -87,6 +88,7 @@ function AppRoutes() {
         <Route path="revenus" element={<Revenus />} />
         <Route path="recus-fiscaux" element={<RecusFiscaux />} />
         <Route path="messages" element={<Messages />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route
           path="admins"
           element={

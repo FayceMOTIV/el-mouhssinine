@@ -75,7 +75,9 @@ export const AuthService = {
     password: string,
     name: string,
     telephone?: string,
-    adresse?: string
+    adresse?: string,
+    genre?: 'homme' | 'femme',
+    dateNaissance?: string
   ): Promise<AuthResult> => {
     try {
       // Créer l'utilisateur dans Firebase Auth
@@ -97,6 +99,8 @@ export const AuthService = {
         email: email,
         telephone: telephone || '',
         adresse: adresse || '',
+        genre: genre || '',
+        dateNaissance: dateNaissance || '',
         cotisation: {
           type: 'annuel',
           montant: 0,

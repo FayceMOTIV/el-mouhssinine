@@ -158,18 +158,18 @@ export default function RecusFiscaux() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-amber-100 rounded-lg">
-            <FileText className="w-6 h-6 text-amber-600" />
+          <div className="p-2 bg-amber-500/20 rounded-lg">
+            <FileText className="w-6 h-6 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Reçus Fiscaux</h1>
-            <p className="text-gray-500">Génération et envoi des reçus fiscaux aux donateurs</p>
+            <h1 className="text-2xl font-bold text-white">Reçus Fiscaux</h1>
+            <p className="text-white/60">Génération et envoi des reçus fiscaux aux donateurs</p>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-white/10">
         <nav className="flex gap-4">
           {tabs.map(tab => (
             <button
@@ -177,8 +177,8 @@ export default function RecusFiscaux() {
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? 'border-amber-500 text-amber-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-secondary text-secondary'
+                  : 'border-transparent text-white/50 hover:text-white/70'
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -191,12 +191,12 @@ export default function RecusFiscaux() {
       {/* Tab Content */}
       {activeTab === 'parametres' && (
         <Card>
-          <div className="p-6 space-y-6">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Building2 className="w-5 h-5" />
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 text-lg font-semibold text-white">
+              <Building2 className="w-5 h-5 text-secondary" />
               Informations de l'association
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-white/60">
               Ces informations apparaîtront sur tous les reçus fiscaux générés.
             </p>
 
@@ -247,10 +247,10 @@ export default function RecusFiscaux() {
               />
             </div>
 
-            <hr className="my-6" />
+            <hr className="border-white/10" />
 
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <User className="w-5 h-5" />
+            <div className="flex items-center gap-2 text-lg font-semibold text-white">
+              <User className="w-5 h-5 text-secondary" />
               Signataire
             </div>
 
@@ -273,9 +273,9 @@ export default function RecusFiscaux() {
               <Button
                 onClick={handleSaveSettings}
                 disabled={saving}
-                className="flex items-center gap-2"
+                loading={saving}
+                icon={Save}
               >
-                <Save className="w-4 h-4" />
                 {saving ? 'Enregistrement...' : 'Enregistrer les paramètres'}
               </Button>
             </div>
@@ -285,24 +285,24 @@ export default function RecusFiscaux() {
 
       {activeTab === 'envoyer' && (
         <Card>
-          <div className="p-6 space-y-6">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Send className="w-5 h-5" />
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 text-lg font-semibold text-white">
+              <Send className="w-5 h-5 text-secondary" />
               Envoyer un reçu fiscal
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-white/60">
               Le système calculera automatiquement le total des dons pour l'année sélectionnée.
             </p>
 
             {/* Avertissement si paramètres incomplets */}
             {(!associationInfo.nom || !associationInfo.siren) && (
-              <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+              <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-amber-800">
+                  <p className="text-sm font-medium text-amber-400">
                     Paramètres incomplets
                   </p>
-                  <p className="text-sm text-amber-700">
+                  <p className="text-sm text-amber-400/80">
                     Veuillez d'abord configurer les informations de l'association dans l'onglet "Paramètres".
                   </p>
                 </div>
@@ -321,18 +321,18 @@ export default function RecusFiscaux() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-white/80 mb-2">
                   Année fiscale
                 </label>
                 <select
                   value={anneeManuelle}
                   onChange={e => setAnneeManuelle(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-secondary focus:border-secondary"
                 >
                   {[...Array(5)].map((_, i) => {
                     const year = new Date().getFullYear() - i
                     return (
-                      <option key={year} value={year}>{year}</option>
+                      <option key={year} value={year} className="bg-bg-dark text-white">{year}</option>
                     )
                   })}
                 </select>
@@ -343,19 +343,19 @@ export default function RecusFiscaux() {
               <Button
                 onClick={handleSendRecu}
                 disabled={sending || !emailManuel || !associationInfo.nom}
-                className="flex items-center gap-2"
+                loading={sending}
+                icon={Send}
               >
-                <Send className="w-4 h-4" />
                 {sending ? 'Envoi en cours...' : 'Générer et envoyer le reçu'}
               </Button>
             </div>
 
             {/* Info box */}
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="text-sm font-medium text-blue-900 mb-2">
+            <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <h4 className="text-sm font-medium text-blue-400 mb-2">
                 Comment ça fonctionne ?
               </h4>
-              <ul className="text-sm text-blue-800 space-y-1">
+              <ul className="text-sm text-blue-400/80 space-y-1">
                 <li>• Le système recherche tous les dons et cotisations de l'email pour l'année</li>
                 <li>• Un PDF conforme est généré avec le montant total</li>
                 <li>• Le reçu est envoyé par email et archivé dans Firebase Storage</li>
@@ -368,19 +368,19 @@ export default function RecusFiscaux() {
 
       {activeTab === 'historique' && (
         <Card>
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-                <FileText className="w-5 h-5" />
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-lg font-semibold text-white">
+                <FileText className="w-5 h-5 text-secondary" />
                 Reçus envoyés
               </div>
               <Button
                 variant="secondary"
                 onClick={loadRecusEnvoyes}
                 disabled={loadingRecus}
-                className="flex items-center gap-2"
+                loading={loadingRecus}
+                icon={RefreshCw}
               >
-                <RefreshCw className={`w-4 h-4 ${loadingRecus ? 'animate-spin' : ''}`} />
                 Actualiser
               </Button>
             </div>
@@ -390,35 +390,35 @@ export default function RecusFiscaux() {
                 <Loading />
               </div>
             ) : recusEnvoyes.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <div className="text-center py-12 text-white/50">
+                <FileText className="w-12 h-12 mx-auto mb-4 text-white/20" />
                 <p>Aucun reçu envoyé pour le moment</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">N° Reçu</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Email</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Année</th>
-                      <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Montant</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Date d'envoi</th>
-                      <th className="text-center py-3 px-4 text-sm font-medium text-gray-500">Statut</th>
+                    <tr className="border-b border-white/10">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-white/60">N° Reçu</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-white/60">Email</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-white/60">Année</th>
+                      <th className="text-right py-3 px-4 text-sm font-medium text-white/60">Montant</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-white/60">Date d'envoi</th>
+                      <th className="text-center py-3 px-4 text-sm font-medium text-white/60">Statut</th>
                     </tr>
                   </thead>
                   <tbody>
                     {recusEnvoyes.map(recu => (
-                      <tr key={recu.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <tr key={recu.id} className="border-b border-white/5 hover:bg-white/5">
                         <td className="py-3 px-4">
-                          <span className="font-mono text-sm text-amber-600">{recu.numeroRecu}</span>
+                          <span className="font-mono text-sm text-amber-400">{recu.numeroRecu}</span>
                         </td>
-                        <td className="py-3 px-4 text-sm text-gray-900">{recu.email}</td>
-                        <td className="py-3 px-4 text-sm text-gray-600">{recu.annee}</td>
-                        <td className="py-3 px-4 text-sm text-right font-medium text-gray-900">
+                        <td className="py-3 px-4 text-sm text-white">{recu.email}</td>
+                        <td className="py-3 px-4 text-sm text-white/70">{recu.annee}</td>
+                        <td className="py-3 px-4 text-sm text-right font-medium text-white">
                           {recu.montantTotal?.toFixed(2)} €
                         </td>
-                        <td className="py-3 px-4 text-sm text-gray-600">
+                        <td className="py-3 px-4 text-sm text-white/70">
                           {recu.createdAt?.toLocaleDateString('fr-FR', {
                             day: '2-digit',
                             month: '2-digit',
@@ -429,12 +429,12 @@ export default function RecusFiscaux() {
                         </td>
                         <td className="py-3 px-4 text-center">
                           {recu.status === 'sent' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-400 bg-green-500/20 rounded-full">
                               <CheckCircle className="w-3 h-3" />
                               Envoyé
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-full">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-400 bg-red-500/20 rounded-full">
                               <AlertCircle className="w-3 h-3" />
                               Erreur
                             </span>

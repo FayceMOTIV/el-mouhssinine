@@ -14,6 +14,7 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, platformShadow, isSmallScreen } from '../theme/colors';
 import {
@@ -69,16 +70,19 @@ const MemberScreen = () => {
   const [registerPrenom, setRegisterPrenom] = useState('');
   const [registerTelephone, setRegisterTelephone] = useState('');
   const [registerAdresse, setRegisterAdresse] = useState('');
+  const [registerGenre, setRegisterGenre] = useState<'homme' | 'femme' | ''>('');
+  const [registerDateNaissance, setRegisterDateNaissance] = useState('');
   const [acceptedRules, setAcceptedRules] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   // Paiement
   const [selectedFormule, setSelectedFormule] = useState<'mensuel' | 'annuel'>('annuel');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Famille
-  const [familyMembers, setFamilyMembers] = useState<{id: string; nom: string; prenom: string; telephone: string; adresse: string; accepte: boolean}[]>([]);
+  const [familyMembers, setFamilyMembers] = useState<{id: string; nom: string; prenom: string; telephone: string; adresse: string; genre: 'homme' | 'femme' | ''; dateNaissance: string; accepte: boolean}[]>([]);
   const [familyFormule, setFamilyFormule] = useState<'mensuel' | 'annuel'>('annuel');
 
   // ============================================================
@@ -109,6 +113,24 @@ const MemberScreen = () => {
   useEffect(() => {
     getMosqueeInfo().then(setMosqueeInfo);
   }, []);
+
+  // Vérifier si c'est la première visite pour afficher le message de bienvenue
+  useEffect(() => {
+    const checkFirstVisit = async () => {
+      try {
+        const hasVisited = await AsyncStorage.getItem('memberScreenVisited');
+        if (!hasVisited && !isLoggedIn) {
+          setShowWelcomeModal(true);
+          await AsyncStorage.setItem('memberScreenVisited', 'true');
+        }
+      } catch (error) {
+        console.log('Error checking first visit:', error);
+      }
+    };
+    if (!isLoading) {
+      checkFirstVisit();
+    }
+  }, [isLoading, isLoggedIn]);
 
   // ============================================================
   // DATA LOADING
@@ -166,11 +188,44 @@ const MemberScreen = () => {
     }
   };
 
+  // Fonction pour vérifier si la personne est majeure
+  const isAdult = (dateNaissance: string): boolean => {
+    const parts = dateNaissance.split('/');
+    if (parts.length !== 3) return false;
+    const birthDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age >= 18;
+  };
+
   const handleRegister = async () => {
     // Validation
     if (!registerNom.trim() || !registerPrenom.trim() || !registerTelephone.trim() ||
         !registerAdresse.trim() || !loginEmail.trim() || !loginPassword.trim()) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      return;
+    }
+
+    if (!registerGenre) {
+      Alert.alert('Erreur', 'Veuillez sélectionner votre genre');
+      return;
+    }
+
+    if (!registerDateNaissance.trim()) {
+      Alert.alert('Erreur', 'Veuillez entrer votre date de naissance');
+      return;
+    }
+
+    // Vérification de la majorité
+    if (!isAdult(registerDateNaissance)) {
+      Alert.alert(
+        'Inscription impossible',
+        'Vous devez être majeur (18 ans ou plus) pour devenir membre de l\'association. Merci de votre compréhension.'
+      );
       return;
     }
 
@@ -191,7 +246,9 @@ const MemberScreen = () => {
         loginPassword,
         `${registerPrenom.trim()} ${registerNom.trim()}`,
         registerTelephone.trim(),
-        registerAdresse.trim()
+        registerAdresse.trim(),
+        registerGenre,
+        registerDateNaissance
       );
       setShowLoginModal(false);
       resetLoginForm();
@@ -245,6 +302,8 @@ const MemberScreen = () => {
     setRegisterPrenom('');
     setRegisterTelephone('');
     setRegisterAdresse('');
+    setRegisterGenre('');
+    setRegisterDateNaissance('');
     setAcceptedRules(false);
     setIsRegistering(false);
   };
@@ -317,6 +376,8 @@ const MemberScreen = () => {
       prenom: '',
       telephone: '',
       adresse: '',
+      genre: '',
+      dateNaissance: '',
       accepte: false,
     }]);
   };
@@ -338,6 +399,21 @@ const MemberScreen = () => {
     for (const member of familyMembers) {
       if (!member.nom.trim() || !member.prenom.trim() || !member.telephone.trim() || !member.adresse.trim()) {
         Alert.alert('Erreur', 'Veuillez remplir tous les champs pour chaque membre');
+        return;
+      }
+      if (!member.genre) {
+        Alert.alert('Erreur', `Veuillez sélectionner le genre pour ${member.prenom || 'ce membre'}`);
+        return;
+      }
+      if (!member.dateNaissance.trim()) {
+        Alert.alert('Erreur', `Veuillez entrer la date de naissance pour ${member.prenom || 'ce membre'}`);
+        return;
+      }
+      if (!isAdult(member.dateNaissance)) {
+        Alert.alert(
+          'Inscription impossible',
+          `${member.prenom || 'Ce membre'} doit être majeur (18 ans ou plus) pour devenir membre de l'association.`
+        );
         return;
       }
       if (!member.accepte) {
@@ -364,6 +440,8 @@ const MemberScreen = () => {
           prenom: member.prenom,
           telephone: member.telephone,
           adresse: member.adresse,
+          genre: member.genre,
+          dateNaissance: member.dateNaissance,
           accepteReglement: true,
           inscritPar: { odUserId: memberProfile.uid, nom: payeurNom, prenom: payeurPrenom },
           status: 'en_attente_paiement',
@@ -421,6 +499,8 @@ const MemberScreen = () => {
             prenom: member.prenom,
             telephone: member.telephone,
             adresse: member.adresse,
+            genre: member.genre,
+            dateNaissance: member.dateNaissance,
             accepteReglement: true,
             inscritPar: { odUserId: memberProfile.uid, nom: payeurNom2, prenom: payeurPrenom2 },
             status: 'en_attente_signature',
@@ -520,6 +600,43 @@ const MemberScreen = () => {
 
         {/* Modal Login */}
         {renderLoginModal()}
+
+        {/* Modal Bienvenue */}
+        <Modal visible={showWelcomeModal} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.welcomeModalContent}>
+              <Text style={styles.welcomeEmoji}>🕌</Text>
+              <Text style={[styles.welcomeTitle, isRTL && styles.rtlText]}>
+                Bienvenue à la mosquée El Mouhssinine !
+              </Text>
+              <Text style={[styles.welcomeText, isRTL && styles.rtlText]}>
+                Rejoignez notre communauté en devenant membre de l'association. En tant que membre, vous bénéficiez de nombreux avantages :
+              </Text>
+              <View style={styles.welcomeBenefits}>
+                <Text style={styles.welcomeBenefit}>✅ Reçu fiscal pour vos dons (déduction d'impôts)</Text>
+                <Text style={styles.welcomeBenefit}>✅ Droit de vote aux assemblées générales</Text>
+                <Text style={styles.welcomeBenefit}>✅ Participation aux décisions de la mosquée</Text>
+                <Text style={styles.welcomeBenefit}>✅ Accès aux événements réservés aux membres</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.welcomeButton}
+                onPress={() => {
+                  setShowWelcomeModal(false);
+                  setIsRegistering(true);
+                  setShowLoginModal(true);
+                }}
+              >
+                <Text style={styles.welcomeButtonText}>Devenir membre</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.welcomeLaterButton}
+                onPress={() => setShowWelcomeModal(false)}
+              >
+                <Text style={styles.welcomeLaterText}>Plus tard</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -896,6 +1013,37 @@ const MemberScreen = () => {
                       value={registerAdresse}
                       onChangeText={setRegisterAdresse}
                     />
+
+                    <Text style={styles.inputLabel}>Genre *</Text>
+                    <View style={styles.genreContainer}>
+                      <TouchableOpacity
+                        style={[styles.genreOption, registerGenre === 'homme' && styles.genreSelected]}
+                        onPress={() => setRegisterGenre('homme')}
+                      >
+                        <Text style={[styles.genreText, registerGenre === 'homme' && styles.genreTextSelected]}>
+                          Homme
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.genreOption, registerGenre === 'femme' && styles.genreSelected]}
+                        onPress={() => setRegisterGenre('femme')}
+                      >
+                        <Text style={[styles.genreText, registerGenre === 'femme' && styles.genreTextSelected]}>
+                          Femme
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.inputLabel}>Date de naissance * (JJ/MM/AAAA)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="01/01/1990"
+                      placeholderTextColor="#999"
+                      value={registerDateNaissance}
+                      onChangeText={setRegisterDateNaissance}
+                      keyboardType="numeric"
+                      maxLength={10}
+                    />
                   </>
                 )}
 
@@ -1126,6 +1274,36 @@ const MemberScreen = () => {
                     placeholderTextColor="#999"
                     value={member.adresse}
                     onChangeText={(v) => updateFamilyMember(member.id, 'adresse', v)}
+                  />
+
+                  <Text style={styles.familyInputLabel}>Genre *</Text>
+                  <View style={styles.familyGenreContainer}>
+                    <TouchableOpacity
+                      style={[styles.familyGenreOption, member.genre === 'homme' && styles.familyGenreSelected]}
+                      onPress={() => updateFamilyMember(member.id, 'genre', 'homme')}
+                    >
+                      <Text style={[styles.familyGenreText, member.genre === 'homme' && styles.familyGenreTextSelected]}>
+                        Homme
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.familyGenreOption, member.genre === 'femme' && styles.familyGenreSelected]}
+                      onPress={() => updateFamilyMember(member.id, 'genre', 'femme')}
+                    >
+                      <Text style={[styles.familyGenreText, member.genre === 'femme' && styles.familyGenreTextSelected]}>
+                        Femme
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TextInput
+                    style={styles.familyInput}
+                    placeholder="Date de naissance (JJ/MM/AAAA)"
+                    placeholderTextColor="#999"
+                    value={member.dateNaissance}
+                    onChangeText={(v) => updateFamilyMember(member.id, 'dateNaissance', v)}
+                    keyboardType="numeric"
+                    maxLength={10}
                   />
 
                   <TouchableOpacity
@@ -1851,6 +2029,130 @@ const styles = StyleSheet.create({
   rtlText: {
     textAlign: 'right',
     writingDirection: 'rtl',
+  },
+
+  // Genre selector
+  genreContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  genreOption: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  genreSelected: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent + '15',
+  },
+  genreText: {
+    fontSize: fontSize.md,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  genreTextSelected: {
+    color: colors.accent,
+    fontWeight: '600',
+  },
+
+  // Family genre selector
+  familyInputLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '500',
+    color: colors.text,
+    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  familyGenreContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  familyGenreOption: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  familyGenreSelected: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent + '15',
+  },
+  familyGenreText: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  familyGenreTextSelected: {
+    color: colors.accent,
+    fontWeight: '600',
+  },
+
+  // Welcome modal
+  welcomeModalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  welcomeEmoji: {
+    fontSize: 64,
+    marginBottom: spacing.md,
+  },
+  welcomeTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  welcomeText: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  welcomeBenefits: {
+    alignSelf: 'stretch',
+    marginBottom: spacing.lg,
+  },
+  welcomeBenefit: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    marginBottom: spacing.sm,
+    lineHeight: 20,
+  },
+  welcomeButton: {
+    backgroundColor: colors.accent,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  welcomeButtonText: {
+    color: '#fff',
+    fontSize: fontSize.md,
+    fontWeight: '600',
+  },
+  welcomeLaterButton: {
+    paddingVertical: spacing.sm,
+  },
+  welcomeLaterText: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
   },
 });
 

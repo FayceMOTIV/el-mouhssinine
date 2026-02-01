@@ -1185,6 +1185,8 @@ export interface CreateMemberData {
   telephone?: string;
   adresse?: string;
   email?: string;
+  genre?: 'homme' | 'femme' | ''; // Sexe du membre
+  dateNaissance?: string; // Format JJ/MM/AAAA
   accepteReglement?: boolean; // A accepté le règlement intérieur
   // Ancien format
   name?: string;
@@ -1255,6 +1257,10 @@ export const createMember = async (member: CreateMemberData | Omit<Member, 'id' 
       };
     }
 
+    // Déterminer genre et date de naissance
+    const genre = ('genre' in member && member.genre) ? member.genre : '';
+    const dateNaissance = ('dateNaissance' in member && member.dateNaissance) ? member.dateNaissance : '';
+
     // Construire le document
     const docData: any = {
       nom,
@@ -1262,6 +1268,8 @@ export const createMember = async (member: CreateMemberData | Omit<Member, 'id' 
       email,
       telephone,
       adresse,
+      genre,
+      dateNaissance,
       cotisation: cotisationData,
       actif: true,
       createdAt: firestore.FieldValue.serverTimestamp(),

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Share,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { AdhkarCategory, Dhikr } from '../data/adhkar';
 import { useLanguage } from '../context/LanguageContext';
@@ -25,6 +26,45 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [repetitionCounts, setRepetitionCounts] = useState<Record<string, number>>({});
+
+  // Clé de stockage unique par catégorie
+  const storageKey = `adhkar_progress_${category.id}`;
+
+  // Charger la progression sauvegardée au montage
+  useEffect(() => {
+    const loadProgress = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(storageKey);
+        if (saved) {
+          const { completed, counts } = JSON.parse(saved);
+          if (completed) setCompletedIds(new Set(completed));
+          if (counts) setRepetitionCounts(counts);
+        }
+      } catch (error) {
+        // Silencieux - pas de progression sauvegardée
+      }
+    };
+    loadProgress();
+  }, [storageKey]);
+
+  // Sauvegarder la progression à chaque changement
+  useEffect(() => {
+    const saveProgress = async () => {
+      try {
+        const data = {
+          completed: Array.from(completedIds),
+          counts: repetitionCounts,
+        };
+        await AsyncStorage.setItem(storageKey, JSON.stringify(data));
+      } catch (error) {
+        // Silencieux - erreur de sauvegarde non critique
+      }
+    };
+    // Sauvegarder seulement si on a des données
+    if (completedIds.size > 0 || Object.keys(repetitionCounts).length > 0) {
+      saveProgress();
+    }
+  }, [completedIds, repetitionCounts, storageKey]);
 
   const handleDhikrPress = (dhikr: Dhikr) => {
     setExpandedId(expandedId === dhikr.id ? null : dhikr.id);
@@ -52,9 +92,15 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
     }
   };
 
-  const resetProgress = () => {
+  const resetProgress = async () => {
     setCompletedIds(new Set());
     setRepetitionCounts({});
+    // Effacer aussi la sauvegarde
+    try {
+      await AsyncStorage.removeItem(storageKey);
+    } catch (error) {
+      // Silencieux
+    }
   };
 
   const completedCount = completedIds.size;

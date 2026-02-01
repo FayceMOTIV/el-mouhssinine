@@ -145,6 +145,37 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // ==================== COLLECTIONS CLOUD FUNCTIONS ====================
+    // Ces collections sont gérées uniquement par les Cloud Functions (SDK admin)
+    // Le SDK admin bypass les rules, mais on les déclare explicitement pour la sécurité
+
+    // Cache horaires de prière - Lecture publique (app), écriture Cloud Functions only
+    match /cached_prayer_times/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Paiements traités (idempotence Stripe) - Aucun accès client
+    match /processed_payments/{docId} {
+      allow read, write: if false;
+    }
+
+    // Paiements échoués - Aucun accès client
+    match /failed_payments/{docId} {
+      allow read, write: if false;
+    }
+
+    // Reçus fiscaux - Lecture admin ou propriétaire, écriture Cloud Functions only
+    match /recus_fiscaux/{docId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Compteurs (numéros reçus fiscaux) - Aucun accès client
+    match /counters/{docId} {
+      allow read, write: if false;
+    }
+
     // ==================== RÈGLE PAR DÉFAUT ====================
 
     // Refuser tout accès non explicitement autorisé

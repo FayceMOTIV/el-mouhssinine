@@ -182,11 +182,7 @@ const EventsScreen: React.FC = () => {
                   <Text style={[styles.detailText, isRTL && styles.rtlText]}>{event.location}</Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.registerButton}>
-                <Text style={[styles.registerButtonText, isRTL && styles.rtlText]}>
-                  {language === 'ar' ? 'التسجيل' : "S'inscrire"}
-                </Text>
-              </TouchableOpacity>
+{/* Bouton inscription masqué - feature non implémentée */}
             </TouchableOpacity>
           ))
         )}
