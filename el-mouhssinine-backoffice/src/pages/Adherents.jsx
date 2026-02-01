@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-toastify'
-import { Users, Plus, Pencil, Trash2, Search, Download, Mail, Phone, Eye, Calendar, MapPin, CreditCard, Settings2, CheckCircle2, XCircle, Clock, Banknote, Smartphone, Building2, FileText, AlertCircle } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, Search, Download, Mail, Phone, Eye, Calendar, MapPin, CreditCard, Settings2, CheckCircle2, XCircle, Clock, Banknote, Smartphone, Building2, FileText, AlertCircle, TrendingUp, UserCheck, UserX, PieChart, BarChart3 } from 'lucide-react'
 import {
   Card,
   Button,
@@ -95,6 +95,64 @@ export default function Adherents() {
     })
     return () => unsubscribe()
   }, [])
+
+  // Calcul des statistiques détaillées
+  const stats = useMemo(() => {
+    const total = membres.length
+    if (total === 0) return null
+
+    // Genre
+    const hommes = membres.filter(m => m.genre === 'homme').length
+    const femmes = membres.filter(m => m.genre === 'femme').length
+    const genreNonRenseigne = total - hommes - femmes
+
+    // Paiement
+    const payes = membres.filter(m => m.aPaye || m.datePaiement).length
+    const nonPayes = total - payes
+
+    // Statut cotisation
+    const actifs = membres.filter(m => getCotisationStatus(m) === CotisationStatut.ACTIF).length
+    const attenteSignature = membres.filter(m => getCotisationStatus(m) === CotisationStatut.EN_ATTENTE_SIGNATURE).length
+    const attentePaiement = membres.filter(m => getCotisationStatus(m) === CotisationStatut.EN_ATTENTE_PAIEMENT).length
+    const expires = membres.filter(m => getCotisationStatus(m) === CotisationStatut.EXPIRE).length
+
+    // Type de cotisation
+    const mensuels = membres.filter(m => (m.cotisation?.type || m.formule) === 'mensuel').length
+    const annuels = membres.filter(m => (m.cotisation?.type || m.formule) === 'annuel' || (!m.cotisation?.type && !m.formule)).length
+
+    // Inscriptions récentes (ce mois)
+    const now = new Date()
+    const debutMois = new Date(now.getFullYear(), now.getMonth(), 1)
+    const inscriptionsCeMois = membres.filter(m => {
+      const createdAt = m.createdAt?.toDate?.() || (m.createdAt ? new Date(m.createdAt) : null)
+      return createdAt && createdAt >= debutMois
+    }).length
+
+    // Total des cotisations collectées (membres actifs)
+    const totalCollecte = membres
+      .filter(m => getCotisationStatus(m) === CotisationStatut.ACTIF)
+      .reduce((sum, m) => sum + (m.cotisation?.montant || 0), 0)
+
+    return {
+      total,
+      hommes,
+      femmes,
+      genreNonRenseigne,
+      hommesPercent: total > 0 ? Math.round((hommes / total) * 100) : 0,
+      femmesPercent: total > 0 ? Math.round((femmes / total) * 100) : 0,
+      payes,
+      nonPayes,
+      payesPercent: total > 0 ? Math.round((payes / total) * 100) : 0,
+      actifs,
+      attenteSignature,
+      attentePaiement,
+      expires,
+      mensuels,
+      annuels,
+      inscriptionsCeMois,
+      totalCollecte
+    }
+  }, [membres])
 
   // Mettre à jour cotisationModal.membre quand membres change (temps réel)
   useEffect(() => {
@@ -434,15 +492,191 @@ export default function Adherents() {
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card><div className="text-center"><p className="text-white/50 text-sm">Total</p><p className="text-2xl font-bold text-white">{membres.length}</p></div></Card>
-        <Card><div className="text-center"><p className="text-white/50 text-sm">Actifs</p><p className="text-2xl font-bold text-green-400">{membres.filter(m => getCotisationStatus(m) === CotisationStatut.ACTIF).length}</p></div></Card>
-        <Card><div className="text-center"><p className="text-white/50 text-sm">Att. signature</p><p className="text-2xl font-bold text-amber-400">{membres.filter(m => getCotisationStatus(m) === CotisationStatut.EN_ATTENTE_SIGNATURE).length}</p></div></Card>
-        <Card><div className="text-center"><p className="text-white/50 text-sm">Att. paiement</p><p className="text-2xl font-bold text-blue-400">{membres.filter(m => getCotisationStatus(m) === CotisationStatut.EN_ATTENTE_PAIEMENT).length}</p></div></Card>
-        <Card><div className="text-center"><p className="text-white/50 text-sm">Expirés</p><p className="text-2xl font-bold text-red-400">{membres.filter(m => getCotisationStatus(m) === CotisationStatut.EXPIRE).length}</p></div></Card>
-        <Card><div className="text-center"><p className="text-white/50 text-sm">Sans cotisation</p><p className="text-2xl font-bold text-white/50">{membres.filter(m => getCotisationStatus(m) === CotisationStatut.AUCUN).length}</p></div></Card>
-      </div>
+      {/* Stats principales */}
+      {stats && (
+        <>
+          {/* Ligne 1 : Stats générales */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <Card>
+              <div className="text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-secondary/20 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-secondary" />
+                </div>
+                <p className="text-white/50 text-sm">Total membres</p>
+                <p className="text-3xl font-bold text-white">{stats.total}</p>
+              </div>
+            </Card>
+            <Card>
+              <div className="text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-green-500/20 flex items-center justify-center">
+                  <UserCheck className="w-5 h-5 text-green-400" />
+                </div>
+                <p className="text-white/50 text-sm">Actifs</p>
+                <p className="text-3xl font-bold text-green-400">{stats.actifs}</p>
+              </div>
+            </Card>
+            <Card>
+              <div className="text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-amber-400" />
+                </div>
+                <p className="text-white/50 text-sm">Att. signature</p>
+                <p className="text-3xl font-bold text-amber-400">{stats.attenteSignature}</p>
+              </div>
+            </Card>
+            <Card>
+              <div className="text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-blue-400" />
+                </div>
+                <p className="text-white/50 text-sm">Att. paiement</p>
+                <p className="text-3xl font-bold text-blue-400">{stats.attentePaiement}</p>
+              </div>
+            </Card>
+            <Card>
+              <div className="text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-red-500/20 flex items-center justify-center">
+                  <UserX className="w-5 h-5 text-red-400" />
+                </div>
+                <p className="text-white/50 text-sm">Expirés</p>
+                <p className="text-3xl font-bold text-red-400">{stats.expires}</p>
+              </div>
+            </Card>
+            <Card>
+              <div className="text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-purple-400" />
+                </div>
+                <p className="text-white/50 text-sm">Ce mois</p>
+                <p className="text-3xl font-bold text-purple-400">+{stats.inscriptionsCeMois}</p>
+              </div>
+            </Card>
+          </div>
+
+          {/* Ligne 2 : Répartitions visuelles */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Répartition Homme/Femme */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <PieChart className="w-5 h-5 text-secondary" />
+                <h3 className="text-white font-semibold">Répartition par genre</h3>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-blue-400">Hommes</span>
+                    <span className="text-white">{stats.hommes} ({stats.hommesPercent}%)</span>
+                  </div>
+                  <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500"
+                      style={{ width: `${stats.hommesPercent}%` }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-pink-400">Femmes</span>
+                    <span className="text-white">{stats.femmes} ({stats.femmesPercent}%)</span>
+                  </div>
+                  <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-pink-500 to-pink-400 rounded-full transition-all duration-500"
+                      style={{ width: `${stats.femmesPercent}%` }}
+                    />
+                  </div>
+                </div>
+                {stats.genreNonRenseigne > 0 && (
+                  <p className="text-white/40 text-xs mt-2">
+                    {stats.genreNonRenseigne} membre(s) sans genre renseigné
+                  </p>
+                )}
+              </div>
+            </Card>
+
+            {/* Répartition Payé/Non payé */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 className="w-5 h-5 text-secondary" />
+                <h3 className="text-white font-semibold">État des paiements</h3>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="relative w-24 h-24">
+                  <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                    <path
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      fill="none"
+                      stroke="rgba(255,255,255,0.1)"
+                      strokeWidth="3"
+                    />
+                    <path
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      fill="none"
+                      stroke="url(#greenGradient)"
+                      strokeWidth="3"
+                      strokeDasharray={`${stats.payesPercent}, 100`}
+                      strokeLinecap="round"
+                    />
+                    <defs>
+                      <linearGradient id="greenGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#22c55e" />
+                        <stop offset="100%" stopColor="#4ade80" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-xl font-bold text-white">{stats.payesPercent}%</span>
+                  </div>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-500" />
+                      <span className="text-white/70 text-sm">Payés</span>
+                    </div>
+                    <span className="text-green-400 font-semibold">{stats.payes}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500" />
+                      <span className="text-white/70 text-sm">Non payés</span>
+                    </div>
+                    <span className="text-red-400 font-semibold">{stats.nonPayes}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Type de cotisation + Revenus */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <Banknote className="w-5 h-5 text-secondary" />
+                <h3 className="text-white font-semibold">Cotisations</h3>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-amber-400" />
+                    <span className="text-white/70">Mensuelles</span>
+                  </div>
+                  <span className="text-amber-400 font-semibold">{stats.mensuels}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-blue-400" />
+                    <span className="text-white/70">Annuelles</span>
+                  </div>
+                  <span className="text-blue-400 font-semibold">{stats.annuels}</span>
+                </div>
+                <div className="pt-3 border-t border-white/10">
+                  <p className="text-white/50 text-xs uppercase mb-1">Total collecté (actifs)</p>
+                  <p className="text-2xl font-bold text-green-400">{stats.totalCollecte.toLocaleString('fr-FR')} €</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-4 justify-between">
