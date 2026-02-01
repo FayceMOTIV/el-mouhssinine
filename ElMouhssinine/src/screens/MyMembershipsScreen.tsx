@@ -243,13 +243,50 @@ const MyMembershipsScreen = () => {
 
           {myMembership ? (
             <>
-              {/* Mon adhésion - Liste simple */}
-              <View style={styles.memberListItem}>
-                <View style={styles.memberListHeader}>
-                  <Text style={[styles.memberListName, isRTL && styles.rtlText]}>
-                    {myMembership.prenom} {myMembership.nom}
-                  </Text>
+              {/* Mon adhésion - Carte unique */}
+              <View style={styles.unifiedCard}>
+                {/* Header avec nom et statut */}
+                <View style={styles.unifiedCardHeader}>
+                  <View style={styles.unifiedCardAvatar}>
+                    <Text style={styles.unifiedCardAvatarText}>
+                      {myMembership.prenom?.[0]}{myMembership.nom?.[0]}
+                    </Text>
+                  </View>
+                  <View style={styles.unifiedCardNameSection}>
+                    <Text style={[styles.unifiedCardName, isRTL && styles.rtlText]}>
+                      {myMembership.prenom} {myMembership.nom}
+                    </Text>
+                    <Text style={styles.unifiedCardEmail} numberOfLines={1}>
+                      {myMembership.email}
+                    </Text>
+                  </View>
                   {getStatusBadge(myMembership.status)}
+                </View>
+
+                {/* Infos principales */}
+                <View style={styles.unifiedCardInfoGrid}>
+                  <View style={styles.unifiedCardInfoItem}>
+                    <Text style={styles.unifiedCardInfoLabel}>📞 Téléphone</Text>
+                    <Text style={styles.unifiedCardInfoValue}>{myMembership.telephone || '-'}</Text>
+                  </View>
+                  <View style={styles.unifiedCardInfoItem}>
+                    <Text style={styles.unifiedCardInfoLabel}>📋 Formule</Text>
+                    <Text style={[styles.unifiedCardInfoValue, styles.infoHighlight]}>
+                      {formatFormule(myMembership.formule)}
+                    </Text>
+                  </View>
+                  <View style={styles.unifiedCardInfoItem}>
+                    <Text style={styles.unifiedCardInfoLabel}>💰 Montant</Text>
+                    <Text style={[styles.unifiedCardInfoValue, styles.infoHighlight]}>
+                      {myMembership.montant ? `${myMembership.montant} €` : '-'}
+                    </Text>
+                  </View>
+                  {myMembership.modePaiement && (
+                    <View style={styles.unifiedCardInfoItem}>
+                      <Text style={styles.unifiedCardInfoLabel}>💳 Mode paiement</Text>
+                      <Text style={styles.unifiedCardInfoValue}>{myMembership.modePaiement}</Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Statut paiement */}
@@ -272,76 +309,6 @@ const MyMembershipsScreen = () => {
                   )}
                 </View>
 
-                {/* Boutons d'action */}
-                {myMembership.status === 'en_attente_paiement' && (
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => navigation.navigate('Member')}
-                  >
-                    <Text style={styles.actionBtnText}>💳 Payer maintenant</Text>
-                  </TouchableOpacity>
-                )}
-                {['expire', 'expired', 'inactive', 'none'].includes(myMembership.status) && (
-                  <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => navigation.navigate('Member')}
-                  >
-                    <Text style={styles.actionBtnText}>🔄 Renouveler</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Détails supplémentaires */}
-              <View style={styles.detailsCard}>
-                <Text style={[styles.detailsTitle, isRTL && styles.rtlText]}>
-                  📋 {language === 'ar' ? 'التفاصيل' : 'Détails'}
-                </Text>
-
-                <View style={styles.infoGrid}>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>
-                      {language === 'ar' ? 'البريد الإلكتروني' : 'Email'}
-                    </Text>
-                    <Text style={[styles.infoValue, isRTL && styles.rtlText]} numberOfLines={1}>
-                      {myMembership.email}
-                    </Text>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>
-                      {language === 'ar' ? 'الهاتف' : 'Téléphone'}
-                    </Text>
-                    <Text style={styles.infoValue}>{myMembership.telephone || '-'}</Text>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>
-                      {language === 'ar' ? 'نوع الاشتراك' : 'Formule'}
-                    </Text>
-                    <Text style={[styles.infoValue, styles.infoHighlight]}>
-                      {formatFormule(myMembership.formule)} • {myMembership.montant ? `${myMembership.montant} €` : '-'}
-                    </Text>
-                  </View>
-
-                  {myMembership.modePaiement && (
-                    <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>
-                        {language === 'ar' ? 'طريقة الدفع' : 'Paiement'}
-                      </Text>
-                      <Text style={styles.infoValue}>{myMembership.modePaiement}</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Bouton résilier pour tout abonnement actif */}
-                {(myMembership.status === 'actif' || myMembership.status === 'active') && (
-                  <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelSubscription}>
-                    <Text style={styles.cancelBtnText}>
-                      {language === 'ar' ? 'إلغاء الاشتراك' : 'Résilier l\'abonnement'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
                 {/* Si inscrit par quelqu'un d'autre */}
                 {myMembership.inscritPar && (
                   <View style={styles.inscritParBanner}>
@@ -351,6 +318,35 @@ const MyMembershipsScreen = () => {
                     </Text>
                   </View>
                 )}
+
+                {/* Boutons d'action */}
+                <View style={styles.unifiedCardActions}>
+                  {myMembership.status === 'en_attente_paiement' && (
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => navigation.navigate('Member')}
+                    >
+                      <Text style={styles.actionBtnText}>💳 Payer maintenant</Text>
+                    </TouchableOpacity>
+                  )}
+                  {['expire', 'expired', 'inactive', 'none'].includes(myMembership.status) && (
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => navigation.navigate('Member')}
+                    >
+                      <Text style={styles.actionBtnText}>🔄 Renouveler</Text>
+                    </TouchableOpacity>
+                  )}
+                  {/* Bouton résilier pour tout abonnement actif */}
+                  {(myMembership.status === 'actif' || myMembership.status === 'active' ||
+                    myMembership.status === 'en_attente_signature') && (
+                    <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelSubscription}>
+                      <Text style={styles.cancelBtnText}>
+                        {language === 'ar' ? 'إلغاء الاشتراك' : 'Résilier l\'abonnement'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
 
               {/* Banner virement si en attente de paiement */}
@@ -823,6 +819,77 @@ const styles = StyleSheet.create({
   rtlText: {
     textAlign: 'right',
     writingDirection: 'rtl',
+  },
+  // Carte unifiée
+  unifiedCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    ...platformShadow(4),
+  },
+  unifiedCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  unifiedCardAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  unifiedCardAvatarText: {
+    fontSize: fontSize.lg,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+  },
+  unifiedCardNameSection: {
+    flex: 1,
+  },
+  unifiedCardName: {
+    fontSize: fontSize.lg,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  unifiedCardEmail: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  unifiedCardInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  unifiedCardInfoItem: {
+    width: '48%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  unifiedCardInfoLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  unifiedCardInfoValue: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  unifiedCardActions: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    gap: spacing.sm,
   },
   // Membre liste item
   memberListItem: {

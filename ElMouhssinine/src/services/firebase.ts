@@ -587,14 +587,16 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
   }
 };
 
-// Ajouter un paiement de cotisation avec Stripe
+// Ajouter un paiement de cotisation ou don avec Stripe
 export interface AddPaymentParams {
-  memberId: string;
+  memberId: string; // Format ELM-XXXX (pour affichage)
+  memberUid?: string; // Firebase Auth UID (pour la mise à jour du document)
   memberName: string;
   amount: number;
   stripePaymentIntentId: string;
   paymentMethod: string;
   period?: string;
+  type?: 'cotisation' | 'don'; // cotisation = pas de reçu fiscal, don = reçu fiscal
 }
 
 export const addPayment = async (params: AddPaymentParams): Promise<string> => {
@@ -605,7 +607,9 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
     // Utiliser stripePaymentIntentId comme docId pour IDEMPOTENCE
     const docId = params.stripePaymentIntentId || `payment-${Date.now()}`;
     const paymentRef = firestore().collection('payments').doc(docId);
-    const memberRef = params.memberId ? firestore().collection('members').doc(params.memberId) : null;
+    // IMPORTANT: Utiliser memberUid (Firebase Auth UID) pour la mise à jour du document membre
+    // memberId (ELM-XXXX) est juste pour l'affichage, pas pour le lookup Firestore
+    const memberRef = params.memberUid ? firestore().collection('members').doc(params.memberUid) : null;
 
     // Vérifier si paiement existe déjà (idempotence)
     const existingDoc = await paymentRef.get();
@@ -624,7 +628,10 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
       dateFin = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
     }
 
-    // TRANSACTION ATOMIQUE: paiement + update membre
+    const paymentType = params.type || 'cotisation';
+    const isDon = paymentType === 'don';
+
+    // TRANSACTION ATOMIQUE: paiement + update membre (sauf pour don)
     await firestore().runTransaction(async (transaction) => {
       // 1. Créer le paiement
       transaction.set(paymentRef, {
@@ -633,16 +640,18 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
         montant: params.amount,
         modePaiement: params.paymentMethod,
         stripePaymentIntentId: params.stripePaymentIntentId,
-        type: 'cotisation',
+        type: paymentType, // 'cotisation' ou 'don'
         statut: 'completed',
         source: 'app_mobile',
         period: params.period || 'annuel',
         date: firestore.FieldValue.serverTimestamp(),
         createdAt: firestore.FieldValue.serverTimestamp(),
+        // Pour les reçus fiscaux (uniquement pour les dons)
+        eligibleRecuFiscal: isDon,
       });
 
-      // 2. Mettre à jour le statut du membre (dans la même transaction)
-      if (memberRef) {
+      // 2. Mettre à jour le statut du membre (uniquement pour cotisation, pas pour don)
+      if (memberRef && !isDon) {
         const memberDoc = await transaction.get(memberRef);
         if (memberDoc.exists()) {
           transaction.update(memberRef, {

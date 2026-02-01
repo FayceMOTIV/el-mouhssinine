@@ -80,6 +80,26 @@ const MemberScreen = () => {
   // Paiement
   const [selectedFormule, setSelectedFormule] = useState<'mensuel' | 'annuel'>('annuel');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [customAmount, setCustomAmount] = useState<string>('');
+
+  // Calculer cotisation (fixe) et don (surplus)
+  // Utilise les prix de Firebase (formulePrices) pour respecter les prix configurés dans le backoffice
+  const getPaymentBreakdown = (formule: 'mensuel' | 'annuel', totalAmount?: number) => {
+    const cotisationFixe = formulePrices[formule]; // Prix depuis Firebase, pas hardcodé
+    const total = totalAmount && totalAmount >= cotisationFixe ? totalAmount : cotisationFixe;
+    const don = Math.max(0, total - cotisationFixe);
+    return { cotisation: cotisationFixe, don, total };
+  };
+
+  // Montant total à payer (cotisation + don optionnel)
+  const getCurrentAmount = () => {
+    const minAmount = formulePrices[selectedFormule];
+    const customNum = parseInt(customAmount, 10);
+    if (customAmount && !isNaN(customNum) && customNum >= minAmount) {
+      return customNum;
+    }
+    return minAmount;
+  };
 
   // Famille
   const [familyMembers, setFamilyMembers] = useState<{id: string; nom: string; prenom: string; telephone: string; adresse: string; genre: 'homme' | 'femme' | ''; dateNaissance: string; accepte: boolean}[]>([]);
@@ -315,44 +335,70 @@ const MemberScreen = () => {
   const handlePayment = async (method: 'card' | 'apple' | 'virement') => {
     if (isProcessingPayment || !memberProfile) return;
 
-    const amount = formulePrices[selectedFormule];
+    const totalAmount = getCurrentAmount();
+    const breakdown = getPaymentBreakdown(selectedFormule, totalAmount);
 
     if (method === 'virement') {
       const reference = `ADH-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-      Alert.alert(
-        '🏦 Virement bancaire',
-        `IBAN: ${mosqueeInfo?.iban || 'FR76 XXXX XXXX XXXX'}\nBIC: ${mosqueeInfo?.bic || 'XXXXXXXX'}\n\nMontant: ${amount}€\nRéférence: ${reference}\n\nImportant: Indiquez la référence dans le motif du virement.`,
-        [{ text: 'Compris', style: 'default' }]
-      );
+      let message = `IBAN: ${mosqueeInfo?.iban || 'FR76 XXXX XXXX XXXX'}\nBIC: ${mosqueeInfo?.bic || 'XXXXXXXX'}\n\nCotisation: ${breakdown.cotisation}€`;
+      if (breakdown.don > 0) {
+        message += `\nDon: ${breakdown.don}€`;
+      }
+      message += `\nTotal: ${breakdown.total}€\n\nRéférence: ${reference}\n\nImportant: Indiquez la référence dans le motif du virement.`;
+      Alert.alert('🏦 Virement bancaire', message, [{ text: 'Compris', style: 'default' }]);
       setShowPaymentModal(false);
+      setCustomAmount('');
       return;
     }
 
     setIsProcessingPayment(true);
     try {
       const paymentResult = await makePayment({
-        amount,
-        description: `Cotisation ${selectedFormule} - El Mouhssinine`,
+        amount: breakdown.total,
+        description: breakdown.don > 0
+          ? `Cotisation ${selectedFormule} (${breakdown.cotisation}€) + Don (${breakdown.don}€) - El Mouhssinine`
+          : `Cotisation ${selectedFormule} - El Mouhssinine`,
         type: 'cotisation',
         metadata: {
-          memberId: memberProfile.memberId || '',
+          memberId: memberProfile.uid, // UID Firebase (doc ID) - PAS le format ELM-XXXX
+          memberIdDisplay: memberProfile.memberId || '', // Format ELM-XXXX pour affichage uniquement
           memberName: memberProfile.name,
+          email: memberProfile.email, // Email pour sendRecuFiscal
           period: selectedFormule,
+          montantCotisation: breakdown.cotisation,
+          montantDon: breakdown.don,
         },
       });
 
       if (paymentResult.success && paymentResult.paymentIntentId) {
+        // Enregistrer le paiement de cotisation
         await addPayment({
           memberId: memberProfile.memberId || '',
+          memberUid: memberProfile.uid, // UID Firebase pour la mise à jour du document
           memberName: memberProfile.name,
-          amount,
+          amount: breakdown.cotisation,
           stripePaymentIntentId: paymentResult.paymentIntentId,
           paymentMethod: method === 'apple' ? 'Apple Pay' : 'CB',
           period: selectedFormule,
         });
 
+        // Si don > 0, enregistrer le don séparément
+        if (breakdown.don > 0) {
+          await addPayment({
+            memberId: memberProfile.memberId || '',
+            memberUid: memberProfile.uid, // UID Firebase pour la mise à jour du document
+            memberName: memberProfile.name,
+            amount: breakdown.don,
+            stripePaymentIntentId: paymentResult.paymentIntentId + '_don',
+            paymentMethod: method === 'apple' ? 'Apple Pay' : 'CB',
+            period: selectedFormule,
+            type: 'don', // Type don pour le reçu fiscal
+          });
+        }
+
         showPaymentSuccess('cotisation');
         setShowPaymentModal(false);
+        setCustomAmount('');
 
         // Recharger les données
         const user = AuthService.getCurrentUser();
@@ -472,8 +518,10 @@ const MemberScreen = () => {
         description: `Cotisation famille ${familyFormule} (${familyMembers.length}) - El Mouhssinine`,
         type: 'cotisation',
         metadata: {
-          memberId: memberProfile.memberId || '',
+          memberId: memberProfile.uid, // UID Firebase (doc ID) - PAS le format ELM-XXXX
+          memberIdDisplay: memberProfile.memberId || '', // Format ELM-XXXX pour affichage uniquement
           memberName: memberProfile.name,
+          email: memberProfile.email, // Email pour sendRecuFiscal
           period: familyFormule,
           membersCount: familyMembers.length.toString(),
         },
@@ -1120,20 +1168,67 @@ const MemberScreen = () => {
   // ============================================================
 
   function renderPaymentModal() {
+    const totalAmount = getCurrentAmount();
+    const breakdown = getPaymentBreakdown(selectedFormule, totalAmount);
+    const minAmount = formulePrices[selectedFormule];
+
     return (
       <Modal visible={showPaymentModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowPaymentModal(false)}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => { setShowPaymentModal(false); setCustomAmount(''); }}>
               <Text style={styles.closeButtonText}>×</Text>
             </TouchableOpacity>
 
             <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>💳 Paiement</Text>
 
-            <View style={styles.paymentSummary}>
-              <Text style={styles.paymentSummaryLabel}>Cotisation {selectedFormule}</Text>
-              <Text style={styles.paymentSummaryAmount}>{formulePrices[selectedFormule]}€</Text>
+            {/* Montant personnalisable */}
+            <View style={styles.amountSection}>
+              <Text style={styles.amountLabel}>Montant (minimum {minAmount}€)</Text>
+              <View style={styles.amountInputContainer}>
+                <TextInput
+                  style={styles.amountInput}
+                  value={customAmount || String(minAmount)}
+                  onChangeText={(text) => {
+                    const num = text.replace(/[^0-9]/g, '');
+                    setCustomAmount(num);
+                  }}
+                  keyboardType="numeric"
+                  placeholder={String(minAmount)}
+                  placeholderTextColor="#999"
+                />
+                <Text style={styles.amountCurrency}>€</Text>
+              </View>
+              <Text style={styles.amountHint}>
+                Vous pouvez donner plus pour soutenir la mosquée
+              </Text>
             </View>
+
+            {/* Répartition cotisation / don */}
+            <View style={styles.breakdownSection}>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>📋 Cotisation {selectedFormule}</Text>
+                <Text style={styles.breakdownValue}>{breakdown.cotisation}€</Text>
+              </View>
+              {breakdown.don > 0 && (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabelDon}>🎁 Don (reçu fiscal)</Text>
+                  <Text style={styles.breakdownValueDon}>{breakdown.don}€</Text>
+                </View>
+              )}
+              <View style={[styles.breakdownRow, styles.breakdownTotal]}>
+                <Text style={styles.breakdownLabelTotal}>Total</Text>
+                <Text style={styles.breakdownValueTotal}>{breakdown.total}€</Text>
+              </View>
+            </View>
+
+            {breakdown.don > 0 && (
+              <View style={styles.donInfo}>
+                <Text style={styles.donInfoText}>
+                  ℹ️ Vous recevrez un reçu fiscal pour votre don de {breakdown.don}€ (déduction de 66% des impôts)
+                </Text>
+              </View>
+            )}
 
             {/* Méthodes de paiement */}
             <TouchableOpacity
@@ -1804,6 +1899,98 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: '700',
     color: colors.text,
+  },
+  // Montant personnalisable
+  amountSection: {
+    marginBottom: spacing.md,
+  },
+  amountLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+  },
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.text,
+    paddingVertical: spacing.md,
+  },
+  amountCurrency: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  amountHint: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    fontStyle: 'italic',
+  },
+  // Répartition cotisation/don
+  breakdownSection: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  breakdownLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+  },
+  breakdownValue: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  breakdownLabelDon: {
+    fontSize: fontSize.sm,
+    color: '#22c55e',
+  },
+  breakdownValueDon: {
+    fontSize: fontSize.sm,
+    color: '#22c55e',
+    fontWeight: '600',
+  },
+  breakdownTotal: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  breakdownLabelTotal: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  breakdownValueTotal: {
+    fontSize: fontSize.lg,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  donInfo: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  donInfoText: {
+    fontSize: fontSize.xs,
+    color: '#22c55e',
+    textAlign: 'center',
   },
   paymentMethod: {
     flexDirection: 'row',

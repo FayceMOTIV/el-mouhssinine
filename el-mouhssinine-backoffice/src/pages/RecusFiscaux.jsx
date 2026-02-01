@@ -317,7 +317,7 @@ export default function RecusFiscaux() {
                   value={emailManuel}
                   onChange={e => setEmailManuel(e.target.value)}
                   placeholder="donateur@email.com"
-                  icon={<Search className="w-4 h-4" />}
+                  icon={Search}
                 />
               </div>
               <div>

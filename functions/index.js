@@ -1322,10 +1322,13 @@ exports.sendRecuFiscal = functions
 
       const association = settingsDoc.data();
 
-      // 2. Récupérer les dons de l'utilisateur pour l'année
+      // 2. Récupérer les DONS de l'utilisateur pour l'année
+      // IMPORTANT: Seuls les dons sont éligibles au reçu fiscal, PAS les cotisations
+      // Les cotisations fixes (10€ mensuel, 100€ annuel) ne donnent pas droit à déduction
       const startDate = new Date(annee, 0, 1);
       const endDate = new Date(annee, 11, 31, 23, 59, 59);
 
+      // Dons dans la collection donations (dons pour projets)
       const donationsSnapshot = await admin.firestore()
         .collection('donations')
         .where('metadata.donorEmail', '==', email.toLowerCase())
@@ -1334,7 +1337,8 @@ exports.sendRecuFiscal = functions
         .where('status', '==', 'succeeded')
         .get();
 
-      // Aussi chercher les cotisations
+      // Dons dans la collection payments (surplus au-dessus de la cotisation)
+      // On ne compte que les paiements avec type='don' ou eligibleRecuFiscal=true
       const paymentsSnapshot = await admin.firestore()
         .collection('payments')
         .where('metadata.email', '==', email.toLowerCase())
@@ -1343,10 +1347,11 @@ exports.sendRecuFiscal = functions
         .where('status', '==', 'succeeded')
         .get();
 
-      // Combiner et calculer le total
+      // Combiner et calculer le total (seulement les dons, pas les cotisations)
       let totalDons = 0;
       const donsDetails = [];
 
+      // Les donations (pour projets) sont toujours des dons
       donationsSnapshot.docs.forEach(doc => {
         const d = doc.data();
         totalDons += d.amount || 0;
@@ -1354,17 +1359,25 @@ exports.sendRecuFiscal = functions
           date: d.createdAt?.toDate?.()?.toLocaleDateString('fr-FR') || 'N/A',
           montant: d.amount || 0,
           mode: d.metadata?.paymentMethod || 'Carte bancaire',
+          type: 'Don projet',
         });
       });
 
+      // Pour les payments, ne compter que ceux marqués comme don
       paymentsSnapshot.docs.forEach(doc => {
         const p = doc.data();
-        totalDons += p.amount || 0;
-        donsDetails.push({
-          date: p.createdAt?.toDate?.()?.toLocaleDateString('fr-FR') || 'N/A',
-          montant: p.amount || 0,
-          mode: p.metadata?.paymentMethod || 'Carte bancaire',
-        });
+        // Vérifier si c'est un don (type='don' ou eligibleRecuFiscal=true)
+        const isDon = p.type === 'don' || p.eligibleRecuFiscal === true;
+        if (isDon) {
+          totalDons += p.amount || 0;
+          donsDetails.push({
+            date: p.createdAt?.toDate?.()?.toLocaleDateString('fr-FR') || 'N/A',
+            montant: p.amount || 0,
+            mode: p.metadata?.paymentMethod || 'Carte bancaire',
+            type: 'Don libre',
+          });
+        }
+        // Les cotisations (type='cotisation' ou sans type) ne sont PAS comptées
       });
 
       if (totalDons === 0) {
@@ -1542,7 +1555,7 @@ exports.getDonsByYear = functions
       const startDate = new Date(annee, 0, 1);
       const endDate = new Date(annee, 11, 31, 23, 59, 59);
 
-      // Dons
+      // Dons (pour projets)
       const donationsSnapshot = await admin.firestore()
         .collection('donations')
         .where('metadata.donorEmail', '==', email.toLowerCase())
@@ -1551,7 +1564,7 @@ exports.getDonsByYear = functions
         .where('status', '==', 'succeeded')
         .get();
 
-      // Cotisations
+      // Paiements (cotisations + dons libres)
       const paymentsSnapshot = await admin.firestore()
         .collection('payments')
         .where('metadata.email', '==', email.toLowerCase())
@@ -1560,33 +1573,58 @@ exports.getDonsByYear = functions
         .where('status', '==', 'succeeded')
         .get();
 
-      let total = 0;
+      let totalDonsEligibles = 0; // Total éligible au reçu fiscal
+      let totalCotisations = 0;   // Total cotisations (non éligible)
       const dons = [];
 
+      // Dons pour projets (toujours éligibles)
       donationsSnapshot.docs.forEach(doc => {
         const d = doc.data();
-        total += d.amount || 0;
+        totalDonsEligibles += d.amount || 0;
         dons.push({
           id: doc.id,
-          type: 'don',
+          type: 'don_projet',
           montant: d.amount || 0,
           date: d.createdAt?.toDate?.()?.toISOString() || null,
           projet: d.projectName || null,
+          eligibleRecuFiscal: true,
         });
       });
 
+      // Paiements (distinguer cotisations et dons)
       paymentsSnapshot.docs.forEach(doc => {
         const p = doc.data();
-        total += p.amount || 0;
-        dons.push({
-          id: doc.id,
-          type: 'cotisation',
-          montant: p.amount || 0,
-          date: p.createdAt?.toDate?.()?.toISOString() || null,
-        });
+        const isDon = p.type === 'don' || p.eligibleRecuFiscal === true;
+
+        if (isDon) {
+          totalDonsEligibles += p.amount || 0;
+          dons.push({
+            id: doc.id,
+            type: 'don_libre',
+            montant: p.amount || 0,
+            date: p.createdAt?.toDate?.()?.toISOString() || null,
+            eligibleRecuFiscal: true,
+          });
+        } else {
+          totalCotisations += p.amount || 0;
+          dons.push({
+            id: doc.id,
+            type: 'cotisation',
+            montant: p.amount || 0,
+            date: p.createdAt?.toDate?.()?.toISOString() || null,
+            period: p.period || null,
+            eligibleRecuFiscal: false,
+          });
+        }
       });
 
-      return { total, dons, annee };
+      return {
+        totalEligible: totalDonsEligibles,
+        totalCotisations,
+        total: totalDonsEligibles + totalCotisations,
+        dons,
+        annee
+      };
 
     } catch (error) {
       console.error('Erreur getDonsByYear:', error);

@@ -47,6 +47,7 @@ const defaultMembre = {
   email: '',
   telephone: '',
   adresse: '',
+  genre: '', // obligatoire: 'homme' ou 'femme'
   cotisation: {
     type: CotisationType.ANNUEL,
     montant: 100,
@@ -55,6 +56,11 @@ const defaultMembre = {
   },
   actif: true
 }
+
+const genreOptions = [
+  { value: 'homme', label: 'Homme' },
+  { value: 'femme', label: 'Femme' }
+]
 
 const cotisationOptions = [
   { value: CotisationType.MENSUEL, label: 'Mensuelle' },
@@ -95,6 +101,16 @@ export default function Adherents() {
     })
     return () => unsubscribe()
   }, [])
+
+  // Fonction pour déterminer le statut de cotisation (définie avant useMemo qui l'utilise)
+  const getCotisationStatus = (membre) => {
+    if (membre.status === 'en_attente_signature') return CotisationStatut.EN_ATTENTE_SIGNATURE
+    if (membre.status === 'en_attente_paiement') return CotisationStatut.EN_ATTENTE_PAIEMENT
+    if (membre.status === 'actif') return CotisationStatut.ACTIF
+    if (!membre.cotisation?.dateFin) return CotisationStatut.AUCUN
+    const dateFin = membre.cotisation.dateFin?.toDate?.() || new Date(membre.cotisation.dateFin)
+    return isPast(dateFin) ? CotisationStatut.EXPIRE : CotisationStatut.ACTIF
+  }
 
   // Calcul des statistiques détaillées
   const stats = useMemo(() => {
@@ -200,16 +216,7 @@ export default function Adherents() {
     }
 
     setFilteredMembres(filtered)
-  }, [membres, searchQuery, statusFilter, payeurFilter])
-
-  const getCotisationStatus = (membre) => {
-    if (membre.status === 'en_attente_signature') return CotisationStatut.EN_ATTENTE_SIGNATURE
-    if (membre.status === 'en_attente_paiement') return CotisationStatut.EN_ATTENTE_PAIEMENT
-    if (membre.status === 'actif') return CotisationStatut.ACTIF
-    if (!membre.cotisation?.dateFin) return CotisationStatut.AUCUN
-    const dateFin = membre.cotisation.dateFin?.toDate?.() || new Date(membre.cotisation.dateFin)
-    return isPast(dateFin) ? CotisationStatut.EXPIRE : CotisationStatut.ACTIF
-  }
+  }, [membres, searchQuery, statusFilter, payeurFilter, getCotisationStatus])
 
   // ========== GESTION COTISATION (MODAL UNIQUE) ==========
   const handleCotisationUpdate = async (updates) => {
@@ -302,6 +309,7 @@ export default function Adherents() {
         email: membre.email || '',
         telephone: membre.telephone || '',
         adresse: membre.adresse || '',
+        genre: membre.genre || '',
         cotisation: {
           type: membre.cotisation?.type || CotisationType.ANNUEL,
           montant: membre.cotisation?.montant || 100,
@@ -326,6 +334,10 @@ export default function Adherents() {
   const handleSave = async () => {
     if (!formData.nom.trim() || !formData.prenom.trim()) {
       toast.error('Le nom et prénom sont requis')
+      return
+    }
+    if (!formData.genre) {
+      toast.error('Le sexe est obligatoire')
       return
     }
 
@@ -559,7 +571,7 @@ export default function Adherents() {
             <Card>
               <div className="flex items-center gap-2 mb-4">
                 <PieChart className="w-5 h-5 text-secondary" />
-                <h3 className="text-white font-semibold">Répartition par genre</h3>
+                <h3 className="text-white font-semibold">Répartition par sexe</h3>
               </div>
               <div className="space-y-3">
                 <div>
@@ -588,7 +600,7 @@ export default function Adherents() {
                 </div>
                 {stats.genreNonRenseigne > 0 && (
                   <p className="text-white/40 text-xs mt-2">
-                    {stats.genreNonRenseigne} membre(s) sans genre renseigné
+                    {stats.genreNonRenseigne} membre(s) sans sexe renseigné
                   </p>
                 )}
               </div>
@@ -945,7 +957,10 @@ export default function Adherents() {
             <Input label="Email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
             <Input label="Téléphone" value={formData.telephone} onChange={(e) => setFormData({ ...formData, telephone: e.target.value })} />
           </div>
-          <Input label="Adresse" value={formData.adresse} onChange={(e) => setFormData({ ...formData, adresse: e.target.value })} />
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Adresse" value={formData.adresse} onChange={(e) => setFormData({ ...formData, adresse: e.target.value })} />
+            <Select label="Sexe *" value={formData.genre} onChange={(e) => setFormData({ ...formData, genre: e.target.value })} options={genreOptions} placeholder="Sélectionner" />
+          </div>
 
           <div className="border-t border-white/10 pt-4">
             <h4 className="text-white font-medium mb-4">Cotisation</h4>
