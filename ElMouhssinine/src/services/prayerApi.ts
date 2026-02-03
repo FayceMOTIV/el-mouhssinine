@@ -3,6 +3,41 @@
 // Avec cache Firestore pour supporter 4000+ utilisateurs
 
 import firestore from '@react-native-firebase/firestore';
+import { logger } from '../utils';
+
+// Interface pour les délais Iqama depuis Firebase
+interface FirebaseIqamaDelays {
+  fajr: number | string;
+  dhuhr: number | string;
+  asr: number | string;
+  maghrib: number | string;
+  isha: number | string;
+}
+
+// Charger les délais Iqama depuis Firebase (settings/horaires)
+const getIqamaDelaysFromFirebase = async (): Promise<FirebaseIqamaDelays | null> => {
+  try {
+    const doc = await firestore().collection('settings').doc('horaires').get();
+    if (doc.exists() && doc.data()?.iqama) {
+      return doc.data()?.iqama as FirebaseIqamaDelays;
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+};
+
+// Convertir délai Firebase en format offset (+10, +15, etc.)
+const delayToOffset = (delay: number | string): string => {
+  if (typeof delay === 'string') {
+    // Si déjà format HH:MM ou +XX, retourner tel quel
+    if (delay.includes(':') || delay.startsWith('+') || delay.startsWith('-')) {
+      return delay;
+    }
+    return `+${delay}`;
+  }
+  return `+${delay}`;
+};
 
 const MAWAQIT_API = 'https://mawaqit.net/api/2.0';
 const MOSQUE_UUID = '357233ff-e025-42f2-abf9-b23adb23ed52';
@@ -241,7 +276,7 @@ export const PrayerAPI = {
       setCache(cacheKey, timings);
       return timings;
     } catch (error) {
-      console.error('[PrayerAPI] Erreur Mawaqit:', error);
+      logger.error('[PrayerAPI] Erreur Mawaqit:', error);
       // Fallback: utiliser les horaires du jour depuis le calendrier local
       const today = new Date();
       const currentHour = today.getHours();
@@ -317,41 +352,54 @@ export const PrayerAPI = {
         },
       };
 
-      // Déterminer le jour à afficher (aujourd'hui ou demain si Isha passé)
+      // Helper: trouver les horaires interpolés pour un jour donné
+      const getTimesForDay = (month: number, day: number): string[] => {
+        const monthCal = calendar2026[month];
+        if (!monthCal) return ['06:34', '08:04', '12:53', '15:20', '17:47', '19:17']; // Défaut
+
+        const dayStr = day.toString();
+        if (monthCal[dayStr]) return monthCal[dayStr];
+
+        // Interpoler: trouver le jour le plus proche
+        const days = Object.keys(monthCal).map(Number).sort((a, b) => a - b);
+        const closest = days.reduce((prev, curr) =>
+          Math.abs(curr - day) < Math.abs(prev - day) ? curr : prev
+        );
+        return monthCal[closest.toString()];
+      };
+
+      // 1. D'abord, obtenir les horaires d'aujourd'hui (interpolés si nécessaire)
+      const todayTimes = getTimesForDay(today.getMonth(), today.getDate());
+      const [ishaH, ishaM] = todayTimes[5].split(':').map(Number);
+      const ishaInMinutes = ishaH * 60 + ishaM;
+
+      // 2. Déterminer si on doit afficher demain (après Isha)
       let targetMonth = today.getMonth();
       let targetDay = today.getDate();
 
-      // Vérifier si Isha est passé avec les horaires d'aujourd'hui
-      const todayMonthCal = calendar2026[targetMonth];
-      if (todayMonthCal) {
-        const todayStr = targetDay.toString();
-        const todayTimes = todayMonthCal[todayStr];
-        if (todayTimes) {
-          const [ishaH, ishaM] = todayTimes[5].split(':').map(Number);
-          const ishaInMinutes = ishaH * 60 + ishaM;
-          if (currentTimeInMinutes >= ishaInMinutes) {
-            // Isha passé, basculer sur demain
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            targetMonth = tomorrow.getMonth();
-            targetDay = tomorrow.getDate();
-          }
-        }
+      if (currentTimeInMinutes >= ishaInMinutes) {
+        // Isha passé, basculer sur demain
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        targetMonth = tomorrow.getMonth();
+        targetDay = tomorrow.getDate();
       }
 
-      // Utiliser les horaires du jour cible
-      const monthCal = calendar2026[targetMonth];
-      let fallbackTimes = ['06:34', '08:04', '12:53', '15:20', '17:47', '19:17']; // Défaut 30 janvier
-      if (monthCal) {
-        const dayStr = targetDay.toString();
-        if (monthCal[dayStr]) {
-          fallbackTimes = monthCal[dayStr];
-        } else {
-          // Trouver le jour le plus proche
-          const days = Object.keys(monthCal).map(Number).sort((a, b) => a - b);
-          const closest = days.reduce((prev, curr) => Math.abs(curr - targetDay) < Math.abs(prev - targetDay) ? curr : prev);
-          fallbackTimes = monthCal[closest.toString()];
-        }
+      // 3. Obtenir les horaires du jour cible (interpolés si nécessaire)
+      let fallbackTimes = getTimesForDay(targetMonth, targetDay);
+
+      // Charger les délais Iqama depuis Firebase (si disponible)
+      let iqamaOffsets = ['+10', '+10', '+10', '+7', '+10']; // Défaut
+      const firebaseIqama = await getIqamaDelaysFromFirebase();
+      if (firebaseIqama) {
+        iqamaOffsets = [
+          delayToOffset(firebaseIqama.fajr),
+          delayToOffset(firebaseIqama.dhuhr),
+          delayToOffset(firebaseIqama.asr),
+          delayToOffset(firebaseIqama.maghrib),
+          delayToOffset(firebaseIqama.isha),
+        ];
+        logger.log('[PrayerAPI] Iqama depuis Firebase:', iqamaOffsets);
       }
 
       const fallbackTimings: PrayerTimings = {
@@ -367,14 +415,14 @@ export const PrayerAPI = {
         Firstthird: '00:00',
         Lastthird: '00:00',
         Jumua: '13:30',
-        IqamaFajr: calculateIqamaTime(fallbackTimes[0], '+10'),
-        IqamaDhuhr: calculateIqamaTime(fallbackTimes[2], '+10'),
-        IqamaAsr: calculateIqamaTime(fallbackTimes[3], '+10'),
-        IqamaMaghrib: calculateIqamaTime(fallbackTimes[4], '+7'),
-        IqamaIsha: calculateIqamaTime(fallbackTimes[5], '+10'),
+        IqamaFajr: calculateIqamaTime(fallbackTimes[0], iqamaOffsets[0]),
+        IqamaDhuhr: calculateIqamaTime(fallbackTimes[2], iqamaOffsets[1]),
+        IqamaAsr: calculateIqamaTime(fallbackTimes[3], iqamaOffsets[2]),
+        IqamaMaghrib: calculateIqamaTime(fallbackTimes[4], iqamaOffsets[3]),
+        IqamaIsha: calculateIqamaTime(fallbackTimes[5], iqamaOffsets[4]),
       };
 
-      console.log('[PrayerAPI] Utilisation fallback local:', fallbackTimings);
+      logger.log('[PrayerAPI] Utilisation fallback local:', fallbackTimings);
       return fallbackTimings;
     }
   },
@@ -449,7 +497,7 @@ export const PrayerAPI = {
       setCache(cacheKey, result);
       return result;
     } catch (error) {
-      console.error('[PrayerAPI] Erreur calendrier:', error);
+      logger.error('[PrayerAPI] Erreur calendrier:', error);
       throw error;
     }
   },
@@ -500,7 +548,7 @@ export const PrayerAPI = {
       }
       throw new Error('Aladhan API error');
     } catch (error) {
-      console.error('[PrayerAPI] Erreur Hijri:', error);
+      logger.error('[PrayerAPI] Erreur Hijri:', error);
       // Retourner une date par défaut
       return {
         date: '',
@@ -531,7 +579,7 @@ export const PrayerAPI = {
       }
       throw new Error('Qibla API error');
     } catch (error) {
-      console.error('[PrayerAPI] Erreur Qibla:', error);
+      logger.error('[PrayerAPI] Erreur Qibla:', error);
       return 119.5; // Direction approximative depuis Bourg-en-Bresse
     }
   },

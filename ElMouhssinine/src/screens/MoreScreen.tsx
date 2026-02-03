@@ -17,7 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import CompassHeading from 'react-native-compass-heading';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, platformShadow, isSmallScreen } from '../theme/colors';
-import { subscribeToMosqueeInfo, requestRecuFiscal } from '../services/firebase';
+import { subscribeToMosqueeInfo, requestRecuFiscal, subscribeToRamadanSettings, RamadanSettings } from '../services/firebase';
 import { AuthService } from '../services/auth';
 import { MosqueeInfo } from '../types';
 import { useLanguage } from '../context/LanguageContext';
@@ -53,6 +53,13 @@ import {
   DEFAULT_MOSQUE_PROXIMITY_SETTINGS,
   getMosqueProximitySettings,
   saveMosqueProximitySettings,
+  // Notifications Ramadan
+  RamadanUserNotificationSettings,
+  DEFAULT_RAMADAN_NOTIFICATION_SETTINGS,
+  getRamadanNotificationSettings,
+  saveRamadanNotificationSettings,
+  scheduleRamadanNotifications,
+  cancelRamadanNotifications,
 } from '../services/prayerNotifications';
 import {
   initBackgroundLocation,
@@ -94,6 +101,9 @@ const MoreScreen = () => {
   const [quranReminderSettings, setQuranReminderSettings] = useState<QuranReminderSettings>(DEFAULT_QURAN_REMINDER_SETTINGS);
   // Proximité Mosquée (mode silencieux)
   const [mosqueProximitySettings, setMosqueProximitySettings] = useState<MosqueProximitySettings>(DEFAULT_MOSQUE_PROXIMITY_SETTINGS);
+  // Notifications Ramadan
+  const [ramadanNotifSettings, setRamadanNotifSettings] = useState<RamadanUserNotificationSettings>(DEFAULT_RAMADAN_NOTIFICATION_SETTINGS);
+  const [ramadanSettings, setRamadanSettings] = useState<RamadanSettings | null>(null);
   const [compassHeading, setCompassHeading] = useState(0);
   const [compassError, setCompassError] = useState<string | null>(null);
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -174,6 +184,19 @@ const MoreScreen = () => {
     getMosqueProximitySettings().then(setMosqueProximitySettings);
   }, []);
 
+  // Charger les settings notifications Ramadan
+  useEffect(() => {
+    getRamadanNotificationSettings().then(setRamadanNotifSettings);
+  }, []);
+
+  // S'abonner aux settings Ramadan (pour savoir si le mode est actif)
+  useEffect(() => {
+    const unsubscribe = subscribeToRamadanSettings((settings) => {
+      setRamadanSettings(settings);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Mettre a jour les settings de notifications de priere
   const updatePrayerNotifSettings = async (newSettings: PrayerNotificationSettings) => {
     setPrayerNotifSettings(newSettings);
@@ -240,6 +263,37 @@ const MoreScreen = () => {
       }
     } else {
       await cancelQuranReminders();
+    }
+  };
+
+  // Mettre à jour les settings notifications Ramadan
+  const updateRamadanNotifSettings = async (newSettings: RamadanUserNotificationSettings) => {
+    setRamadanNotifSettings(newSettings);
+    await saveRamadanNotificationSettings(newSettings);
+
+    // Re-scheduler les notifications si au moins une est activée
+    const anyEnabled = newSettings.suhoor.enabled || newSettings.iftar.enabled || newSettings.tarawih.enabled;
+
+    if (anyEnabled && ramadanSettings?.enabled) {
+      const hasPermission = await requestPrayerNotifPermission();
+      if (hasPermission) {
+        try {
+          const timings = await PrayerAPI.getTimesByCity('Bourg-en-Bresse', 'France');
+          const translations = {
+            suhoorTitle: language === 'ar' ? '🌙 السحور' : '🌙 Suhoor',
+            suhoorBody: language === 'ar' ? 'بقي {minutes} دقيقة على الفجر - استعد للصيام' : 'Plus que {minutes} min avant Fajr - Préparez-vous',
+            iftarTitle: language === 'ar' ? '🌅 الإفطار' : '🌅 Iftar',
+            iftarBody: language === 'ar' ? 'وقت الإفطار في {minutes} دقيقة' : 'Iftar dans {minutes} min',
+            tarawihTitle: language === 'ar' ? '🕌 التراويح' : '🕌 Tarawih',
+            tarawihBody: language === 'ar' ? 'صلاة التراويح في {minutes} دقيقة' : 'Prière Tarawih dans {minutes} min',
+          };
+          await scheduleRamadanNotifications(timings, ramadanSettings.tarawihTime, newSettings, translations);
+        } catch (error) {
+          console.warn('[MoreScreen] Erreur Ramadan scheduling:', error);
+        }
+      }
+    } else {
+      await cancelRamadanNotifications();
     }
   };
 
@@ -437,10 +491,11 @@ const MoreScreen = () => {
           result.message
         );
       }
-    } catch (error: any) {
+    } catch (error) {
+      const err = error as Error;
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
-        error.message || (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue')
+        err?.message || (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue')
       );
     } finally {
       setSendingRecuFiscal(false);
@@ -980,6 +1035,183 @@ const MoreScreen = () => {
               </View>
             </View>
           </View>
+
+          {/* Notifications Ramadan - Visible uniquement si mode Ramadan actif */}
+          {ramadanSettings?.enabled && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
+                🌙 {language === 'ar' ? 'إشعارات رمضان' : 'Notifications Ramadan'}
+              </Text>
+              <View style={[styles.card, styles.ramadanCard]}>
+                {/* Toggle Suhoor */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLeft}>
+                    <Text style={styles.settingIcon}>🌙</Text>
+                    <Text style={styles.settingLabel}>
+                      {language === 'ar' ? 'تذكير السحور' : 'Rappel Suhoor'}
+                    </Text>
+                  </View>
+                  <Switch
+                    active={ramadanNotifSettings.suhoor.enabled}
+                    onToggle={() => updateRamadanNotifSettings({
+                      ...ramadanNotifSettings,
+                      suhoor: { ...ramadanNotifSettings.suhoor, enabled: !ramadanNotifSettings.suhoor.enabled }
+                    })}
+                  />
+                </View>
+
+                {/* Minutes avant Suhoor */}
+                {ramadanNotifSettings.suhoor.enabled && (
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingLeft}>
+                      <Text style={styles.settingIcon}>⏰</Text>
+                      <Text style={styles.settingLabel}>
+                        {language === 'ar' ? 'قبل الفجر بـ' : 'Avant Fajr'}
+                      </Text>
+                    </View>
+                    <View style={styles.picker}>
+                      {[15, 30, 45].map((min) => (
+                        <TouchableOpacity
+                          key={min}
+                          style={[
+                            styles.pickerOption,
+                            ramadanNotifSettings.suhoor.minutesBefore === min && styles.pickerOptionActive
+                          ]}
+                          onPress={() => updateRamadanNotifSettings({
+                            ...ramadanNotifSettings,
+                            suhoor: { ...ramadanNotifSettings.suhoor, minutesBefore: min }
+                          })}
+                        >
+                          <Text style={[
+                            styles.pickerOptionText,
+                            ramadanNotifSettings.suhoor.minutesBefore === min && styles.pickerOptionTextActive
+                          ]}>
+                            {min}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                      <Text style={styles.pickerUnit}>{isRTL ? 'د' : 'min'}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Toggle Iftar */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLeft}>
+                    <Text style={styles.settingIcon}>🌅</Text>
+                    <Text style={styles.settingLabel}>
+                      {language === 'ar' ? 'تذكير الإفطار' : 'Rappel Iftar'}
+                    </Text>
+                  </View>
+                  <Switch
+                    active={ramadanNotifSettings.iftar.enabled}
+                    onToggle={() => updateRamadanNotifSettings({
+                      ...ramadanNotifSettings,
+                      iftar: { ...ramadanNotifSettings.iftar, enabled: !ramadanNotifSettings.iftar.enabled }
+                    })}
+                  />
+                </View>
+
+                {/* Minutes avant Iftar */}
+                {ramadanNotifSettings.iftar.enabled && (
+                  <View style={styles.settingRow}>
+                    <View style={styles.settingLeft}>
+                      <Text style={styles.settingIcon}>⏰</Text>
+                      <Text style={styles.settingLabel}>
+                        {language === 'ar' ? 'قبل المغرب بـ' : 'Avant Maghrib'}
+                      </Text>
+                    </View>
+                    <View style={styles.picker}>
+                      {[0, 5, 10, 15].map((min) => (
+                        <TouchableOpacity
+                          key={min}
+                          style={[
+                            styles.pickerOption,
+                            ramadanNotifSettings.iftar.minutesBefore === min && styles.pickerOptionActive
+                          ]}
+                          onPress={() => updateRamadanNotifSettings({
+                            ...ramadanNotifSettings,
+                            iftar: { ...ramadanNotifSettings.iftar, minutesBefore: min }
+                          })}
+                        >
+                          <Text style={[
+                            styles.pickerOptionText,
+                            ramadanNotifSettings.iftar.minutesBefore === min && styles.pickerOptionTextActive
+                          ]}>
+                            {min === 0 ? (language === 'ar' ? 'الآن' : 'À l\'heure') : min}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                      {ramadanNotifSettings.iftar.minutesBefore > 0 && (
+                        <Text style={styles.pickerUnit}>{isRTL ? 'د' : 'min'}</Text>
+                      )}
+                    </View>
+                  </View>
+                )}
+
+                {/* Toggle Tarawih */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLeft}>
+                    <Text style={styles.settingIcon}>🕌</Text>
+                    <Text style={styles.settingLabel}>
+                      {language === 'ar' ? 'تذكير التراويح' : 'Rappel Tarawih'}
+                    </Text>
+                  </View>
+                  <Switch
+                    active={ramadanNotifSettings.tarawih.enabled}
+                    onToggle={() => updateRamadanNotifSettings({
+                      ...ramadanNotifSettings,
+                      tarawih: { ...ramadanNotifSettings.tarawih, enabled: !ramadanNotifSettings.tarawih.enabled }
+                    })}
+                  />
+                </View>
+
+                {/* Minutes avant Tarawih */}
+                {ramadanNotifSettings.tarawih.enabled && (
+                  <View style={[styles.settingRow, styles.settingRowLast]}>
+                    <View style={styles.settingLeft}>
+                      <Text style={styles.settingIcon}>⏰</Text>
+                      <Text style={styles.settingLabel}>
+                        {language === 'ar' ? 'قبل التراويح بـ' : 'Avant Tarawih'}
+                      </Text>
+                    </View>
+                    <View style={styles.picker}>
+                      {[10, 15, 30].map((min) => (
+                        <TouchableOpacity
+                          key={min}
+                          style={[
+                            styles.pickerOption,
+                            ramadanNotifSettings.tarawih.minutesBefore === min && styles.pickerOptionActive
+                          ]}
+                          onPress={() => updateRamadanNotifSettings({
+                            ...ramadanNotifSettings,
+                            tarawih: { ...ramadanNotifSettings.tarawih, minutesBefore: min }
+                          })}
+                        >
+                          <Text style={[
+                            styles.pickerOptionText,
+                            ramadanNotifSettings.tarawih.minutesBefore === min && styles.pickerOptionTextActive
+                          ]}>
+                            {min}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                      <Text style={styles.pickerUnit}>{isRTL ? 'د' : 'min'}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Note explicative */}
+                <View style={styles.prayerNotifNote}>
+                  <Text style={styles.prayerNotifNoteText}>
+                    {language === 'ar'
+                      ? '🌙 رمضان مبارك! ستتلقى تذكيرات في الأوقات المحددة'
+                      : '🌙 Ramadan Mubarak ! Vous recevrez les rappels aux heures choisies'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           {/* Reçu Fiscal */}
           <View style={styles.section}>
@@ -1615,6 +1847,12 @@ const styles = StyleSheet.create({
     color: '#FFA726',
     textAlign: 'center',
     marginTop: spacing.md,
+  },
+  // Ramadan card
+  ramadanCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    backgroundColor: 'rgba(139, 92, 246, 0.05)',
   },
 });
 

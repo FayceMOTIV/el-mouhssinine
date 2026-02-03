@@ -3,6 +3,7 @@
 // Fallback sur données mock si Firebase vide ou erreur
 
 import firestore from '@react-native-firebase/firestore';
+import { logger } from '../utils';
 import functions from '@react-native-firebase/functions';
 import {
   Project,
@@ -126,7 +127,7 @@ export const subscribeToAnnouncements = (callback: (data: Announcement[]) => voi
     return () => {};
   }
 
-  console.log('🔔 [Firebase] Subscribing to announcements...');
+  logger.firebase('🔔 Subscribing to announcements...');
 
   try {
     // Query simple sans orderBy pour éviter les problèmes d'index composite
@@ -135,10 +136,10 @@ export const subscribeToAnnouncements = (callback: (data: Announcement[]) => voi
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          console.log('📢 [Firebase] Annonces snapshot:', snapshot.docs.length, 'documents');
+          logger.firebase('📢 Annonces snapshot:', snapshot.docs.length, 'documents');
           const data = snapshot.docs.map(doc => {
             const docData = doc.data();
-            console.log('📢 [Firebase] Annonce:', doc.id, docData.titre);
+            logger.firebase('📢 Annonce:', doc.id, docData.titre);
             return {
               id: doc.id,
               title: docData.titre,
@@ -149,16 +150,17 @@ export const subscribeToAnnouncements = (callback: (data: Announcement[]) => voi
           });
           // Tri côté client (plus récent en premier)
           data.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-          console.log('📢 [Firebase] Annonces finales:', data.length);
+          logger.firebase('📢 Annonces finales:', data.length);
           callback(data.length > 0 ? data : mockAnnouncements as Announcement[]);
         },
         error => {
-          console.error('❌ [Firebase] Announcements error:', error.message);
+          logger.error('❌ [Firebase] Announcements error:', error.message);
           callback(mockAnnouncements as Announcement[]);
         }
       );
-  } catch (error: any) {
-    console.error('❌ [Firebase] Announcements catch:', error?.message);
+  } catch (error) {
+    const err = error as Error;
+    logger.error('❌ [Firebase] Announcements catch:', err?.message);
     callback(mockAnnouncements as Announcement[]);
     return () => {};
   }
@@ -183,7 +185,7 @@ export const getAnnouncements = async (): Promise<Announcement[]> => {
     }));
     return mergeWithMock(data, mockAnnouncements as Announcement[]);
   } catch (error) {
-    console.error('[Firebase] getAnnouncements error:', error);
+    logger.error('[Firebase] getAnnouncements error:', error);
     return mockAnnouncements as Announcement[];
   }
 };
@@ -198,7 +200,7 @@ export const subscribeToEvents = (callback: (data: Event[]) => void) => {
     return () => {};
   }
 
-  console.log('🔔 [Firebase] Subscribing to events...');
+  logger.firebase('🔔 Subscribing to events...');
 
   try {
     // Query simple sans orderBy pour éviter les problèmes d'index composite
@@ -207,10 +209,10 @@ export const subscribeToEvents = (callback: (data: Event[]) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          console.log('📅 [Firebase] Events snapshot:', snapshot.docs.length, 'documents');
+          logger.firebase('📅 Events snapshot:', snapshot.docs.length, 'documents');
           const data = snapshot.docs.map(doc => {
             const docData = doc.data();
-            console.log('📅 [Firebase] Event:', doc.id, docData.titre);
+            logger.firebase('📅 Event:', doc.id, docData.titre);
             return {
               id: doc.id,
               title: docData.titre,
@@ -224,16 +226,17 @@ export const subscribeToEvents = (callback: (data: Event[]) => void) => {
           });
           // Tri côté client (plus proche en premier)
           data.sort((a, b) => a.date.getTime() - b.date.getTime());
-          console.log('📅 [Firebase] Events finaux:', data.length);
+          logger.firebase('📅 Events finaux:', data.length);
           callback(data.length > 0 ? data : mockEvents as Event[]);
         },
         error => {
-          console.error('❌ [Firebase] Events error:', error.message);
+          logger.error('❌ [Firebase] Events error:', error.message);
           callback(mockEvents as Event[]);
         }
       );
-  } catch (error: any) {
-    console.error('❌ [Firebase] Events catch:', error?.message);
+  } catch (error) {
+    const err = error as Error;
+    logger.error('❌ [Firebase] Events catch:', err?.message);
     callback(mockEvents as Event[]);
     return () => {};
   }
@@ -261,7 +264,7 @@ export const getEvents = async (): Promise<Event[]> => {
     }));
     return mergeWithMock(data, mockEvents as Event[]);
   } catch (error) {
-    console.error('[Firebase] getEvents error:', error);
+    logger.error('[Firebase] getEvents error:', error);
     return mockEvents as Event[];
   }
 };
@@ -278,7 +281,7 @@ export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
     return () => {};
   }
 
-  console.log('🔔 [Firebase] Subscribing to janaza...');
+  logger.firebase('🔔 Subscribing to janaza...');
 
   try {
     return firestore()
@@ -286,9 +289,9 @@ export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          console.log('🤲 [Firebase] Janaza snapshot:', snapshot.docs.length, 'documents');
+          logger.firebase('🤲 Janaza snapshot:', snapshot.docs.length, 'documents');
           if (snapshot.empty) {
-            console.log('🤲 [Firebase] Pas de janaza active');
+            logger.firebase('🤲 Pas de janaza active');
             callback(null);
             return;
           }
@@ -299,7 +302,7 @@ export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
           docs.sort((a, b) => b.date.getTime() - a.date.getTime());
           const doc = docs[0].doc;
           const docData = doc.data();
-          console.log('🤲 [Firebase] Janaza:', doc.id, docData.nomDefunt);
+          logger.firebase('🤲 Janaza:', doc.id, docData.nomDefunt);
           const data: Janaza = {
             id: doc.id,
             deceasedName: docData.nomDefunt,
@@ -314,12 +317,13 @@ export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
           callback(data);
         },
         error => {
-          console.error('❌ [Firebase] Janaza error:', error.message);
+          logger.error('❌ [Firebase] Janaza error:', error.message);
           callback(null);
         }
       );
-  } catch (error: any) {
-    console.error('❌ [Firebase] Janaza catch:', error?.message);
+  } catch (error) {
+    const err = error as Error;
+    logger.error('❌ [Firebase] Janaza catch:', err?.message);
     callback(null);
     return () => {};
   }
@@ -333,7 +337,7 @@ export const subscribeToJanazaList = (callback: (data: Janaza[]) => void) => {
     return () => {};
   }
 
-  console.log('🔔 [Firebase] Subscribing to janaza list...');
+  logger.firebase('🔔 Subscribing to janaza list...');
 
   try {
     return firestore()
@@ -341,9 +345,9 @@ export const subscribeToJanazaList = (callback: (data: Janaza[]) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          console.log('🤲 [Firebase] Janaza list snapshot:', snapshot.docs.length, 'documents');
+          logger.firebase('🤲 Janaza list snapshot:', snapshot.docs.length, 'documents');
           if (snapshot.empty) {
-            console.log('🤲 [Firebase] Pas de janaza active');
+            logger.firebase('🤲 Pas de janaza active');
             callback([]);
             return;
           }
@@ -364,16 +368,17 @@ export const subscribeToJanazaList = (callback: (data: Janaza[]) => void) => {
           });
           // Trier par date (plus récent en premier)
           janazaList.sort((a, b) => b.prayerDate.getTime() - a.prayerDate.getTime());
-          console.log('🤲 [Firebase] Janaza list:', janazaList.length, 'items');
+          logger.firebase('🤲 Janaza list:', janazaList.length, 'items');
           callback(janazaList);
         },
         error => {
-          console.error('❌ [Firebase] Janaza list error:', error.message);
+          logger.error('❌ [Firebase] Janaza list error:', error.message);
           callback([]);
         }
       );
-  } catch (error: any) {
-    console.error('❌ [Firebase] Janaza list catch:', error?.message);
+  } catch (error) {
+    const err = error as Error;
+    logger.error('❌ [Firebase] Janaza list catch:', err?.message);
     callback([]);
     return () => {};
   }
@@ -408,7 +413,7 @@ export const getActiveJanaza = async (): Promise<Janaza | null> => {
       salatApres: doc.data().salatApres,
     };
   } catch (error) {
-    console.error('[Firebase] getActiveJanaza error:', error);
+    logger.error('[Firebase] getActiveJanaza error:', error);
     const mockActive = mockJanaza.find(j => j.isActive);
     return mockActive ? (mockActive as Janaza) : null;
   }
@@ -446,12 +451,12 @@ export const subscribeToProjects = (callback: (data: Project[]) => void) => {
           callback(mergeWithMock(data, mockProjects as Project[]));
         },
         error => {
-          console.error('[Firebase] Projects error:', error);
+          logger.error('[Firebase] Projects error:', error);
           callback(mockProjects as Project[]);
         }
       );
   } catch (error) {
-    console.error('[Firebase] Projects catch:', error);
+    logger.error('[Firebase] Projects catch:', error);
     callback(mockProjects as Project[]);
     return () => {};
   }
@@ -488,7 +493,7 @@ export const getProjects = async (isExternal?: boolean): Promise<Project[]> => {
     }
     return data;
   } catch (error) {
-    console.error('[Firebase] getProjects error:', error);
+    logger.error('[Firebase] getProjects error:', error);
     if (isExternal !== undefined) {
       return (mockProjects as Project[]).filter(p => p.isExternal === isExternal);
     }
@@ -515,7 +520,7 @@ export const createDonation = async (donation: Omit<Donation, 'id' | 'createdAt'
     });
     return docRef.id;
   } catch (error) {
-    console.error('[Firebase] createDonation error:', error);
+    logger.error('[Firebase] createDonation error:', error);
     return `error-donation-${Date.now()}`;
   }
 };
@@ -546,7 +551,7 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
     // Vérifier si donation existe déjà (idempotence)
     const existingDoc = await donationRef.get();
     if (existingDoc.exists()) {
-      console.log('[Firebase] Don déjà existant (idempotent):', docId);
+      logger.firebase(' Don déjà existant (idempotent):', docId);
       return docId;
     }
 
@@ -579,10 +584,10 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
       }
     });
 
-    console.log('[Firebase] Don enregistré (transaction atomique):', docId);
+    logger.firebase(' Don enregistré (transaction atomique):', docId);
     return docId;
   } catch (error) {
-    console.error('[Firebase] addDonation error:', error);
+    logger.error('[Firebase] addDonation error:', error);
     throw error;
   }
 };
@@ -614,7 +619,7 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
     // Vérifier si paiement existe déjà (idempotence)
     const existingDoc = await paymentRef.get();
     if (existingDoc.exists()) {
-      console.log('[Firebase] Paiement déjà existant (idempotent):', docId);
+      logger.firebase(' Paiement déjà existant (idempotent):', docId);
       return docId;
     }
 
@@ -672,10 +677,10 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
       }
     });
 
-    console.log('[Firebase] Paiement cotisation enregistré (transaction atomique):', docId);
+    logger.firebase(' Paiement cotisation enregistré (transaction atomique):', docId);
     return docId;
   } catch (error) {
-    console.error('[Firebase] addPayment error:', error);
+    logger.error('[Firebase] addPayment error:', error);
     throw error;
   }
 };
@@ -718,12 +723,12 @@ export const subscribeToPopups = (callback: (data: Popup[]) => void) => {
           callback(mergeWithMock(data, mockPopups as Popup[]));
         },
         error => {
-          console.error('[Firebase] Popups error:', error);
+          logger.error('[Firebase] Popups error:', error);
           callback(mockPopups as Popup[]);
         }
       );
   } catch (error) {
-    console.error('[Firebase] Popups catch:', error);
+    logger.error('[Firebase] Popups catch:', error);
     callback(mockPopups as Popup[]);
     return () => {};
   }
@@ -755,12 +760,12 @@ export const subscribeToRappels = (callback: (data: Rappel[]) => void) => {
           callback(mergeWithMock(data, mockRappels as Rappel[]));
         },
         error => {
-          console.error('[Firebase] Rappels error:', error);
+          logger.error('[Firebase] Rappels error:', error);
           callback(mockRappels as Rappel[]);
         }
       );
   } catch (error) {
-    console.error('[Firebase] Rappels catch:', error);
+    logger.error('[Firebase] Rappels catch:', error);
     callback(mockRappels as Rappel[]);
     return () => {};
   }
@@ -784,7 +789,7 @@ export const getRappels = async (): Promise<Rappel[]> => {
     }));
     return mergeWithMock(data, mockRappels as Rappel[]);
   } catch (error) {
-    console.error('[Firebase] getRappels error:', error);
+    logger.error('[Firebase] getRappels error:', error);
     return mockRappels as Rappel[];
   }
 };
@@ -826,13 +831,81 @@ export const subscribeToMosqueeInfo = (callback: (data: MosqueeInfo & { headerIm
           }
         },
         error => {
-          console.error('[Firebase] MosqueeInfo error:', error);
+          logger.error('[Firebase] MosqueeInfo error:', error);
           callback(mockMosqueeInfo);
         }
       );
   } catch (error) {
-    console.error('[Firebase] MosqueeInfo catch:', error);
+    logger.error('[Firebase] MosqueeInfo catch:', error);
     callback(mockMosqueeInfo);
+    return () => {};
+  }
+};
+
+// ==================== RAMADAN SETTINGS ====================
+// Collection Firestore: "settings/ramadan"
+
+export interface RamadanSettings {
+  enabled: boolean;
+  startDate: string;
+  endDate: string;
+  tarawihTime: string;
+  notifications: {
+    suhoor: { enabled: boolean; minutesBefore: number };
+    iftar: { enabled: boolean; minutesBefore: number };
+    tarawih: { enabled: boolean; minutesBefore: number };
+  };
+}
+
+const defaultRamadanSettings: RamadanSettings = {
+  enabled: false,
+  startDate: '',
+  endDate: '',
+  tarawihTime: '21:30',
+  notifications: {
+    suhoor: { enabled: true, minutesBefore: 30 },
+    iftar: { enabled: true, minutesBefore: 5 },
+    tarawih: { enabled: true, minutesBefore: 15 },
+  },
+};
+
+export const subscribeToRamadanSettings = (callback: (data: RamadanSettings) => void) => {
+  if (FORCE_DEMO_MODE) {
+    callback(defaultRamadanSettings);
+    return () => {};
+  }
+
+  try {
+    return firestore()
+      .collection('settings')
+      .doc('ramadan')
+      .onSnapshot(
+        doc => {
+          if (doc.exists()) {
+            const data = doc.data();
+            callback({
+              enabled: data?.enabled ?? false,
+              startDate: data?.startDate || '',
+              endDate: data?.endDate || '',
+              tarawihTime: data?.tarawihTime || '21:30',
+              notifications: {
+                suhoor: data?.notifications?.suhoor || defaultRamadanSettings.notifications.suhoor,
+                iftar: data?.notifications?.iftar || defaultRamadanSettings.notifications.iftar,
+                tarawih: data?.notifications?.tarawih || defaultRamadanSettings.notifications.tarawih,
+              },
+            });
+          } else {
+            callback(defaultRamadanSettings);
+          }
+        },
+        error => {
+          logger.error('[Firebase] RamadanSettings error:', error);
+          callback(defaultRamadanSettings);
+        }
+      );
+  } catch (error) {
+    logger.error('[Firebase] RamadanSettings catch:', error);
+    callback(defaultRamadanSettings);
     return () => {};
   }
 };
@@ -872,12 +945,12 @@ export const subscribeToCotisationPrices = (callback: (data: CotisationPrices) =
           }
         },
         error => {
-          console.error('[Firebase] CotisationPrices error:', error);
+          logger.error('[Firebase] CotisationPrices error:', error);
           callback(defaultCotisationPrices);
         }
       );
   } catch (error) {
-    console.error('[Firebase] CotisationPrices catch:', error);
+    logger.error('[Firebase] CotisationPrices catch:', error);
     callback(defaultCotisationPrices);
     return () => {};
   }
@@ -906,8 +979,9 @@ export const getMosqueeInfo = async (): Promise<MosqueeInfo> => {
       };
     }
     return mockMosqueeInfo;
-  } catch (error: any) {
-    console.error('❌ [Firebase] getMosqueeInfo error:', error?.message);
+  } catch (error) {
+    const err = error as Error;
+    logger.error('❌ [Firebase] getMosqueeInfo error:', err?.message);
     return mockMosqueeInfo;
   }
 };
@@ -939,12 +1013,12 @@ export const subscribeToIqama = (callback: (data: HorairesData) => void) => {
           }
         },
         error => {
-          console.error('[Firebase] Iqama error:', error);
+          logger.error('[Firebase] Iqama error:', error);
           callback({ iqama: mockIqama, jumua: mockJumua });
         }
       );
   } catch (error) {
-    console.error('[Firebase] Iqama catch:', error);
+    logger.error('[Firebase] Iqama catch:', error);
     callback({ iqama: mockIqama, jumua: mockJumua });
     return () => {};
   }
@@ -965,7 +1039,7 @@ export const getPrayerTimes = async (): Promise<HorairesData> => {
     }
     return { iqama: mockIqama, jumua: mockJumua };
   } catch (error) {
-    console.error('[Firebase] getPrayerTimes error:', error);
+    logger.error('[Firebase] getPrayerTimes error:', error);
     return { iqama: mockIqama, jumua: mockJumua };
   }
 };
@@ -1033,12 +1107,12 @@ export const subscribeToGeneralSettings = (callback: (data: GeneralSettings) => 
           }
         },
         error => {
-          console.error('[Firebase] GeneralSettings error:', error);
+          logger.error('[Firebase] GeneralSettings error:', error);
           callback(defaultGeneralSettings);
         }
       );
   } catch (error) {
-    console.error('[Firebase] GeneralSettings catch:', error);
+    logger.error('[Firebase] GeneralSettings catch:', error);
     callback(defaultGeneralSettings);
     return () => {};
   }
@@ -1066,7 +1140,7 @@ export const getGeneralSettings = async (): Promise<GeneralSettings> => {
     }
     return defaultGeneralSettings;
   } catch (error) {
-    console.error('[Firebase] getGeneralSettings error:', error);
+    logger.error('[Firebase] getGeneralSettings error:', error);
     return defaultGeneralSettings;
   }
 };
@@ -1098,12 +1172,12 @@ export const subscribeToIslamicDates = (callback: (data: DateIslamique[]) => voi
           callback(mergeWithMock(data, mockDatesIslamiques as DateIslamique[]));
         },
         error => {
-          console.error('[Firebase] IslamicDates error:', error);
+          logger.error('[Firebase] IslamicDates error:', error);
           callback(mockDatesIslamiques as DateIslamique[]);
         }
       );
   } catch (error) {
-    console.error('[Firebase] IslamicDates catch:', error);
+    logger.error('[Firebase] IslamicDates catch:', error);
     callback(mockDatesIslamiques as DateIslamique[]);
     return () => {};
   }
@@ -1129,7 +1203,7 @@ export const getIslamicDates = async (): Promise<DateIslamique[]> => {
     }));
     return mergeWithMock(data, mockDatesIslamiques as DateIslamique[]);
   } catch (error) {
-    console.error('[Firebase] getIslamicDates error:', error);
+    logger.error('[Firebase] getIslamicDates error:', error);
     return mockDatesIslamiques as DateIslamique[];
   }
 };
@@ -1157,7 +1231,7 @@ export const getMember = async (memberId: string): Promise<Member | null> => {
       createdAt: toDate(data?.createdAt),
     };
   } catch (error) {
-    console.error('[Firebase] getMember error:', error);
+    logger.error('[Firebase] getMember error:', error);
     return null;
   }
 };
@@ -1175,7 +1249,7 @@ export const updateMember = async (memberId: string, data: Partial<Member>): Pro
     if (data.email) updateData.email = data.email;
     await firestore().collection('members').doc(memberId).update(updateData);
   } catch (error) {
-    console.error('[Firebase] updateMember error:', error);
+    logger.error('[Firebase] updateMember error:', error);
   }
 };
 
@@ -1202,7 +1276,7 @@ export interface CreateMemberData {
   phone?: string;
   // Nouveaux champs multi-membres
   inscritPar?: InscritParData | string; // Objet avec info du payeur (ou string pour rétrocompatibilité)
-  status?: 'actif' | 'en_attente_signature' | 'en_attente_paiement' | 'expire';
+  status?: 'actif' | 'en_attente_validation' | 'en_attente_signature' | 'en_attente_paiement' | 'expire';
   dateInscription?: Date;
   datePaiement?: Date | null; // null pour virement non encore reçu
   paiementId?: string; // ID pour regrouper les membres payés ensemble
@@ -1319,7 +1393,7 @@ export const createMember = async (member: CreateMemberData | Omit<Member, 'id' 
     const docRef = await firestore().collection('members').add(docData);
     return docRef.id;
   } catch (error) {
-    console.error('[Firebase] createMember error:', error);
+    logger.error('[Firebase] createMember error:', error);
     return `error-member-${Date.now()}`;
   }
 };
@@ -1396,7 +1470,7 @@ export const getMembersInscribedBy = async (userId: string): Promise<InscribedMe
       return dateB - dateA;
     });
   } catch (error) {
-    console.error('[Firebase] getMembersInscribedBy error:', error);
+    logger.error('[Firebase] getMembersInscribedBy error:', error);
     return [];
   }
 };
@@ -1463,7 +1537,7 @@ export const getMyMembership = async (email: string): Promise<MyMembership | nul
       referenceVirement: data.referenceVirement || undefined,
     };
   } catch (error) {
-    console.error('[Firebase] getMyMembership error:', error);
+    logger.error('[Firebase] getMyMembership error:', error);
     return null;
   }
 };
@@ -1521,12 +1595,12 @@ export const subscribeToMyMembership = (
           });
         },
         error => {
-          console.error('[Firebase] subscribeToMyMembership error:', error);
+          logger.error('[Firebase] subscribeToMyMembership error:', error);
           callback(null);
         }
       );
   } catch (error) {
-    console.error('[Firebase] subscribeToMyMembership catch:', error);
+    logger.error('[Firebase] subscribeToMyMembership catch:', error);
     callback(null);
     return () => {};
   }
@@ -1589,7 +1663,7 @@ const checkDailyMessageLimit = async (userId: string): Promise<boolean> => {
 
     return snapshot.docs.length < 5; // Max 5 messages par jour
   } catch (error) {
-    console.error('[Firebase] checkDailyMessageLimit error:', error);
+    logger.error('[Firebase] checkDailyMessageLimit error:', error);
     return true; // En cas d'erreur, on autorise
   }
 };
@@ -1632,9 +1706,10 @@ export const sendMessage = async (
     });
 
     return { success: true, messageId: docRef.id };
-  } catch (error: any) {
-    console.error('[Firebase] sendMessage error:', error);
-    return { success: false, error: error.message || 'Erreur lors de l\'envoi' };
+  } catch (error) {
+    const err = error as Error;
+    logger.error('[Firebase] sendMessage error:', err);
+    return { success: false, error: err?.message || 'Erreur lors de l\'envoi' };
   }
 };
 
@@ -1670,7 +1745,7 @@ export const getUserMessages = async (userId: string): Promise<UserMessage[]> =>
       };
     });
   } catch (error) {
-    console.error('[Firebase] getUserMessages error:', error);
+    logger.error('[Firebase] getUserMessages error:', error);
     return [];
   }
 };
@@ -1719,12 +1794,12 @@ export const subscribeToUserMessages = (
           callback(messages);
         },
         error => {
-          console.error('[Firebase] subscribeToUserMessages error:', error);
+          logger.error('[Firebase] subscribeToUserMessages error:', error);
           callback([]);
         }
       );
   } catch (error) {
-    console.error('[Firebase] subscribeToUserMessages catch:', error);
+    logger.error('[Firebase] subscribeToUserMessages catch:', error);
     callback([]);
     return () => {};
   }
@@ -1755,7 +1830,7 @@ export const addUserReplyToMessage = async (
     // SÉCURITÉ: Vérifier que l'utilisateur est le propriétaire du message
     const data = doc.data();
     if (userId && data?.odUserId !== userId) {
-      console.warn('[Firebase] Tentative de réponse non autorisée:', { messageId, userId, owner: data?.odUserId });
+      logger.warn('[Firebase] Tentative de réponse non autorisée:', { messageId, userId, owner: data?.odUserId });
       return { success: false, error: 'Non autorisé' };
     }
 
@@ -1775,9 +1850,10 @@ export const addUserReplyToMessage = async (
     });
 
     return { success: true };
-  } catch (error: any) {
-    console.error('[Firebase] addUserReplyToMessage error:', error);
-    return { success: false, error: error.message || 'Erreur lors de l\'envoi' };
+  } catch (error) {
+    const err = error as Error;
+    logger.error('[Firebase] addUserReplyToMessage error:', err);
+    return { success: false, error: err?.message || 'Erreur lors de l\'envoi' };
   }
 };
 
@@ -1809,7 +1885,7 @@ export const getMessage = async (messageId: string): Promise<UserMessage | null>
       })),
     };
   } catch (error) {
-    console.error('[Firebase] getMessage error:', error);
+    logger.error('[Firebase] getMessage error:', error);
     return null;
   }
 };
@@ -1834,7 +1910,7 @@ export const deleteMessage = async (
       }
       const data = doc.data();
       if (data?.odUserId !== userId) {
-        console.warn('[Firebase] Tentative de suppression non autorisée:', { messageId, userId, owner: data?.odUserId });
+        logger.warn('[Firebase] Tentative de suppression non autorisée:', { messageId, userId, owner: data?.odUserId });
         return { success: false, error: 'Non autorisé' };
       }
     }
@@ -1845,9 +1921,10 @@ export const deleteMessage = async (
       deletedByUserAt: firestore.FieldValue.serverTimestamp(),
     });
     return { success: true };
-  } catch (error: any) {
-    console.error('[Firebase] deleteMessage error:', error);
-    return { success: false, error: error.message || 'Erreur lors de la suppression' };
+  } catch (error) {
+    const err = error as Error;
+    logger.error('[Firebase] deleteMessage error:', err);
+    return { success: false, error: err?.message || 'Erreur lors de la suppression' };
   }
 };
 
@@ -1891,12 +1968,12 @@ export const subscribeToMessage = (
           });
         },
         error => {
-          console.error('[Firebase] subscribeToMessage error:', error);
+          logger.error('[Firebase] subscribeToMessage error:', error);
           callback(null);
         }
       );
   } catch (error) {
-    console.error('[Firebase] subscribeToMessage catch:', error);
+    logger.error('[Firebase] subscribeToMessage catch:', error);
     callback(null);
     return () => {};
   }
@@ -1930,16 +2007,17 @@ export const requestRecuFiscal = async (
       message: data.message || 'Reçu fiscal envoyé',
       montantTotal: data.montantTotal,
     };
-  } catch (error: any) {
-    console.error('[Firebase] requestRecuFiscal error:', error);
+  } catch (error) {
+    const err = error as Error & { code?: string };
+    logger.error('[Firebase] requestRecuFiscal error:', err);
     let message = 'Erreur lors de l\'envoi du reçu fiscal';
 
-    if (error.code === 'functions/not-found') {
+    if (err?.code === 'functions/not-found') {
       message = 'Aucun don trouvé pour cette année';
-    } else if (error.code === 'functions/failed-precondition') {
+    } else if (err?.code === 'functions/failed-precondition') {
       message = 'Service non configuré. Contactez l\'administration.';
-    } else if (error.message) {
-      message = error.message;
+    } else if (err?.message) {
+      message = err.message;
     }
 
     return {
@@ -1972,7 +2050,7 @@ export const getDonsTotalByYear = async (
       count: data.dons?.length || 0,
     };
   } catch (error) {
-    console.error('[Firebase] getDonsTotalByYear error:', error);
+    logger.error('[Firebase] getDonsTotalByYear error:', error);
     return null;
   }
 };

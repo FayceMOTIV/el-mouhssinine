@@ -1,6 +1,7 @@
 import { Alert } from 'react-native';
 import { initPaymentSheet, presentPaymentSheet } from '@stripe/stripe-react-native';
 import functions from '@react-native-firebase/functions';
+import { logger } from '../utils';
 
 // Types
 export interface PaymentParams {
@@ -11,10 +12,16 @@ export interface PaymentParams {
     projectId?: string;
     projectName?: string;
     memberId?: string;
+    memberIdDisplay?: string; // Format ELM-XXXX pour affichage
     memberName?: string;
+    email?: string;
+    donorEmail?: string; // Email du donateur pour reçus fiscaux
+    donorUid?: string;   // UID Firebase du donateur
     isAnonymous?: boolean;
     period?: string;
     membersCount?: string; // Nombre de membres pour multi-adhésion
+    montantCotisation?: number;
+    montantDon?: number;
   };
 }
 
@@ -44,9 +51,10 @@ const createPaymentIntent = async (
 
     const data = result.data as { clientSecret: string; paymentIntentId: string };
     return data;
-  } catch (error: any) {
-    console.error('Erreur création PaymentIntent:', error);
-    throw new Error(error.message || 'Erreur lors de la création du paiement');
+  } catch (error) {
+    const err = error as Error;
+    logger.error('Erreur création PaymentIntent:', err);
+    throw new Error(err?.message || 'Erreur lors de la création du paiement');
   }
 };
 
@@ -111,7 +119,7 @@ export const makePayment = async (params: PaymentParams): Promise<PaymentResult>
     });
 
     if (initError) {
-      console.error('Erreur init Payment Sheet:', initError);
+      logger.error('Erreur init Payment Sheet:', initError);
       return {
         success: false,
         error: initError.message,
@@ -129,7 +137,7 @@ export const makePayment = async (params: PaymentParams): Promise<PaymentResult>
           error: 'Paiement annulé',
         };
       }
-      console.error('Erreur présentation Payment Sheet:', presentError);
+      logger.error('Erreur présentation Payment Sheet:', presentError);
       return {
         success: false,
         error: presentError.message,
@@ -141,11 +149,12 @@ export const makePayment = async (params: PaymentParams): Promise<PaymentResult>
       success: true,
       paymentIntentId,
     };
-  } catch (error: any) {
-    console.error('Erreur paiement:', error);
+  } catch (error) {
+    const err = error as Error;
+    logger.error('Erreur paiement:', err);
     return {
       success: false,
-      error: error.message || 'Une erreur est survenue',
+      error: err?.message || 'Une erreur est survenue',
     };
   }
 };

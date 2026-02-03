@@ -14,7 +14,11 @@ admin.initializeApp();
 
 // Initialiser Stripe avec la clé secrète (à configurer via firebase functions:config:set)
 // Pour configurer: firebase functions:config:set stripe.secret_key="sk_live_xxx"
-const stripe = new Stripe(functions.config().stripe?.secret_key || 'sk_test_placeholder', {
+const stripeSecretKey = functions.config().stripe?.secret_key;
+if (!stripeSecretKey) {
+  console.warn('⚠️ ATTENTION: stripe.secret_key non configuré - les paiements échoueront');
+}
+const stripe = new Stripe(stripeSecretKey || 'sk_test_not_configured', {
   apiVersion: '2023-10-16',
 });
 
@@ -43,6 +47,68 @@ const truncate = (text, maxLength = 100) => {
   if (!text) return '';
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
+};
+
+/**
+ * Sanitize une chaîne pour éviter XSS et injection
+ * @param {string} str - La chaîne à nettoyer
+ * @param {number} maxLength - Longueur max (défaut 100)
+ * @returns {string}
+ */
+const sanitizeString = (str, maxLength = 100) => {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .substring(0, maxLength)
+    .replace(/[<>'"]/g, '')
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    .trim();
+};
+
+/**
+ * Rate limiting helper - Limite les appels par utilisateur
+ * @param {string} uid - L'ID de l'utilisateur
+ * @param {string} functionName - Nom de la fonction
+ * @param {number} maxCalls - Nombre max d'appels autorisés
+ * @param {number} windowSeconds - Fenêtre de temps en secondes
+ * @throws {functions.https.HttpsError} Si la limite est atteinte
+ */
+const checkRateLimit = async (uid, functionName, maxCalls, windowSeconds) => {
+  if (!uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'Utilisateur non authentifié');
+  }
+
+  const key = `rate_limits/${uid}_${functionName}`;
+  const ref = admin.firestore().doc(key);
+
+  return admin.firestore().runTransaction(async (transaction) => {
+    const doc = await transaction.get(ref);
+    const now = Date.now();
+    const windowMs = windowSeconds * 1000;
+
+    if (doc.exists) {
+      const data = doc.data();
+      const calls = (data.calls || []).filter(t => now - t < windowMs);
+
+      if (calls.length >= maxCalls) {
+        const waitTime = Math.ceil((calls[0] + windowMs - now) / 1000 / 60);
+        throw new functions.https.HttpsError(
+          'resource-exhausted',
+          `Limite atteinte. Réessayez dans ${waitTime > 1 ? waitTime + ' minutes' : 'quelques secondes'}.`
+        );
+      }
+
+      calls.push(now);
+      transaction.update(ref, {
+        calls,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      transaction.set(ref, {
+        calls: [now],
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  });
 };
 
 /**
@@ -401,6 +467,9 @@ exports.sendManualNotification = functions
         'Seuls les administrateurs peuvent envoyer des notifications'
       );
     }
+
+    // Rate limiting: max 10 notifications par minute
+    await checkRateLimit(context.auth.uid, 'sendNotif', 10, 60);
 
     const { title, body, topic, data: customData } = data;
 
@@ -824,7 +893,7 @@ exports.onMessageReply = functions
           return null;
         }
 
-        const userName = after.nom || 'Un utilisateur';
+        const userName = sanitizeString(after.nom, 50) || 'Un utilisateur';
         const message = {
           notification: {
             title: '💬 Nouvelle réponse adhérent',
@@ -926,6 +995,10 @@ exports.createPaymentIntent = functions
       );
     }
 
+    // Rate limiting: max 5 paiements par 5 minutes
+    // Utilise l'uid si auth, sinon hash basique sur IP (pas d'IP dispo donc 'anonymous')
+    await checkRateLimit(userId, 'payment', 5, 300);
+
     try {
       // Créer le PaymentIntent
       const paymentIntent = await stripe.paymentIntents.create({
@@ -965,6 +1038,12 @@ exports.stripeWebhook = functions
     const sig = req.headers['stripe-signature'];
     const endpointSecret = functions.config().stripe?.webhook_secret;
 
+    // SÉCURITÉ: Vérifier que le secret webhook est configuré
+    if (!endpointSecret) {
+      console.error('ERREUR CRITIQUE: stripe.webhook_secret non configuré');
+      return res.status(500).send('Webhook not configured');
+    }
+
     let event;
 
     try {
@@ -981,38 +1060,70 @@ exports.stripeWebhook = functions
         const paymentIntentId = paymentIntent.id;
         console.log('Paiement réussi:', paymentIntentId);
 
-        // IDEMPOTENCE: Vérifier si ce paiement a déjà été traité
         try {
-          const existingPayment = await admin.firestore()
-            .collection('processed_payments')
-            .doc(paymentIntentId)
-            .get();
-
-          if (existingPayment.exists) {
-            console.log('Paiement déjà traité (idempotence):', paymentIntentId);
-            return res.json({ received: true, alreadyProcessed: true });
-          }
-
           const metadata = paymentIntent.metadata || {};
           const amountEuros = paymentIntent.amount / 100;
 
-          // ATOMICITÉ: Utiliser une transaction Firestore
+          // SÉCURITÉ: Valider que le montant metadata correspond au montant Stripe réel
+          // Cela empêche la manipulation côté client des montants
+          if (metadata.type === 'cotisation') {
+            const declaredCotisation = parseFloat(metadata.montantCotisation) || 0;
+            const declaredDon = parseFloat(metadata.montantDon) || 0;
+            const declaredTotal = declaredCotisation + declaredDon;
+
+            // Tolérance de 1 centime pour les erreurs d'arrondi
+            if (Math.abs(declaredTotal - amountEuros) > 0.01) {
+              console.error('⚠️ FRAUDE POTENTIELLE: Montant metadata (' + declaredTotal + '€) != montant Stripe (' + amountEuros + '€)');
+              // Utiliser le montant Stripe réel, pas les metadata
+              // On continue quand même le traitement mais avec le montant réel
+            }
+          }
+
+          // ATOMICITÉ + IDEMPOTENCE: Tout dans une seule transaction
           await admin.firestore().runTransaction(async (transaction) => {
-            // 1. Marquer comme traité (pour idempotence)
+            // 1. Vérification idempotence DANS la transaction
             const processedRef = admin.firestore().collection('processed_payments').doc(paymentIntentId);
+            const existingPayment = await transaction.get(processedRef);
+
+            if (existingPayment.exists) {
+              console.log('Paiement déjà traité (idempotence in-transaction):', paymentIntentId);
+              // Throw pour sortir de la transaction sans erreur
+              throw { alreadyProcessed: true };
+            }
+
+            // 2. Marquer comme traité (pour idempotence)
             transaction.set(processedRef, {
               processedAt: admin.firestore.FieldValue.serverTimestamp(),
               type: metadata.type || 'donation',
               amount: amountEuros,
             });
 
-            // 2. Enregistrer le paiement selon le type
+            // 3. Enregistrer le paiement selon le type
             if (metadata.type === 'cotisation') {
-              // Créer le document payment
+              // SÉCURITÉ: Utiliser le montant Stripe réel, pas les metadata client
+              // Les metadata servent seulement à connaître la répartition cotisation/don
+              const declaredCotisation = parseFloat(metadata.montantCotisation) || amountEuros;
+              const declaredDon = parseFloat(metadata.montantDon) || 0;
+              const declaredTotal = declaredCotisation + declaredDon;
+
+              // Si les montants déclarés correspondent au total Stripe, on les utilise
+              // Sinon, on considère tout comme cotisation (sécurité)
+              let montantCotisation, montantDon;
+              if (Math.abs(declaredTotal - amountEuros) <= 0.01) {
+                montantCotisation = declaredCotisation;
+                montantDon = declaredDon;
+              } else {
+                console.warn('Montants metadata non fiables, utilisation du montant Stripe total');
+                montantCotisation = amountEuros;
+                montantDon = 0;
+              }
+
+              // Créer le document payment (cotisation)
               const paymentRef = admin.firestore().collection('payments').doc();
               transaction.set(paymentRef, {
                 stripePaymentIntentId: paymentIntentId,
-                amount: amountEuros,
+                amount: montantCotisation,
+                montant: montantCotisation, // Compatibilité: écrire les deux champs
                 currency: paymentIntent.currency,
                 status: 'succeeded',
                 type: 'cotisation',
@@ -1021,15 +1132,45 @@ exports.stripeWebhook = functions
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
 
+              // Si don supplémentaire inclus, créer aussi un document donation
+              if (montantDon > 0) {
+                console.log('Don supplémentaire détecté:', montantDon, 'EUR');
+                const donationRef = admin.firestore().collection('donations').doc();
+                transaction.set(donationRef, {
+                  stripePaymentIntentId: paymentIntentId,
+                  amount: montantDon,
+                  montant: montantDon,
+                  currency: paymentIntent.currency,
+                  status: 'succeeded',
+                  type: 'donation',
+                  description: 'Don supplémentaire lors de cotisation',
+                  metadata: {
+                    ...metadata,
+                    linkedToCotisation: true,
+                  },
+                  projectId: null, // Don général à la mosquée
+                  projectName: 'Don général',
+                  isAnonymous: false,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+              }
+
               // Mettre à jour le membre si memberId fourni
               if (metadata.memberId) {
                 const memberRef = admin.firestore().collection('members').doc(metadata.memberId);
-                transaction.update(memberRef, {
-                  statut: 'actif',
-                  datePaiement: admin.firestore.FieldValue.serverTimestamp(),
-                  montantPaye: amountEuros,
-                  stripePaymentId: paymentIntentId,
-                });
+                // SÉCURITÉ: Vérifier que le membre existe avant update
+                const memberDoc = await transaction.get(memberRef);
+                if (memberDoc.exists) {
+                  transaction.update(memberRef, {
+                    statut: 'actif',
+                    status: 'actif', // Compatibilité: écrire les deux champs
+                    datePaiement: admin.firestore.FieldValue.serverTimestamp(),
+                    montantPaye: montantCotisation, // Seulement le montant de la cotisation
+                    stripePaymentId: paymentIntentId,
+                  });
+                } else {
+                  console.warn('Membre non trouvé pour update:', metadata.memberId);
+                }
               }
             } else {
               // Don - Créer le document donation
@@ -1037,6 +1178,7 @@ exports.stripeWebhook = functions
               transaction.set(donationRef, {
                 stripePaymentIntentId: paymentIntentId,
                 amount: amountEuros,
+                montant: amountEuros, // Compatibilité: écrire les deux champs
                 currency: paymentIntent.currency,
                 status: 'succeeded',
                 type: 'donation',
@@ -1051,18 +1193,29 @@ exports.stripeWebhook = functions
               // Mettre à jour le montant collecté du projet
               if (metadata.projectId) {
                 const projectRef = admin.firestore().collection('projects').doc(metadata.projectId);
-                transaction.update(projectRef, {
-                  montantCollecte: admin.firestore.FieldValue.increment(amountEuros),
-                });
+                // SÉCURITÉ: Vérifier que le projet existe avant update
+                const projectDoc = await transaction.get(projectRef);
+                if (projectDoc.exists) {
+                  transaction.update(projectRef, {
+                    montantCollecte: admin.firestore.FieldValue.increment(amountEuros),
+                  });
+                } else {
+                  console.warn('Projet non trouvé pour update:', metadata.projectId);
+                }
               }
             }
           });
 
           console.log('Paiement enregistré dans Firestore (transaction atomique)');
         } catch (dbError) {
+          // Gérer le cas d'idempotence (pas une vraie erreur)
+          if (dbError && dbError.alreadyProcessed) {
+            console.log('Paiement déjà traité, retour OK');
+            return res.json({ received: true, alreadyProcessed: true });
+          }
           console.error('Erreur enregistrement Firestore:', dbError);
           // Retourner 500 pour que Stripe réessaie
-          return res.status(500).send(`Database Error: ${dbError.message}`);
+          return res.status(500).send(`Database Error: ${dbError.message || 'Unknown error'}`);
         }
         break;
 
@@ -1305,6 +1458,9 @@ exports.sendRecuFiscal = functions
         'Vous ne pouvez demander que votre propre reçu fiscal'
       );
     }
+
+    // Rate limiting: max 3 reçus fiscaux par heure (évite le spam d'emails)
+    await checkRateLimit(context.auth.uid, 'recu', 3, 3600);
 
     try {
       // 1. Récupérer les paramètres de l'association

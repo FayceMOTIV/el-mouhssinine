@@ -149,3 +149,151 @@ export interface AppSettings {
   language: 'fr' | 'ar';
   calculationMethod: string;
 }
+
+// ==================== ERROR & RESULT TYPES ====================
+
+/**
+ * Interface pour les erreurs Firebase (Auth, Firestore, etc.)
+ */
+export interface FirebaseError extends Error {
+  code?: string;
+  customData?: { httpErrorCode?: string };
+}
+
+/**
+ * Résultat d'une opération d'authentification
+ */
+export interface AuthResult {
+  success: boolean;
+  user?: {
+    uid: string;
+    email: string | null;
+  };
+  error?: string;
+}
+
+/**
+ * Résultat d'une opération de paiement
+ */
+export interface PaymentResult {
+  success: boolean;
+  paymentIntentId?: string;
+  error?: string;
+}
+
+/**
+ * Résultat générique d'une opération API
+ */
+export interface ApiResult<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+// ==================== NAVIGATION TYPES ====================
+
+/**
+ * Types des paramètres de navigation pour toutes les routes
+ */
+export type RootStackParamList = {
+  Home: undefined;
+  Member: undefined;
+  Quran: undefined;
+  QuranHome: undefined;
+  QuranRead: { page?: number };
+  Surah: { surahNumber: number; surahName: string };
+  Messages: undefined;
+  Conversation: { messageId: string };
+  Donations: undefined;
+  More: undefined;
+  Adhkar: undefined;
+  AdhkarDetail: { category: string };
+  LearnArabic: undefined;
+  Alphabet: undefined;
+  LetterDetail: { letter: any };
+  LessonsList: undefined;
+  Lesson: { lessonId: number };
+  Quiz: { lessonId: number };
+  Spiritual: undefined;
+  MyMemberships: undefined;
+};
+
+// ==================== MESSAGE TYPES ====================
+
+/**
+ * Interface pour une réponse dans un message
+ */
+export interface MessageReply {
+  id: string;
+  contenu: string;
+  createdBy: 'user' | 'mosquee';
+  createdAt: any; // Timestamp Firebase
+  createdByName?: string;
+}
+
+/**
+ * Interface pour un message complet
+ */
+export interface Message {
+  id: string;
+  sujet: string;
+  contenu: string;
+  nom: string;
+  email: string;
+  telephone?: string;
+  odUserId: string;
+  statut: 'nouveau' | 'lu' | 'repondu' | 'archive';
+  createdAt: any; // Timestamp Firebase
+  reponses?: MessageReply[];
+  deleted?: boolean;
+}
+
+// ==================== COTISATION TYPES ====================
+
+/**
+ * Statuts possibles d'une cotisation
+ */
+export type CotisationStatus =
+  | 'none'
+  | 'active'
+  | 'expired'
+  | 'pending'
+  | 'en_attente_validation'
+  | 'en_attente_paiement'
+  | 'en_attente_signature';
+
+/**
+ * Types de cotisation
+ */
+export type CotisationType = 'mensuel' | 'annuel' | null;
+
+/**
+ * Interface pour les données de cotisation
+ */
+export interface CotisationData {
+  dateDebut?: string;
+  dateFin?: string;
+  montant: number;
+  type: CotisationType;
+  status?: CotisationStatus;
+  modePaiement?: 'card' | 'virement' | 'especes' | 'cheque' | 'apple_pay' | 'google_pay';
+}
+
+// ==================== PAYMENT METADATA ====================
+
+/**
+ * Métadonnées pour un paiement Stripe
+ */
+export interface PaymentMetadata {
+  projectId?: string;
+  projectName?: string;
+  memberId?: string;
+  memberIdDisplay?: string;
+  memberName?: string;
+  email?: string;
+  isAnonymous?: boolean;
+  period?: string;
+  membersCount?: string;
+  montantCotisation?: number;
+  montantDon?: number;
+}

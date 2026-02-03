@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { QuranAPI, surahsInfo, reciters, SurahData, getAudioUrl } from '../services/quranApi';
 import { playAudio, pauseAudio, stopAudio, getIsPlaying } from '../services/audioPlayer';
@@ -37,6 +38,27 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   const [isPlayingSurah, setIsPlayingSurah] = useState(false);
 
   const surahInfo = surahsInfo.find((s) => s.number === surahNumber);
+
+  // Clé AsyncStorage pour les favoris
+  const FAVORITES_KEY = '@quran_favorites';
+
+  // Charger les favoris depuis AsyncStorage au démarrage
+  useEffect(() => {
+    const loadFavorites = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(FAVORITES_KEY);
+        if (stored) {
+          const arr = JSON.parse(stored);
+          if (Array.isArray(arr)) {
+            setFavorites(new Set(arr));
+          }
+        }
+      } catch (e) {
+        if (__DEV__) console.error('Erreur chargement favoris:', e);
+      }
+    };
+    loadFavorites();
+  }, []);
 
   // URL pour la SOURATE COMPLÈTE
   const surahAudioUrl = `https://cdn.islamic.network/quran/audio-surah/128/${selectedReciter.id}/${surahNumber}.mp3`;
@@ -101,20 +123,27 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
     }
   };
 
-  // Toggle favori
-  const handleToggleFavorite = (ayahNumber: number) => {
+  // Toggle favori (avec persistance AsyncStorage)
+  const handleToggleFavorite = async (ayahNumber: number) => {
     const key = `${surahNumber}:${ayahNumber}`;
-    setFavorites(prev => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(key)) {
-        newFavorites.delete(key);
-        Alert.alert(t('favoriteRemoved'), `${t('verse')} ${ayahNumber} ${t('verseRemovedFromFavorites')}`);
-      } else {
-        newFavorites.add(key);
-        Alert.alert(t('favoriteAdded'), `${t('verse')} ${ayahNumber} ${t('verseAddedToFavorites')}`);
-      }
-      return newFavorites;
-    });
+    const newFavorites = new Set(favorites);
+
+    if (newFavorites.has(key)) {
+      newFavorites.delete(key);
+      Alert.alert(t('favoriteRemoved'), `${t('verse')} ${ayahNumber} ${t('verseRemovedFromFavorites')}`);
+    } else {
+      newFavorites.add(key);
+      Alert.alert(t('favoriteAdded'), `${t('verse')} ${ayahNumber} ${t('verseAddedToFavorites')}`);
+    }
+
+    setFavorites(newFavorites);
+
+    // Sauvegarder dans AsyncStorage
+    try {
+      await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify([...newFavorites]));
+    } catch (e) {
+      if (__DEV__) console.error('Erreur sauvegarde favoris:', e);
+    }
   };
 
   // Copier le verset

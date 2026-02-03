@@ -50,7 +50,7 @@ export default function RecusFiscaux() {
       // Charger les reçus envoyés
       await loadRecusEnvoyes()
     } catch (err) {
-      console.error('Erreur chargement:', err)
+      if (import.meta.env.DEV) console.error('Erreur chargement:', err)
       toast.error('Erreur lors du chargement')
     } finally {
       setLoading(false)
@@ -73,7 +73,7 @@ export default function RecusFiscaux() {
       }))
       setRecusEnvoyes(recus)
     } catch (err) {
-      console.error('Erreur chargement reçus:', err)
+      if (import.meta.env.DEV) console.error('Erreur chargement reçus:', err)
     } finally {
       setLoadingRecus(false)
     }
@@ -85,7 +85,7 @@ export default function RecusFiscaux() {
       await setDoc(doc(db, 'settings', 'recusFiscaux'), associationInfo)
       toast.success('Paramètres enregistrés')
     } catch (err) {
-      console.error('Erreur sauvegarde:', err)
+      if (import.meta.env.DEV) console.error('Erreur sauvegarde:', err)
       toast.error('Erreur lors de la sauvegarde')
     } finally {
       setSaving(false)
@@ -131,7 +131,7 @@ export default function RecusFiscaux() {
       setEmailManuel('')
       await loadRecusEnvoyes()
     } catch (err) {
-      console.error('Erreur envoi:', err)
+      if (import.meta.env.DEV) console.error('Erreur envoi:', err)
       const message = err.message || 'Erreur lors de l\'envoi'
       if (message.includes('not-found')) {
         toast.error(`Aucun don trouvé pour ${anneeManuelle}`)

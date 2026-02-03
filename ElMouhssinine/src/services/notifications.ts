@@ -8,6 +8,7 @@ import notifee, {
 import messaging from '@react-native-firebase/messaging';
 import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils';
 import {
   addNotificationToHistory,
   detectNotificationType,
@@ -79,7 +80,7 @@ export const createNotificationChannels = async () => {
     sound: 'default',
   });
 
-  console.log('Notification channels created');
+  logger.log('Notification channels created');
 };
 
 // S'abonner à tous les topics par défaut
@@ -91,8 +92,9 @@ export const subscribeToAllTopics = async () => {
     try {
       await messaging().subscribeToTopic(topic);
       successCount++;
-    } catch (error: any) {
-      console.error(`Erreur souscription topic ${topic}:`, error?.message);
+    } catch (error) {
+      const err = error as Error;
+      logger.error(`Erreur souscription topic ${topic}:`, err?.message);
     }
   }
 
@@ -108,10 +110,10 @@ export const subscribeToTopic = async (topic: FCMTopic) => {
   try {
     await messaging().subscribeToTopic(topic);
     await AsyncStorage.setItem(`fcm_topic_${topic}`, 'true');
-    console.log(`Subscribed to topic: ${topic}`);
+    logger.log(`Subscribed to topic: ${topic}`);
     return true;
   } catch (error) {
-    console.error(`Error subscribing to topic ${topic}:`, error);
+    logger.error(`Error subscribing to topic ${topic}:`, error);
     return false;
   }
 };
@@ -121,10 +123,10 @@ export const unsubscribeFromTopic = async (topic: FCMTopic) => {
   try {
     await messaging().unsubscribeFromTopic(topic);
     await AsyncStorage.setItem(`fcm_topic_${topic}`, 'false');
-    console.log(`Unsubscribed from topic: ${topic}`);
+    logger.log(`Unsubscribed from topic: ${topic}`);
     return true;
   } catch (error) {
-    console.error(`Error unsubscribing from topic ${topic}:`, error);
+    logger.error(`Error unsubscribing from topic ${topic}:`, error);
     return false;
   }
 };
@@ -139,10 +141,10 @@ export const isSubscribedToTopic = async (topic: FCMTopic): Promise<boolean> => 
 export const getFCMToken = async (): Promise<string | null> => {
   try {
     const token = await messaging().getToken();
-    console.log('FCM Token:', token);
+    logger.log('FCM Token:', token);
     return token;
   } catch (error) {
-    console.error('Error getting FCM token:', error);
+    logger.error('Error getting FCM token:', error);
     return null;
   }
 };
@@ -152,7 +154,7 @@ export const saveFCMTokenToFirestore = async (userId: string): Promise<boolean> 
   try {
     const token = await messaging().getToken();
     if (!token || !userId) {
-      console.log('[FCM] Pas de token ou userId pour sauvegarde');
+      logger.log('[FCM] Pas de token ou userId pour sauvegarde');
       return false;
     }
 
@@ -162,10 +164,10 @@ export const saveFCMTokenToFirestore = async (userId: string): Promise<boolean> 
       fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
     });
 
-    console.log('[FCM] Token sauvegardé pour userId:', userId);
+    logger.log('[FCM] Token sauvegardé pour userId:', userId);
     return true;
   } catch (error) {
-    console.error('[FCM] Erreur sauvegarde token:', error);
+    logger.error('[FCM] Erreur sauvegarde token:', error);
     return false;
   }
 };
@@ -182,7 +184,7 @@ export const setInAppNotificationCallback = (
 // Gérer les messages FCM en foreground
 export const setupForegroundHandler = () => {
   return messaging().onMessage(async (remoteMessage) => {
-    console.log('FCM Message received in foreground:', remoteMessage);
+    logger.log('FCM Message received in foreground:', remoteMessage);
 
     // Afficher la notification avec notifee
     const { notification, data } = remoteMessage;
@@ -216,7 +218,7 @@ export const setupForegroundHandler = () => {
       // Stocker dans l'historique (notifications push du backoffice)
       const notifType = detectNotificationType(title, body);
       await addNotificationToHistory(title, body, notifType);
-      console.log('[Notifications] Push notification ajoutée à l\'historique');
+      logger.log('[Notifications] Push notification ajoutée à l\'historique');
 
       // Appeler le callback pour afficher en modal dans l'app
       if (inAppNotificationCallback) {
@@ -236,7 +238,7 @@ export const setupNotificationOpenedHandler = (
 ) => {
   // Notification ouverte quand l'app était en background
   messaging().onNotificationOpenedApp((remoteMessage) => {
-    console.log('Notification opened app from background:', remoteMessage);
+    logger.log('Notification opened app from background:', remoteMessage);
     if (remoteMessage.data) {
       onNotificationOpened(remoteMessage.data as Record<string, string>);
     }
@@ -247,7 +249,7 @@ export const setupNotificationOpenedHandler = (
     .getInitialNotification()
     .then((remoteMessage) => {
       if (remoteMessage) {
-        console.log('App opened from quit state by notification:', remoteMessage);
+        logger.log('App opened from quit state by notification:', remoteMessage);
         if (remoteMessage.data) {
           onNotificationOpened(remoteMessage.data as Record<string, string>);
         }
@@ -302,12 +304,13 @@ export const initializeFCM = async (): Promise<FCMInitResult> => {
         error: 'Permission notifications refusée',
       };
     }
-  } catch (error: any) {
-    console.error('FCM initialization error:', error?.message);
+  } catch (error) {
+    const err = error as Error & { code?: string };
+    logger.error('FCM initialization error:', err?.message);
     return {
       success: false,
-      error: error?.message || 'Erreur inconnue',
-      errorCode: error?.code,
+      error: err?.message || 'Erreur inconnue',
+      errorCode: err?.code,
     };
   }
 };
@@ -383,7 +386,7 @@ export const scheduleJumuaReminder = async (language: 'fr' | 'ar' = 'fr') => {
   );
 
   await AsyncStorage.setItem('jumua_reminder_enabled', 'true');
-  console.log("Jumu'a reminder scheduled for:", nextFriday);
+  logger.log("Jumu'a reminder scheduled for:", nextFriday);
 };
 
 // Annuler la notification Jumu'a
@@ -405,10 +408,10 @@ export const subscribeToMembersTopic = async () => {
   try {
     await messaging().subscribeToTopic(FCM_TOPICS.MEMBERS);
     await AsyncStorage.setItem('is_subscribed_members_topic', 'true');
-    console.log('Subscribed to members topic');
+    logger.log('Subscribed to members topic');
     return true;
   } catch (error) {
-    console.error('Error subscribing to members topic:', error);
+    logger.error('Error subscribing to members topic:', error);
     return false;
   }
 };
@@ -418,10 +421,10 @@ export const unsubscribeFromMembersTopic = async () => {
   try {
     await messaging().unsubscribeFromTopic(FCM_TOPICS.MEMBERS);
     await AsyncStorage.setItem('is_subscribed_members_topic', 'false');
-    console.log('Unsubscribed from members topic');
+    logger.log('Unsubscribed from members topic');
     return true;
   } catch (error) {
-    console.error('Error unsubscribing from members topic:', error);
+    logger.error('Error unsubscribing from members topic:', error);
     return false;
   }
 };
@@ -438,8 +441,8 @@ export const isSubscribedToMembersTopic = async () => {
 export const clearBadgeCount = async () => {
   try {
     await notifee.setBadgeCount(0);
-    console.log('Badge count cleared');
+    logger.log('Badge count cleared');
   } catch (error) {
-    console.error('Error clearing badge count:', error);
+    logger.error('Error clearing badge count:', error);
   }
 };

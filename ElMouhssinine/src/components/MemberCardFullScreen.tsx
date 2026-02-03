@@ -44,6 +44,10 @@ const getBackgroundColor = (status?: string) => {
     case 'unpaid':
     case 'en_attente_paiement':
       return '#92400E'; // Ambre foncé
+    case 'en_attente_validation':
+      return '#5B21B6'; // Violet foncé
+    case 'en_attente_signature':
+      return '#B45309'; // Orange foncé (signature)
     default:
       return '#065F46'; // Vert par défaut (actif)
   }
@@ -61,6 +65,8 @@ const getStatusText = (status?: string) => {
       return 'EXPIRÉ';
     case 'inactive':
       return 'INACTIF';
+    case 'en_attente_validation':
+      return 'EN ATTENTE VALIDATION';
     case 'en_attente_signature':
       return 'EN ATTENTE SIGNATURE';
     case 'en_attente_paiement':

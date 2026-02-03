@@ -26,6 +26,7 @@ import {
   subscribeToIslamicDates,
   subscribeToMosqueeInfo,
   subscribeToGeneralSettings,
+  subscribeToRamadanSettings,
   IqamaDelays,
   JumuaTimes,
   addMinutesToTime,
@@ -33,6 +34,7 @@ import {
   Popup,
   DateIslamique,
   DisplaySettings,
+  RamadanSettings,
 } from '../services/firebase';
 import { PrayerAPI, PrayerTimings } from '../services/prayerApi';
 import { PrayerTime, Announcement, Event, Janaza } from '../types';
@@ -49,6 +51,7 @@ import {
 } from '../services/prayerNotifications';
 import Geolocation from '@react-native-community/geolocation';
 import { setInAppNotificationCallback } from '../services/notifications';
+import { logger } from '../utils';
 import { HomeScreenSkeleton } from '../components';
 import {
   getNotificationHistory,
@@ -101,7 +104,7 @@ const mockJanazaList = [
 ];
 
 const HomeScreen = () => {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, language } = useLanguage();
   const [prayerTimes, setPrayerTimes] = useState<PrayerTime[]>(mockPrayerTimes);
   const [nextPrayer, setNextPrayer] = useState({ name: 'Dhuhr', time: '13:15', icon: '☀️' });
   const [countdown, setCountdown] = useState('01:23:45');
@@ -151,6 +154,10 @@ const HomeScreen = () => {
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [notificationHistory, setNotificationHistory] = useState<StoredNotification[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+  // Ramadan mode
+  const [ramadanSettings, setRamadanSettings] = useState<RamadanSettings | null>(null);
+  const [ramadanDay, setRamadanDay] = useState<number | null>(null);
 
   // Traduction des noms de prière
   const getPrayerName = (name: string) => {
@@ -319,6 +326,26 @@ const HomeScreen = () => {
       }
     });
 
+    // Subscription aux paramètres Ramadan
+    const unsubRamadan = subscribeToRamadanSettings((settings) => {
+      setRamadanSettings(settings);
+      // Calculer le jour actuel de Ramadan
+      if (settings.enabled && settings.startDate && settings.endDate) {
+        const now = new Date();
+        const start = new Date(settings.startDate);
+        const end = new Date(settings.endDate);
+        if (now >= start && now <= end) {
+          const diffTime = now.getTime() - start.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+          setRamadanDay(diffDays);
+        } else {
+          setRamadanDay(null);
+        }
+      } else {
+        setRamadanDay(null);
+      }
+    });
+
     // Subscriptions aux popups Firebase - File d'attente multi-popups
     const unsubPopups = subscribeToPopups(async (popups) => {
       if (popups && popups.length > 0) {
@@ -353,6 +380,7 @@ const HomeScreen = () => {
       unsubRappels();
       unsubMosqueeInfo();
       unsubGeneralSettings();
+      unsubRamadan();
       unsubPopups();
       clearInterval(timer);
     };
@@ -365,11 +393,11 @@ const HomeScreen = () => {
       const scheduleNotifications = async () => {
         if (!rawPrayerTimings) return;
         try {
-          console.log('[HomeScreen] Re-scheduling prayer notifications...');
+          logger.log('[HomeScreen] Re-scheduling prayer notifications...');
           const settings = await getPrayerNotificationSettings();
           await schedulePrayerNotifications(rawPrayerTimings, settings);
         } catch (error) {
-          console.warn('[HomeScreen] Erreur scheduling notifications:', error);
+          logger.warn('[HomeScreen] Erreur scheduling notifications:', error);
         }
       };
       scheduleNotifications();
@@ -387,7 +415,7 @@ const HomeScreen = () => {
 
           // 2. Programmer les notifications si activé
           if (!rawPrayerTimings || !settings.enabled) {
-            console.log('[HomeScreen] Boost désactivé ou pas de timings');
+            logger.log('[HomeScreen] Boost désactivé ou pas de timings');
             return;
           }
 
@@ -399,9 +427,9 @@ const HomeScreen = () => {
             before15min: t('boostBefore15min'),
           };
           await scheduleBoostNotifications(rawPrayerTimings, settings, translations);
-          console.log('[HomeScreen] Boost notifications reprogrammées avec succès');
+          logger.log('[HomeScreen] Boost notifications reprogrammées avec succès');
         } catch (error) {
-          console.warn('[HomeScreen] Erreur boost:', error);
+          logger.warn('[HomeScreen] Erreur boost:', error);
         }
       };
 
@@ -428,7 +456,7 @@ const HomeScreen = () => {
           }
         }
       } catch (error) {
-        console.warn('[HomeScreen] Erreur chargement état prié:', error);
+        logger.warn('[HomeScreen] Erreur chargement état prié:', error);
       }
     };
 
@@ -474,7 +502,7 @@ const HomeScreen = () => {
           const unread = await getUnreadCount();
           setUnreadNotifCount(unread);
         } catch (error) {
-          console.warn('[HomeScreen] Erreur chargement historique notifs:', error);
+          logger.warn('[HomeScreen] Erreur chargement historique notifs:', error);
         }
       };
       loadNotificationHistory();
@@ -494,17 +522,22 @@ const HomeScreen = () => {
   // Vérifier la proximité de la mosquée au démarrage (si feature activée)
   // Note: Le service backgroundLocation.ts gère aussi la vérification en arrière-plan
   useEffect(() => {
+    let isMounted = true;
+
     const checkProximity = async () => {
       try {
         // Vérifier si la feature est activée
         const settings = await getMosqueProximitySettings();
-        if (!settings.enabled) return;
+        if (!settings.enabled || !isMounted) return;
 
         // Faire un check quand l'app s'ouvre (en complément du background)
         Geolocation.getCurrentPosition(
           async (position) => {
+            // Guard: ne pas mettre à jour si le composant est démonté
+            if (!isMounted) return;
+
             const { latitude, longitude } = position.coords;
-            console.log(`[HomeScreen] Position: ${latitude}, ${longitude}`);
+            logger.log(`[HomeScreen] Position: ${latitude}, ${longitude}`);
 
             await checkMosqueProximity(latitude, longitude, {
               title: `🕌 ${t('mosqueSilentModeTitle')}`,
@@ -512,7 +545,8 @@ const HomeScreen = () => {
             });
           },
           (error) => {
-            console.log('[HomeScreen] Erreur géolocalisation:', error.code, error.message);
+            if (!isMounted) return;
+            logger.log('[HomeScreen] Erreur géolocalisation:', error.code, error.message);
           },
           {
             enableHighAccuracy: false,
@@ -521,11 +555,18 @@ const HomeScreen = () => {
           }
         );
       } catch (error) {
-        console.warn('[HomeScreen] Erreur check proximité:', error);
+        if (isMounted) {
+          logger.warn('[HomeScreen] Erreur check proximité:', error);
+        }
       }
     };
 
     checkProximity();
+
+    // Cleanup: marquer le composant comme démonté
+    return () => {
+      isMounted = false;
+    };
   }, [t]);
 
   // Gérer le clic sur "J'ai prié" - annule les notifications boost et masque le bouton
@@ -542,7 +583,7 @@ const HomeScreen = () => {
       await cancelBoostNotificationsForPrayer(currentPrayer.name);
       Vibration.vibrate(100); // Feedback haptique
     } catch (error) {
-      console.warn('[HomeScreen] Erreur annulation boost:', error);
+      logger.warn('[HomeScreen] Erreur annulation boost:', error);
     }
   }, [currentPrayer, boostSettings?.enabled]);
 
@@ -1136,6 +1177,71 @@ const HomeScreen = () => {
                 );
               })}
           </View>
+
+          {/* Section Ramadan */}
+          {ramadanSettings?.enabled && ramadanDay && (
+            <View style={styles.ramadanSection}>
+              <LinearGradient
+                colors={['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.05)']}
+                style={styles.ramadanGradient}
+              >
+                <View style={styles.ramadanHeader}>
+                  <Text style={styles.ramadanMubarak}>
+                    {language === 'ar' ? 'رمضان مبارك 🌙' : 'Ramadan Mubarak 🌙'}
+                  </Text>
+                  <Text style={styles.ramadanDay}>
+                    {language === 'ar' ? `اليوم ${ramadanDay}/30` : `Jour ${ramadanDay}/30`}
+                  </Text>
+                </View>
+
+                <View style={styles.ramadanTimesRow}>
+                  {/* Suhoor */}
+                  <View style={styles.ramadanTimeCard}>
+                    <Text style={styles.ramadanTimeLabel}>
+                      {language === 'ar' ? 'السحور' : 'Suhoor'}
+                    </Text>
+                    <Text style={styles.ramadanTimeIcon}>🌅</Text>
+                    <Text style={styles.ramadanTimeValue}>
+                      {prayerTimes.find(p => p.name === 'Fajr')?.time || '--:--'}
+                    </Text>
+                    <Text style={styles.ramadanTimeNote}>
+                      {language === 'ar' ? 'قبل الفجر' : 'Fin Suhoor'}
+                    </Text>
+                  </View>
+
+                  {/* Iftar */}
+                  <View style={styles.ramadanTimeCard}>
+                    <Text style={styles.ramadanTimeLabel}>
+                      {language === 'ar' ? 'الإفطار' : 'Iftar'}
+                    </Text>
+                    <Text style={styles.ramadanTimeIcon}>🌙</Text>
+                    <Text style={styles.ramadanTimeValue}>
+                      {prayerTimes.find(p => p.name === 'Maghrib')?.time || '--:--'}
+                    </Text>
+                    <Text style={styles.ramadanTimeNote}>
+                      {language === 'ar' ? 'وقت المغرب' : 'Au Maghrib'}
+                    </Text>
+                  </View>
+
+                  {/* Tarawih */}
+                  {ramadanSettings.tarawihTime && (
+                    <View style={styles.ramadanTimeCard}>
+                      <Text style={styles.ramadanTimeLabel}>
+                        {language === 'ar' ? 'التراويح' : 'Tarawih'}
+                      </Text>
+                      <Text style={styles.ramadanTimeIcon}>🕌</Text>
+                      <Text style={styles.ramadanTimeValue}>
+                        {ramadanSettings.tarawihTime}
+                      </Text>
+                      <Text style={styles.ramadanTimeNote}>
+                        {language === 'ar' ? 'بعد العشاء' : 'Après Isha'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </LinearGradient>
+            </View>
+          )}
 
           {/* Annonces */}
           <View style={styles.section}>
@@ -2147,6 +2253,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1a1a2e',
+  },
+  // Ramadan styles
+  ramadanSection: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.3)',
+  },
+  ramadanGradient: {
+    padding: spacing.lg,
+  },
+  ramadanHeader: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  ramadanMubarak: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#8b5cf6',
+    marginBottom: 4,
+  },
+  ramadanDay: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+  },
+  ramadanTimesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  ramadanTimeCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    minWidth: 90,
+  },
+  ramadanTimeLabel: {
+    fontSize: fontSize.sm,
+    color: '#8b5cf6',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  ramadanTimeIcon: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  ramadanTimeValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  ramadanTimeNote: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
   },
 });
 

@@ -150,6 +150,57 @@ xcodebuild -exportArchive -archivePath ./build/ElMouhssinine.xcarchive -exportOp
 xcrun altool --upload-app -f ./build/export/ElMouhssinine.ipa -t ios -u EMAIL -p APP_SPECIFIC_PASSWORD
 ```
 
+## CI/CD
+
+GitHub Actions configure avec 2 workflows :
+
+### CI (`.github/workflows/ci.yml`)
+- **Declencheur** : Push/PR sur `main`
+- **Jobs** :
+  - Mobile App : TypeScript check + lint + tests
+  - Cloud Functions : Lint
+  - Backoffice : Build check
+
+### Deploy (`.github/workflows/deploy.yml`)
+- **Declencheur** : Push sur `main` avec tags specifiques
+- **Tags** :
+  - `[deploy-functions]` : Deploie les Cloud Functions
+  - `[deploy-hosting]` : Deploie le backoffice
+  - `[deploy-rules]` : Deploie Firestore Rules
+
+**Configuration requise** : Ajouter `FIREBASE_TOKEN` dans les secrets GitHub.
+
+```bash
+# Generer le token Firebase
+firebase login:ci
+```
+
+## Monitoring (Sentry)
+
+Configuration optionnelle pour le suivi des erreurs en production.
+
+### Installation
+
+```bash
+cd ElMouhssinine
+npx @sentry/wizard@latest -i reactNative
+```
+
+### Configuration
+
+1. Creer un projet sur [sentry.io](https://sentry.io)
+2. Modifier `src/services/sentry.ts` :
+   - Decommenter le code
+   - Remplacer `YOUR_SENTRY_DSN_HERE` par votre DSN
+
+## Securite
+
+- **Firestore Rules** : Validation des donnees, controle d'acces
+- **Rate Limiting** : Protection contre les abus (Cloud Functions)
+- **Idempotence Stripe** : Prevention des doublons de paiement
+- **Masquage emails** : Privacy dans les logs
+- **No stack traces** : Pas d'infos sensibles en production
+
 ## Support
 
 Pour toute question technique, consulter le fichier `CLAUDE.md` qui contient l'historique complet des developpements et corrections.

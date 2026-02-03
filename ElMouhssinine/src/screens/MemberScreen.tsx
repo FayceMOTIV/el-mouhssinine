@@ -33,6 +33,7 @@ import { subscribeToMembersTopic, saveFCMTokenToFirestore } from '../services/no
 import { useLanguage } from '../context/LanguageContext';
 import MemberCard from '../components/MemberCard';
 import MemberCardFullScreen from '../components/MemberCardFullScreen';
+import { logger } from '../utils';
 
 // ============================================================
 // MEMBER SCREEN - Refonte UX épurée
@@ -201,8 +202,9 @@ const MemberScreen = () => {
       await AuthService.signIn(loginEmail.trim(), loginPassword);
       setShowLoginModal(false);
       resetLoginForm();
-    } catch (error: any) {
-      Alert.alert('Erreur', error.message || 'Échec de la connexion');
+    } catch (error) {
+      const err = error as Error;
+      Alert.alert('Erreur', err?.message || 'Échec de la connexion');
     } finally {
       setAuthLoading(false);
     }
@@ -272,8 +274,9 @@ const MemberScreen = () => {
       );
       setShowLoginModal(false);
       resetLoginForm();
-    } catch (error: any) {
-      Alert.alert('Erreur', error.message || 'Échec de la création du compte');
+    } catch (error) {
+      const err = error as Error;
+      Alert.alert('Erreur', err?.message || 'Échec de la création du compte');
     } finally {
       setAuthLoading(false);
     }
@@ -291,8 +294,9 @@ const MemberScreen = () => {
       Alert.alert('Email envoyé', 'Vérifiez votre boîte mail pour réinitialiser votre mot de passe');
       setShowForgotPassword(false);
       setForgotEmail('');
-    } catch (error: any) {
-      Alert.alert('Erreur', error.message);
+    } catch (error) {
+      const err = error as Error;
+      Alert.alert('Erreur', err?.message || 'Une erreur est survenue');
     } finally {
       setAuthLoading(false);
     }
@@ -340,6 +344,23 @@ const MemberScreen = () => {
 
     if (method === 'virement') {
       const reference = `ADH-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+      // Mettre à jour le membre avec status 'en_attente_paiement' pour que le backoffice le voie
+      try {
+        await AuthService.updateMemberProfile(memberProfile.uid, {
+          // @ts-ignore - Ces champs seront acceptés par Firestore
+          status: 'en_attente_paiement',
+          statut: 'en_attente_paiement', // Compatibilité
+          referenceVirement: reference,
+          formule: selectedFormule,
+          montantAttendu: breakdown.total,
+        });
+        logger.log('[Virement] Membre mis à jour avec status en_attente_paiement');
+      } catch (updateError) {
+        logger.error('[Virement] Erreur mise à jour membre:', updateError);
+        // Continuer quand même pour afficher l'alerte
+      }
+
       let message = `IBAN: ${mosqueeInfo?.iban || 'FR76 XXXX XXXX XXXX'}\nBIC: ${mosqueeInfo?.bic || 'XXXXXXXX'}\n\nCotisation: ${breakdown.cotisation}€`;
       if (breakdown.don > 0) {
         message += `\nDon: ${breakdown.don}€`;
@@ -348,6 +369,10 @@ const MemberScreen = () => {
       Alert.alert('🏦 Virement bancaire', message, [{ text: 'Compris', style: 'default' }]);
       setShowPaymentModal(false);
       setCustomAmount('');
+
+      // Recharger les données pour refléter le changement de status
+      const user = AuthService.getCurrentUser();
+      if (user) await loadMemberData(user.uid);
       return;
     }
 
@@ -404,8 +429,9 @@ const MemberScreen = () => {
         const user = AuthService.getCurrentUser();
         if (user) await loadMemberData(user.uid);
       }
-    } catch (error: any) {
-      showPaymentError(error.message);
+    } catch (error) {
+      const err = error as Error;
+      showPaymentError(err?.message || 'Une erreur est survenue');
     } finally {
       setIsProcessingPayment(false);
     }
@@ -551,7 +577,7 @@ const MemberScreen = () => {
             dateNaissance: member.dateNaissance,
             accepteReglement: true,
             inscritPar: { odUserId: memberProfile.uid, nom: payeurNom2, prenom: payeurPrenom2 },
-            status: 'en_attente_signature',
+            status: 'en_attente_validation',
             dateInscription: timestamp,
             datePaiement: timestamp,
             paiementId,
@@ -574,8 +600,9 @@ const MemberScreen = () => {
         const user = AuthService.getCurrentUser();
         if (user) await loadMemberData(user.uid);
       }
-    } catch (error: any) {
-      showPaymentError(error.message);
+    } catch (error) {
+      const err = error as Error;
+      showPaymentError(err?.message || 'Une erreur est survenue');
     } finally {
       setIsProcessingPayment(false);
     }
@@ -706,6 +733,7 @@ const MemberScreen = () => {
     if (profile.status === 'actif' || profile.status === 'active') return 'paid';
     if (profile.status === 'en_attente_paiement') return 'virement_pending';
     if (profile.status === 'en_attente_signature') return 'paid'; // Payé mais pas encore signé
+    if (profile.status === 'en_attente_validation') return 'paid'; // Payé, en attente de validation bureau
     if (profile.datePaiement) return 'paid';
     return 'unpaid';
   };

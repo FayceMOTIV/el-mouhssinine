@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ==================== MOBILE APP ====================
+  mobile-check:
+    name: Mobile App - TypeScript & Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./ElMouhssinine
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './ElMouhssinine/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Lint check
+        run: npm run lint --if-present
+
+  mobile-test:
+    name: Mobile App - Tests
+    runs-on: ubuntu-latest
+    needs: mobile-check
+    defaults:
+      run:
+        working-directory: ./ElMouhssinine
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './ElMouhssinine/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test --if-present
+
+  # ==================== CLOUD FUNCTIONS ====================
+  functions-check:
+    name: Cloud Functions - Lint & Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./functions
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './functions/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint check
+        run: npm run lint --if-present
+
+  # ==================== BACKOFFICE ====================
+  backoffice-check:
+    name: Backoffice - Build Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./el-mouhssinine-backoffice
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './el-mouhssinine-backoffice/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build check
+        run: npm run build

@@ -1,5 +1,6 @@
 // Text-to-Speech service using react-native-tts
 import Tts from 'react-native-tts';
+import { logger } from '../utils';
 
 let ttsInitialized = false;
 
@@ -14,15 +15,15 @@ export const initTTS = async (): Promise<boolean> => {
     await Tts.setDefaultPitch(1.0);
 
     // Add event listeners
-    Tts.addEventListener('tts-start', () => console.log('[TTS] Started'));
-    Tts.addEventListener('tts-finish', () => console.log('[TTS] Finished'));
-    Tts.addEventListener('tts-error', (err: any) => console.log('[TTS] Error:', err));
+    Tts.addEventListener('tts-start', () => logger.log('[TTS] Started'));
+    Tts.addEventListener('tts-finish', () => logger.log('[TTS] Finished'));
+    Tts.addEventListener('tts-error', (err: any) => logger.log('[TTS] Error:', err));
 
     ttsInitialized = true;
-    console.log('[TTS] Initialized successfully for Arabic');
+    logger.log('[TTS] Initialized successfully for Arabic');
     return true;
   } catch (error) {
-    console.error('[TTS] Initialization error:', error);
+    logger.error('[TTS] Initialization error:', error);
     return false;
   }
 };
@@ -36,17 +37,17 @@ export const speakArabic = async (text: string): Promise<void> => {
     await Tts.stop();
 
     // Speak the text (language already set via setDefaultLanguage in initTTS)
-    console.log('[TTS] Speaking:', text);
+    logger.log('[TTS] Speaking:', text);
     await Tts.speak(text, {
       rate: 0.4,
     } as any);
   } catch (error) {
-    console.error('[TTS] Error speaking:', error);
+    logger.error('[TTS] Error speaking:', error);
     // Fallback: try without options
     try {
       Tts.speak(text);
     } catch (fallbackError) {
-      console.error('[TTS] Fallback also failed:', fallbackError);
+      logger.error('[TTS] Fallback also failed:', fallbackError);
     }
   }
 };
@@ -61,7 +62,7 @@ export const stopSpeaking = async (): Promise<void> => {
   try {
     await Tts.stop();
   } catch (error) {
-    console.error('[TTS] Error stopping:', error);
+    logger.error('[TTS] Error stopping:', error);
   }
 };
 

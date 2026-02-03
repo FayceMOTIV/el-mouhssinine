@@ -467,6 +467,25 @@ export const translations = {
     later: 'Plus tard',
     refuse: 'Refuser',
     allow: 'Autoriser',
+
+    // Ramadan
+    ramadanMubarak: 'Ramadan Mubarak',
+    suhoor: 'Suhoor',
+    iftar: 'Iftar',
+    tarawih: 'Tarawih',
+    dayOfRamadan: 'Jour',
+    suhoorEnds: 'Fin Suhoor',
+    iftarTime: 'Heure Iftar',
+    tarawihTime: 'Tarawih',
+    ramadanNotifications: 'Notifications Ramadan',
+    suhoorReminder: 'Rappel Suhoor',
+    iftarReminder: 'Rappel Iftar',
+    tarawihReminder: 'Rappel Tarawih',
+    beforeFajr: 'Avant Fajr',
+    beforeMaghrib: 'Avant Maghrib',
+    beforeTarawih: 'Avant Tarawih',
+    atTime: 'À l\'heure',
+    ramadanMubarakNote: 'Ramadan Mubarak ! Vous recevrez les rappels aux heures choisies',
   },
 
   ar: {
@@ -941,6 +960,25 @@ export const translations = {
     later: 'لاحقاً',
     refuse: 'رفض',
     allow: 'موافق',
+
+    // Ramadan
+    ramadanMubarak: 'رمضان مبارك',
+    suhoor: 'السحور',
+    iftar: 'الإفطار',
+    tarawih: 'التراويح',
+    dayOfRamadan: 'اليوم',
+    suhoorEnds: 'نهاية السحور',
+    iftarTime: 'وقت الإفطار',
+    tarawihTime: 'التراويح',
+    ramadanNotifications: 'إشعارات رمضان',
+    suhoorReminder: 'تذكير السحور',
+    iftarReminder: 'تذكير الإفطار',
+    tarawihReminder: 'تذكير التراويح',
+    beforeFajr: 'قبل الفجر',
+    beforeMaghrib: 'قبل المغرب',
+    beforeTarawih: 'قبل التراويح',
+    atTime: 'في الوقت',
+    ramadanMubarakNote: 'رمضان مبارك! ستتلقى التذكيرات في الأوقات المختارة',
   },
 };
 

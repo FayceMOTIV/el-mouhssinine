@@ -80,22 +80,54 @@ service cloud.firestore {
                      (resource.data.uid == request.auth.uid) ||
                      (request.auth.token.email != null && resource.data.email == request.auth.token.email) ||
                      isInscripteur();
-      // Création: utilisateur authentifié (inscription depuis l'app)
-      allow create: if request.auth != null;
-      // Update: admin OU propriétaire OU inscripteur
+      // Création: utilisateur authentifié avec validation des données
+      allow create: if request.auth != null &&
+        // Champs obligatoires présents
+        request.resource.data.keys().hasAll(['nom', 'prenom', 'email']) &&
+        // Validation nom
+        request.resource.data.nom is string &&
+        request.resource.data.nom.size() > 0 &&
+        request.resource.data.nom.size() <= 100 &&
+        // Validation prenom
+        request.resource.data.prenom is string &&
+        request.resource.data.prenom.size() > 0 &&
+        request.resource.data.prenom.size() <= 100 &&
+        // Validation email basique
+        request.resource.data.email is string &&
+        request.resource.data.email.matches('.*@.*\\..*') &&
+        // SÉCURITÉ: Empêcher création avec status 'actif' (doit passer par paiement)
+        (!('status' in request.resource.data) ||
+         request.resource.data.status in ['en_attente_paiement', 'en_attente_signature', 'pending']) &&
+        (!('statut' in request.resource.data) ||
+         request.resource.data.statut in ['en_attente_paiement', 'en_attente_signature', 'pending']);
+      // Update: admin peut tout modifier, membres ne peuvent PAS modifier les champs critiques
       allow update: if isAdmin() ||
-                       request.auth.uid == memberId ||
-                       (resource.data.uid == request.auth.uid) ||
-                       (request.auth.token.email != null && resource.data.email == request.auth.token.email) ||
-                       isInscripteur();
+                       ((request.auth.uid == memberId ||
+                         resource.data.uid == request.auth.uid ||
+                         (request.auth.token.email != null && resource.data.email == request.auth.token.email) ||
+                         isInscripteur()) &&
+                        // SÉCURITÉ: Empêcher modification des champs critiques par le membre
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                          'status', 'statut', 'numeroAdherent', 'memberId', 'paiementId',
+                          'montantCotisation', 'modePaiement', 'inscritPar', 'datePaiement',
+                          'stripePaymentId', 'cotisation'
+                        ]));
       // Suppression: admin uniquement
       allow delete: if isAdmin();
     }
 
-    // Dons - Lecture admin, création authentifiée
+    // Dons - Lecture admin, création authentifiée avec validation montant ET userId
     match /donations/{docId} {
       allow read: if isAdmin();
-      allow create: if isAuthenticated();
+      // Création avec validation du montant (min 1€, max 100000€) et userId
+      allow create: if isAuthenticated() &&
+        request.resource.data.amount is number &&
+        request.resource.data.amount >= 1 &&
+        request.resource.data.amount <= 100000 &&
+        // SÉCURITÉ: userId doit correspondre à l'utilisateur authentifié (sauf don anonyme)
+        (!('userId' in request.resource.data) ||
+         request.resource.data.userId == null ||
+         request.resource.data.userId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
@@ -117,8 +149,20 @@ service cloud.firestore {
       // Lecture: UNIQUEMENT admin OU propriétaire du message
       allow read: if isAdmin() || (isAuthenticated() && isMessageOwner());
 
-      // Création: utilisateur authentifié (et odUserId doit correspondre à l'auth)
-      allow create: if isAuthenticated() && request.resource.data.odUserId == request.auth.uid;
+      // Création: admin (peut créer pour n'importe quel membre) OU utilisateur authentifié avec validation
+      allow create: if isAdmin() ||
+        (isAuthenticated() &&
+         request.resource.data.odUserId == request.auth.uid &&
+         // Champs obligatoires
+         request.resource.data.keys().hasAll(['sujet', 'contenu', 'nom', 'email']) &&
+         // Validation sujet (max 200 caractères)
+         request.resource.data.sujet is string &&
+         request.resource.data.sujet.size() > 0 &&
+         request.resource.data.sujet.size() <= 200 &&
+         // Validation contenu (max 5000 caractères)
+         request.resource.data.contenu is string &&
+         request.resource.data.contenu.size() > 0 &&
+         request.resource.data.contenu.size() <= 5000);
 
       // Mise à jour: admin (répondre, changer statut) OU propriétaire (ajouter réponse, soft delete)
       allow update: if isAdmin() || (isAuthenticated() && isMessageOwner());
@@ -141,7 +185,11 @@ service cloud.firestore {
     // Payments (historique des paiements cotisations et dons) - Admin lecture/écriture, app création
     match /payments/{paymentId} {
       allow read: if isAdmin();
-      allow create: if request.auth != null;  // Utilisateur authentifié (paiements)
+      // Création avec validation du montant (min 1€, max 10000€ pour cotisations)
+      allow create: if request.auth != null &&
+        request.resource.data.montant is number &&
+        request.resource.data.montant >= 1 &&
+        request.resource.data.montant <= 10000;
       allow update, delete: if isAdmin();
     }
 
@@ -173,6 +221,11 @@ service cloud.firestore {
 
     // Compteurs (numéros reçus fiscaux) - Aucun accès client
     match /counters/{docId} {
+      allow read, write: if false;
+    }
+
+    // Rate limits (pour le rate limiting des Cloud Functions) - Aucun accès client
+    match /rate_limits/{docId} {
       allow read, write: if false;
     }
 

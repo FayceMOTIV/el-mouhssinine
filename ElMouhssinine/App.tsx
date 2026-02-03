@@ -11,6 +11,7 @@ import { initializeFCM, setupForegroundHandler, clearBadgeCount } from './src/se
 import { subscribeToGeneralSettings, MaintenanceSettings } from './src/services/firebase';
 import { initBackgroundLocation } from './src/services/backgroundLocation';
 import { addNotificationToHistory, detectNotificationType } from './src/services/notificationHistory';
+import { initSentry, captureError } from './src/services/sentry';
 
 // Clé publique Stripe (à remplacer par la vraie clé)
 // Pour obtenir la clé: https://dashboard.stripe.com/apikeys
@@ -33,7 +34,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('App crash:', error, errorInfo);
+    // Log uniquement en dev pour éviter d'exposer des infos sensibles en prod
+    if (__DEV__) {
+      console.error('App crash:', error, errorInfo);
+    }
+    // Envoyer à Sentry en production
+    captureError(error, { componentStack: errorInfo.componentStack });
   }
 
   render() {
@@ -41,8 +47,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
       return (
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>Erreur</Text>
-          <Text style={styles.errorMessage}>{this.state.error?.message}</Text>
-          <Text style={styles.errorStack}>{this.state.error?.stack?.slice(0, 500)}</Text>
+          <Text style={styles.errorMessage}>
+            {__DEV__ ? this.state.error?.message : "Une erreur est survenue. Veuillez redémarrer l'application."}
+          </Text>
+          {__DEV__ && (
+            <Text style={styles.errorStack}>{this.state.error?.stack?.slice(0, 500)}</Text>
+          )}
         </View>
       );
     }
@@ -60,6 +70,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const prepare = async () => {
+      // Initialiser Sentry pour le monitoring des erreurs (production uniquement)
+      initSentry();
+
       // Initialiser TTS au démarrage
       initTTS();
 
@@ -95,7 +108,7 @@ const App: React.FC = () => {
         if (title && body) {
           const notifType = detectNotificationType(title, body);
           await addNotificationToHistory(title, body, notifType);
-          console.log('[App] Notification locale ajoutée à l\'historique:', title);
+          if (__DEV__) console.log('[App] Notification locale ajoutée à l\'historique:', title);
         }
       }
     });

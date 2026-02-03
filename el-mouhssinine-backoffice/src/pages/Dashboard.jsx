@@ -183,6 +183,9 @@ export default function Dashboard() {
     // Prayer Times
     getPrayerTimes().then(data => {
       setPrayerTimes(data)
+    }).catch(err => {
+      if (import.meta.env.DEV) console.error('Erreur chargement horaires:', err)
+      // Continuer sans horaires si erreur
     })
 
     setLoading(false)

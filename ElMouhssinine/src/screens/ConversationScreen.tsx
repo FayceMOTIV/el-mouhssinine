@@ -80,10 +80,11 @@ const ConversationScreen = () => {
           result.error || 'Une erreur est survenue'
         );
       }
-    } catch (error: any) {
+    } catch (error) {
+      const err = error as Error;
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
-        error.message || 'Une erreur est survenue'
+        err?.message || 'Une erreur est survenue'
       );
     } finally {
       setSending(false);

@@ -1,5 +1,7 @@
 // Service API pour le Coran - Al-Quran Cloud API
 
+import { logger } from '../utils';
+
 const BASE_URL = 'https://api.alquran.cloud/v1';
 
 export interface Surah {
@@ -91,7 +93,7 @@ export const QuranAPI = {
       }
       throw new Error(json.status);
     } catch (error) {
-      console.error('Erreur getAllSurahs:', error);
+      logger.error('Erreur getAllSurahs:', error);
       throw error;
     }
   },
@@ -111,7 +113,7 @@ export const QuranAPI = {
       }
       throw new Error(json.status);
     } catch (error) {
-      console.error('Erreur getSurah:', error);
+      logger.error('Erreur getSurah:', error);
       throw error;
     }
   },
@@ -131,7 +133,7 @@ export const QuranAPI = {
       }
       throw new Error(json.status);
     } catch (error) {
-      console.error('Erreur getSurahWithTranslation:', error);
+      logger.error('Erreur getSurahWithTranslation:', error);
       throw error;
     }
   },
@@ -161,7 +163,7 @@ export const QuranAPI = {
       }
       throw new Error(json.status);
     } catch (error) {
-      console.error('Erreur getSurahFull:', error);
+      logger.error('Erreur getSurahFull:', error);
       throw error;
     }
   },
@@ -181,7 +183,7 @@ export const QuranAPI = {
       }
       throw new Error(json.status);
     } catch (error) {
-      console.error('Erreur getSurahAudio:', error);
+      logger.error('Erreur getSurahAudio:', error);
       throw error;
     }
   },
@@ -197,7 +199,7 @@ export const QuranAPI = {
       }
       throw new Error(json.status);
     } catch (error) {
-      console.error('Erreur search:', error);
+      logger.error('Erreur search:', error);
       throw error;
     }
   },
@@ -218,7 +220,7 @@ export const QuranAPI = {
       }
       throw new Error(json.status);
     } catch (error) {
-      console.error('Erreur getAyah:', error);
+      logger.error('Erreur getAyah:', error);
       throw error;
     }
   },
@@ -233,7 +235,7 @@ export const QuranAPI = {
       }
       throw new Error(json.status);
     } catch (error) {
-      console.error('Erreur getPage:', error);
+      logger.error('Erreur getPage:', error);
       throw error;
     }
   },
@@ -248,7 +250,7 @@ export const QuranAPI = {
       }
       throw new Error(json.status);
     } catch (error) {
-      console.error('Erreur getJuz:', error);
+      logger.error('Erreur getJuz:', error);
       throw error;
     }
   },

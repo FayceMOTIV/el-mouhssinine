@@ -4,6 +4,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils';
 
 // ==================== TYPES ====================
 
@@ -51,7 +52,7 @@ export const getNotificationHistory = async (): Promise<StoredNotification[]> =>
 
     return cleaned;
   } catch (error) {
-    console.error('[NotifHistory] Erreur lecture:', error);
+    logger.error('[NotifHistory] Erreur lecture:', error);
     return [];
   }
 };
@@ -84,9 +85,9 @@ export const addNotificationToHistory = async (
     const limited = history.slice(0, 50);
 
     await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(limited));
-    console.log('[NotifHistory] Notification ajoutée:', title);
+    logger.log('[NotifHistory] Notification ajoutée:', title);
   } catch (error) {
-    console.error('[NotifHistory] Erreur ajout:', error);
+    logger.error('[NotifHistory] Erreur ajout:', error);
   }
 };
 
@@ -101,7 +102,7 @@ export const markNotificationAsRead = async (notificationId: string): Promise<vo
     );
     await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(updated));
   } catch (error) {
-    console.error('[NotifHistory] Erreur markAsRead:', error);
+    logger.error('[NotifHistory] Erreur markAsRead:', error);
   }
 };
 
@@ -113,9 +114,9 @@ export const markAllNotificationsAsRead = async (): Promise<void> => {
     const history = await getNotificationHistory();
     const updated = history.map(n => ({ ...n, read: true }));
     await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(updated));
-    console.log('[NotifHistory] Toutes les notifications marquées comme lues');
+    logger.log('[NotifHistory] Toutes les notifications marquées comme lues');
   } catch (error) {
-    console.error('[NotifHistory] Erreur markAllAsRead:', error);
+    logger.error('[NotifHistory] Erreur markAllAsRead:', error);
   }
 };
 
@@ -127,7 +128,7 @@ export const getUnreadCount = async (): Promise<number> => {
     const history = await getNotificationHistory();
     return history.filter(n => !n.read).length;
   } catch (error) {
-    console.error('[NotifHistory] Erreur getUnreadCount:', error);
+    logger.error('[NotifHistory] Erreur getUnreadCount:', error);
     return 0;
   }
 };
@@ -138,9 +139,9 @@ export const getUnreadCount = async (): Promise<number> => {
 export const clearNotificationHistory = async (): Promise<void> => {
   try {
     await AsyncStorage.removeItem(NOTIFICATION_HISTORY_KEY);
-    console.log('[NotifHistory] Historique effacé');
+    logger.log('[NotifHistory] Historique effacé');
   } catch (error) {
-    console.error('[NotifHistory] Erreur clearHistory:', error);
+    logger.error('[NotifHistory] Erreur clearHistory:', error);
   }
 };
 

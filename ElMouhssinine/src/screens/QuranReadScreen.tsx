@@ -262,7 +262,10 @@ const QuranReadScreen: React.FC = () => {
     setTextFontSize(prev => Math.max(prev - 2, MIN_FONT_SIZE));
   };
 
-  // Charger une page
+  // Clé de cache pour une page
+  const getCacheKey = (page: number) => `@quran_page_${page}`;
+
+  // Charger une page (avec cache offline)
   const loadPage = useCallback(async (page: number) => {
     if (!isMountedRef.current) return;
 
@@ -270,6 +273,29 @@ const QuranReadScreen: React.FC = () => {
     setError(null);
 
     try {
+      // 1. Vérifier le cache local d'abord
+      const cacheKey = getCacheKey(page);
+      const cached = await AsyncStorage.getItem(cacheKey);
+
+      if (cached) {
+        try {
+          const { arabic, french } = JSON.parse(cached);
+          // Valider que le cache contient des données valides
+          if (Array.isArray(arabic) && arabic.length > 0 &&
+              Array.isArray(french) && french.length > 0) {
+            if (!isMountedRef.current) return;
+            setArabicAyahs(arabic);
+            setFrenchAyahs(french);
+            setLoading(false);
+            return; // Cache hit, pas besoin de fetch
+          }
+        } catch {
+          // Cache corrompu, continuer avec le fetch
+          await AsyncStorage.removeItem(cacheKey);
+        }
+      }
+
+      // 2. Pas de cache valide, fetch depuis l'API
       const [arResponse, frResponse] = await Promise.all([
         fetch(`${QURAN_API}/page/${page}/ar.alafasy`),
         fetch(`${QURAN_API}/page/${page}/fr.hamidullah`),
@@ -289,12 +315,20 @@ const QuranReadScreen: React.FC = () => {
       if (arData.data?.ayahs && frData.data?.ayahs) {
         setArabicAyahs(arData.data.ayahs);
         setFrenchAyahs(frData.data.ayahs);
+
+        // 3. Sauvegarder dans le cache pour utilisation offline
+        const cacheData = {
+          arabic: arData.data.ayahs,
+          french: frData.data.ayahs,
+          timestamp: Date.now(),
+        };
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
       } else {
         throw new Error('Données invalides');
       }
     } catch (e) {
       if (!isMountedRef.current) return;
-      console.error('Erreur chargement page:', e);
+      if (__DEV__) console.error('Erreur chargement page:', e);
       setError('Impossible de charger cette page. Vérifiez votre connexion.');
     } finally {
       if (isMountedRef.current) {
@@ -320,7 +354,9 @@ const QuranReadScreen: React.FC = () => {
     }
   }, [currentPage]);
 
-  // Gestion des swipes
+  // Gestion des swipes (style Mushaf / livre arabe)
+  // Dans un Mushaf, on tourne les pages de droite à gauche pour avancer
+  // Swipe gauche = page suivante, Swipe droite = page précédente
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -331,20 +367,20 @@ const QuranReadScreen: React.FC = () => {
         translateX.setValue(gestureState.dx);
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx > 100 && currentPage < TOTAL_PAGES) {
-          // Swipe droite = page suivante (lecture arabe)
+        if (gestureState.dx < -100 && currentPage < TOTAL_PAGES) {
+          // Swipe gauche = page suivante (comme tourner une page de Mushaf)
           Animated.timing(translateX, {
-            toValue: 300,
+            toValue: -300,
             duration: 200,
             useNativeDriver: true,
           }).start(() => {
             setCurrentPage(prev => prev + 1);
             translateX.setValue(0);
           });
-        } else if (gestureState.dx < -100 && currentPage > 1) {
-          // Swipe gauche = page précédente
+        } else if (gestureState.dx > 100 && currentPage > 1) {
+          // Swipe droite = page précédente (retour en arrière)
           Animated.timing(translateX, {
-            toValue: -300,
+            toValue: 300,
             duration: 200,
             useNativeDriver: true,
           }).start(() => {

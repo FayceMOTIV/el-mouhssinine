@@ -13,6 +13,48 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "members",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "popups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "actif",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "priorite",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

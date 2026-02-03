@@ -70,10 +70,11 @@ const MessagesScreen = () => {
                   result.error || 'Une erreur est survenue'
                 );
               }
-            } catch (error: any) {
+            } catch (error) {
+              const err = error as Error;
               Alert.alert(
                 language === 'ar' ? 'خطأ' : 'Erreur',
-                error.message || 'Une erreur est survenue'
+                err?.message || 'Une erreur est survenue'
               );
             } finally {
               setDeleting(null);
@@ -169,8 +170,9 @@ const MessagesScreen = () => {
         language === 'ar' ? 'تم الإرسال' : 'Message envoyé',
         language === 'ar' ? 'سنرد عليك قريبا إن شاء الله' : 'Nous vous répondrons bientôt insha\'Allah'
       );
-    } catch (error: any) {
-      const errorMsg = error.message || 'Erreur';
+    } catch (error) {
+      const err = error as Error;
+      const errorMsg = err?.message || 'Erreur';
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
         errorMsg.includes('limite')

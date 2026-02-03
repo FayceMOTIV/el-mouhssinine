@@ -4,11 +4,12 @@
 
 import { AppRegistry, LogBox } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
-import notifee from '@notifee/react-native';
+import notifee, { EventType } from '@notifee/react-native';
 import TrackPlayer from 'react-native-track-player';
 import BackgroundFetch from 'react-native-background-fetch';
 import App from './App';
 import { name as appName } from './app.json';
+import { addNotificationToHistory, detectNotificationType } from './src/services/notificationHistory';
 
 // IMPORTANT: Enregistrer le service de lecture audio (Coran)
 TrackPlayer.registerPlaybackService(() => require('./service'));
@@ -29,7 +30,21 @@ LogBox.ignoreLogs([
   'Require cycle',
 ]);
 
-// IMPORTANT: Gestionnaire de notifications en arrière-plan
+// IMPORTANT: Gestionnaire de notifications LOCALES en arrière-plan (notifee)
+// Capture les notifications de prière, boost, coran, ramadan quand l'app est en background/killed
+notifee.onBackgroundEvent(async ({ type, detail }) => {
+  // Quand une notification locale est délivrée en background
+  if (type === EventType.DELIVERED && detail.notification) {
+    const { title, body } = detail.notification;
+    if (title && body) {
+      const notifType = detectNotificationType(title, body);
+      await addNotificationToHistory(title, body, notifType);
+      console.log('[Background] Notification locale ajoutée à l\'historique:', title);
+    }
+  }
+});
+
+// IMPORTANT: Gestionnaire de notifications FCM en arrière-plan
 // Doit être enregistré AVANT AppRegistry.registerComponent
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   console.log('🔔 [FCM] Background message received:', remoteMessage);
@@ -59,6 +74,10 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
         sound: 'default',
       },
     });
+
+    // Ajouter à l'historique des notifications
+    const notifType = detectNotificationType(notification.title || '', notification.body || '');
+    await addNotificationToHistory(notification.title || 'Notification', notification.body || '', notifType);
   }
 });
 

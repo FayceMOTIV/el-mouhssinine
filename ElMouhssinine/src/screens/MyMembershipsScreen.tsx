@@ -122,6 +122,7 @@ const MyMembershipsScreen = () => {
     const config: Record<string, { label: string; labelAr: string; color: string; bg: string }> = {
       actif: { label: 'Actif', labelAr: 'نشط', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
       active: { label: 'Actif', labelAr: 'نشط', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+      en_attente_validation: { label: 'En attente validation', labelAr: 'في انتظار التحقق', color: '#8b5cf6', bg: 'rgba(139,92,246,0.15)' },
       en_attente_signature: { label: 'En attente signature', labelAr: 'في انتظار التوقيع', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
       en_attente_paiement: { label: 'En attente paiement', labelAr: 'في انتظار الدفع', color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
       pending: { label: 'En attente', labelAr: 'في الانتظار', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
@@ -130,7 +131,7 @@ const MyMembershipsScreen = () => {
       aucun: { label: 'Aucun', labelAr: 'لا يوجد', color: '#9ca3af', bg: 'rgba(156,163,175,0.15)' },
     };
 
-    const statusConfig = config[status] || config.en_attente_signature;
+    const statusConfig = config[status] || config.en_attente_validation;
 
     return (
       <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
@@ -339,6 +340,7 @@ const MyMembershipsScreen = () => {
                   )}
                   {/* Bouton résilier pour tout abonnement actif */}
                   {(myMembership.status === 'actif' || myMembership.status === 'active' ||
+                    myMembership.status === 'en_attente_validation' ||
                     myMembership.status === 'en_attente_signature') && (
                     <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelSubscription}>
                       <Text style={styles.cancelBtnText}>
@@ -416,6 +418,21 @@ const MyMembershipsScreen = () => {
                     ⚠️ {language === 'ar'
                       ? 'يرجى ذكر المرجع في موضوع التحويل'
                       : 'Merci d\'indiquer la référence dans le motif du virement'}
+                  </Text>
+                </View>
+              )}
+
+              {/* Banner en attente de validation bureau */}
+              {myMembership.status === 'en_attente_validation' && (
+                <View style={styles.validationBanner}>
+                  <Text style={styles.validationBannerIcon}>✅</Text>
+                  <Text style={styles.validationBannerTitle}>
+                    {language === 'ar' ? 'تم استلام الدفعة' : 'Paiement reçu'}
+                  </Text>
+                  <Text style={styles.validationBannerText}>
+                    {language === 'ar'
+                      ? 'عضويتك في انتظار التحقق من قبل المكتب. سيتم إعلامك بمجرد التحقق منها.'
+                      : 'Votre adhésion est en attente de validation par le bureau. Vous serez notifié dès qu\'elle sera validée.'}
                   </Text>
                 </View>
               )}
@@ -815,6 +832,33 @@ const styles = StyleSheet.create({
     color: '#f59e0b',
     marginTop: spacing.sm,
     fontStyle: 'italic',
+  },
+  // Validation banner styles
+  validationBanner: {
+    marginTop: spacing.lg,
+    backgroundColor: 'rgba(139,92,246,0.1)',
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.3)',
+    alignItems: 'center',
+  },
+  validationBannerIcon: {
+    fontSize: 40,
+    marginBottom: spacing.sm,
+  },
+  validationBannerTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: 'bold',
+    color: '#8b5cf6',
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  validationBannerText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   rtlText: {
     textAlign: 'right',

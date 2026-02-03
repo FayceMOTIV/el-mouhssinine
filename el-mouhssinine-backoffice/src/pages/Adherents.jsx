@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-toastify'
-import { Users, Plus, Pencil, Trash2, Search, Download, Mail, Phone, Eye, Calendar, MapPin, CreditCard, Settings2, CheckCircle2, XCircle, Clock, Banknote, Smartphone, Building2, FileText, AlertCircle, TrendingUp, UserCheck, UserX, PieChart, BarChart3 } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, Search, Download, Mail, Phone, Eye, Calendar, MapPin, CreditCard, Settings2, CheckCircle2, XCircle, Clock, Banknote, Smartphone, Building2, FileText, AlertCircle, TrendingUp, UserCheck, UserX, PieChart, BarChart3, MessageCircle, ShieldCheck, Link2 } from 'lucide-react'
 import {
   Card,
   Button,
@@ -22,11 +22,32 @@ import {
   deleteDocument,
   subscribeToPayments,
   getPaymentStats,
-  PaymentType
+  PaymentType,
+  subscribeToMessages
 } from '../services/firebase'
 import { CotisationType, CotisationStatut } from '../types'
 import { format, addMonths, addYears, isPast } from 'date-fns'
 import { fr } from 'date-fns/locale'
+
+// Helper: Détermine le statut de cotisation d'un membre (déplacé hors composant pour éviter re-renders)
+const getCotisationStatus = (membre) => {
+  if (membre.status === 'en_attente_validation') return CotisationStatut.EN_ATTENTE_VALIDATION
+  if (membre.status === 'en_attente_signature') return CotisationStatut.EN_ATTENTE_SIGNATURE
+  if (membre.status === 'en_attente_paiement') return CotisationStatut.EN_ATTENTE_PAIEMENT
+  if (membre.status === 'actif') return CotisationStatut.ACTIF
+  if (!membre.cotisation?.dateFin) return CotisationStatut.AUCUN
+  const dateFin = membre.cotisation.dateFin?.toDate?.() || new Date(membre.cotisation.dateFin)
+  return isPast(dateFin) ? CotisationStatut.EXPIRE : CotisationStatut.ACTIF
+}
+
+// Helper: Obtient le nom du payeur
+const getPayeurName = (membre) => {
+  if (!membre.inscritPar) return 'Lui-même'
+  if (typeof membre.inscritPar === 'object') {
+    return `${membre.inscritPar.prenom || ''} ${membre.inscritPar.nom || ''}`.trim() || 'Tiers'
+  }
+  return 'Payé par tiers'
+}
 
 // Modes de paiement disponibles
 const PAYMENT_MODES = {
@@ -77,6 +98,7 @@ export default function Adherents() {
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, membre: null })
   const [cotisationModal, setCotisationModal] = useState({ open: false, membre: null })
+  const [messageModal, setMessageModal] = useState({ open: false, membre: null, message: '' })
   const [editingMembre, setEditingMembre] = useState(null)
   const [formData, setFormData] = useState(defaultMembre)
   const [saving, setSaving] = useState(false)
@@ -85,11 +107,29 @@ export default function Adherents() {
     month: { total: 0, count: 0 },
     year: { total: 0, count: 0 }
   })
+  // Tracking des membres contactés par la mosquée
+  const [membresContactes, setMembresContactes] = useState(new Set())
 
   useEffect(() => {
     const unsubscribe = subscribeToMembres((data) => {
       setMembres(data)
       setLoading(false)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  // Récupérer les membres qui ont reçu un message de la mosquée
+  useEffect(() => {
+    const unsubscribe = subscribeToMessages((messages) => {
+      const contactedIds = new Set()
+      messages.forEach(msg => {
+        // Messages créés par la mosquée = membre a été contacté
+        if (msg.createdBy === 'mosquee' && msg.odUserId) {
+          contactedIds.add(msg.odUserId)
+        }
+      })
+      console.log('[Adherents] Messages mosquée trouvés:', contactedIds.size, 'membres contactés:', [...contactedIds])
+      setMembresContactes(contactedIds)
     })
     return () => unsubscribe()
   }, [])
@@ -102,15 +142,7 @@ export default function Adherents() {
     return () => unsubscribe()
   }, [])
 
-  // Fonction pour déterminer le statut de cotisation (définie avant useMemo qui l'utilise)
-  const getCotisationStatus = (membre) => {
-    if (membre.status === 'en_attente_signature') return CotisationStatut.EN_ATTENTE_SIGNATURE
-    if (membre.status === 'en_attente_paiement') return CotisationStatut.EN_ATTENTE_PAIEMENT
-    if (membre.status === 'actif') return CotisationStatut.ACTIF
-    if (!membre.cotisation?.dateFin) return CotisationStatut.AUCUN
-    const dateFin = membre.cotisation.dateFin?.toDate?.() || new Date(membre.cotisation.dateFin)
-    return isPast(dateFin) ? CotisationStatut.EXPIRE : CotisationStatut.ACTIF
-  }
+  // Note: getCotisationStatus est défini au niveau module pour éviter les re-renders
 
   // Calcul des statistiques détaillées
   const stats = useMemo(() => {
@@ -128,6 +160,7 @@ export default function Adherents() {
 
     // Statut cotisation
     const actifs = membres.filter(m => getCotisationStatus(m) === CotisationStatut.ACTIF).length
+    const attenteValidation = membres.filter(m => getCotisationStatus(m) === CotisationStatut.EN_ATTENTE_VALIDATION).length
     const attenteSignature = membres.filter(m => getCotisationStatus(m) === CotisationStatut.EN_ATTENTE_SIGNATURE).length
     const attentePaiement = membres.filter(m => getCotisationStatus(m) === CotisationStatut.EN_ATTENTE_PAIEMENT).length
     const expires = membres.filter(m => getCotisationStatus(m) === CotisationStatut.EXPIRE).length
@@ -160,6 +193,7 @@ export default function Adherents() {
       nonPayes,
       payesPercent: total > 0 ? Math.round((payes / total) * 100) : 0,
       actifs,
+      attenteValidation,
       attenteSignature,
       attentePaiement,
       expires,
@@ -180,13 +214,7 @@ export default function Adherents() {
     }
   }, [membres, cotisationModal.open, cotisationModal.membre?.id])
 
-  const getPayeurName = (membre) => {
-    if (!membre.inscritPar) return 'Lui-même'
-    if (typeof membre.inscritPar === 'object') {
-      return `${membre.inscritPar.prenom || ''} ${membre.inscritPar.nom || ''}`.trim() || 'Tiers'
-    }
-    return 'Payé par tiers'
-  }
+  // Note: getPayeurName est défini au niveau module pour éviter les re-renders
 
   useEffect(() => {
     let filtered = [...membres]
@@ -216,7 +244,7 @@ export default function Adherents() {
     }
 
     setFilteredMembres(filtered)
-  }, [membres, searchQuery, statusFilter, payeurFilter, getCotisationStatus])
+  }, [membres, searchQuery, statusFilter, payeurFilter]) // getCotisationStatus est maintenant module-scoped
 
   // ========== GESTION COTISATION (MODAL UNIQUE) ==========
   const handleCotisationUpdate = async (updates) => {
@@ -292,6 +320,68 @@ export default function Adherents() {
 
   const handlePaymentModeChange = async (mode) => {
     await handleCotisationUpdate({ modePaiement: mode })
+  }
+
+  // ========== VALIDATION BUREAU ==========
+  const handleValidateAdhesion = async () => {
+    const membre = cotisationModal.membre
+    if (!membre) return
+
+    setSaving(true)
+    try {
+      await updateDocument('members', membre.id, {
+        status: 'actif',
+        validatedAt: new Date(),
+        validatedBy: 'bureau'
+      })
+      toast.success(`Adhésion de ${membre.prenom} ${membre.nom} validée !`)
+    } catch (err) {
+      console.error('Error validating adhesion:', err)
+      toast.error('Erreur lors de la validation')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Récupérer les membres liés (même paiementId)
+  const getLinkedMembers = (membre) => {
+    if (!membre?.paiementId) return []
+    return membres.filter(m =>
+      m.paiementId === membre.paiementId && m.id !== membre.id
+    )
+  }
+
+  // ========== MESSAGE MEMBRE ==========
+  const handleOpenMessageModal = (membre) => {
+    const defaultMessage = `Bonjour ${membre.prenom},\n\nNous vous invitons à venir au bureau de la mosquée pour finaliser votre adhésion.\n\nCordialement,\nLe Bureau`
+    setMessageModal({ open: true, membre, message: defaultMessage })
+  }
+
+  const handleSendMessage = async () => {
+    if (!messageModal.membre || !messageModal.message.trim()) return
+
+    setSaving(true)
+    try {
+      // Créer un message dans la collection messages
+      await addDocument('messages', {
+        sujet: 'Votre adhésion',
+        message: messageModal.message,
+        odUserId: messageModal.membre.uid || messageModal.membre.id,
+        nomComplet: `${messageModal.membre.prenom} ${messageModal.membre.nom}`,
+        email: messageModal.membre.email || '',
+        telephone: messageModal.membre.telephone || '',
+        status: 'non_lu',
+        createdBy: 'mosquee',
+        reponses: []
+      })
+      toast.success('Message envoyé avec succès')
+      setMessageModal({ open: false, membre: null, message: '' })
+    } catch (err) {
+      console.error('Error sending message:', err)
+      toast.error('Erreur lors de l\'envoi du message')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ========== MODAL MEMBRE (INFOS PERSO) ==========
@@ -381,6 +471,7 @@ export default function Adherents() {
   const getStatusLabel = (status) => {
     switch (status) {
       case CotisationStatut.ACTIF: return 'Actif'
+      case CotisationStatut.EN_ATTENTE_VALIDATION: return 'Attente validation'
       case CotisationStatut.EN_ATTENTE_SIGNATURE: return 'Attente signature'
       case CotisationStatut.EN_ATTENTE_PAIEMENT: return 'Attente paiement'
       case CotisationStatut.EXPIRE: return 'Expiré'
@@ -436,6 +527,7 @@ export default function Adherents() {
         const status = getCotisationStatus(row)
         const config = {
           [CotisationStatut.ACTIF]: { bg: 'bg-green-500/20', text: 'text-green-400', icon: CheckCircle2 },
+          [CotisationStatut.EN_ATTENTE_VALIDATION]: { bg: 'bg-violet-500/20', text: 'text-violet-400', icon: ShieldCheck },
           [CotisationStatut.EN_ATTENTE_SIGNATURE]: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
           [CotisationStatut.EN_ATTENTE_PAIEMENT]: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CreditCard },
           [CotisationStatut.EXPIRE]: { bg: 'bg-red-500/20', text: 'text-red-400', icon: XCircle },
@@ -470,7 +562,14 @@ export default function Adherents() {
       key: 'actions',
       label: 'Actions',
       render: (row) => (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          {/* Indicateur message envoyé */}
+          {membresContactes.has(row.uid || row.id) && (
+            <span className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 rounded-lg text-blue-400 text-xs" title="Message envoyé">
+              <MessageCircle className="w-3 h-3" />
+              Contacté
+            </span>
+          )}
           <button
             onClick={() => setCotisationModal({ open: true, membre: row })}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary/20 hover:bg-secondary/30 rounded-lg transition-colors text-secondary text-sm font-medium"
@@ -508,7 +607,7 @@ export default function Adherents() {
       {stats && (
         <>
           {/* Ligne 1 : Stats générales */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
             <Card>
               <div className="text-center">
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-secondary/20 flex items-center justify-center">
@@ -525,6 +624,15 @@ export default function Adherents() {
                 </div>
                 <p className="text-white/50 text-sm">Actifs</p>
                 <p className="text-3xl font-bold text-green-400">{stats.actifs}</p>
+              </div>
+            </Card>
+            <Card>
+              <div className="text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-violet-500/20 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-violet-400" />
+                </div>
+                <p className="text-white/50 text-sm">Att. validation</p>
+                <p className="text-3xl font-bold text-violet-400">{stats.attenteValidation}</p>
               </div>
             </Card>
             <Card>
@@ -598,11 +706,6 @@ export default function Adherents() {
                     />
                   </div>
                 </div>
-                {stats.genreNonRenseigne > 0 && (
-                  <p className="text-white/40 text-xs mt-2">
-                    {stats.genreNonRenseigne} membre(s) sans sexe renseigné
-                  </p>
-                )}
               </div>
             </Card>
 
@@ -706,6 +809,7 @@ export default function Adherents() {
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
             <option value="all">Tous les statuts</option>
             <option value={CotisationStatut.ACTIF}>Actif</option>
+            <option value={CotisationStatut.EN_ATTENTE_VALIDATION}>Attente validation</option>
             <option value={CotisationStatut.EN_ATTENTE_SIGNATURE}>Attente signature</option>
             <option value={CotisationStatut.EN_ATTENTE_PAIEMENT}>Attente paiement</option>
             <option value={CotisationStatut.EXPIRE}>Expiré</option>
@@ -737,6 +841,8 @@ export default function Adherents() {
           const isPaid = m.aPaye || m.datePaiement
           const isSigned = m.aSigne
           const status = getCotisationStatus(m)
+          const linkedMembers = getLinkedMembers(m)
+          const isAwaitingValidation = status === CotisationStatut.EN_ATTENTE_VALIDATION
 
           return (
             <div className="space-y-6">
@@ -748,11 +854,23 @@ export default function Adherents() {
                   </span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-semibold text-white">{m.prenom} {m.nom}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-semibold text-white">{m.prenom} {m.nom}</h3>
+                    {membresContactes.has(m.uid || m.id) && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-500/20 rounded text-blue-400 text-xs">
+                        <MessageCircle className="w-3 h-3" />
+                        Déjà contacté
+                      </span>
+                    )}
+                  </div>
                   <p className="text-white/50">{m.email || m.telephone}</p>
+                  {m.telephone && m.email && (
+                    <p className="text-white/40 text-sm">{m.telephone}</p>
+                  )}
                 </div>
                 <div className={`px-4 py-2 rounded-xl text-sm font-semibold ${
                   status === CotisationStatut.ACTIF ? 'bg-green-500/20 text-green-400' :
+                  status === CotisationStatut.EN_ATTENTE_VALIDATION ? 'bg-violet-500/20 text-violet-400' :
                   status === CotisationStatut.EN_ATTENTE_SIGNATURE ? 'bg-amber-500/20 text-amber-400' :
                   status === CotisationStatut.EN_ATTENTE_PAIEMENT ? 'bg-blue-500/20 text-blue-400' :
                   status === CotisationStatut.EXPIRE ? 'bg-red-500/20 text-red-400' :
@@ -761,6 +879,37 @@ export default function Adherents() {
                   {getStatusLabel(status)}
                 </div>
               </div>
+
+              {/* ===== ALERTE VALIDATION BUREAU ===== */}
+              {isAwaitingValidation && (
+                <div className="p-4 bg-violet-500/10 border border-violet-500/30 rounded-xl">
+                  <div className="flex items-center gap-3 mb-3">
+                    <ShieldCheck className="w-6 h-6 text-violet-400" />
+                    <div>
+                      <p className="text-violet-400 font-semibold">En attente de validation</p>
+                      <p className="text-white/60 text-sm">Ce membre a payé sa cotisation. Validez son adhésion ou demandez-lui de passer au bureau.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={handleValidateAdhesion}
+                      disabled={saving}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-5 h-5" />
+                      Valider l'adhésion
+                    </button>
+                    <button
+                      onClick={() => handleOpenMessageModal(m)}
+                      disabled={saving}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      Envoyer un message
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Infos cotisation */}
               <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-xl">
@@ -909,41 +1058,147 @@ export default function Adherents() {
                 </div>
               </div>
 
-              {/* Récapitulatif du statut */}
-              <div className="p-4 bg-gradient-to-r from-secondary/10 to-primary/10 rounded-xl border border-secondary/20">
-                <p className="text-white/60 text-sm mb-2">Le statut est calculé automatiquement :</p>
-                <div className="flex items-center gap-4 text-sm">
-                  <span className={`flex items-center gap-1 ${isPaid ? 'text-green-400' : 'text-white/40'}`}>
-                    {isPaid ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                    Payé
-                  </span>
-                  <span className="text-white/20">+</span>
-                  <span className={`flex items-center gap-1 ${isSigned ? 'text-green-400' : 'text-white/40'}`}>
-                    {isSigned ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                    Signé
-                  </span>
-                  <span className="text-white/20">=</span>
-                  <span className={`font-semibold ${
-                    isPaid && isSigned ? 'text-green-400' :
-                    isPaid && !isSigned ? 'text-amber-400' :
-                    'text-blue-400'
-                  }`}>
-                    {isPaid && isSigned ? '✅ Actif' :
-                     isPaid && !isSigned ? '⏳ Attente signature' :
-                     '💳 Attente paiement'}
-                  </span>
+              {/* ===== MEMBRES LIÉS (même paiementId) ===== */}
+              {linkedMembers.length > 0 && (
+                <div className="space-y-4">
+                  <h4 className="text-white font-medium flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-secondary" />
+                    Membres liés ({linkedMembers.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {linkedMembers.map(linked => {
+                      const linkedStatus = getCotisationStatus(linked)
+                      return (
+                        <div
+                          key={linked.id}
+                          className="flex items-center justify-between p-3 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors"
+                          onClick={() => setCotisationModal({ open: true, membre: linked })}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                              <span className="text-white text-sm font-medium">
+                                {linked.prenom?.[0]}{linked.nom?.[0]}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-white font-medium">{linked.prenom} {linked.nom}</p>
+                              <p className="text-white/50 text-sm">{linked.telephone || linked.email}</p>
+                            </div>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            linkedStatus === CotisationStatut.ACTIF ? 'bg-green-500/20 text-green-400' :
+                            linkedStatus === CotisationStatut.EN_ATTENTE_VALIDATION ? 'bg-violet-500/20 text-violet-400' :
+                            linkedStatus === CotisationStatut.EN_ATTENTE_SIGNATURE ? 'bg-amber-500/20 text-amber-400' :
+                            linkedStatus === CotisationStatut.EN_ATTENTE_PAIEMENT ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-white/10 text-white/50'
+                          }`}>
+                            {getStatusLabel(linkedStatus)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-white/40 text-xs">Ces membres ont été inscrits avec le même paiement</p>
                 </div>
-              </div>
+              )}
 
-              {/* Bouton fermer */}
-              <div className="flex justify-end pt-4 border-t border-white/10">
-                <Button variant="ghost" onClick={() => setCotisationModal({ open: false, membre: null })}>
-                  Fermer
-                </Button>
+              {/* Récapitulatif du statut */}
+              {!isAwaitingValidation && (
+                <div className="p-4 bg-gradient-to-r from-secondary/10 to-primary/10 rounded-xl border border-secondary/20">
+                  <p className="text-white/60 text-sm mb-2">Le statut est calculé automatiquement :</p>
+                  <div className="flex items-center gap-4 text-sm">
+                    <span className={`flex items-center gap-1 ${isPaid ? 'text-green-400' : 'text-white/40'}`}>
+                      {isPaid ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                      Payé
+                    </span>
+                    <span className="text-white/20">+</span>
+                    <span className={`flex items-center gap-1 ${isSigned ? 'text-green-400' : 'text-white/40'}`}>
+                      {isSigned ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                      Signé
+                    </span>
+                    <span className="text-white/20">=</span>
+                    <span className={`font-semibold ${
+                      isPaid && isSigned ? 'text-green-400' :
+                      isPaid && !isSigned ? 'text-amber-400' :
+                      'text-blue-400'
+                    }`}>
+                      {isPaid && isSigned ? '✅ Actif' :
+                       isPaid && !isSigned ? '⏳ Attente signature' :
+                       '💳 Attente paiement'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Boutons action + fermer */}
+              <div className="flex justify-between pt-4 border-t border-white/10">
+                {!isAwaitingValidation && (
+                  <button
+                    onClick={() => handleOpenMessageModal(m)}
+                    className="flex items-center gap-2 px-4 py-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Envoyer un message
+                  </button>
+                )}
+                <div className={!isAwaitingValidation ? '' : 'ml-auto'}>
+                  <Button variant="ghost" onClick={() => setCotisationModal({ open: false, membre: null })}>
+                    Fermer
+                  </Button>
+                </div>
               </div>
             </div>
           )
         })()}
+      </Modal>
+
+      {/* ========== MODAL MESSAGE ========== */}
+      <Modal
+        isOpen={messageModal.open}
+        onClose={() => setMessageModal({ open: false, membre: null, message: '' })}
+        title="Envoyer un message"
+        size="md"
+      >
+        {messageModal.membre && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center">
+                <span className="text-white text-sm font-bold">
+                  {messageModal.membre.prenom?.[0]}{messageModal.membre.nom?.[0]}
+                </span>
+              </div>
+              <div>
+                <p className="text-white font-medium">{messageModal.membre.prenom} {messageModal.membre.nom}</p>
+                <p className="text-white/50 text-sm">{messageModal.membre.email || messageModal.membre.telephone}</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-white/70 text-sm mb-2">Message</label>
+              <textarea
+                value={messageModal.message}
+                onChange={(e) => setMessageModal({ ...messageModal, message: e.target.value })}
+                rows={6}
+                className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white placeholder-white/30 focus:outline-none focus:border-secondary resize-none"
+                placeholder="Votre message..."
+              />
+            </div>
+
+            <p className="text-white/40 text-xs">
+              Ce message sera visible dans l'application du membre, dans la section Messages.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="ghost" onClick={() => setMessageModal({ open: false, membre: null, message: '' })}>
+                Annuler
+              </Button>
+              <Button onClick={handleSendMessage} loading={saving} disabled={!messageModal.message.trim()}>
+                <Mail className="w-4 h-4 mr-2" />
+                Envoyer
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Modal infos perso */}

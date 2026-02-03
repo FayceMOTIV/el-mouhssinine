@@ -1,0 +1,88 @@
+name: Deploy Firebase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'el-mouhssinine-backoffice/**'
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'firebase.json'
+  workflow_dispatch: # Permet le déclenchement manuel
+
+jobs:
+  deploy-functions:
+    name: Deploy Cloud Functions
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[deploy-functions]') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Install Functions dependencies
+        working-directory: ./functions
+        run: npm ci
+
+      - name: Deploy Functions
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: firebase deploy --only functions --token "$FIREBASE_TOKEN"
+
+  deploy-hosting:
+    name: Deploy Backoffice (Hosting)
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[deploy-hosting]') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ./el-mouhssinine-backoffice
+        run: npm ci
+
+      - name: Build backoffice
+        working-directory: ./el-mouhssinine-backoffice
+        run: npm run build
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy to Firebase Hosting
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: firebase deploy --only hosting --token "$FIREBASE_TOKEN"
+
+  deploy-rules:
+    name: Deploy Firestore Rules
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[deploy-rules]') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy Firestore Rules & Indexes
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          firebase deploy --only firestore:rules --token "$FIREBASE_TOKEN"
+          firebase deploy --only firestore:indexes --token "$FIREBASE_TOKEN"

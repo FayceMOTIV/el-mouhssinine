@@ -1,4 +1,5 @@
 import TrackPlayer, { Capability, State, AppKilledPlaybackBehavior } from 'react-native-track-player';
+import { logger } from '../utils';
 
 let isSetup = false;
 let setupPromise: Promise<void> | null = null;
@@ -19,7 +20,7 @@ export const setupPlayer = async () => {
       try {
         await TrackPlayer.getActiveTrackIndex();
         isSetup = true;
-        console.log('[AudioPlayer] Player déjà initialisé');
+        logger.log('[AudioPlayer] Player déjà initialisé');
         return;
       } catch {
         // Le player n'est pas encore initialisé, continuer
@@ -43,14 +44,15 @@ export const setupPlayer = async () => {
       });
 
       isSetup = true;
-      console.log('[AudioPlayer] Player configuré avec succès');
-    } catch (error: any) {
+      logger.log('[AudioPlayer] Player configuré avec succès');
+    } catch (error) {
+      const err = error as Error;
       // Erreur "player already initialized" = OK
-      if (error?.message?.includes('already been initialized')) {
+      if (err?.message?.includes('already been initialized')) {
         isSetup = true;
-        console.log('[AudioPlayer] Player était déjà initialisé');
+        logger.log('[AudioPlayer] Player était déjà initialisé');
       } else {
-        console.error('[AudioPlayer] Erreur setup:', error);
+        logger.error('[AudioPlayer] Erreur setup:', error);
         throw error;
       }
     }
@@ -77,9 +79,9 @@ export const playAudio = async (url: string, title: string, artist: string = 'Co
     await new Promise<void>(resolve => setTimeout(resolve, 100));
 
     await TrackPlayer.play();
-    console.log('[AudioPlayer] Lecture démarrée:', title);
+    logger.log('[AudioPlayer] Lecture démarrée:', title);
   } catch (error) {
-    console.error('[AudioPlayer] Erreur playAudio:', error);
+    logger.error('[AudioPlayer] Erreur playAudio:', error);
     throw error;
   }
 };
@@ -93,7 +95,7 @@ export const stopAudio = async () => {
     await TrackPlayer.stop();
     await TrackPlayer.reset();
   } catch (error) {
-    console.log('Error stopping audio:', error);
+    logger.error('Error stopping audio:', error);
   }
 };
 

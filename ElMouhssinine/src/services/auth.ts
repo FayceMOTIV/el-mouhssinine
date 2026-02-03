@@ -5,6 +5,7 @@
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils';
 
 const AUTH_STORAGE_KEY = '@auth_user_profile';
 
@@ -39,21 +40,16 @@ const generateMemberId = (): string => {
   return `ELM-${year}-${random}`;
 };
 
-// Masquer email pour logs (privacy)
-const maskEmail = (email: string): string => {
-  const [local, domain] = email.split('@');
-  if (!local || !domain) return '***';
-  const maskedLocal = local.length > 2 ? local[0] + '***' + local[local.length - 1] : '***';
-  return `${maskedLocal}@${domain}`;
-};
-
 // Mapper les codes d'erreur Firebase vers des messages français
+// SÉCURITÉ: user-not-found et wrong-password retournent le même message
+// pour éviter l'énumération d'emails (savoir si un email existe ou non)
 const getErrorMessage = (errorCode: string): string => {
   const errorMessages: Record<string, string> = {
     'auth/invalid-email': 'L\'adresse email n\'est pas valide.',
     'auth/user-disabled': 'Ce compte a été désactivé.',
-    'auth/user-not-found': 'Aucun compte ne correspond à cet email.',
-    'auth/wrong-password': 'Mot de passe incorrect.',
+    // SÉCURITÉ: Message générique pour éviter l'énumération d'emails
+    'auth/user-not-found': 'Email ou mot de passe incorrect.',
+    'auth/wrong-password': 'Email ou mot de passe incorrect.',
     'auth/email-already-in-use': 'Cette adresse email est déjà utilisée.',
     'auth/weak-password': 'Le mot de passe doit contenir au moins 6 caractères.',
     'auth/network-request-failed': 'Erreur de connexion. Vérifiez votre connexion internet.',
@@ -69,6 +65,7 @@ export const AuthService = {
 
   /**
    * Inscription d'un nouveau membre avec Firebase Auth
+   * Inclut retry logic pour Firestore et rollback si échec total
    */
   signUp: async (
     email: string,
@@ -79,21 +76,23 @@ export const AuthService = {
     genre?: 'homme' | 'femme',
     dateNaissance?: string
   ): Promise<AuthResult> => {
+    let user: FirebaseAuthTypes.User | null = null;
+
     try {
       // Créer l'utilisateur dans Firebase Auth
       const userCredential = await auth().createUserWithEmailAndPassword(email, password);
-      const user = userCredential.user;
+      user = userCredential.user;
 
       // Mettre à jour le displayName
       await user.updateProfile({ displayName: name });
 
-      // Créer le profil membre dans Firestore
+      // Créer le profil membre dans Firestore avec retry
       const memberId = generateMemberId();
       const nameParts = name.trim().split(' ');
       const prenom = nameParts[0] || '';
       const nom = nameParts.slice(1).join(' ') || prenom;
 
-      await firestore().collection('members').doc(user.uid).set({
+      const profileData = {
         nom: nom,
         prenom: prenom,
         email: email,
@@ -112,15 +111,50 @@ export const AuthService = {
         uid: user.uid,
         createdAt: firestore.FieldValue.serverTimestamp(),
         source: 'mobile_app'
-      });
+      };
 
-      console.log('[Auth] ✅ Inscription réussie:', maskEmail(email), memberId);
-      return { success: true, user };
-    } catch (error: any) {
-      console.error('[Auth] ❌ Erreur inscription:', error.code, error.message);
+      // Retry Firestore document creation (max 3 tentatives)
+      const MAX_RETRIES = 3;
+      const RETRY_DELAY = 500; // ms
+      let lastError: Error | null = null;
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          await firestore().collection('members').doc(user.uid).set(profileData);
+          logger.auth('Inscription réussie', email, memberId);
+          return { success: true, user };
+        } catch (firestoreError) {
+          lastError = firestoreError as Error;
+          logger.warn(`[Auth] Firestore attempt ${attempt}/${MAX_RETRIES} failed`);
+
+          if (attempt < MAX_RETRIES) {
+            // Attendre avant de réessayer
+            await new Promise<void>(resolve => setTimeout(() => resolve(), RETRY_DELAY * attempt));
+          }
+        }
+      }
+
+      // Toutes les tentatives Firestore ont échoué
+      // Rollback: supprimer le compte Auth pour éviter un état incohérent
+      logger.error('[Auth] Firestore failed after retries, rolling back Auth account');
+      try {
+        await user.delete();
+        logger.log('[Auth] Auth account rolled back successfully');
+      } catch (deleteError) {
+        // Log mais ne pas masquer l'erreur Firestore
+        logger.error('[Auth] Failed to rollback Auth account', deleteError);
+      }
+
       return {
         success: false,
-        error: getErrorMessage(error.code)
+        error: 'Erreur lors de la création du profil. Veuillez réessayer.'
+      };
+    } catch (error) {
+      const err = error as { code?: string; message?: string };
+      logger.error('[Auth] Erreur inscription', err);
+      return {
+        success: false,
+        error: getErrorMessage(err.code || '')
       };
     }
   },
@@ -131,13 +165,14 @@ export const AuthService = {
   signIn: async (email: string, password: string): Promise<AuthResult> => {
     try {
       const userCredential = await auth().signInWithEmailAndPassword(email, password);
-      console.log('[Auth] ✅ Connexion réussie:', maskEmail(email));
+      logger.auth('Connexion réussie', email);
       return { success: true, user: userCredential.user };
-    } catch (error: any) {
-      console.error('[Auth] ❌ Erreur connexion:', error.code, error.message);
+    } catch (error) {
+      const err = error as { code?: string; message?: string };
+      logger.error('[Auth] Erreur connexion', err);
       return {
         success: false,
-        error: getErrorMessage(error.code)
+        error: getErrorMessage(err.code || '')
       };
     }
   },
@@ -149,9 +184,9 @@ export const AuthService = {
     try {
       await auth().signOut();
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-      console.log('[Auth] Déconnexion réussie');
+      logger.log('[Auth] Déconnexion réussie');
     } catch (error) {
-      console.error('[Auth] Erreur déconnexion:', error);
+      logger.error('[Auth] Erreur déconnexion', error);
     }
   },
 
@@ -161,13 +196,14 @@ export const AuthService = {
   resetPassword: async (email: string): Promise<AuthResult> => {
     try {
       await auth().sendPasswordResetEmail(email);
-      console.log('[Auth] Email de réinitialisation envoyé à:', maskEmail(email));
+      logger.auth('Email de réinitialisation envoyé', email);
       return { success: true };
-    } catch (error: any) {
-      console.error('[Auth] Erreur reset password:', error.code);
+    } catch (error) {
+      const err = error as { code?: string };
+      logger.error('[Auth] Erreur reset password', err);
       return {
         success: false,
-        error: getErrorMessage(error.code)
+        error: getErrorMessage(err.code || '')
       };
     }
   },
@@ -214,7 +250,7 @@ export const AuthService = {
         // Sauvegarder les updates si nécessaire
         if (Object.keys(updates).length > 0) {
           await memberDoc.ref.update(updates);
-          console.log('[Auth] Champs manquants ajoutés:', Object.keys(updates));
+          logger.log('[Auth] Champs manquants ajoutés:', Object.keys(updates));
         }
 
         return mapFirestoreToProfile(uid, docData);
@@ -250,7 +286,7 @@ export const AuthService = {
 
         if (!emailQuery.empty) {
           const memberDoc = emailQuery.docs[0];
-          console.log('[Auth] Membre trouvé par email:', userEmail ? maskEmail(userEmail) : 'N/A');
+          logger.auth('Membre trouvé par email', userEmail);
           return processAndReturnProfile(memberDoc, memberDoc.data());
         }
       }
@@ -258,7 +294,7 @@ export const AuthService = {
       // Pas de profil trouvé - CRÉER UN PROFIL DE BASE
       // (Cas où le compte Auth existe mais pas le document Firestore)
       if (user) {
-        console.log('[Auth] Création profil de base pour:', uid.substring(0, 8) + '...', userEmail ? maskEmail(userEmail) : 'N/A');
+        logger.log('[Auth] Création profil de base pour:', uid.substring(0, 8) + '...');
         const memberId = generateMemberId();
         const displayName = user.displayName || 'Membre';
         const nameParts = displayName.split(' ');
@@ -283,7 +319,7 @@ export const AuthService = {
         };
 
         await firestore().collection('members').doc(uid).set(newProfile);
-        console.log('[Auth] Profil créé automatiquement:', memberId);
+        logger.log('[Auth] Profil créé automatiquement:', memberId);
 
         return {
           uid,
@@ -302,10 +338,10 @@ export const AuthService = {
         };
       }
 
-      console.log('[Auth] Profil membre non trouvé et pas d\'utilisateur connecté');
+      logger.log('[Auth] Profil membre non trouvé et pas d\'utilisateur connecté');
       return null;
     } catch (error) {
-      console.error('[Auth] Erreur récupération profil:', error);
+      logger.error('[Auth] Erreur récupération profil', error);
       return null;
     }
   },
@@ -327,13 +363,13 @@ export const AuthService = {
 
       if (!querySnapshot.empty) {
         await querySnapshot.docs[0].ref.update(updates);
-        console.log('[Auth] Profil mis à jour');
+        logger.log('[Auth] Profil mis à jour');
       } else {
         // Essayer avec doc ID
         await firestore().collection('members').doc(uid).update(updates);
       }
     } catch (error) {
-      console.error('[Auth] Erreur mise à jour profil:', error);
+      logger.error('[Auth] Erreur mise à jour profil', error);
       throw error;
     }
   },

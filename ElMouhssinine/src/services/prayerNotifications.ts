@@ -11,6 +11,8 @@ import notifee, {
 } from '@notifee/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PrayerTimings } from './prayerApi';
+import { logger } from '../utils';
+import { addNotificationToHistory } from './notificationHistory';
 
 // ==================== TYPES ====================
 
@@ -113,7 +115,7 @@ export const getPrayerNotificationSettings = async (): Promise<PrayerNotificatio
     }
     return DEFAULT_SETTINGS;
   } catch (error) {
-    console.error('[PrayerNotif] Erreur lecture settings:', error);
+    logger.error('[PrayerNotif] Erreur lecture settings:', error);
     return DEFAULT_SETTINGS;
   }
 };
@@ -125,7 +127,7 @@ export const savePrayerNotificationSettings = async (settings: PrayerNotificatio
   try {
     await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch (error) {
-    console.error('[PrayerNotif] Erreur sauvegarde settings:', error);
+    logger.error('[PrayerNotif] Erreur sauvegarde settings:', error);
   }
 };
 
@@ -193,9 +195,9 @@ export const cancelAllPrayerNotifications = async (): Promise<void> => {
         await notifee.cancelTriggerNotification(id);
       }
     }
-    console.log('[PrayerNotif] Notifications annulees');
+    logger.log('[PrayerNotif] Notifications annulees');
   } catch (error) {
-    console.error('[PrayerNotif] Erreur annulation:', error);
+    logger.error('[PrayerNotif] Erreur annulation:', error);
   }
 };
 
@@ -214,7 +216,7 @@ const getScheduledNotificationsMap = async (): Promise<Map<string, number>> => {
       }
     }
   } catch (error) {
-    console.error('[PrayerNotif] Erreur récupération map:', error);
+    logger.error('[PrayerNotif] Erreur récupération map:', error);
   }
   return map;
 };
@@ -240,11 +242,11 @@ const cleanupObsoleteNotifications = async (validIds: Set<string>): Promise<void
 
       if (isObsolete) {
         await notifee.cancelTriggerNotification(id);
-        console.log(`[PrayerNotif] Removed obsolete: ${id}`);
+        logger.log(`[PrayerNotif] Removed obsolete: ${id}`);
       }
     }
   } catch (error) {
-    console.error('[PrayerNotif] Erreur cleanup:', error);
+    logger.error('[PrayerNotif] Erreur cleanup:', error);
   }
 };
 
@@ -264,13 +266,13 @@ export const schedulePrayerNotifications = async (
 ): Promise<void> => {
   try {
     // DEBUG: Afficher les settings reçus
-    console.log('[PrayerNotif] ======== SCHEDULING START ========');
-    console.log('[PrayerNotif] Settings received:', JSON.stringify(settings, null, 2));
-    console.log('[PrayerNotif] minutesBefore:', settings.minutesBefore, typeof settings.minutesBefore);
+    logger.log('[PrayerNotif] ======== SCHEDULING START ========');
+    logger.log('[PrayerNotif] Settings received:', JSON.stringify(settings, null, 2));
+    logger.log('[PrayerNotif] minutesBefore:', settings.minutesBefore, typeof settings.minutesBefore);
 
     // Verifier si active
     if (!settings.enabled) {
-      console.log('[PrayerNotif] Notifications desactivees');
+      logger.log('[PrayerNotif] Notifications desactivees');
       await cancelAllPrayerNotifications();
       return;
     }
@@ -278,7 +280,7 @@ export const schedulePrayerNotifications = async (
     // Verifier les permissions
     const hasPermission = await requestNotificationPermission();
     if (!hasPermission) {
-      console.log('[PrayerNotif] Permissions refusees');
+      logger.log('[PrayerNotif] Permissions refusees');
       return;
     }
 
@@ -288,12 +290,12 @@ export const schedulePrayerNotifications = async (
     // NOUVEAU: Récupérer les notifications existantes pour comparaison
     // On ne supprime plus aveuglément, on fait une réconciliation intelligente
     const existingNotifs = await getScheduledNotificationsMap();
-    console.log(`[PrayerNotif] Existing notifications: ${existingNotifs.size}`);
+    logger.log(`[PrayerNotif] Existing notifications: ${existingNotifs.size}`);
 
     const now = new Date();
     const today = new Date();
 
-    console.log('[PrayerNotif] Current time:', now.toLocaleString('fr-FR'));
+    logger.log('[PrayerNotif] Current time:', now.toLocaleString('fr-FR'));
     const scheduledPrayers: string[] = [];
     const validNotificationIds = new Set<string>(); // IDs qui doivent rester
 
@@ -304,7 +306,7 @@ export const schedulePrayerNotifications = async (
     // Si boost désactivé: 4 jours (40 notifs prière + 1 app reminder = 41, large marge)
     const boostSettings = await getBoostSettings();
     const MAX_DAYS = boostSettings.enabled ? 3 : 4;
-    console.log(`[PrayerNotif] MAX_DAYS: ${MAX_DAYS} (boost ${boostSettings.enabled ? 'enabled' : 'disabled'})`);
+    logger.log(`[PrayerNotif] MAX_DAYS: ${MAX_DAYS} (boost ${boostSettings.enabled ? 'enabled' : 'disabled'})`);
     const daysToSchedule: { date: Date; suffix: string }[] = [];
     for (let i = 0; i < MAX_DAYS; i++) {
       daysToSchedule.push({
@@ -380,9 +382,9 @@ export const schedulePrayerNotifications = async (
                 reminderTrigger
               );
 
-              console.log(`[PrayerNotif] ✅ Scheduled REMINDER for ${prayerKey} (${daySuffix}) at ${reminderTime.toLocaleString('fr-FR')}${isJumua ? ' [JUMUA]' : ''}`);
+              logger.log(`[PrayerNotif] ✅ Scheduled REMINDER for ${prayerKey} (${daySuffix}) at ${reminderTime.toLocaleString('fr-FR')}${isJumua ? ' [JUMUA]' : ''}`);
             } else {
-              console.log(`[PrayerNotif] ⏭️ REMINDER already scheduled for ${prayerKey} (${daySuffix})`);
+              logger.log(`[PrayerNotif] ⏭️ REMINDER already scheduled for ${prayerKey} (${daySuffix})`);
             }
             scheduledPrayers.push(`${prayerKey}-rappel-${daySuffix}`);
           }
@@ -436,9 +438,9 @@ export const schedulePrayerNotifications = async (
               exactTrigger
             );
 
-            console.log(`[PrayerNotif] ✅ Scheduled NOW for ${prayerKey} (${daySuffix}) at ${prayerTime.toLocaleString('fr-FR')}${isJumua ? ' [JUMUA]' : ''}`);
+            logger.log(`[PrayerNotif] ✅ Scheduled NOW for ${prayerKey} (${daySuffix}) at ${prayerTime.toLocaleString('fr-FR')}${isJumua ? ' [JUMUA]' : ''}`);
           } else {
-            console.log(`[PrayerNotif] ⏭️ NOW already scheduled for ${prayerKey} (${daySuffix})`);
+            logger.log(`[PrayerNotif] ⏭️ NOW already scheduled for ${prayerKey} (${daySuffix})`);
           }
           scheduledPrayers.push(`${prayerKey}-maintenant-${daySuffix}`);
         }
@@ -485,9 +487,9 @@ export const schedulePrayerNotifications = async (
           },
           appReminderTrigger
         );
-        console.log(`[PrayerNotif] ✅ Scheduled APP REMINDER for ${reminderDate.toLocaleString('fr-FR')}`);
+        logger.log(`[PrayerNotif] ✅ Scheduled APP REMINDER for ${reminderDate.toLocaleString('fr-FR')}`);
       } else {
-        console.log('[PrayerNotif] ⏭️ APP REMINDER already scheduled');
+        logger.log('[PrayerNotif] ⏭️ APP REMINDER already scheduled');
       }
       scheduledPrayers.push('app-reminder');
     }
@@ -496,21 +498,21 @@ export const schedulePrayerNotifications = async (
     // (celles qui ne sont plus dans la liste des IDs valides)
     await cleanupObsoleteNotifications(validNotificationIds);
 
-    console.log('[PrayerNotif] ======== SCHEDULING COMPLETE ========');
-    console.log('[PrayerNotif] Total scheduled:', scheduledPrayers.length);
-    console.log('[PrayerNotif] iOS limit: 64 | Used:', scheduledPrayers.length);
+    logger.log('[PrayerNotif] ======== SCHEDULING COMPLETE ========');
+    logger.log('[PrayerNotif] Total scheduled:', scheduledPrayers.length);
+    logger.log('[PrayerNotif] iOS limit: 64 | Used:', scheduledPrayers.length);
 
     // Vérifier les notifications réellement schedulées par iOS
     const scheduledIds = await notifee.getTriggerNotificationIds();
     const prayerIds = scheduledIds.filter(id => id.startsWith('prayer-'));
-    console.log('[PrayerNotif] Actually scheduled by iOS:', prayerIds.length);
+    logger.log('[PrayerNotif] Actually scheduled by iOS:', prayerIds.length);
 
     // Avertir si iOS a drop des notifications
     if (prayerIds.length < scheduledPrayers.length) {
-      console.warn(`[PrayerNotif] ⚠️ iOS dropped ${scheduledPrayers.length - prayerIds.length} notifications (limit 64)`);
+      logger.warn(`[PrayerNotif] ⚠️ iOS dropped ${scheduledPrayers.length - prayerIds.length} notifications (limit 64)`);
     }
   } catch (error) {
-    console.error('[PrayerNotif] Erreur scheduling:', error);
+    logger.error('[PrayerNotif] Erreur scheduling:', error);
   }
 };
 
@@ -522,7 +524,7 @@ export const getScheduledPrayerNotifications = async (): Promise<string[]> => {
     const triggers = await notifee.getTriggerNotificationIds();
     return triggers.filter(id => id.startsWith('prayer-'));
   } catch (error) {
-    console.error('[PrayerNotif] Erreur getTriggers:', error);
+    logger.error('[PrayerNotif] Erreur getTriggers:', error);
     return [];
   }
 };
@@ -702,9 +704,9 @@ export const cancelBoostNotifications = async (): Promise<void> => {
         await notifee.cancelTriggerNotification(id);
       }
     }
-    console.log('[PrayerBoost] Notifications boost annulées');
+    logger.log('[PrayerBoost] Notifications boost annulées');
   } catch (error) {
-    console.error('[PrayerBoost] Erreur annulation:', error);
+    logger.error('[PrayerBoost] Erreur annulation:', error);
   }
 };
 
@@ -725,11 +727,11 @@ const cleanupObsoleteBoostNotifications = async (validIds: Set<string>): Promise
 
       if (isObsolete) {
         await notifee.cancelTriggerNotification(id);
-        console.log(`[PrayerBoost] Removed obsolete: ${id}`);
+        logger.log(`[PrayerBoost] Removed obsolete: ${id}`);
       }
     }
   } catch (error) {
-    console.error('[PrayerBoost] Erreur cleanup:', error);
+    logger.error('[PrayerBoost] Erreur cleanup:', error);
   }
 };
 
@@ -749,9 +751,9 @@ export const cancelBoostNotificationsForPrayer = async (prayerKey: string): Prom
         cancelledCount++;
       }
     }
-    console.log(`[PrayerBoost] ${cancelledCount} notifications annulées pour ${prayerKey}`);
+    logger.log(`[PrayerBoost] ${cancelledCount} notifications annulées pour ${prayerKey}`);
   } catch (error) {
-    console.error('[PrayerBoost] Erreur annulation prière:', error);
+    logger.error('[PrayerBoost] Erreur annulation prière:', error);
   }
 };
 
@@ -777,16 +779,16 @@ export const scheduleBoostNotifications = async (
     // Si désactivé, annuler les notifications boost existantes
     if (!settings.enabled) {
       await cancelBoostNotifications();
-      console.log('[PrayerBoost] Feature désactivée');
+      logger.log('[PrayerBoost] Feature désactivée');
       return;
     }
 
-    console.log('[PrayerBoost] ======== SCHEDULING START ========');
+    logger.log('[PrayerBoost] ======== SCHEDULING START ========');
 
     // Vérifier les permissions
     const hasPermission = await requestNotificationPermission();
     if (!hasPermission) {
-      console.log('[PrayerBoost] Permissions refusées');
+      logger.log('[PrayerBoost] Permissions refusées');
       return;
     }
 
@@ -828,7 +830,7 @@ export const scheduleBoostNotifications = async (
         const endTime = getPrayerEndTime(prayer.key, timings);
 
         if (!startTime || !endTime) {
-          console.log(`[PrayerBoost] Temps manquant pour ${prayer.name}`);
+          logger.log(`[PrayerBoost] Temps manquant pour ${prayer.name}`);
           continue;
         }
 
@@ -857,7 +859,7 @@ export const scheduleBoostNotifications = async (
           const alreadyScheduled = existingTimestamp && Math.abs(existingTimestamp - boostTimestamp) < 60000;
 
           if (alreadyScheduled) {
-            console.log(`[PrayerBoost] ⏭️ Already scheduled ${prayer.name} ${reminder.type} (${daySuffix})`);
+            logger.log(`[PrayerBoost] ⏭️ Already scheduled ${prayer.name} ${reminder.type} (${daySuffix})`);
             scheduledCount++;
             continue;
           }
@@ -923,7 +925,7 @@ export const scheduleBoostNotifications = async (
           );
 
           scheduledCount++;
-          console.log(`[PrayerBoost] ✅ ${prayer.name} ${reminder.type} (${daySuffix}) at ${notifDate.toLocaleString('fr-FR')}`);
+          logger.log(`[PrayerBoost] ✅ ${prayer.name} ${reminder.type} (${daySuffix}) at ${notifDate.toLocaleString('fr-FR')}`);
         }
       }
     }
@@ -931,10 +933,10 @@ export const scheduleBoostNotifications = async (
     // NOUVEAU: Nettoyer uniquement les notifications boost obsolètes
     await cleanupObsoleteBoostNotifications(validNotificationIds);
 
-    console.log('[PrayerBoost] ======== SCHEDULING COMPLETE ========');
-    console.log(`[PrayerBoost] Total scheduled: ${scheduledCount}`);
+    logger.log('[PrayerBoost] ======== SCHEDULING COMPLETE ========');
+    logger.log(`[PrayerBoost] Total scheduled: ${scheduledCount}`);
   } catch (error) {
-    console.error('[PrayerBoost] Erreur scheduling:', error);
+    logger.error('[PrayerBoost] Erreur scheduling:', error);
   }
 };
 
@@ -944,9 +946,9 @@ export const scheduleBoostNotifications = async (
 export const saveBoostSettings = async (settings: PrayerBoostSettings): Promise<void> => {
   try {
     await AsyncStorage.setItem(BOOST_SETTINGS_KEY, JSON.stringify(settings));
-    console.log('[PrayerBoost] Settings sauvegardés');
+    logger.log('[PrayerBoost] Settings sauvegardés');
   } catch (error) {
-    console.error('[PrayerBoost] Erreur sauvegarde settings:', error);
+    logger.error('[PrayerBoost] Erreur sauvegarde settings:', error);
   }
 };
 
@@ -968,7 +970,7 @@ export const getBoostSettings = async (): Promise<PrayerBoostSettings> => {
     }
     return DEFAULT_PRAYER_BOOST_SETTINGS;
   } catch (error) {
-    console.error('[PrayerBoost] Erreur lecture settings:', error);
+    logger.error('[PrayerBoost] Erreur lecture settings:', error);
     return DEFAULT_PRAYER_BOOST_SETTINGS;
   }
 };
@@ -981,7 +983,7 @@ export const getScheduledBoostNotifications = async (): Promise<string[]> => {
     const triggers = await notifee.getTriggerNotificationIds();
     return triggers.filter(id => id.startsWith('boost_'));
   } catch (error) {
-    console.error('[PrayerBoost] Erreur getTriggers:', error);
+    logger.error('[PrayerBoost] Erreur getTriggers:', error);
     return [];
   }
 };
@@ -1027,9 +1029,9 @@ export const cancelQuranReminders = async (): Promise<void> => {
         await notifee.cancelTriggerNotification(id);
       }
     }
-    console.log('[QuranReminder] Notifications annulées');
+    logger.log('[QuranReminder] Notifications annulées');
   } catch (error) {
-    console.error('[QuranReminder] Erreur annulation:', error);
+    logger.error('[QuranReminder] Erreur annulation:', error);
   }
 };
 
@@ -1047,16 +1049,16 @@ export const scheduleQuranReminders = async (
     // Si désactivé, annuler les notifications existantes
     if (!settings.enabled) {
       await cancelQuranReminders();
-      console.log('[QuranReminder] Feature désactivée');
+      logger.log('[QuranReminder] Feature désactivée');
       return;
     }
 
-    console.log('[QuranReminder] ======== SCHEDULING START ========');
+    logger.log('[QuranReminder] ======== SCHEDULING START ========');
 
     // Vérifier les permissions
     const hasPermission = await requestNotificationPermission();
     if (!hasPermission) {
-      console.log('[QuranReminder] Permissions refusées');
+      logger.log('[QuranReminder] Permissions refusées');
       return;
     }
 
@@ -1106,13 +1108,13 @@ export const scheduleQuranReminders = async (
       );
 
       scheduledCount++;
-      console.log(`[QuranReminder] ✅ Scheduled for ${notifDate.toLocaleString('fr-FR')}`);
+      logger.log(`[QuranReminder] ✅ Scheduled for ${notifDate.toLocaleString('fr-FR')}`);
     }
 
-    console.log('[QuranReminder] ======== SCHEDULING COMPLETE ========');
-    console.log(`[QuranReminder] Total scheduled: ${scheduledCount}`);
+    logger.log('[QuranReminder] ======== SCHEDULING COMPLETE ========');
+    logger.log(`[QuranReminder] Total scheduled: ${scheduledCount}`);
   } catch (error) {
-    console.error('[QuranReminder] Erreur scheduling:', error);
+    logger.error('[QuranReminder] Erreur scheduling:', error);
   }
 };
 
@@ -1122,9 +1124,9 @@ export const scheduleQuranReminders = async (
 export const saveQuranReminderSettings = async (settings: QuranReminderSettings): Promise<void> => {
   try {
     await AsyncStorage.setItem(QURAN_REMINDER_SETTINGS_KEY, JSON.stringify(settings));
-    console.log('[QuranReminder] Settings sauvegardés');
+    logger.log('[QuranReminder] Settings sauvegardés');
   } catch (error) {
-    console.error('[QuranReminder] Erreur sauvegarde settings:', error);
+    logger.error('[QuranReminder] Erreur sauvegarde settings:', error);
   }
 };
 
@@ -1140,7 +1142,7 @@ export const getQuranReminderSettings = async (): Promise<QuranReminderSettings>
     }
     return DEFAULT_QURAN_REMINDER_SETTINGS;
   } catch (error) {
-    console.error('[QuranReminder] Erreur lecture settings:', error);
+    logger.error('[QuranReminder] Erreur lecture settings:', error);
     return DEFAULT_QURAN_REMINDER_SETTINGS;
   }
 };
@@ -1232,7 +1234,7 @@ export const checkMosqueProximity = async (
       MOSQUE_COORDS.longitude
     );
 
-    console.log(`[MosqueProximity] Distance: ${Math.round(distance)}m`);
+    logger.log(`[MosqueProximity] Distance: ${Math.round(distance)}m`);
 
     // Vérifier si dans le rayon
     if (distance > PROXIMITY_RADIUS_METERS) {
@@ -1244,7 +1246,7 @@ export const checkMosqueProximity = async (
     if (lastNotifTime) {
       const elapsed = Date.now() - parseInt(lastNotifTime, 10);
       if (elapsed < MIN_NOTIF_INTERVAL_MS) {
-        console.log('[MosqueProximity] Notification récente, skip');
+        logger.log('[MosqueProximity] Notification récente, skip');
         return false;
       }
     }
@@ -1266,13 +1268,16 @@ export const checkMosqueProximity = async (
       },
     });
 
+    // Ajouter à l'historique des notifications
+    await addNotificationToHistory(translations.title, translations.body, 'other');
+
     // Enregistrer le timestamp
     await AsyncStorage.setItem(LAST_MOSQUE_NOTIF_KEY, Date.now().toString());
-    console.log('[MosqueProximity] ✅ Notification envoyée !');
+    logger.log('[MosqueProximity] ✅ Notification envoyée !');
 
     return true;
   } catch (error) {
-    console.error('[MosqueProximity] Erreur:', error);
+    logger.error('[MosqueProximity] Erreur:', error);
     return false;
   }
 };
@@ -1283,9 +1288,9 @@ export const checkMosqueProximity = async (
 export const saveMosqueProximitySettings = async (settings: MosqueProximitySettings): Promise<void> => {
   try {
     await AsyncStorage.setItem(MOSQUE_PROXIMITY_SETTINGS_KEY, JSON.stringify(settings));
-    console.log('[MosqueProximity] Settings sauvegardés');
+    logger.log('[MosqueProximity] Settings sauvegardés');
   } catch (error) {
-    console.error('[MosqueProximity] Erreur sauvegarde settings:', error);
+    logger.error('[MosqueProximity] Erreur sauvegarde settings:', error);
   }
 };
 
@@ -1301,7 +1306,274 @@ export const getMosqueProximitySettings = async (): Promise<MosqueProximitySetti
     }
     return DEFAULT_MOSQUE_PROXIMITY_SETTINGS;
   } catch (error) {
-    console.error('[MosqueProximity] Erreur lecture settings:', error);
+    logger.error('[MosqueProximity] Erreur lecture settings:', error);
     return DEFAULT_MOSQUE_PROXIMITY_SETTINGS;
+  }
+};
+
+// ==================== NOTIFICATIONS RAMADAN ====================
+
+export interface RamadanUserNotificationSettings {
+  suhoor: {
+    enabled: boolean;
+    minutesBefore: number; // 15, 30, 45
+  };
+  iftar: {
+    enabled: boolean;
+    minutesBefore: number; // 5, 10, 15
+  };
+  tarawih: {
+    enabled: boolean;
+    minutesBefore: number; // 10, 15, 30
+  };
+}
+
+export const DEFAULT_RAMADAN_NOTIFICATION_SETTINGS: RamadanUserNotificationSettings = {
+  suhoor: {
+    enabled: true,
+    minutesBefore: 30,
+  },
+  iftar: {
+    enabled: true,
+    minutesBefore: 5,
+  },
+  tarawih: {
+    enabled: true,
+    minutesBefore: 15,
+  },
+};
+
+const RAMADAN_NOTIFICATION_SETTINGS_KEY = 'ramadan_notification_settings';
+
+/**
+ * Créer le channel Android pour les notifications Ramadan
+ */
+const ensureRamadanChannel = async (): Promise<string> => {
+  const channelId = await notifee.createChannel({
+    id: 'ramadan-reminders',
+    name: 'Rappels Ramadan',
+    description: 'Notifications Suhoor, Iftar et Tarawih',
+    importance: AndroidImportance.HIGH,
+    sound: 'default',
+  });
+  return channelId;
+};
+
+/**
+ * Annuler les notifications Ramadan
+ */
+export const cancelRamadanNotifications = async (): Promise<void> => {
+  try {
+    const notifications = await notifee.getTriggerNotificationIds();
+    for (const id of notifications) {
+      if (id.startsWith('ramadan_')) {
+        await notifee.cancelTriggerNotification(id);
+      }
+    }
+    logger.log('[RamadanNotif] Notifications annulées');
+  } catch (error) {
+    logger.error('[RamadanNotif] Erreur annulation:', error);
+  }
+};
+
+/**
+ * Programmer les notifications Ramadan (Suhoor, Iftar, Tarawih)
+ * @param prayerTimes - Horaires de prière du jour (Fajr = fin Suhoor, Maghrib = Iftar)
+ * @param tarawihTime - Heure de Tarawih (ex: "21:30")
+ * @param settings - Préférences utilisateur pour les notifications
+ * @param translations - Textes traduits FR/AR
+ */
+export const scheduleRamadanNotifications = async (
+  prayerTimes: PrayerTimings | Record<string, string>,
+  tarawihTime: string | null,
+  settings: RamadanUserNotificationSettings,
+  translations: {
+    suhoorTitle: string;
+    suhoorBody: string;
+    iftarTitle: string;
+    iftarBody: string;
+    tarawihTitle: string;
+    tarawihBody: string;
+  }
+): Promise<void> => {
+  try {
+    logger.log('[RamadanNotif] ======== SCHEDULING START ========');
+
+    // Vérifier les permissions
+    const hasPermission = await requestNotificationPermission();
+    if (!hasPermission) {
+      logger.log('[RamadanNotif] Permissions refusées');
+      return;
+    }
+
+    // Créer le channel Android
+    const channelId = await ensureRamadanChannel();
+
+    // Annuler les anciennes notifications
+    await cancelRamadanNotifications();
+
+    const timings = prayerTimes as Record<string, string>;
+    const now = new Date();
+    let scheduledCount = 0;
+
+    // Scheduler pour les 7 prochains jours
+    for (let i = 0; i < 7; i++) {
+      const baseDate = addDays(new Date(), i);
+      const daySuffix = `day${i}`;
+
+      // ========== SUHOOR (avant Fajr) ==========
+      if (settings.suhoor.enabled) {
+        const fajrTime = timings.Fajr || timings.fajr;
+        if (fajrTime) {
+          const cleanFajr = fajrTime.split(' ')[0];
+          const fajrDate = parsePrayerTime(cleanFajr, baseDate);
+          const suhoorDate = subMinutes(fajrDate, settings.suhoor.minutesBefore);
+
+          if (suhoorDate > now) {
+            const suhoorId = `ramadan_suhoor_${daySuffix}`;
+            const trigger: TimestampTrigger = {
+              type: TriggerType.TIMESTAMP,
+              timestamp: suhoorDate.getTime(),
+            };
+
+            await notifee.createTriggerNotification(
+              {
+                id: suhoorId,
+                title: translations.suhoorTitle,
+                body: translations.suhoorBody.replace('{minutes}', settings.suhoor.minutesBefore.toString()),
+                android: {
+                  channelId,
+                  importance: AndroidImportance.HIGH,
+                  pressAction: { id: 'default' },
+                },
+                ios: {
+                  sound: 'default',
+                },
+              },
+              trigger
+            );
+
+            scheduledCount++;
+            logger.log(`[RamadanNotif] ✅ Suhoor (${daySuffix}) at ${suhoorDate.toLocaleString('fr-FR')}`);
+          }
+        }
+      }
+
+      // ========== IFTAR (à Maghrib ou avant) ==========
+      if (settings.iftar.enabled) {
+        const maghribTime = timings.Maghrib || timings.maghrib;
+        if (maghribTime) {
+          const cleanMaghrib = maghribTime.split(' ')[0];
+          const maghribDate = parsePrayerTime(cleanMaghrib, baseDate);
+          const iftarDate = subMinutes(maghribDate, settings.iftar.minutesBefore);
+
+          if (iftarDate > now) {
+            const iftarId = `ramadan_iftar_${daySuffix}`;
+            const trigger: TimestampTrigger = {
+              type: TriggerType.TIMESTAMP,
+              timestamp: iftarDate.getTime(),
+            };
+
+            const bodyText = settings.iftar.minutesBefore === 0
+              ? translations.iftarBody.replace(' dans {minutes} min', '')
+              : translations.iftarBody.replace('{minutes}', settings.iftar.minutesBefore.toString());
+
+            await notifee.createTriggerNotification(
+              {
+                id: iftarId,
+                title: translations.iftarTitle,
+                body: bodyText,
+                android: {
+                  channelId,
+                  importance: AndroidImportance.HIGH,
+                  pressAction: { id: 'default' },
+                },
+                ios: {
+                  sound: 'default',
+                },
+              },
+              trigger
+            );
+
+            scheduledCount++;
+            logger.log(`[RamadanNotif] ✅ Iftar (${daySuffix}) at ${iftarDate.toLocaleString('fr-FR')}`);
+          }
+        }
+      }
+
+      // ========== TARAWIH ==========
+      if (settings.tarawih.enabled && tarawihTime) {
+        const cleanTarawih = tarawihTime.split(' ')[0];
+        const tarawihDate = parsePrayerTime(cleanTarawih, baseDate);
+        const reminderDate = subMinutes(tarawihDate, settings.tarawih.minutesBefore);
+
+        if (reminderDate > now) {
+          const tarawihId = `ramadan_tarawih_${daySuffix}`;
+          const trigger: TimestampTrigger = {
+            type: TriggerType.TIMESTAMP,
+            timestamp: reminderDate.getTime(),
+          };
+
+          await notifee.createTriggerNotification(
+            {
+              id: tarawihId,
+              title: translations.tarawihTitle,
+              body: translations.tarawihBody.replace('{minutes}', settings.tarawih.minutesBefore.toString()),
+              android: {
+                channelId,
+                importance: AndroidImportance.HIGH,
+                pressAction: { id: 'default' },
+              },
+              ios: {
+                sound: 'default',
+              },
+            },
+            trigger
+          );
+
+          scheduledCount++;
+          logger.log(`[RamadanNotif] ✅ Tarawih (${daySuffix}) at ${reminderDate.toLocaleString('fr-FR')}`);
+        }
+      }
+    }
+
+    logger.log('[RamadanNotif] ======== SCHEDULING COMPLETE ========');
+    logger.log(`[RamadanNotif] Total scheduled: ${scheduledCount}`);
+  } catch (error) {
+    logger.error('[RamadanNotif] Erreur scheduling:', error);
+  }
+};
+
+/**
+ * Sauvegarder les settings de notification Ramadan
+ */
+export const saveRamadanNotificationSettings = async (settings: RamadanUserNotificationSettings): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(RAMADAN_NOTIFICATION_SETTINGS_KEY, JSON.stringify(settings));
+    logger.log('[RamadanNotif] Settings sauvegardés');
+  } catch (error) {
+    logger.error('[RamadanNotif] Erreur sauvegarde settings:', error);
+  }
+};
+
+/**
+ * Récupérer les settings de notification Ramadan
+ */
+export const getRamadanNotificationSettings = async (): Promise<RamadanUserNotificationSettings> => {
+  try {
+    const stored = await AsyncStorage.getItem(RAMADAN_NOTIFICATION_SETTINGS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        ...DEFAULT_RAMADAN_NOTIFICATION_SETTINGS,
+        suhoor: { ...DEFAULT_RAMADAN_NOTIFICATION_SETTINGS.suhoor, ...parsed.suhoor },
+        iftar: { ...DEFAULT_RAMADAN_NOTIFICATION_SETTINGS.iftar, ...parsed.iftar },
+        tarawih: { ...DEFAULT_RAMADAN_NOTIFICATION_SETTINGS.tarawih, ...parsed.tarawih },
+      };
+    }
+    return DEFAULT_RAMADAN_NOTIFICATION_SETTINGS;
+  } catch (error) {
+    logger.error('[RamadanNotif] Erreur lecture settings:', error);
+    return DEFAULT_RAMADAN_NOTIFICATION_SETTINGS;
   }
 };

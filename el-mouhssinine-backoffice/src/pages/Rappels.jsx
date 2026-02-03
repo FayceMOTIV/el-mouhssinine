@@ -74,7 +74,7 @@ export default function Rappels() {
       setRappels(data)
       setLoading(false)
     }, (error) => {
-      console.error('Error fetching rappels:', error)
+      if (import.meta.env.DEV) console.error('Error fetching rappels:', error)
       toast.error('Erreur lors du chargement des rappels')
       setLoading(false)
     })
@@ -142,7 +142,7 @@ export default function Rappels() {
       }
       handleCloseModal()
     } catch (err) {
-      console.error('Error saving rappel:', err)
+      if (import.meta.env.DEV) console.error('Error saving rappel:', err)
       toast.error('Erreur lors de la sauvegarde')
     } finally {
       setSaving(false)
@@ -156,7 +156,7 @@ export default function Rappels() {
       })
       toast.success(rappel.actif ? 'Rappel désactivé' : 'Rappel activé')
     } catch (err) {
-      console.error('Error toggling rappel:', err)
+      if (import.meta.env.DEV) console.error('Error toggling rappel:', err)
       toast.error('Erreur lors de la modification')
     }
   }
@@ -167,7 +167,7 @@ export default function Rappels() {
       toast.success('Rappel supprimé')
       setDeleteConfirm(null)
     } catch (err) {
-      console.error('Error deleting rappel:', err)
+      if (import.meta.env.DEV) console.error('Error deleting rappel:', err)
       toast.error('Erreur lors de la suppression')
     }
   }
@@ -215,7 +215,7 @@ export default function Rappels() {
       }
       setShowImportConfirm(false)
     } catch (err) {
-      console.error('Error importing hadiths:', err)
+      if (import.meta.env.DEV) console.error('Error importing hadiths:', err)
       toast.error('Erreur lors de l\'import')
     } finally {
       setImporting(false)

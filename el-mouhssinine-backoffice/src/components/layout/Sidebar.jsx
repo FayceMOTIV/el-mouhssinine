@@ -17,7 +17,8 @@ import {
   BookOpen,
   TrendingUp,
   FileText,
-  Bell
+  Bell,
+  Moon
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { subscribeToUnreadMessagesCount } from '../../services/firebase'
@@ -36,6 +37,7 @@ const menuItems = [
   { path: '/recus-fiscaux', icon: FileText, label: 'Reçus fiscaux' },
   { path: '/messages', icon: MessageCircle, label: 'Messages', hasBadge: true },
   { path: '/notifications', icon: Bell, label: 'Notifications' },
+  { path: '/ramadan', icon: Moon, label: 'Mode Ramadan' },
   { path: '/admins', icon: Shield, label: 'Gestion Admins', adminOnly: true },
   { path: '/parametres', icon: Settings, label: 'Paramètres' }
 ]

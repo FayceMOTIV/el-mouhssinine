@@ -21,6 +21,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { useLanguage } from '../context/LanguageContext';
 import { makePayment, showPaymentError, showPaymentSuccess } from '../services/stripe';
 import { EmptyProjects } from '../components';
+import { AuthService } from '../services/auth';
 
 const DonationsScreen = () => {
   const { t, isRTL } = useLanguage();
@@ -208,8 +209,55 @@ const DonationsScreen = () => {
       return;
     }
 
-    // Paiement par carte/Apple Pay/Google Pay via Stripe
+    // SÉCURITÉ: Vérifier si l'utilisateur est connecté pour les reçus fiscaux
+    const currentUser = AuthService.getCurrentUser();
+    const isAnonymous = !currentUser;
+
+    // Avertir l'utilisateur non connecté qu'il ne recevra pas de reçu fiscal
+    if (isAnonymous) {
+      return new Promise<void>((resolve) => {
+        Alert.alert(
+          'Don anonyme',
+          'Vous n\'êtes pas connecté. Votre don sera anonyme et vous ne pourrez pas recevoir de reçu fiscal.\n\nVoulez-vous continuer ?',
+          [
+            {
+              text: 'Annuler',
+              style: 'cancel',
+              onPress: () => resolve(),
+            },
+            {
+              text: 'Continuer',
+              onPress: async () => {
+                await processPayment(amount, project, true);
+                resolve();
+              },
+            },
+            {
+              text: 'Me connecter',
+              onPress: () => {
+                setShowPaymentModal(false);
+                // L'utilisateur devra naviguer vers la page membre pour se connecter
+                Alert.alert(
+                  'Connexion requise',
+                  'Rendez-vous dans l\'onglet "Membre" pour vous connecter, puis revenez faire votre don.'
+                );
+                resolve();
+              },
+            },
+          ],
+          { cancelable: true }
+        );
+      });
+    }
+
+    // Utilisateur connecté, procéder au paiement
+    await processPayment(amount, project, false);
+  };
+
+  // Fonction séparée pour le traitement du paiement
+  const processPayment = async (amount: number, project: Project | undefined, isAnonymous: boolean) => {
     setIsProcessingPayment(true);
+    const currentUser = AuthService.getCurrentUser();
 
     try {
       const result = await makePayment({
@@ -217,21 +265,24 @@ const DonationsScreen = () => {
         description: `Don - ${project?.name || 'Mosquée El Mouhssinine'}`,
         type: 'donation',
         metadata: {
-          projectId: selectedProject,
+          projectId: selectedProject || undefined,
           projectName: project?.name || '',
-          isAnonymous: false,
+          isAnonymous: isAnonymous,
+          donorEmail: currentUser?.email?.toLowerCase() || '',
+          donorUid: currentUser?.uid || '',
         },
       });
 
       if (result.success && result.paymentIntentId) {
         // Enregistrer le don dans Firebase
         await addDonation({
-          projectId: selectedProject,
+          projectId: selectedProject || '',
           projectName: project?.name || '',
           amount,
           stripePaymentIntentId: result.paymentIntentId,
           paymentMethod: paymentMethod || 'card',
-          isAnonymous: false,
+          isAnonymous: isAnonymous,
+          donorEmail: currentUser?.email?.toLowerCase() || '',
         });
 
         // Fermer le modal et afficher succès
@@ -246,9 +297,10 @@ const DonationsScreen = () => {
       } else {
         showPaymentError(result.error || 'Une erreur est survenue');
       }
-    } catch (error: any) {
-      console.error('Erreur paiement:', error);
-      showPaymentError(error.message || 'Une erreur est survenue');
+    } catch (error) {
+      const err = error as Error;
+      if (__DEV__) console.error('Erreur paiement:', err);
+      showPaymentError(err?.message || 'Une erreur est survenue');
     } finally {
       setIsProcessingPayment(false);
     }

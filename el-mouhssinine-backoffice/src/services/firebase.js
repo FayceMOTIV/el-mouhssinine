@@ -36,13 +36,20 @@ import {
   connectFunctionsEmulator
 } from 'firebase/functions'
 
+// Configuration Firebase - préfère les variables d'environnement si disponibles
+// Note: Les credentials Firebase web sont publiques par design (protection via Firestore Rules)
 const firebaseConfig = {
-  apiKey: "AIzaSyCJr6tGI9QpbWr3pf1GpYoEnvsGgkJj8j8",
-  authDomain: "el-mouhssinine.firebaseapp.com",
-  projectId: "el-mouhssinine",
-  storageBucket: "el-mouhssinine.firebasestorage.app",
-  messagingSenderId: "658931173250",
-  appId: "1:658931173250:web:c5a7e8f2d3b4a192837465"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCJr6tGI9QpbWr3pf1GpYoEnvsGgkJj8j8",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "el-mouhssinine.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "el-mouhssinine",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "el-mouhssinine.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "658931173250",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:658931173250:web:c5a7e8f2d3b4a192837465"
+}
+
+// Avertissement en dev si variables d'environnement non configurées
+if (import.meta.env.DEV && !import.meta.env.VITE_FIREBASE_API_KEY) {
+  console.warn('[Firebase] Variables d\'environnement non configurées - utilisation des valeurs par défaut')
 }
 
 // Force demo mode for development (set to true to use mock data)
@@ -64,7 +71,16 @@ if (!FORCE_DEMO_MODE) {
     storage = getStorage(app)
     functions = getFunctions(app, 'europe-west1')
   } catch (err) {
+    console.error('[Firebase] Échec initialisation:', err)
+    // En production, afficher une erreur fatale au lieu de passer en mode démo silencieusement
+    if (import.meta.env.PROD) {
+      // Afficher une alerte à l'utilisateur
+      alert('⚠️ Impossible de se connecter à Firebase. Vérifiez votre connexion et rechargez la page.')
+      throw new Error('Impossible de se connecter à Firebase. Contactez le support.')
+    }
+    // En dev, accepter le mode démo
     isDemoMode = true
+    console.warn('[Firebase] Mode démo activé (erreur Firebase en dev)')
   }
 }
 
