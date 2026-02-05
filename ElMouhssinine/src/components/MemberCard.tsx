@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import { useLanguage } from '../context/LanguageContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_MARGIN = 12;
@@ -48,12 +49,13 @@ interface MemberCardProps {
   isRTL?: boolean;
 }
 
-const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth, isRTL = false }) => {
+const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth }) => {
+  const { t, isRTL } = useLanguage();
   const width = cardWidth || CARD_WIDTH;
   const height = width * 0.55;
 
   const isExpired = member?.status === 'expired' || member?.status === 'inactive';
-  const badgeText = isExpired ? 'EXPIRÉ' : 'ACTIF';
+  const badgeText = isExpired ? t('memberCardExpired') : t('memberCardActive');
   const badgeColor = isExpired ? '#EF4444' : '#10B981';
 
   const formatDate = () => {
@@ -81,14 +83,16 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth, isRTL = fals
         style={[styles.card, { width, height }]}
       >
         {/* HEADER */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
+        <View style={[styles.header, isRTL && styles.headerRTL]}>
+          <View style={[styles.headerLeft, isRTL && styles.headerLeftRTL]}>
             <View style={styles.logo}>
               <Text style={styles.logoText}>م</Text>
             </View>
             <View style={styles.headerTextContainer}>
-              <Text style={styles.mosqueName}>EL MOUHSSININE</Text>
-              <Text style={styles.mosqueSubtitle} numberOfLines={1}>Centre Islamique • Bourg-en-Bresse</Text>
+              <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>EL MOUHSSININE</Text>
+              <Text style={[styles.mosqueSubtitle, isRTL && styles.textRTL]} numberOfLines={1}>
+                {t('memberCardCenter')} • {t('memberCardCity')}
+              </Text>
             </View>
           </View>
           <View style={[styles.badge, { borderColor: badgeColor }]}>
@@ -98,8 +102,8 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth, isRTL = fals
 
         {/* NUMÉRO ADHÉRENT */}
         <View style={styles.numberSection}>
-          <Text style={styles.numberLabel}>N° ADHÉRENT</Text>
-          <View style={styles.digits}>
+          <Text style={[styles.numberLabel, isRTL && styles.textRTL]}>{t('memberCardNumber')}</Text>
+          <View style={[styles.digits, isRTL && styles.digitsRTL]}>
             {digits.map((digit, index) => (
               <Text key={index} style={styles.digit}>{digit}</Text>
             ))}
@@ -107,14 +111,14 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth, isRTL = fals
         </View>
 
         {/* FOOTER */}
-        <View style={styles.footer}>
-          <View style={styles.footerLeft}>
-            <Text style={styles.label}>TITULAIRE</Text>
-            <Text style={styles.value} numberOfLines={1}>{fullName.toUpperCase()}</Text>
+        <View style={[styles.footer, isRTL && styles.footerRTL]}>
+          <View style={[styles.footerLeft, isRTL && styles.footerLeftRTL]}>
+            <Text style={[styles.label, isRTL && styles.textRTL]}>{t('memberCardHolder')}</Text>
+            <Text style={[styles.value, isRTL && styles.textRTL]} numberOfLines={1}>{fullName.toUpperCase()}</Text>
           </View>
-          <View style={styles.footerRight}>
-            <Text style={styles.label}>VALIDE</Text>
-            <Text style={styles.value}>{formatDate()}</Text>
+          <View style={[styles.footerRight, isRTL && styles.footerRightRTL]}>
+            <Text style={[styles.label, isRTL && styles.textRTL]}>{t('memberCardValid')}</Text>
+            <Text style={[styles.value, isRTL && styles.textRTL]}>{formatDate()}</Text>
           </View>
         </View>
       </LinearGradient>
@@ -227,6 +231,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#D1D5DB',
+  },
+  // RTL Styles
+  headerRTL: {
+    flexDirection: 'row-reverse',
+  },
+  headerLeftRTL: {
+    flexDirection: 'row-reverse',
+    marginRight: 0,
+    marginLeft: 8,
+  },
+  textRTL: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  digitsRTL: {
+    flexDirection: 'row-reverse',
+  },
+  footerRTL: {
+    flexDirection: 'row-reverse',
+  },
+  footerLeftRTL: {
+    alignItems: 'flex-end',
+  },
+  footerRightRTL: {
+    alignItems: 'flex-start',
   },
 });
 

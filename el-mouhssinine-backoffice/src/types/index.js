@@ -65,9 +65,11 @@ export const CotisationType = {
 }
 
 export const CotisationStatut = {
+  SYMPATHISANT: 'sympathisant',           // Nouveau: inscrit sans paiement, accès complet app
   ACTIF: 'actif',
   EXPIRE: 'expire',
   AUCUN: 'aucun',
+  EN_ATTENTE_VALIDATION: 'en_attente_validation', // A payé, attend validation bureau
   EN_ATTENTE_SIGNATURE: 'en_attente_signature',
   EN_ATTENTE_PAIEMENT: 'en_attente_paiement'
 }

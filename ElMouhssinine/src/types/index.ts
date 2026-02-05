@@ -78,7 +78,7 @@ export interface Member {
   phone?: string;
   memberId: string;
   cotisationType: 'mensuel' | 'annuel' | null;
-  cotisationStatus: 'active' | 'expired' | 'none' | 'pending';
+  cotisationStatus: 'active' | 'expired' | 'none' | 'pending' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' | 'en_attente_paiement';
   nextPaymentDate?: Date;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
@@ -251,14 +251,15 @@ export interface Message {
 // ==================== COTISATION TYPES ====================
 
 /**
- * Statuts possibles d'une cotisation
+ * Statuts possibles d'une cotisation/membre
  */
 export type CotisationStatus =
   | 'none'
   | 'active'
   | 'expired'
   | 'pending'
-  | 'en_attente_validation'
+  | 'sympathisant'           // Inscrit sans paiement, accès complet app
+  | 'en_attente_validation'  // A payé, attend validation bureau
   | 'en_attente_paiement'
   | 'en_attente_signature';
 

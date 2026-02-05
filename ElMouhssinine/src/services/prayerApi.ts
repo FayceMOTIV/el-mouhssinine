@@ -14,10 +14,10 @@ interface FirebaseIqamaDelays {
   isha: number | string;
 }
 
-// Charger les délais Iqama depuis Firebase (settings/horaires)
+// Charger les délais Iqama depuis Firebase (settings/prayerTimes)
 const getIqamaDelaysFromFirebase = async (): Promise<FirebaseIqamaDelays | null> => {
   try {
-    const doc = await firestore().collection('settings').doc('horaires').get();
+    const doc = await firestore().collection('settings').doc('prayerTimes').get();
     if (doc.exists() && doc.data()?.iqama) {
       return doc.data()?.iqama as FirebaseIqamaDelays;
     }

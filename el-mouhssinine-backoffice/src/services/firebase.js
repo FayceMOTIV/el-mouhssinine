@@ -495,6 +495,10 @@ export const updateMosqueeInfo = (data) => setDocument('settings', 'mosqueeInfo'
 export const getCotisationPrices = () => getDocument('settings', 'cotisation')
 export const updateCotisationPrices = (data) => setDocument('settings', 'cotisation', data)
 
+// Règlement intérieur
+export const getReglement = () => getDocument('settings', 'reglement')
+export const updateReglement = (data) => setDocument('settings', 'reglement', data)
+
 // Rappels
 export const getRappels = () => getCollection('rappels', [orderBy('createdAt', 'desc')])
 export const subscribeToRappels = (cb) => subscribeToCollection('rappels', cb, [orderBy('createdAt', 'desc')])

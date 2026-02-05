@@ -958,6 +958,10 @@ exports.onMessageReply = functions
 // Créer un PaymentIntent pour les dons et cotisations
 
 exports.createPaymentIntent = functions
+  .runWith({
+    timeoutSeconds: 30,
+    memory: '256MB',
+  })
   .region('europe-west1')
   .https.onCall(async (data, context) => {
     // Vérifier l'authentification (optionnel pour les dons anonymes)
@@ -1033,6 +1037,10 @@ exports.createPaymentIntent = functions
 // Avec idempotence et transactions atomiques
 
 exports.stripeWebhook = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: '256MB',
+  })
   .region('europe-west1')
   .https.onRequest(async (req, res) => {
     const sig = req.headers['stripe-signature'];
@@ -1431,6 +1439,10 @@ const generateRecuFiscalPDF = async (data) => {
  * Cloud Function: Générer et envoyer un reçu fiscal par email
  */
 exports.sendRecuFiscal = functions
+  .runWith({
+    timeoutSeconds: 120,
+    memory: '512MB', // PDFKit nécessite plus de mémoire
+  })
   .region('europe-west1')
   .https.onCall(async (data, context) => {
     // Vérifier l'authentification
@@ -1784,6 +1796,410 @@ exports.getDonsByYear = functions
 
     } catch (error) {
       console.error('Erreur getDonsByYear:', error);
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ==================== NOUVEAU MEMBRE SYMPATHISANT ====================
+// Trigger : quand un nouveau membre est créé avec status 'sympathisant'
+
+exports.onNewSympathisant = functions
+  .region('europe-west1')
+  .firestore
+  .document('members/{memberId}')
+  .onCreate(async (snap, context) => {
+    const member = snap.data();
+
+    // Seulement pour les sympathisants
+    if (member.status !== 'sympathisant') {
+      console.log('Nouveau membre mais pas sympathisant, status:', member.status);
+      return null;
+    }
+
+    const email = member.email;
+    const prenom = member.prenom || 'Membre';
+
+    if (!email) {
+      console.log('Pas d\'email pour le sympathisant, skip email de bienvenue');
+      return null;
+    }
+
+    console.log('🎉 Nouveau sympathisant:', prenom, email);
+
+    try {
+      // Récupérer les infos de la mosquée
+      const mosqueeDoc = await admin.firestore()
+        .collection('settings')
+        .doc('mosqueeInfo')
+        .get();
+
+      const mosquee = mosqueeDoc.exists ? mosqueeDoc.data() : {};
+      const nomMosquee = mosquee.nom || 'Mosquée El Mouhssinine';
+      const adresseMosquee = mosquee.adresse || '';
+      const villeMosquee = mosquee.ville || 'Bourg-en-Bresse';
+      const telephoneMosquee = mosquee.telephone || '';
+      const emailMosquee = mosquee.email || '';
+
+      // Configuration email Brevo
+      const brevoUser = functions.config().brevo?.smtp_user;
+      const brevoPass = functions.config().brevo?.smtp_pass;
+      const fromEmail = functions.config().brevo?.from_email;
+      const fromName = functions.config().brevo?.from_name || nomMosquee;
+
+      if (!brevoUser || !brevoPass || !fromEmail) {
+        console.error('Configuration Brevo manquante, email non envoyé');
+        return null;
+      }
+
+      const transporter = nodemailer.createTransport({
+        host: 'smtp-relay.brevo.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: brevoUser,
+          pass: brevoPass,
+        },
+      });
+
+      // Envoyer l'email de bienvenue
+      await transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to: email,
+        subject: `Bienvenue à la ${nomMosquee} !`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #6b4423 0%, #8b5a2b 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0;">🕌 Bienvenue</h1>
+            </div>
+
+            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+              <p style="font-size: 16px;">Assalamu alaykum <strong>${prenom}</strong>,</p>
+
+              <p style="font-size: 16px;">Bienvenue en tant que <strong>membre sympathisant</strong> de la ${nomMosquee} !</p>
+
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6b4423;">
+                <h3 style="color: #6b4423; margin-top: 0;">🎁 En tant que sympathisant, vous avez accès à :</h3>
+                <ul style="color: #444; line-height: 1.8;">
+                  <li>📍 Les horaires de prière en temps réel</li>
+                  <li>📖 Le Coran complet avec audio et traduction</li>
+                  <li>📢 Les annonces et événements de la mosquée</li>
+                  <li>🤲 Les invocations (adhkar)</li>
+                  <li>📝 L'alphabet arabe et les leçons</li>
+                  <li>💬 La messagerie avec le bureau</li>
+                </ul>
+              </div>
+
+              <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #2e7d32; margin-top: 0;">💳 Pour devenir membre actif (adhérent)</h3>
+                <ol style="color: #444; line-height: 1.8;">
+                  <li>Ouvrez l'application et allez dans "Membre"</li>
+                  <li>Cliquez sur "Devenir Membre Actif"</li>
+                  <li>Lisez et acceptez les statuts et règlement intérieur</li>
+                  <li>Payez votre cotisation (mensuelle ou annuelle)</li>
+                  <li>Votre adhésion sera validée par le bureau</li>
+                </ol>
+                <p style="font-size: 14px; color: #666; margin-bottom: 0;">
+                  <em>En tant que membre actif, vous bénéficiez d'une carte de membre, du droit de vote en AG, et d'un reçu fiscal pour votre cotisation.</em>
+                </p>
+              </div>
+
+              <p style="font-size: 16px; color: #444;">Qu'Allah vous bénisse et accepte vos bonnes actions.</p>
+
+              <p style="font-size: 16px; color: #444;">Fraternellement,<br><strong>Le Bureau de la ${nomMosquee}</strong></p>
+
+              <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+              <div style="font-size: 13px; color: #888; text-align: center;">
+                ${adresseMosquee ? `<p style="margin: 5px 0;">📍 ${adresseMosquee}, ${villeMosquee}</p>` : ''}
+                ${telephoneMosquee ? `<p style="margin: 5px 0;">📞 ${telephoneMosquee}</p>` : ''}
+                ${emailMosquee ? `<p style="margin: 5px 0;">📧 ${emailMosquee}</p>` : ''}
+              </div>
+            </div>
+          </div>
+        `,
+      });
+
+      console.log('✅ Email de bienvenue envoyé à', email);
+
+      // Mettre à jour le document membre
+      await snap.ref.update({
+        welcomeEmailSent: true,
+        welcomeEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return { success: true, email };
+
+    } catch (error) {
+      console.error('❌ Erreur envoi email bienvenue:', error);
+      return { error: error.message };
+    }
+  });
+
+// ==================== VALIDATION ADHÉSION PAR LE BUREAU ====================
+// Callable function pour valider ou refuser une adhésion
+
+exports.validateMembership = functions
+  .region('europe-west1')
+  .https.onCall(async (data, context) => {
+    // Vérifier l'authentification
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentification requise');
+    }
+
+    // Vérifier les droits admin
+    const adminCheck = await isAdmin(context.auth.uid);
+    if (!adminCheck) {
+      throw new functions.https.HttpsError('permission-denied', 'Réservé aux administrateurs');
+    }
+
+    const { memberId, action, message } = data;
+
+    if (!memberId || !action) {
+      throw new functions.https.HttpsError('invalid-argument', 'memberId et action sont requis');
+    }
+
+    if (!['approve', 'reject', 'request_visit'].includes(action)) {
+      throw new functions.https.HttpsError('invalid-argument', 'Action invalide');
+    }
+
+    try {
+      // Récupérer le membre
+      const memberRef = admin.firestore().collection('members').doc(memberId);
+      const memberDoc = await memberRef.get();
+
+      if (!memberDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Membre non trouvé');
+      }
+
+      const member = memberDoc.data();
+      const email = member.email;
+      const prenom = member.prenom || 'Membre';
+      const nom = member.nom || '';
+
+      // Récupérer les infos de la mosquée pour les emails
+      const mosqueeDoc = await admin.firestore()
+        .collection('settings')
+        .doc('mosqueeInfo')
+        .get();
+
+      const mosquee = mosqueeDoc.exists ? mosqueeDoc.data() : {};
+      const nomMosquee = mosquee.nom || 'Mosquée El Mouhssinine';
+
+      // Configuration email
+      const brevoUser = functions.config().brevo?.smtp_user;
+      const brevoPass = functions.config().brevo?.smtp_pass;
+      const fromEmail = functions.config().brevo?.from_email;
+      const fromName = functions.config().brevo?.from_name || nomMosquee;
+
+      let transporter = null;
+      if (brevoUser && brevoPass && fromEmail) {
+        transporter = nodemailer.createTransport({
+          host: 'smtp-relay.brevo.com',
+          port: 587,
+          secure: false,
+          auth: {
+            user: brevoUser,
+            pass: brevoPass,
+          },
+        });
+      }
+
+      // ========== APPROVAL ==========
+      if (action === 'approve') {
+        // Mettre à jour le statut
+        await memberRef.update({
+          status: 'actif',
+          validatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          validatedBy: context.auth.uid,
+        });
+
+        // Envoyer email de confirmation
+        if (transporter && email) {
+          await transporter.sendMail({
+            from: `"${fromName}" <${fromEmail}>`,
+            to: email,
+            subject: `🎉 Votre adhésion est validée - ${nomMosquee}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                  <h1 style="color: white; margin: 0;">✅ Adhésion Validée</h1>
+                </div>
+
+                <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                  <p style="font-size: 16px;">Assalamu alaykum <strong>${prenom}</strong>,</p>
+
+                  <p style="font-size: 16px;">Nous avons le plaisir de vous informer que votre adhésion à la ${nomMosquee} a été <strong style="color: #2e7d32;">validée</strong> !</p>
+
+                  <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #2e7d32; margin-top: 0;">Vous êtes maintenant membre actif</h3>
+                    <ul style="color: #444; line-height: 1.8;">
+                      <li>🎫 Carte de membre officielle</li>
+                      <li>🗳️ Droit de vote en Assemblée Générale</li>
+                      <li>📜 Reçu fiscal pour votre cotisation</li>
+                    </ul>
+                  </div>
+
+                  <p style="font-size: 16px;">Votre carte de membre est disponible dans l'application.</p>
+
+                  <p style="font-size: 16px; color: #444;">Qu'Allah vous récompense pour votre engagement.</p>
+
+                  <p style="font-size: 16px; color: #444;">Fraternellement,<br><strong>Le Bureau de la ${nomMosquee}</strong></p>
+                </div>
+              </div>
+            `,
+          });
+        }
+
+        // Envoyer notification push
+        if (member.fcmToken) {
+          await admin.messaging().send({
+            token: member.fcmToken,
+            notification: {
+              title: '🎉 Adhésion validée !',
+              body: 'Félicitations, vous êtes maintenant membre actif.',
+            },
+            data: {
+              type: 'membership_approved',
+              memberId: memberId,
+            },
+          });
+        }
+
+        console.log('✅ Adhésion validée pour', prenom, nom);
+        return { success: true, action: 'approved' };
+      }
+
+      // ========== REJECTION ==========
+      if (action === 'reject') {
+        const montant = member.cotisation?.montant || 0;
+
+        // 1. Créer un don à partir du paiement
+        if (montant > 0) {
+          await admin.firestore().collection('donations').add({
+            donateur: `${prenom} ${nom}`,
+            email: email || '',
+            telephone: member.telephone || '',
+            montant: montant,
+            projetId: null,
+            projetNom: 'Don libre',
+            modePaiement: member.modePaiement || 'autre',
+            origine: 'conversion_adhesion_refusee',
+            membreId: memberId,
+            eligibleRecuFiscal: true,
+            date: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        // 2. Mettre à jour le membre en sympathisant
+        await memberRef.update({
+          status: 'sympathisant',
+          adhesionRefuseeAt: admin.firestore.FieldValue.serverTimestamp(),
+          adhesionRefuseeRaison: message || 'Décision du bureau',
+          cotisation: {
+            ...member.cotisation,
+            dateDebut: null,
+            dateFin: null,
+          },
+          aPaye: false,
+          datePaiement: null,
+        });
+
+        // 3. Envoyer email d'information
+        if (transporter && email) {
+          await transporter.sendMail({
+            from: `"${fromName}" <${fromEmail}>`,
+            to: email,
+            subject: `Information concernant votre demande d'adhésion - ${nomMosquee}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: #f5f5f5; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                  <h1 style="color: #333; margin: 0;">Information</h1>
+                </div>
+
+                <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                  <p style="font-size: 16px;">Assalamu alaykum <strong>${prenom}</strong>,</p>
+
+                  <p style="font-size: 16px;">Nous avons bien reçu votre demande d'adhésion.</p>
+
+                  <p style="font-size: 16px;">Après examen par le bureau, nous ne sommes pas en mesure de valider votre adhésion en tant que membre actif.</p>
+
+                  <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff9800;">
+                    <p style="margin: 0; color: #e65100;">
+                      <strong>Conformément à nos conditions :</strong><br>
+                      Votre paiement de <strong>${montant}€</strong> a été converti en don au profit de la mosquée.
+                    </p>
+                  </div>
+
+                  <p style="font-size: 16px;">Vous recevrez un reçu fiscal pour ce don.</p>
+
+                  <p style="font-size: 16px;">Vous restez <strong>membre sympathisant</strong> et conservez l'accès à toutes les fonctionnalités de l'application.</p>
+
+                  <p style="font-size: 16px;">Pour toute question, n'hésitez pas à nous contacter via l'application ou à passer au bureau de la mosquée.</p>
+
+                  <p style="font-size: 16px; color: #444;">Fraternellement,<br><strong>Le Bureau de la ${nomMosquee}</strong></p>
+                </div>
+              </div>
+            `,
+          });
+        }
+
+        // 4. Envoyer notification push
+        if (member.fcmToken) {
+          await admin.messaging().send({
+            token: member.fcmToken,
+            notification: {
+              title: 'Information adhésion',
+              body: `Votre paiement de ${montant}€ a été converti en don.`,
+            },
+            data: {
+              type: 'membership_rejected',
+              memberId: memberId,
+            },
+          });
+        }
+
+        console.log('❌ Adhésion refusée pour', prenom, nom, '- paiement converti en don');
+        return { success: true, action: 'rejected', donAmount: montant };
+      }
+
+      // ========== REQUEST VISIT ==========
+      if (action === 'request_visit') {
+        // Créer un message dans la collection messages
+        await admin.firestore().collection('messages').add({
+          sujet: 'Votre adhésion',
+          contenu: message || `Bonjour ${prenom},\n\nNous vous invitons à venir au bureau de la mosquée pour finaliser votre adhésion.\n\nCordialement,\nLe Bureau`,
+          odUserId: member.uid || memberId,
+          nomComplet: `${prenom} ${nom}`,
+          email: email || '',
+          telephone: member.telephone || '',
+          status: 'non_lu',
+          createdBy: 'mosquee',
+          reponses: [],
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Envoyer notification push
+        if (member.fcmToken) {
+          await admin.messaging().send({
+            token: member.fcmToken,
+            notification: {
+              title: '📍 Passage au bureau demandé',
+              body: 'La mosquée souhaite vous rencontrer pour votre adhésion.',
+            },
+            data: {
+              type: 'visit_requested',
+              memberId: memberId,
+            },
+          });
+        }
+
+        console.log('📍 Demande de passage au bureau pour', prenom, nom);
+        return { success: true, action: 'visit_requested' };
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur validateMembership:', error);
       throw new functions.https.HttpsError('internal', error.message);
     }
   });

@@ -1631,14 +1631,15 @@ const styles = StyleSheet.create({
     color: colors.text,
     flexShrink: 1,
   },
-  // Switch
+  // Switch - Accessible touch target
   switch: {
-    width: 50,
-    height: 28,
-    borderRadius: 14,
+    width: 52,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#e0e0e0',
     justifyContent: 'center',
     padding: 2,
+    minHeight: 44, // Touch target wrapper
   },
   switchActive: {
     backgroundColor: colors.accent,
@@ -1663,11 +1664,13 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   pickerOption: {
-    paddingHorizontal: isSmallScreen ? 6 : spacing.sm,
-    paddingVertical: isSmallScreen ? 3 : spacing.xs,
+    paddingHorizontal: isSmallScreen ? 8 : spacing.sm,
+    paddingVertical: isSmallScreen ? 10 : 12,
     borderRadius: borderRadius.sm,
-    minWidth: isSmallScreen ? 24 : 28,
+    minWidth: 44, // Minimum touch target Apple HIG
+    minHeight: 44, // Minimum touch target Apple HIG
     alignItems: 'center',
+    justifyContent: 'center',
   },
   pickerOptionActive: {
     backgroundColor: colors.accent,

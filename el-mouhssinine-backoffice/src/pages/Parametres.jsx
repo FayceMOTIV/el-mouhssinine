@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import {
   Settings, Save, Building2, MapPin, Phone, Mail, Globe, Clock,
-  Palette, Database, Landmark, Image, Upload, CreditCard
+  Palette, Database, Landmark, Image, Upload, CreditCard, ScrollText
 } from 'lucide-react'
 import { Card, Button, Input, Textarea, Toggle, Loading } from '../components/common'
-import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo, storage, getCotisationPrices, updateCotisationPrices } from '../services/firebase'
+import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo, storage, getCotisationPrices, updateCotisationPrices, getReglement, updateReglement } from '../services/firebase'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { useAuth } from '../context/AuthContext'
 
@@ -67,16 +67,23 @@ export default function Parametres() {
     annuel: 100
   })
 
+  // Règlement intérieur
+  const [reglement, setReglement] = useState({
+    contenu: '',
+    updatedAt: null
+  })
+
   useEffect(() => {
     loadData()
   }, [])
 
   const loadData = async () => {
     try {
-      const [mosquee, general, cotisation] = await Promise.all([
+      const [mosquee, general, cotisation, reglementData] = await Promise.all([
         getMosqueeInfo(),
         getSettings(),
-        getCotisationPrices()
+        getCotisationPrices(),
+        getReglement()
       ])
 
       if (mosquee) {
@@ -92,6 +99,9 @@ export default function Parametres() {
       }
       if (cotisation) {
         setCotisationPrices(prev => ({ ...prev, ...cotisation }))
+      }
+      if (reglementData) {
+        setReglement(prev => ({ ...prev, ...reglementData }))
       }
     } catch (err) {
       console.error('Error loading settings:', err)
@@ -140,6 +150,19 @@ export default function Parametres() {
     }
   }
 
+  const handleSaveReglement = async () => {
+    setSaving(true)
+    try {
+      await updateReglement(reglement)
+      toast.success('Règlement intérieur enregistré')
+    } catch (err) {
+      console.error('Error saving reglement:', err)
+      toast.error('Erreur lors de la sauvegarde')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleHeaderImageUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -181,6 +204,7 @@ export default function Parametres() {
     { id: 'header', label: 'Image d\'en-tête', icon: Image },
     { id: 'banque', label: 'Coordonnées bancaires', icon: Landmark },
     { id: 'cotisation', label: 'Cotisations', icon: CreditCard },
+    { id: 'reglement', label: 'Règlement', icon: ScrollText },
     { id: 'display', label: 'Affichage', icon: Palette },
     { id: 'system', label: 'Système', icon: Database }
   ]
@@ -405,6 +429,60 @@ export default function Parametres() {
           </div>
           <div className="flex justify-end mt-6">
             <Button onClick={handleSaveCotisation} loading={saving}>
+              <Save className="w-4 h-4 mr-2" />
+              Enregistrer
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Règlement Tab */}
+      {activeTab === 'reglement' && (
+        <Card title="Statuts et Règlement Intérieur" icon={ScrollText}>
+          <p className="text-white/60 text-sm mb-6">
+            Ce texte sera affiché aux membres lors de leur demande d'adhésion.
+            <br />
+            <span className="text-accent">Ils devront le lire en entier et l'accepter avant de pouvoir payer.</span>
+          </p>
+          <div className="space-y-4">
+            <Textarea
+              label="Contenu du règlement"
+              value={reglement.contenu}
+              onChange={(e) => setReglement({ ...reglement, contenu: e.target.value })}
+              placeholder="Entrez ici les statuts et le règlement intérieur de l'association...
+
+Exemple:
+ARTICLE 1 - OBJET
+L'association a pour objet...
+
+ARTICLE 2 - CONDITIONS D'ADHÉSION
+Pour devenir membre actif, il faut..."
+              rows={20}
+            />
+            {reglement.updatedAt && (
+              <p className="text-white/40 text-sm">
+                Dernière modification : {
+                  reglement.updatedAt?.toDate
+                    ? reglement.updatedAt.toDate().toLocaleDateString('fr-FR', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                    : new Date(reglement.updatedAt).toLocaleDateString('fr-FR', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                }
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end mt-6">
+            <Button onClick={handleSaveReglement} loading={saving}>
               <Save className="w-4 h-4 mr-2" />
               Enregistrer
             </Button>

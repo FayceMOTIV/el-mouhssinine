@@ -1606,6 +1606,177 @@ export const subscribeToMyMembership = (
   }
 };
 
+// Listener temps réel pour le profil membre (par UID ou email)
+// Utilisé par MemberScreen pour mise à jour en temps réel depuis le backoffice
+export interface MemberProfileRealtime {
+  id: string;
+  memberId: string;
+  nom: string;
+  prenom: string;
+  email: string;
+  telephone: string;
+  adresse: string;
+  status: string;
+  cotisation: {
+    type: 'mensuel' | 'annuel' | null;
+    montant: number;
+    dateDebut: Date | null;
+    dateFin: Date | null;
+    status: string;
+  };
+}
+
+export const subscribeToMemberProfile = (
+  uid: string,
+  email: string,
+  callback: (profile: MemberProfileRealtime | null) => void
+): (() => void) => {
+  if (FORCE_DEMO_MODE || (!uid && !email)) {
+    callback(null);
+    return () => {};
+  }
+
+  try {
+    // Chercher par UID d'abord, puis par email
+    const query = uid
+      ? firestore().collection('members').where('uid', '==', uid).limit(1)
+      : firestore().collection('members').where('email', '==', email.toLowerCase()).limit(1);
+
+    return query.onSnapshot(
+      async snapshot => {
+        // Si pas trouvé par UID, essayer par email
+        if (snapshot.empty && uid && email) {
+          const emailSnapshot = await firestore()
+            .collection('members')
+            .where('email', '==', email.toLowerCase())
+            .limit(1)
+            .get();
+
+          if (!emailSnapshot.empty) {
+            const doc = emailSnapshot.docs[0];
+            const data = doc.data();
+
+            // Lier le UID au document si pas encore fait
+            if (!data.uid) {
+              await doc.ref.update({ uid });
+            }
+
+            // Continuer avec un nouveau listener sur ce document
+            firestore()
+              .collection('members')
+              .doc(doc.id)
+              .onSnapshot(docSnap => {
+                const d = docSnap.data();
+                if (d) {
+                  callback(buildMemberProfile(docSnap.id, d));
+                } else {
+                  callback(null);
+                }
+              });
+            return;
+          }
+          callback(null);
+          return;
+        }
+
+        if (snapshot.empty) {
+          callback(null);
+          return;
+        }
+
+        const doc = snapshot.docs[0];
+        const data = doc.data();
+        callback(buildMemberProfile(doc.id, data));
+      },
+      error => {
+        logger.error('[Firebase] subscribeToMemberProfile error:', error);
+        callback(null);
+      }
+    );
+  } catch (error) {
+    logger.error('[Firebase] subscribeToMemberProfile catch:', error);
+    callback(null);
+    return () => {};
+  }
+};
+
+// Helper pour construire le profil membre
+const buildMemberProfile = (docId: string, data: any): MemberProfileRealtime => {
+  const hasValidCotisation = data.cotisation?.dateFin &&
+    (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
+
+  const cotisationStatus = data.status === 'actif' || hasValidCotisation ? 'active' :
+    data.status === 'en_attente_paiement' ? 'pending' :
+    data.status === 'sympathisant' ? 'sympathisant' : 'expired';
+
+  return {
+    id: docId,
+    memberId: data.memberId || data.numeroAdherent || '',
+    nom: data.nom || '',
+    prenom: data.prenom || '',
+    email: data.email || '',
+    telephone: data.telephone || '',
+    adresse: data.adresse || '',
+    status: data.status || (hasValidCotisation ? 'actif' : 'en_attente_signature'),
+    cotisation: {
+      type: data.formule || data.cotisation?.type || null,
+      montant: data.montant || data.cotisation?.montant || 0,
+      dateDebut: data.cotisation?.dateDebut ? toDate(data.cotisation.dateDebut) : null,
+      dateFin: data.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : null,
+      status: cotisationStatus,
+    },
+  };
+};
+
+// ==================== RÈGLEMENT INTÉRIEUR ====================
+
+export interface ReglementData {
+  contenu: string;
+  updatedAt: Date | null;
+}
+
+/**
+ * Écouter les changements du règlement intérieur en temps réel
+ */
+export const subscribeToReglement = (
+  callback: (reglement: ReglementData | null) => void
+): (() => void) => {
+  if (FORCE_DEMO_MODE) {
+    callback({
+      contenu: 'Règlement intérieur de l\'association...\n\nARTICLE 1 - OBJET\n...',
+      updatedAt: null
+    });
+    return () => {};
+  }
+
+  try {
+    return firestore()
+      .collection('settings')
+      .doc('reglement')
+      .onSnapshot(
+        (doc) => {
+          if (doc.exists()) {
+            const data = doc.data();
+            callback({
+              contenu: data?.contenu || '',
+              updatedAt: data?.updatedAt?.toDate ? data.updatedAt.toDate() : null
+            });
+          } else {
+            callback(null);
+          }
+        },
+        (error) => {
+          logger.error('[Firebase] subscribeToReglement error:', error);
+          callback(null);
+        }
+      );
+  } catch (error) {
+    logger.error('[Firebase] subscribeToReglement catch:', error);
+    callback(null);
+    return () => {};
+  }
+};
+
 // ==================== SERVICES & ACTIVITÉS (statiques) ====================
 
 export const getServices = () => mockServices;

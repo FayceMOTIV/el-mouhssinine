@@ -26,6 +26,10 @@ import {
   createMember,
   getMembersInscribedBy,
   InscribedMember,
+  subscribeToMemberProfile,
+  MemberProfileRealtime,
+  subscribeToReglement,
+  ReglementData,
 } from '../services/firebase';
 import { AuthService, MemberProfile } from '../services/auth';
 import { makePayment, showPaymentError, showPaymentSuccess } from '../services/stripe';
@@ -61,6 +65,12 @@ const MemberScreen = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCardFullScreen, setShowCardFullScreen] = useState(false);
   const [showFamilyModal, setShowFamilyModal] = useState(false);
+  const [showReglementModal, setShowReglementModal] = useState(false);
+
+  // Règlement intérieur
+  const [reglement, setReglement] = useState<ReglementData | null>(null);
+  const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
+  const [acceptedReglement, setAcceptedReglement] = useState(false);
 
   // Formulaire connexion
   const [isRegistering, setIsRegistering] = useState(false);
@@ -110,20 +120,76 @@ const MemberScreen = () => {
   // EFFECTS
   // ============================================================
 
+  // Listener pour profil membre en temps réel
+  const [memberProfileUnsubscribe, setMemberProfileUnsubscribe] = useState<(() => void) | null>(null);
+
   useEffect(() => {
     const unsubscribe = AuthService.onAuthStateChanged(async (user) => {
       setIsLoading(true);
+
+      // Nettoyer l'ancien listener si existant
+      if (memberProfileUnsubscribe) {
+        memberProfileUnsubscribe();
+        setMemberProfileUnsubscribe(null);
+      }
+
       if (user) {
         setIsLoggedIn(true);
-        await loadMemberData(user.uid);
+
+        // Souscrire au profil en temps réel (se met à jour depuis le backoffice)
+        const unsubMember = subscribeToMemberProfile(user.uid, user.email || '', (profile) => {
+          if (profile) {
+            // Convertir MemberProfileRealtime vers MemberProfile
+            const memberProf: MemberProfile = {
+              uid: user.uid,
+              name: `${profile.prenom} ${profile.nom}`.trim(),
+              email: profile.email,
+              memberId: profile.memberId,
+              nom: profile.nom,
+              prenom: profile.prenom,
+              cotisationType: profile.cotisation.type,
+              cotisationStatus: profile.cotisation.status as 'none' | 'active' | 'expired' | 'pending',
+              cotisationExpiry: profile.cotisation.dateFin || undefined,
+              telephone: profile.telephone,
+              adresse: profile.adresse,
+              createdAt: new Date(),
+            };
+            setMemberProfile(memberProf);
+            setIsPaid(profile.cotisation.status === 'active');
+
+            // Charger les membres inscrits (une seule fois)
+            getMembersInscribedBy(user.uid).then(setInscribedMembers);
+          } else {
+            // Profil pas encore créé, charger via la méthode classique (pour création initiale)
+            loadMemberData(user.uid);
+          }
+          setIsLoading(false);
+        });
+
+        setMemberProfileUnsubscribe(() => unsubMember);
+
+        // S'abonner aux notifications et sauvegarder le token
+        await subscribeToMembersTopic();
+        await saveFCMTokenToFirestore(user.uid);
       } else {
+        // Cleanup du listener lors de la déconnexion
+        if (memberProfileUnsubscribe) {
+          memberProfileUnsubscribe();
+          setMemberProfileUnsubscribe(null);
+        }
         setIsLoggedIn(false);
         setMemberProfile(null);
         setIsPaid(false);
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribe();
+      if (memberProfileUnsubscribe) {
+        memberProfileUnsubscribe();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -133,6 +199,12 @@ const MemberScreen = () => {
 
   useEffect(() => {
     getMosqueeInfo().then(setMosqueeInfo);
+  }, []);
+
+  // Charger le règlement
+  useEffect(() => {
+    const unsubscribe = subscribeToReglement(setReglement);
+    return () => unsubscribe();
   }, []);
 
   // Vérifier si c'est la première visite pour afficher le message de bienvenue
@@ -720,6 +792,19 @@ const MemberScreen = () => {
   // RENDER: LOGGED IN - NO SUBSCRIPTION
   // ============================================================
 
+  // Vérifier si le membre est sympathisant
+  const isSympathisant = memberProfile && (
+    (memberProfile as any).cotisationStatus === 'sympathisant' ||
+    (memberProfile as any).status === 'sympathisant' ||
+    (memberProfile.cotisationStatus === 'none' && !memberProfile.cotisationExpiry)
+  );
+
+  // Vérifier si le membre attend la validation du bureau
+  const isAwaitingValidation = memberProfile && (
+    (memberProfile as any).cotisationStatus === 'en_attente_validation' ||
+    (memberProfile as any).status === 'en_attente_validation'
+  );
+
   // Préparation des cartes de membre (utilisateur + inscrits)
   const getPaymentStatus = (profile: MemberProfile | InscribedMember): 'paid' | 'pending' | 'virement_pending' | 'unpaid' => {
     // Pour MemberProfile
@@ -807,52 +892,92 @@ const MemberScreen = () => {
             <Text style={styles.membershipsButtonArrow}>→</Text>
           </TouchableOpacity>
 
-          {/* Card Devenir membre */}
-          <View style={styles.card}>
-            <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Activer ma cotisation</Text>
-            <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
-              Choisissez votre formule d'adhésion
-            </Text>
+          {/* Card Sympathisant ou Devenir membre */}
+          {isSympathisant ? (
+            <View style={styles.card}>
+              <Text style={styles.cardIcon}>🙏</Text>
+              <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Bienvenue, sympathisant !</Text>
+              <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
+                Vous avez accès à toutes les fonctionnalités de l'app.
+                {'\n'}Pour devenir membre actif, payez votre cotisation.
+              </Text>
 
-            {/* Formules */}
-            <View style={styles.formulesContainer}>
-              <TouchableOpacity
-                style={[styles.formuleOption, selectedFormule === 'mensuel' && styles.formuleSelected]}
-                onPress={() => setSelectedFormule('mensuel')}
-              >
-                <Text style={[styles.formuleLabel, selectedFormule === 'mensuel' && styles.formuleLabelSelected]}>
-                  Mensuel
-                </Text>
-                <Text style={[styles.formulePrice, selectedFormule === 'mensuel' && styles.formulePriceSelected]}>
-                  {formulePrices.mensuel}€
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.sympathisantBenefits}>
+                <Text style={styles.benefitItem}>✅ Carte de membre officielle</Text>
+                <Text style={styles.benefitItem}>✅ Droit de vote en AG</Text>
+                <Text style={styles.benefitItem}>✅ Reçu fiscal pour cotisation</Text>
+              </View>
 
               <TouchableOpacity
-                style={[styles.formuleOption, selectedFormule === 'annuel' && styles.formuleSelected]}
-                onPress={() => setSelectedFormule('annuel')}
+                style={styles.primaryButton}
+                onPress={() => {
+                  setHasScrolledToEnd(false);
+                  setAcceptedReglement(false);
+                  setShowReglementModal(true);
+                }}
               >
-                <Text style={[styles.formuleLabel, selectedFormule === 'annuel' && styles.formuleLabelSelected]}>
-                  Annuel
-                </Text>
-                <Text style={[styles.formulePrice, selectedFormule === 'annuel' && styles.formulePriceSelected]}>
-                  {formulePrices.annuel}€
-                </Text>
-                {formulePrices.annuel < formulePrices.mensuel * 12 && (
-                  <View style={styles.economyBadge}>
-                    <Text style={styles.economyText}>-{Math.round((1 - formulePrices.annuel / (formulePrices.mensuel * 12)) * 100)}%</Text>
-                  </View>
-                )}
+                <Text style={styles.primaryButtonText}>🎉 Devenir Membre Actif</Text>
               </TouchableOpacity>
             </View>
+          ) : isAwaitingValidation ? (
+            <View style={styles.card}>
+              <Text style={styles.cardIcon}>⏳</Text>
+              <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Adhésion en cours de validation</Text>
+              <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
+                Votre paiement a été reçu. Le bureau va valider votre adhésion prochainement.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Activer ma cotisation</Text>
+              <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
+                Choisissez votre formule d'adhésion
+              </Text>
 
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => setShowPaymentModal(true)}
-            >
-              <Text style={styles.primaryButtonText}>Payer {formulePrices[selectedFormule]}€</Text>
-            </TouchableOpacity>
-          </View>
+              {/* Formules */}
+              <View style={styles.formulesContainer}>
+                <TouchableOpacity
+                  style={[styles.formuleOption, selectedFormule === 'mensuel' && styles.formuleSelected]}
+                  onPress={() => setSelectedFormule('mensuel')}
+                >
+                  <Text style={[styles.formuleLabel, selectedFormule === 'mensuel' && styles.formuleLabelSelected]}>
+                    Mensuel
+                  </Text>
+                  <Text style={[styles.formulePrice, selectedFormule === 'mensuel' && styles.formulePriceSelected]}>
+                    {formulePrices.mensuel}€
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.formuleOption, selectedFormule === 'annuel' && styles.formuleSelected]}
+                  onPress={() => setSelectedFormule('annuel')}
+                >
+                  <Text style={[styles.formuleLabel, selectedFormule === 'annuel' && styles.formuleLabelSelected]}>
+                    Annuel
+                  </Text>
+                  <Text style={[styles.formulePrice, selectedFormule === 'annuel' && styles.formulePriceSelected]}>
+                    {formulePrices.annuel}€
+                  </Text>
+                  {formulePrices.annuel < formulePrices.mensuel * 12 && (
+                    <View style={styles.economyBadge}>
+                      <Text style={styles.economyText}>-{Math.round((1 - formulePrices.annuel / (formulePrices.mensuel * 12)) * 100)}%</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => {
+                  setHasScrolledToEnd(false);
+                  setAcceptedReglement(false);
+                  setShowReglementModal(true);
+                }}
+              >
+                <Text style={styles.primaryButtonText}>Payer {formulePrices[selectedFormule]}€</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Bouton inscrire famille */}
           <TouchableOpacity
@@ -883,6 +1008,7 @@ const MemberScreen = () => {
           isRTL={isRTL}
         />
 
+        {renderReglementModal()}
         {renderPaymentModal()}
         {renderFamilyModal()}
       </View>
@@ -991,6 +1117,7 @@ const MemberScreen = () => {
         isRTL={isRTL}
       />
 
+      {renderReglementModal()}
       {renderPaymentModal()}
       {renderFamilyModal()}
     </View>
@@ -1187,6 +1314,110 @@ const MemberScreen = () => {
             )}
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+    );
+  }
+
+  // ============================================================
+  // MODAL: RÈGLEMENT
+  // ============================================================
+
+  function renderReglementModal() {
+    const handleScroll = (event: any) => {
+      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      const paddingToBottom = 50;
+      if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+        setHasScrolledToEnd(true);
+      }
+    };
+
+    const handleContinueToPayment = () => {
+      if (!hasScrolledToEnd) {
+        Alert.alert('Lecture obligatoire', 'Veuillez lire le règlement jusqu\'à la fin avant de continuer.');
+        return;
+      }
+      if (!acceptedReglement) {
+        Alert.alert('Acceptation requise', 'Veuillez cocher la case pour accepter le règlement.');
+        return;
+      }
+      setShowReglementModal(false);
+      setShowPaymentModal(true);
+    };
+
+    return (
+      <Modal visible={showReglementModal} transparent animationType="slide">
+        <View style={styles.familyModalOverlay}>
+          <View style={styles.familyModalContent}>
+            {/* Header */}
+            <View style={styles.familyModalHeader}>
+              <Text style={[styles.familyModalTitle, isRTL && styles.rtlText]}>📜 Statuts et Règlement</Text>
+              <TouchableOpacity
+                style={styles.familyCloseButton}
+                onPress={() => {
+                  setShowReglementModal(false);
+                  setHasScrolledToEnd(false);
+                  setAcceptedReglement(false);
+                }}
+              >
+                <Text style={styles.familyCloseButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Contenu avec scroll */}
+            <ScrollView
+              style={styles.reglementScrollView}
+              onScroll={handleScroll}
+              scrollEventThrottle={400}
+              showsVerticalScrollIndicator={true}
+            >
+              <Text style={[styles.reglementText, isRTL && styles.rtlText]}>
+                {reglement?.contenu || 'Chargement du règlement...'}
+              </Text>
+
+              {/* Indicateur de fin */}
+              <View style={styles.reglementEndMarker}>
+                <Text style={styles.reglementEndText}>─── Fin du document ───</Text>
+              </View>
+            </ScrollView>
+
+            {/* Footer avec checkbox et bouton */}
+            <View style={styles.reglementFooter}>
+              {!hasScrolledToEnd && (
+                <View style={styles.scrollWarning}>
+                  <Text style={styles.scrollWarningText}>⬇️ Faites défiler jusqu'en bas pour continuer</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setAcceptedReglement(!acceptedReglement)}
+              >
+                <View style={[styles.checkbox, acceptedReglement && styles.checkboxChecked]}>
+                  {acceptedReglement && <Text style={styles.checkboxCheck}>✓</Text>}
+                </View>
+                <Text style={[styles.checkboxLabel, { flex: 1 }]}>
+                  J'ai lu et j'accepte les statuts et le règlement intérieur
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.reglementWarning}>
+                <Text style={styles.reglementWarningText}>
+                  ⚠️ En cas de refus d'adhésion par le bureau, votre paiement sera converti en don (éligible au reçu fiscal).
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (!hasScrolledToEnd || !acceptedReglement) && styles.buttonDisabled
+                ]}
+                onPress={handleContinueToPayment}
+              >
+                <Text style={styles.primaryButtonText}>Continuer vers le paiement</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     );
   }
@@ -2244,6 +2475,63 @@ const styles = StyleSheet.create({
   rtlText: {
     textAlign: 'right',
     writingDirection: 'rtl',
+  },
+
+  // Règlement modal
+  reglementScrollView: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+  },
+  reglementText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    lineHeight: 22,
+  },
+  reglementEndMarker: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+  },
+  reglementEndText: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+  },
+  reglementFooter: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  scrollWarning: {
+    backgroundColor: colors.accent + '20',
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+  },
+  scrollWarningText: {
+    fontSize: fontSize.sm,
+    color: colors.accent,
+    textAlign: 'center',
+  },
+  reglementWarning: {
+    backgroundColor: '#F5920015',
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginVertical: spacing.sm,
+  },
+  reglementWarningText: {
+    fontSize: fontSize.xs,
+    color: '#F59200',
+    textAlign: 'center',
+  },
+
+  // Sympathisant benefits
+  sympathisantBenefits: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
 
   // Genre selector

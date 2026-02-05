@@ -17,7 +17,7 @@ export interface MemberProfile {
   nom?: string;
   prenom?: string;
   cotisationType: 'mensuel' | 'annuel' | null;
-  cotisationStatus: 'none' | 'active' | 'expired' | 'pending';
+  cotisationStatus: 'none' | 'active' | 'expired' | 'pending' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' | 'en_attente_paiement';
   cotisationExpiry?: Date;
   phone?: string;
   address?: string;
@@ -101,11 +101,13 @@ export const AuthService = {
         genre: genre || '',
         dateNaissance: dateNaissance || '',
         cotisation: {
-          type: 'annuel',
+          type: null,
           montant: 0,
           dateDebut: null,
-          dateFin: null
+          dateFin: null,
+          status: 'sympathisant'
         },
+        status: 'sympathisant', // Nouveau: inscrit sans paiement, accès complet app
         actif: true,
         memberId: memberId,
         uid: user.uid,
@@ -421,17 +423,31 @@ function mapFirestoreToProfile(uid: string, data: any): MemberProfile {
   const cotisation = data.cotisation || {};
 
   // Calculer le statut de cotisation
-  let cotisationStatus: 'none' | 'active' | 'expired' | 'pending' = 'none';
+  let cotisationStatus: 'none' | 'active' | 'expired' | 'pending' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' | 'en_attente_paiement' = 'none';
   let cotisationExpiry: Date | undefined;
 
+  // Extraire la date d'expiration si elle existe
   if (cotisation.dateFin) {
-    const dateFin = cotisation.dateFin.toDate ? cotisation.dateFin.toDate() : new Date(cotisation.dateFin);
-    cotisationExpiry = dateFin;
+    cotisationExpiry = cotisation.dateFin.toDate ? cotisation.dateFin.toDate() : new Date(cotisation.dateFin);
+  }
 
-    if (new Date() < dateFin) {
+  // Vérifier d'abord le status explicite du document
+  if (data.status === 'sympathisant') {
+    cotisationStatus = 'sympathisant';
+  } else if (data.status === 'en_attente_validation') {
+    cotisationStatus = 'en_attente_validation';
+  } else if (data.status === 'en_attente_signature') {
+    cotisationStatus = 'en_attente_signature';
+  } else if (data.status === 'en_attente_paiement') {
+    cotisationStatus = 'en_attente_paiement';
+  } else if (data.status === 'actif' || cotisationExpiry) {
+    // Si explicitement actif ou si date d'expiration existe
+    if (cotisationExpiry && new Date() < cotisationExpiry) {
       cotisationStatus = 'active';
-    } else {
+    } else if (cotisationExpiry) {
       cotisationStatus = 'expired';
+    } else if (data.status === 'actif') {
+      cotisationStatus = 'active';
     }
   }
 

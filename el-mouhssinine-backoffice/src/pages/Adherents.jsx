@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-toastify'
-import { Users, Plus, Pencil, Trash2, Search, Download, Mail, Phone, Eye, Calendar, MapPin, CreditCard, Settings2, CheckCircle2, XCircle, Clock, Banknote, Smartphone, Building2, FileText, AlertCircle, TrendingUp, UserCheck, UserX, PieChart, BarChart3, MessageCircle, ShieldCheck, Link2 } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, Search, Download, Mail, Phone, Eye, Calendar, MapPin, CreditCard, Settings2, CheckCircle2, XCircle, Clock, Banknote, Smartphone, Building2, FileText, AlertCircle, TrendingUp, UserCheck, UserX, PieChart, BarChart3, MessageCircle, ShieldCheck, Link2, Heart } from 'lucide-react'
 import {
   Card,
   Button,
@@ -31,6 +31,7 @@ import { fr } from 'date-fns/locale'
 
 // Helper: Détermine le statut de cotisation d'un membre (déplacé hors composant pour éviter re-renders)
 const getCotisationStatus = (membre) => {
+  if (membre.status === 'sympathisant') return CotisationStatut.SYMPATHISANT
   if (membre.status === 'en_attente_validation') return CotisationStatut.EN_ATTENTE_VALIDATION
   if (membre.status === 'en_attente_signature') return CotisationStatut.EN_ATTENTE_SIGNATURE
   if (membre.status === 'en_attente_paiement') return CotisationStatut.EN_ATTENTE_PAIEMENT
@@ -159,6 +160,7 @@ export default function Adherents() {
     const nonPayes = total - payes
 
     // Statut cotisation
+    const sympathisants = membres.filter(m => getCotisationStatus(m) === CotisationStatut.SYMPATHISANT).length
     const actifs = membres.filter(m => getCotisationStatus(m) === CotisationStatut.ACTIF).length
     const attenteValidation = membres.filter(m => getCotisationStatus(m) === CotisationStatut.EN_ATTENTE_VALIDATION).length
     const attenteSignature = membres.filter(m => getCotisationStatus(m) === CotisationStatut.EN_ATTENTE_SIGNATURE).length
@@ -192,6 +194,7 @@ export default function Adherents() {
       payes,
       nonPayes,
       payesPercent: total > 0 ? Math.round((payes / total) * 100) : 0,
+      sympathisants,
       actifs,
       attenteValidation,
       attenteSignature,
@@ -343,6 +346,60 @@ export default function Adherents() {
     }
   }
 
+  const handleRejectAdhesion = async () => {
+    const membre = cotisationModal.membre
+    if (!membre) return
+
+    // Confirmation avant refus
+    if (!window.confirm(`Êtes-vous sûr de vouloir refuser l'adhésion de ${membre.prenom} ${membre.nom} ?\n\nSon paiement de ${membre.cotisation?.montant || 0}€ sera converti en don.`)) {
+      return
+    }
+
+    setSaving(true)
+    try {
+      // 1. Créer un don à partir du paiement
+      const montant = membre.cotisation?.montant || 0
+      if (montant > 0) {
+        await addDocument('donations', {
+          donateur: `${membre.prenom} ${membre.nom}`,
+          email: membre.email || '',
+          telephone: membre.telephone || '',
+          montant: montant,
+          projetId: null, // Don libre
+          projetNom: 'Don libre',
+          modePaiement: membre.modePaiement || 'autre',
+          origine: 'conversion_adhesion_refusee',
+          membreId: membre.id,
+          eligibleRecuFiscal: true,
+          date: new Date()
+        })
+      }
+
+      // 2. Mettre à jour le membre en sympathisant
+      await updateDocument('members', membre.id, {
+        status: 'sympathisant',
+        adhesionRefuseeAt: new Date(),
+        adhesionRefuseeRaison: 'Décision du bureau',
+        // Réinitialiser les infos de cotisation
+        cotisation: {
+          ...membre.cotisation,
+          dateDebut: null,
+          dateFin: null
+        },
+        aPaye: false,
+        datePaiement: null
+      })
+
+      toast.success(`Adhésion refusée. Le paiement de ${montant}€ a été converti en don.`)
+      setCotisationModal({ open: false, membre: null })
+    } catch (err) {
+      console.error('Error rejecting adhesion:', err)
+      toast.error('Erreur lors du refus')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // Récupérer les membres liés (même paiementId)
   const getLinkedMembers = (membre) => {
     if (!membre?.paiementId) return []
@@ -470,6 +527,7 @@ export default function Adherents() {
 
   const getStatusLabel = (status) => {
     switch (status) {
+      case CotisationStatut.SYMPATHISANT: return 'Sympathisant'
       case CotisationStatut.ACTIF: return 'Actif'
       case CotisationStatut.EN_ATTENTE_VALIDATION: return 'Attente validation'
       case CotisationStatut.EN_ATTENTE_SIGNATURE: return 'Attente signature'
@@ -526,6 +584,7 @@ export default function Adherents() {
       render: (row) => {
         const status = getCotisationStatus(row)
         const config = {
+          [CotisationStatut.SYMPATHISANT]: { bg: 'bg-pink-500/20', text: 'text-pink-400', icon: Heart },
           [CotisationStatut.ACTIF]: { bg: 'bg-green-500/20', text: 'text-green-400', icon: CheckCircle2 },
           [CotisationStatut.EN_ATTENTE_VALIDATION]: { bg: 'bg-violet-500/20', text: 'text-violet-400', icon: ShieldCheck },
           [CotisationStatut.EN_ATTENTE_SIGNATURE]: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
@@ -607,7 +666,7 @@ export default function Adherents() {
       {stats && (
         <>
           {/* Ligne 1 : Stats générales */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
             <Card>
               <div className="text-center">
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-secondary/20 flex items-center justify-center">
@@ -615,6 +674,15 @@ export default function Adherents() {
                 </div>
                 <p className="text-white/50 text-sm">Total membres</p>
                 <p className="text-3xl font-bold text-white">{stats.total}</p>
+              </div>
+            </Card>
+            <Card>
+              <div className="text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-pink-500/20 flex items-center justify-center">
+                  <Heart className="w-5 h-5 text-pink-400" />
+                </div>
+                <p className="text-white/50 text-sm">Sympathisants</p>
+                <p className="text-3xl font-bold text-pink-400">{stats.sympathisants}</p>
               </div>
             </Card>
             <Card>
@@ -808,11 +876,17 @@ export default function Adherents() {
           </div>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
             <option value="all">Tous les statuts</option>
+            <option value={CotisationStatut.SYMPATHISANT}>Sympathisant</option>
             <option value={CotisationStatut.ACTIF}>Actif</option>
             <option value={CotisationStatut.EN_ATTENTE_VALIDATION}>Attente validation</option>
             <option value={CotisationStatut.EN_ATTENTE_SIGNATURE}>Attente signature</option>
             <option value={CotisationStatut.EN_ATTENTE_PAIEMENT}>Attente paiement</option>
             <option value={CotisationStatut.EXPIRE}>Expiré</option>
+          </select>
+          <select value={payeurFilter} onChange={(e) => setPayeurFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
+            <option value="all">Tous les payeurs</option>
+            <option value="lui-meme">Payé par lui-même</option>
+            <option value="tiers">Payé par tiers</option>
           </select>
         </div>
         <div className="flex gap-3">
@@ -869,6 +943,7 @@ export default function Adherents() {
                   )}
                 </div>
                 <div className={`px-4 py-2 rounded-xl text-sm font-semibold ${
+                  status === CotisationStatut.SYMPATHISANT ? 'bg-pink-500/20 text-pink-400' :
                   status === CotisationStatut.ACTIF ? 'bg-green-500/20 text-green-400' :
                   status === CotisationStatut.EN_ATTENTE_VALIDATION ? 'bg-violet-500/20 text-violet-400' :
                   status === CotisationStatut.EN_ATTENTE_SIGNATURE ? 'bg-amber-500/20 text-amber-400' :
@@ -887,7 +962,7 @@ export default function Adherents() {
                     <ShieldCheck className="w-6 h-6 text-violet-400" />
                     <div>
                       <p className="text-violet-400 font-semibold">En attente de validation</p>
-                      <p className="text-white/60 text-sm">Ce membre a payé sa cotisation. Validez son adhésion ou demandez-lui de passer au bureau.</p>
+                      <p className="text-white/60 text-sm">Ce membre a payé sa cotisation. Validez son adhésion, refusez-la (conversion en don), ou demandez-lui de passer au bureau.</p>
                     </div>
                   </div>
                   <div className="flex gap-3 mt-4">
@@ -897,7 +972,15 @@ export default function Adherents() {
                       className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
                     >
                       <CheckCircle2 className="w-5 h-5" />
-                      Valider l'adhésion
+                      Valider
+                    </button>
+                    <button
+                      onClick={handleRejectAdhesion}
+                      disabled={saving}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      <XCircle className="w-5 h-5" />
+                      Refuser
                     </button>
                     <button
                       onClick={() => handleOpenMessageModal(m)}
@@ -905,9 +988,12 @@ export default function Adherents() {
                       className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
                     >
                       <MessageCircle className="w-5 h-5" />
-                      Envoyer un message
+                      Message
                     </button>
                   </div>
+                  <p className="text-white/40 text-xs mt-3">
+                    En cas de refus, le paiement de {m.cotisation?.montant || 0}€ sera converti en don (éligible au reçu fiscal).
+                  </p>
                 </div>
               )}
 
@@ -1086,6 +1172,7 @@ export default function Adherents() {
                             </div>
                           </div>
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            linkedStatus === CotisationStatut.SYMPATHISANT ? 'bg-pink-500/20 text-pink-400' :
                             linkedStatus === CotisationStatut.ACTIF ? 'bg-green-500/20 text-green-400' :
                             linkedStatus === CotisationStatut.EN_ATTENTE_VALIDATION ? 'bg-violet-500/20 text-violet-400' :
                             linkedStatus === CotisationStatut.EN_ATTENTE_SIGNATURE ? 'bg-amber-500/20 text-amber-400' :

@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 167
+- **Build actuel** : 98
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -26,23 +26,26 @@
 - **Region** : europe-west1
 - **Collections** : announcements, events, janaza, projects, members, popups, rappels, settings, dates_islamiques, donations, messages, payments
 
-## Cloud Functions (14 deployees)
+## Cloud Functions (17 deployees)
 | Fonction | Type | Description |
 |----------|------|-------------|
 | onNewAnnouncement | Trigger Firestore | Notif auto nouvelle annonce |
 | onNewEvent | Trigger Firestore | Notif auto nouvel evenement |
 | onNewJanaza | Trigger Firestore | Notif auto janaza (priorite haute) |
-| onNewPopup | Trigger Firestore | Notif auto popup |
+| onNotificationFromBackoffice | Trigger Firestore | Notif depuis backoffice |
 | onMessageReply | Trigger Firestore | Notif reponse message |
+| onNewSympathisant | Trigger Firestore | Email bienvenue nouveau sympathisant |
 | sendManualNotification | Callable | Envoi manuel backoffice |
 | getNotificationStats | Callable | Stats pour dashboard |
+| validateMembership | Callable | Validation adhesion par admin |
 | scheduledJumuaReminder | Scheduled | Vendredi 11h30 |
-| scheduledFajrReminder | Scheduled | Tous les jours 5h30 |
 | cleanupOldNotifications | Scheduled | Dimanche 3h |
-| sendRecuFiscal | Callable | Genere PDF recu fiscal + envoi email |
+| cachePrayerTimesDaily | Scheduled | Cache horaires priere |
+| sendRecuFiscal | Callable (120s, 512MB) | Genere PDF recu fiscal + envoi email |
 | getDonsByYear | Callable | Total dons par annee pour un email |
-| createPaymentIntent | HTTPS | Paiement Stripe |
-| stripeWebhook | HTTPS | Webhook Stripe |
+| createPaymentIntent | Callable (30s) | Paiement Stripe |
+| stripeWebhook | HTTPS (60s) | Webhook Stripe |
+| forceCachePrayerTimes | Callable | Force mise a jour cache horaires |
 
 ## Fonctionnalites Implementees
 
@@ -152,8 +155,26 @@ firebase deploy --only firestore:rules
 - [ ] Verifier expediteur Brevo (centreculturelislamique@orange.fr)
 - [ ] Remplir infos association dans backoffice (Recus fiscaux > Parametres)
 
+## Corrige (5 Fev 2026 - Build 98)
+
+### Traduction i18n - Cartes de membre
+- [x] MemberCard.tsx : Textes traduits (ACTIF, EXPIRE, N° ADHERENT, TITULAIRE, VALIDE)
+- [x] MemberCardFullScreen.tsx : 20+ statuts traduits (EN ATTENTE VALIDATION, etc.)
+- [x] Support RTL complet sur les cartes de membre
+- [x] 22 nouvelles cles i18n ajoutees (FR + AR)
+
+### Accessibilite - Touch targets
+- [x] MoreScreen.tsx : pickerOption minWidth/minHeight = 44pt (Apple HIG)
+- [x] MoreScreen.tsx : switch minHeight = 44pt
+
+### Cloud Functions - Timeouts
+- [x] createPaymentIntent : 30s, 256MB
+- [x] stripeWebhook : 60s, 256MB
+- [x] sendRecuFiscal : 120s, 512MB (generation PDF + email)
+
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
 - Mock data present dans les screens (fallback si Firebase vide)
 - Cloud Functions bien structurees, pas de probleme critique
-- Score audit securite : 8/10
+- Score audit securite : 8.5/10
+- Score audit i18n : 9/10 (apres corrections Build 98)

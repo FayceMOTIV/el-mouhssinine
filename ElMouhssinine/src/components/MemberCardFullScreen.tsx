@@ -11,6 +11,8 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLanguage } from '../context/LanguageContext';
+import { TranslationKey } from '../i18n';
 
 interface Member {
   name?: string;
@@ -53,38 +55,40 @@ const getBackgroundColor = (status?: string) => {
   }
 };
 
-const getStatusText = (status?: string) => {
+const getStatusText = (status: string | undefined, t: (key: TranslationKey) => string): string => {
   switch (status) {
     case 'active':
     case 'actif':
-      return 'ACTIF';
+      return t('memberCardActive');
     case 'expiring':
-      return 'EXPIRE BIENTÔT';
+      return t('memberCardExpiring');
     case 'expired':
     case 'expiré':
-      return 'EXPIRÉ';
+      return t('memberCardExpired');
     case 'inactive':
-      return 'INACTIF';
+      return t('memberCardInactive');
     case 'en_attente_validation':
-      return 'EN ATTENTE VALIDATION';
+      return t('memberCardPendingValidation');
     case 'en_attente_signature':
-      return 'EN ATTENTE SIGNATURE';
+      return t('memberCardPendingSignature');
     case 'en_attente_paiement':
-      return 'EN ATTENTE PAIEMENT';
+      return t('memberCardPendingPayment');
+    case 'sympathisant':
+      return t('memberCardSympathisant');
     default:
-      return 'ACTIF';
+      return t('memberCardActive');
   }
 };
 
-const getPaymentStatusText = (paymentStatus?: string) => {
+const getPaymentStatusText = (paymentStatus: string | undefined, t: (key: TranslationKey) => string): string | null => {
   switch (paymentStatus) {
     case 'paid':
-      return 'PAYÉ';
+      return t('memberCardPaid');
     case 'pending':
     case 'virement_pending':
-      return 'EN ATTENTE';
+      return t('memberCardPending');
     case 'unpaid':
-      return 'NON PAYÉ';
+      return t('memberCardUnpaid');
     default:
       return null; // Ne pas afficher si pas de statut
   }
@@ -110,6 +114,7 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+  const { t, isRTL } = useLanguage();
 
   const isLandscape = width > height;
 
@@ -141,7 +146,7 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
             <Text style={styles.closeText}>✕</Text>
           </TouchableOpacity>
           <View style={styles.center}>
-            <Text style={styles.errorText}>Aucun membre</Text>
+            <Text style={[styles.errorText, isRTL && styles.textRTL]}>{t('memberCardNoMember')}</Text>
           </View>
         </View>
       </Modal>
@@ -152,13 +157,13 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
     const fullName = member.name || 'MEMBRE';
     const memberId = member.memberId || '00000';
     const digits = memberId.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
-    const statusText = getStatusText(member.status);
-    const paymentStatusText = getPaymentStatusText(member.paymentStatus);
+    const statusText = getStatusText(member.status, t);
+    const paymentStatusText = getPaymentStatusText(member.paymentStatus, t);
     const paymentStatusColor = getPaymentStatusColor(member.paymentStatus);
 
     // Type d'abonnement (seulement si payé)
     const subscriptionText = member.paymentStatus === 'paid' && member.subscriptionType
-      ? member.subscriptionType === 'mensuel' ? 'MENSUEL' : 'ANNUEL'
+      ? member.subscriptionType === 'mensuel' ? t('memberCardMonthly') : t('memberCardAnnual')
       : null;
 
     let dateStr = '--/--';
@@ -181,24 +186,24 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
             <View style={styles.logo}>
               <Text style={styles.logoText}>م</Text>
             </View>
-            <Text style={styles.mosqueName}>EL MOUHSSININE</Text>
-            <Text style={styles.mosqueCity}>Bourg-en-Bresse</Text>
+            <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>EL MOUHSSININE</Text>
+            <Text style={[styles.mosqueCity, isRTL && styles.textRTL]}>{t('memberCardCity')}</Text>
           </View>
 
           {/* STATUTS (Adhésion + Paiement + Type abonnement) */}
           <View style={styles.statusSection}>
             <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>{statusText}</Text>
+              <Text style={[styles.statusText, isRTL && styles.textRTL]}>{statusText}</Text>
             </View>
-            <View style={styles.statusRow}>
+            <View style={[styles.statusRow, isRTL && styles.statusRowRTL]}>
               {paymentStatusText && (
                 <View style={[styles.paymentBadge, { backgroundColor: paymentStatusColor }]}>
-                  <Text style={styles.paymentText}>{paymentStatusText}</Text>
+                  <Text style={[styles.paymentText, isRTL && styles.textRTL]}>{paymentStatusText}</Text>
                 </View>
               )}
               {subscriptionText && (
                 <View style={styles.subscriptionBadge}>
-                  <Text style={styles.subscriptionText}>{subscriptionText}</Text>
+                  <Text style={[styles.subscriptionText, isRTL && styles.textRTL]}>{subscriptionText}</Text>
                 </View>
               )}
             </View>
@@ -206,19 +211,19 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
 
           {/* NUMÉRO */}
           <View style={styles.numberSection}>
-            <Text style={styles.numberLabel}>N° MEMBRE</Text>
+            <Text style={[styles.numberLabel, isRTL && styles.textRTL]}>{t('memberCardNumberFull')}</Text>
             <Text style={styles.number}>{digits}</Text>
           </View>
 
           {/* FOOTER */}
-          <View style={[styles.footer, isLandscape && styles.footerLandscape]}>
-            <View style={styles.footerItem}>
-              <Text style={styles.label}>TITULAIRE</Text>
-              <Text style={styles.value} numberOfLines={2}>{fullName.toUpperCase()}</Text>
+          <View style={[styles.footer, isLandscape && styles.footerLandscape, isRTL && styles.footerRTL]}>
+            <View style={[styles.footerItem, isRTL && styles.footerItemRTL]}>
+              <Text style={[styles.label, isRTL && styles.textRTL]}>{t('memberCardHolder')}</Text>
+              <Text style={[styles.value, isRTL && styles.textRTL]} numberOfLines={2}>{fullName.toUpperCase()}</Text>
             </View>
-            <View style={styles.footerItem}>
-              <Text style={styles.label}>VALIDITÉ</Text>
-              <Text style={styles.value}>{dateStr}</Text>
+            <View style={[styles.footerItem, isRTL && styles.footerItemRTL]}>
+              <Text style={[styles.label, isRTL && styles.textRTL]}>{t('memberCardValidity')}</Text>
+              <Text style={[styles.value, isRTL && styles.textRTL]}>{dateStr}</Text>
             </View>
           </View>
         </View>
@@ -305,7 +310,9 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
         {/* INSTRUCTION SWIPE */}
         {members.length > 1 && currentIndex === 0 && (
           <View style={[styles.swipeHint, { bottom: insets.bottom + 60 }]}>
-            <Text style={styles.swipeHintText}>← Swipez pour voir les autres membres →</Text>
+            <Text style={[styles.swipeHintText, isRTL && styles.textRTL]}>
+              {isRTL ? `→ ${t('memberCardSwipeHint')} ←` : `← ${t('memberCardSwipeHint')} →`}
+            </Text>
           </View>
         )}
       </View>
@@ -507,6 +514,20 @@ const styles = StyleSheet.create({
   swipeHintText: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 14,
+  },
+  // RTL Styles
+  textRTL: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  statusRowRTL: {
+    flexDirection: 'row-reverse',
+  },
+  footerRTL: {
+    flexDirection: 'row-reverse',
+  },
+  footerItemRTL: {
+    alignItems: 'flex-end',
   },
 });
 
