@@ -13,9 +13,18 @@ import { initBackgroundLocation } from './src/services/backgroundLocation';
 import { addNotificationToHistory, detectNotificationType } from './src/services/notificationHistory';
 import { initSentry, captureError } from './src/services/sentry';
 
-// Clé publique Stripe (à remplacer par la vraie clé)
-// Pour obtenir la clé: https://dashboard.stripe.com/apikeys
-const STRIPE_PUBLISHABLE_KEY = 'pk_test_VOTRE_CLE_STRIPE';
+// =============================================================================
+// STRIPE CONFIGURATION
+// =============================================================================
+// Clé publique Stripe - À CONFIGURER avec votre vraie clé
+// 1. Allez sur https://dashboard.stripe.com/apikeys
+// 2. Copiez la "Publishable key" (commence par pk_live_ ou pk_test_)
+// 3. Remplacez la valeur ci-dessous
+//
+// NOTE: Les clés publishable sont conçues pour être dans le code client.
+// La clé secrète (sk_) est dans Firebase Functions config (ne jamais la mettre ici!)
+// =============================================================================
+const STRIPE_PUBLISHABLE_KEY = 'pk_test_VOTRE_CLE_STRIPE'; // TODO: Remplacer par la vraie clé
 
 // Error Boundary pour capturer les crashes
 interface ErrorBoundaryState {

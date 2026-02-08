@@ -22,9 +22,11 @@ import { useLanguage } from '../context/LanguageContext';
 import { makePayment, showPaymentError, showPaymentSuccess } from '../services/stripe';
 import { EmptyProjects } from '../components';
 import { AuthService } from '../services/auth';
+import { BackgroundPattern } from '../components/BackgroundPattern';
+import { getGoldPricePerGram, calculateNisab, NISAB_INFO } from '../services/goldPrice';
 
 const DonationsScreen = () => {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, language } = useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectType, setProjectType] = useState<'interne' | 'externe'>('interne');
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -54,10 +56,30 @@ const DonationsScreen = () => {
   // Zakat
   const [zakatEpargne, setZakatEpargne] = useState('');
   const [zakatOr, setZakatOr] = useState('');
-  const [zakatArgent, setZakatArgent] = useState('');
+  const [zakatCash, setZakatCash] = useState(''); // Argent liquide (cash)
+
+  // Nisab dynamique basé sur le cours de l'or
+  const [nisab, setNisab] = useState(5950); // 85g × 70€ (valeur par défaut)
+  const [goldPrice, setGoldPrice] = useState(70);
+  const [isGoldPriceRealTime, setIsGoldPriceRealTime] = useState(false);
 
   const amounts = [10, 20, 50, 100, 200, 500];
-  const nisab = 5000;
+
+  // Charger le prix de l'or et calculer le Nisab
+  useEffect(() => {
+    const fetchNisab = async () => {
+      try {
+        const result = await getGoldPricePerGram();
+        setGoldPrice(result.pricePerGram);
+        setNisab(calculateNisab(result.pricePerGram));
+        setIsGoldPriceRealTime(result.isRealTime);
+      } catch (error) {
+        console.log('Erreur récupération prix or, utilisation valeur par défaut');
+        setIsGoldPriceRealTime(false);
+      }
+    };
+    fetchNisab();
+  }, []);
 
   // Générer une référence unique pour les virements
   const generateTransferReference = () => {
@@ -307,12 +329,13 @@ const DonationsScreen = () => {
   };
 
   // Calcul Zakat
-  const totalWealth = (parseFloat(zakatEpargne) || 0) + (parseFloat(zakatOr) || 0) + (parseFloat(zakatArgent) || 0);
-  const zakatAmount = totalWealth >= nisab ? (totalWealth * 0.025) : 0;
+  // Total = Épargne + Or + Argent liquide (cash)
+  const totalWealth = (parseFloat(zakatEpargne) || 0) + (parseFloat(zakatOr) || 0) + (parseFloat(zakatCash) || 0);
+  const zakatAmount = totalWealth >= nisab ? (totalWealth * NISAB_INFO.zakatRate) : 0;
   const isZakatEligible = totalWealth >= nisab;
 
   return (
-    <View style={styles.container}>
+    <BackgroundPattern>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -846,7 +869,18 @@ const DonationsScreen = () => {
                   <Text style={styles.nisabBold}>📌 {t('currentNisab')} : </Text>
                   ~{nisab.toLocaleString()}€
                 </Text>
-                <Text style={[styles.nisabSubtext, isRTL && styles.rtlText]}>{t('goldSilverValue')}</Text>
+                <Text style={[styles.nisabSubtext, isRTL && styles.rtlText]}>
+                  {language === 'ar'
+                    ? `(قيمة 85 غرام ذهب بسعر ${goldPrice}€/غ)`
+                    : `(Valeur de 85g d'or à ${goldPrice}€/g)`}
+                </Text>
+                <View style={[styles.goldPriceIndicator, isGoldPriceRealTime ? styles.goldPriceRealTime : styles.goldPriceApprox]}>
+                  <Text style={[styles.goldPriceIndicatorText, isGoldPriceRealTime ? styles.goldPriceRealTimeText : styles.goldPriceApproxText]}>
+                    {isGoldPriceRealTime
+                      ? (language === 'ar' ? '✓ سعر الذهب في الوقت الفعلي' : '✓ Cours de l\'or en temps réel')
+                      : (language === 'ar' ? '⚠️ سعر تقريبي' : '⚠️ Cours approximatif')}
+                  </Text>
+                </View>
               </View>
 
               <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>💰 {t('savingsLabel')}</Text>
@@ -867,13 +901,13 @@ const DonationsScreen = () => {
                 onChangeText={setZakatOr}
               />
 
-              <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>🥈 {t('silverValueLabel')}</Text>
+              <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>💵 {t('cashValueLabel')}</Text>
               <TextInput
                 style={[styles.zakatInput, isRTL && styles.rtlText]}
                 placeholder="0"
                 keyboardType="numeric"
-                value={zakatArgent}
-                onChangeText={setZakatArgent}
+                value={zakatCash}
+                onChangeText={setZakatCash}
               />
 
               <View style={[styles.zakatResult, isZakatEligible && styles.zakatResultEligible]}>
@@ -1063,14 +1097,13 @@ const DonationsScreen = () => {
           </ScrollView>
         </View>
       </Modal>
-    </View>
+    </BackgroundPattern>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: spacing.lg,
@@ -1085,7 +1118,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
   },
   content: {
     paddingHorizontal: spacing.lg,
@@ -1097,7 +1130,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
     marginBottom: spacing.md,
   },
   tabToggle: {
@@ -1242,7 +1275,7 @@ const styles = StyleSheet.create({
   },
   customAmountLabel: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
   customAmountWrapper: {
@@ -1306,7 +1339,7 @@ const styles = StyleSheet.create({
   },
   disclaimer: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
     marginTop: spacing.sm,
@@ -1496,6 +1529,29 @@ const styles = StyleSheet.create({
   nisabSubtext: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
+  },
+  goldPriceIndicator: {
+    marginTop: spacing.sm,
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+  },
+  goldPriceRealTime: {
+    backgroundColor: 'rgba(39,174,96,0.15)',
+  },
+  goldPriceApprox: {
+    backgroundColor: 'rgba(230,126,34,0.15)',
+  },
+  goldPriceIndicatorText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+  },
+  goldPriceRealTimeText: {
+    color: colors.success,
+  },
+  goldPriceApproxText: {
+    color: '#E67E22',
   },
   inputLabel: {
     fontSize: fontSize.sm,

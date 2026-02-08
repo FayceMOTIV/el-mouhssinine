@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { QuranAPI, surahsInfo, reciters, SurahData, getAudioUrl } from '../services/quranApi';
 import { playAudio, pauseAudio, stopAudio, getIsPlaying } from '../services/audioPlayer';
+import { useTrackPlayerEvents, Event, State } from 'react-native-track-player';
 import { useLanguage } from '../context/LanguageContext';
 
 interface SurahScreenProps {
@@ -36,6 +37,13 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [playingAyah, setPlayingAyah] = useState<number | null>(null);
   const [isPlayingSurah, setIsPlayingSurah] = useState(false);
+
+  // Listener pour détecter la fin de lecture d'un verset
+  useTrackPlayerEvents([Event.PlaybackState], async (event) => {
+    if (event.state === State.Ended || event.state === State.Stopped) {
+      setPlayingAyah(null);
+    }
+  });
 
   const surahInfo = surahsInfo.find((s) => s.number === surahNumber);
 

@@ -184,7 +184,7 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
           {/* HEADER */}
           <View style={styles.header}>
             <View style={styles.logo}>
-              <Text style={styles.logoText}>م</Text>
+              <Text style={styles.logoText}>🕌</Text>
             </View>
             <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>EL MOUHSSININE</Text>
             <Text style={[styles.mosqueCity, isRTL && styles.textRTL]}>{t('memberCardCity')}</Text>

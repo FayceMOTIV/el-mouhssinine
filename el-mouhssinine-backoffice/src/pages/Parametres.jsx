@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import {
   Settings, Save, Building2, MapPin, Phone, Mail, Globe, Clock,
-  Palette, Database, Landmark, Image, Upload, CreditCard, ScrollText
+  Palette, Database, Landmark, Image, Upload, CreditCard, ScrollText, Trash2, Check, X
 } from 'lucide-react'
 import { Card, Button, Input, Textarea, Toggle, Loading } from '../components/common'
 import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo, storage, getCotisationPrices, updateCotisationPrices, getReglement, updateReglement } from '../services/firebase'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { useAuth } from '../context/AuthContext'
 
 export default function Parametres() {
@@ -16,6 +16,8 @@ export default function Parametres() {
   const [saving, setSaving] = useState(false)
 
   const [uploading, setUploading] = useState(false)
+  const [pendingHeaderImage, setPendingHeaderImage] = useState(null) // URL pour preview
+  const [pendingHeaderFile, setPendingHeaderFile] = useState(null) // Fichier original
 
   const [mosqueeInfo, setMosqueeInfo] = useState({
     nom: 'Mosquée El Mouhssinine',
@@ -179,21 +181,84 @@ export default function Parametres() {
       return
     }
 
+    // Créer une URL locale pour preview (pas d'upload encore)
+    const previewUrl = URL.createObjectURL(file)
+    setPendingHeaderImage(previewUrl)
+    setPendingHeaderFile(file)
+    toast.info('Image chargée. Cliquez sur "Enregistrer" pour valider.')
+  }
+
+  // Valider et enregistrer l'image en attente
+  const handleSaveHeaderImage = async () => {
+    if (!pendingHeaderFile) return
+
     setUploading(true)
     try {
+      // Upload direct du fichier vers l'emplacement final
       const storageRef = ref(storage, 'settings/header-image.png')
-      await uploadBytes(storageRef, file)
+      await uploadBytes(storageRef, pendingHeaderFile)
       const url = await getDownloadURL(storageRef)
 
-      // Mettre à jour les infos mosquée avec l'URL
+      // Mettre à jour Firestore
       const newMosqueeInfo = { ...mosqueeInfo, headerImageUrl: url }
       await updateMosqueeInfo(newMosqueeInfo)
       setMosqueeInfo(newMosqueeInfo)
 
-      toast.success('Image d\'en-tête uploadée avec succès !')
+      // Nettoyer
+      if (pendingHeaderImage) {
+        URL.revokeObjectURL(pendingHeaderImage)
+      }
+      setPendingHeaderImage(null)
+      setPendingHeaderFile(null)
+      toast.success('Image d\'en-tête enregistrée avec succès !')
     } catch (error) {
-      console.error('Erreur upload:', error)
-      toast.error('Erreur lors de l\'upload de l\'image')
+      console.error('Erreur enregistrement:', error)
+      toast.error('Erreur lors de l\'enregistrement')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Annuler l'image en attente
+  const handleCancelHeaderImage = () => {
+    if (pendingHeaderImage) {
+      URL.revokeObjectURL(pendingHeaderImage)
+    }
+    setPendingHeaderImage(null)
+    setPendingHeaderFile(null)
+    toast.info('Modification annulée')
+  }
+
+  const handleDeleteHeaderImage = async () => {
+    if (!mosqueeInfo.headerImageUrl) return
+
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette image ?')) {
+      return
+    }
+
+    setUploading(true)
+    try {
+      // Supprimer l'image de Firebase Storage
+      const storageRef = ref(storage, 'settings/header-image.png')
+      await deleteObject(storageRef)
+
+      // Mettre à jour les infos mosquée sans l'URL
+      const newMosqueeInfo = { ...mosqueeInfo, headerImageUrl: '' }
+      await updateMosqueeInfo(newMosqueeInfo)
+      setMosqueeInfo(newMosqueeInfo)
+
+      toast.success('Image supprimée avec succès')
+    } catch (error) {
+      console.error('Erreur suppression:', error)
+      // Si l'image n'existe pas dans Storage, on nettoie quand même l'URL
+      if (error.code === 'storage/object-not-found') {
+        const newMosqueeInfo = { ...mosqueeInfo, headerImageUrl: '' }
+        await updateMosqueeInfo(newMosqueeInfo)
+        setMosqueeInfo(newMosqueeInfo)
+        toast.success('Référence image supprimée')
+      } else {
+        toast.error('Erreur lors de la suppression')
+      }
     } finally {
       setUploading(false)
     }
@@ -318,38 +383,85 @@ export default function Parametres() {
 
           <div className="space-y-6">
             {/* Zone d'upload */}
-            <div className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-accent transition-colors">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleHeaderImageUpload}
-                disabled={uploading}
-                className="hidden"
-                id="header-image-input"
-              />
-              <label
-                htmlFor="header-image-input"
-                className={`cursor-pointer ${uploading ? 'opacity-50' : ''}`}
-              >
-                <Upload className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                <p className="text-white font-medium mb-2">
-                  {uploading ? 'Upload en cours...' : 'Cliquez pour sélectionner une image'}
-                </p>
-                <p className="text-white/50 text-sm">PNG, JPG jusqu'à 5MB</p>
-              </label>
-            </div>
+            {!pendingHeaderImage && (
+              <div className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-accent transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleHeaderImageUpload}
+                  disabled={uploading}
+                  className="hidden"
+                  id="header-image-input"
+                />
+                <label
+                  htmlFor="header-image-input"
+                  className={`cursor-pointer ${uploading ? 'opacity-50' : ''}`}
+                >
+                  <Upload className="w-12 h-12 mx-auto mb-4 text-white/40" />
+                  <p className="text-white font-medium mb-2">
+                    {uploading ? 'Upload en cours...' : 'Cliquez pour sélectionner une image'}
+                  </p>
+                  <p className="text-white/50 text-sm">PNG, JPG jusqu'à 5MB</p>
+                </label>
+              </div>
+            )}
 
-            {/* Aperçu */}
-            {mosqueeInfo.headerImageUrl && (
+            {/* Image en attente de validation */}
+            {pendingHeaderImage && (
+              <div className="space-y-4 p-4 bg-accent/10 border border-accent/30 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+                  <p className="text-accent font-medium">Nouvelle image en attente de validation</p>
+                </div>
+                <img
+                  src={pendingHeaderImage}
+                  alt="Nouvelle image"
+                  className="w-full max-h-48 object-cover rounded-xl border border-accent/30"
+                />
+                <div className="flex gap-3">
+                  <Button
+                    variant="success"
+                    onClick={handleSaveHeaderImage}
+                    disabled={uploading}
+                    className="flex-1"
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    Enregistrer
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={handleCancelHeaderImage}
+                    disabled={uploading}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Annuler
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Aperçu image actuelle */}
+            {mosqueeInfo.headerImageUrl && !pendingHeaderImage && (
               <div className="space-y-3">
-                <p className="text-white font-medium">Aperçu actuel :</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-white font-medium">Image actuelle :</p>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={handleDeleteHeaderImage}
+                    disabled={uploading}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Supprimer
+                  </Button>
+                </div>
                 <img
                   src={mosqueeInfo.headerImageUrl}
                   alt="Header"
                   className="w-full max-h-48 object-cover rounded-xl border border-white/10"
                 />
                 <p className="text-white/50 text-xs">
-                  L'image sera affichée en pleine largeur sur l'écran d'accueil de l'app
+                  ✓ Image active sur l'écran d'accueil de l'application
                 </p>
               </div>
             )}

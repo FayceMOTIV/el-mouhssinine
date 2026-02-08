@@ -11,11 +11,13 @@ import {
   Animated,
   Vibration,
   Platform,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, shadows, MIN_TOUCH_SIZE } from '../theme/colors';
+import { BackgroundPattern } from '../components/BackgroundPattern';
 import {
   subscribeToAnnouncements,
   subscribeToEvents,
@@ -241,7 +243,7 @@ const HomeScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   // Calculer le countdown vers la prochaine priere
   const calculateCountdown = useCallback(() => {
@@ -277,6 +279,7 @@ const HomeScreen = () => {
       timeZone: 'Europe/Paris'
     });
     setParisTime(parisTimeStr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- countdownOpacity is stable Animated ref
   }, [nextPrayer.time]);
 
   useEffect(() => {
@@ -314,6 +317,11 @@ const HomeScreen = () => {
 
     // Subscription aux infos mosquée (pour l'image header)
     const unsubMosqueeInfo = subscribeToMosqueeInfo((info) => {
+      logger.log('[HomeScreen] MosqueeInfo received:', JSON.stringify({
+        hasInfo: !!info,
+        headerImageUrl: info?.headerImageUrl || 'NOT_SET',
+        name: info?.name
+      }));
       if (info?.headerImageUrl) {
         setHeaderImageUrl(info.headerImageUrl);
       }
@@ -913,7 +921,7 @@ const HomeScreen = () => {
         </View>
       </Modal>
 
-    <View style={styles.container}>
+    <BackgroundPattern>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -932,10 +940,12 @@ const HomeScreen = () => {
             source={{ uri: headerImageUrl }}
             style={styles.headerImage}
             resizeMode="cover"
+            onLoad={() => logger.log('[HomeScreen] Header image loaded successfully')}
+            onError={(e) => logger.error('[HomeScreen] Header image error:', e.nativeEvent.error)}
           />
         ) : (
           <LinearGradient
-            colors={['#5c3a1a', '#7f4f24']}
+            colors={colors.headerGradient}
             style={styles.salamHeader}
           >
             <Text style={styles.salamArabic}>
@@ -1161,19 +1171,29 @@ const HomeScreen = () => {
                 }
 
                 return (
-                  <View key={janazaItem.id} style={styles.janazaMockCard}>
-                    <Text style={styles.janazaMockArabic}>{phraseAr}</Text>
+                  <TouchableOpacity
+                    key={janazaItem.id}
+                    style={styles.janazaMockCard}
+                    onPress={() => Alert.alert(
+                      `⚰️ ${t('janazaPrayer')}`,
+                      `👤 ${nom}\n\n📅 ${dateFormatee}\n⏰ ${heureInfo}\n📍 ${lieu}\n\n"${isRTL ? phraseAr : phraseFr}"`,
+                      [{ text: 'OK' }]
+                    )}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.janazaCardHeader}>
+                      <Text style={styles.janazaCardTitle}>🕋 {t('janazaPrayer')}</Text>
+                      <Text style={styles.tapIndicator}>ℹ️</Text>
+                    </View>
                     <View style={styles.janazaMockInfo}>
-                      <Text style={[styles.janazaMockName, isRTL && styles.rtlText]}>
-                        👤 {nom}
+                      <Text style={[styles.janazaMockName, isRTL && styles.rtlText]} numberOfLines={1}>
+                        {nom || t('funeralPrayer')}
                       </Text>
-                      <Text style={[styles.janazaMockDate, isRTL && styles.rtlText]}>
+                      <Text style={[styles.janazaMockDate, isRTL && styles.rtlText]} numberOfLines={1}>
                         📅 {dateFormatee} - {heureInfo}
                       </Text>
-                      <Text style={[styles.janazaMockLieu, isRTL && styles.rtlText]}>📍 {lieu}</Text>
-                      <Text style={[styles.janazaMockPhraseFr, isRTL && styles.rtlText]}>"{isRTL ? phraseAr : phraseFr}"</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
           </View>
@@ -1248,13 +1268,22 @@ const HomeScreen = () => {
             <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📢 {t('announcements')}</Text>
             {(announcements || []).length > 0 ? (
               (announcements || []).map((announcement) => (
-                <View key={announcement.id} style={styles.card}>
-                  <Text style={[styles.announcementTitle, isRTL && styles.rtlText]}>{announcement.title}</Text>
-                  <Text style={[styles.announcementContent, isRTL && styles.rtlText]}>{announcement.content}</Text>
-                  <Text style={[styles.announcementDate, isRTL && styles.rtlText]}>
-                    {t('publishedOn')} {announcement.publishedAt?.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}
-                  </Text>
-                </View>
+                <TouchableOpacity
+                  key={announcement.id}
+                  style={styles.card}
+                  onPress={() => Alert.alert(
+                    `📢 ${announcement.title}`,
+                    `${announcement.content}\n\n📅 ${t('publishedOn')} ${announcement.publishedAt?.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}`,
+                    [{ text: 'OK' }]
+                  )}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.announcementHeader}>
+                    <Text style={[styles.announcementTitle, isRTL && styles.rtlText, { flex: 1 }]} numberOfLines={1}>{announcement.title}</Text>
+                    <Text style={styles.tapIndicator}>ℹ️</Text>
+                  </View>
+                  <Text style={[styles.announcementContent, isRTL && styles.rtlText]} numberOfLines={2}>{announcement.content}</Text>
+                </TouchableOpacity>
               ))
             ) : (
               <View style={styles.emptyCard}>
@@ -1271,20 +1300,30 @@ const HomeScreen = () => {
               (events || []).map((event) => {
                 const { day, month } = formatDate(event.date);
                 return (
-                  <View key={event.id} style={styles.card}>
+                  <TouchableOpacity
+                    key={event.id}
+                    style={styles.card}
+                    onPress={() => Alert.alert(
+                      event.title,
+                      `📅 ${day} ${month}\n⏰ ${event.time}\n📍 ${event.location}${event.description ? `\n\n${event.description}` : ''}`,
+                      [{ text: 'OK' }]
+                    )}
+                    activeOpacity={0.7}
+                  >
                     <View style={[styles.eventItem, isRTL && styles.eventItemRTL]}>
                       <View style={styles.eventDateBox}>
                         <Text style={styles.eventDay}>{day}</Text>
                         <Text style={styles.eventMonth}>{month}</Text>
                       </View>
                       <View style={styles.eventDetails}>
-                        <Text style={[styles.eventTitle, isRTL && styles.rtlText]}>{event.title}</Text>
-                        <Text style={[styles.eventSubtitle, isRTL && styles.rtlText]}>
+                        <Text style={[styles.eventTitle, isRTL && styles.rtlText]} numberOfLines={1}>{event.title}</Text>
+                        <Text style={[styles.eventSubtitle, isRTL && styles.rtlText]} numberOfLines={1}>
                           {event.time} • {event.location}
                         </Text>
                       </View>
+                      <Text style={styles.tapIndicator}>ℹ️</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })
             ) : (
@@ -1295,7 +1334,7 @@ const HomeScreen = () => {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </BackgroundPattern>
     </>
   );
 };
@@ -1309,7 +1348,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   popupContainer: {
-    backgroundColor: '#6B4423',
+    backgroundColor: colors.accentDark,
     borderRadius: 24,
     padding: 32,
     marginHorizontal: 20,
@@ -1518,7 +1557,7 @@ const styles = StyleSheet.create({
   },
   salamTranslation: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     letterSpacing: 1,
     textAlign: 'center',
   },
@@ -1577,7 +1616,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
   },
   content: {
     paddingHorizontal: spacing.lg,
@@ -1615,12 +1654,12 @@ const styles = StyleSheet.create({
   jumuaTime: {
     fontSize: fontSize.md,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
     marginBottom: 6,
   },
   jumuaMessage: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
   sectionHeaderRow: {
@@ -1632,7 +1671,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
     marginBottom: 0,
   },
   calendarToggle: {
@@ -1956,6 +1995,16 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textMuted,
   },
+  announcementHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tapIndicator: {
+    fontSize: 16,
+    marginLeft: spacing.sm,
+  },
   janazaCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
@@ -1985,7 +2034,7 @@ const styles = StyleSheet.create({
   janazaTitle: {
     fontSize: fontSize.lg,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
   },
   janazaTime: {
     fontSize: fontSize.sm,
@@ -1999,7 +2048,7 @@ const styles = StyleSheet.create({
   },
   janazaDeceased: {
     fontSize: fontSize.md,
-    color: '#ffffff',
+    color: colors.text,
     marginBottom: 4,
   },
   janazaBold: {
@@ -2007,14 +2056,14 @@ const styles = StyleSheet.create({
   },
   janazaMessage: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
   },
   janazaFooter: {
     flexDirection: 'row',
   },
   janazaLocation: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textMuted,
   },
   eventItem: {
     flexDirection: 'row',
@@ -2053,39 +2102,50 @@ const styles = StyleSheet.create({
   },
   // Janaza Mock styles
   janazaMockCard: {
-    backgroundColor: 'rgba(30,58,95,0.9)',
+    backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(201,162,39,0.3)',
+    ...shadows.sm,
   },
   janazaMockArabic: {
     fontSize: 20,
-    color: colors.accent,
+    color: colors.primary,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
+  janazaCardTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.primary,
+    flex: 1,
+  },
   janazaMockInfo: {},
+  janazaCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+  },
   janazaMockName: {
     fontSize: fontSize.lg,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.primary,
     marginBottom: spacing.xs,
   },
   janazaMockDate: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#555',
     marginBottom: spacing.xs,
   },
   janazaMockLieu: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#666',
     marginBottom: spacing.sm,
   },
   janazaMockPhraseFr: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.6)',
+    color: '#777',
     fontStyle: 'italic',
     marginTop: spacing.sm,
   },

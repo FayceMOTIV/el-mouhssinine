@@ -79,6 +79,7 @@ const AnimatedModal: React.FC<AnimatedModalProps> = ({
       opacityAnim.setValue(0);
       translateYAnim.setValue(100);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Animated refs are stable
   }, [visible, animationType]);
 
   const handleClose = () => {

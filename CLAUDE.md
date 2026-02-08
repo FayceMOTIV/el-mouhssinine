@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 98
+- **Build actuel** : 193
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -171,6 +171,32 @@ firebase deploy --only firestore:rules
 - [x] createPaymentIntent : 30s, 256MB
 - [x] stripeWebhook : 60s, 256MB
 - [x] sendRecuFiscal : 120s, 512MB (generation PDF + email)
+
+## Corrige (8 Fev 2026 - Build 192-193)
+
+### Bugs visuels responsive iPhone Mini
+- [x] MoreScreen.tsx : Layout vertical pour pickers (label AU-DESSUS des boutons)
+- [x] i18n : Traductions raccourcies "Avant prière" / "قبل الصلاة"
+
+### Scroll Coran
+- [x] QuranReadScreen.tsx : Fix PanResponder bloquant le scroll
+- [x] onStartShouldSetPanResponder: false (ne capture plus les touches initiales)
+- [x] onMoveShouldSetPanResponder: capture uniquement les swipes horizontaux
+
+### Admin et Backoffice
+- [x] Fix document admin avec UID comme ID (requis par Firestore rules)
+- [x] Admins.jsx : Champ UID obligatoire pour nouveaux admins
+- [x] Parametres.jsx : Fix upload image header (plus de fetch CORS)
+
+### UI Janaza et Carte membre
+- [x] HomeScreen.tsx : Section Janaza en blanc comme les autres sections
+- [x] MemberCard.tsx : Logo "م" remplacé par "🕌"
+- [x] MemberCard.tsx : Chiffres plus petits (fontSize 24, margin 8) - évite retour ligne
+- [x] MemberCardFullScreen.tsx : Logo "م" remplacé par "🕌"
+
+### Image Hero HomeScreen
+- [x] Debug logging ajouté pour headerImageUrl
+- [x] Géré via backoffice > Paramètres > Image d'en-tête
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)

@@ -86,7 +86,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth }) => {
         <View style={[styles.header, isRTL && styles.headerRTL]}>
           <View style={[styles.headerLeft, isRTL && styles.headerLeftRTL]}>
             <View style={styles.logo}>
-              <Text style={styles.logoText}>م</Text>
+              <Text style={styles.logoText}>🕌</Text>
             </View>
             <View style={styles.headerTextContainer}>
               <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>EL MOUHSSININE</Text>
@@ -203,10 +203,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   digit: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '300',
     color: '#FFFFFF',
-    marginRight: 16,
+    marginRight: 8,
     fontVariant: ['tabular-nums'],
   },
   footer: {

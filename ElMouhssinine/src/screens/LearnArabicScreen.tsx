@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,10 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
 import { arabicAlphabet } from '../data/alphabet';
-import { lessons, levels, getUserProgress } from '../data/lessons';
+import { lessons, levels, loadUserProgress, UserProgress } from '../data/lessons';
 import { vocabulary } from '../data/vocabulary';
 import ProgressBar from '../components/ProgressBar';
 import { useLanguage } from '../context/LanguageContext';
@@ -19,7 +20,24 @@ interface LearnArabicScreenProps {
 
 const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => {
   const { t, isRTL } = useLanguage();
-  const [userProgress] = useState(getUserProgress());
+  const [userProgress, setUserProgress] = useState<UserProgress>({
+    currentLevel: 'debutant',
+    totalXP: 0,
+    lessonsCompleted: [],
+    lettersLearned: [],
+    streak: 0,
+  });
+
+  // Load progress on mount and when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadProgress = async () => {
+        const progress = await loadUserProgress();
+        setUserProgress(progress);
+      };
+      loadProgress();
+    }, [])
+  );
 
   const modules = [
     {
@@ -243,7 +261,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   content: {
@@ -330,7 +348,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
     marginBottom: spacing.md,
   },
   moduleCard: {

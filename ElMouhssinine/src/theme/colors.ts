@@ -1,44 +1,52 @@
 import { Platform, Dimensions, StatusBar } from 'react-native';
 
-// Couleurs du thème El Mouhssinine
+// Couleurs du thème El Mouhssinine - Version Claire
 export const colors = {
-  background: '#8b5a2b', // Marron plus clair pour meilleur contraste
+  // Fonds
+  background: '#F5F0E6',      // Beige clair principal
+  backgroundAlt: '#FDF8F3',   // Beige encore plus clair
   surface: '#ffffff',
   card: '#ffffff',
-  accent: '#c9a227',
-  text: '#1a1a2e',
-  textSecondary: '#4a4a68',
-  textMuted: '#8e8ea0',
+
+  // Accents
+  accent: '#C9A227',          // Or (conservé)
+  accentDark: '#8B7355',      // Bronze
+  accentLight: '#E8D5A3',     // Or pâle
+
+  // Textes - Contraste amélioré sur fond clair
+  text: '#2D2D2D',            // Gris très foncé
+  textSecondary: '#5A5A5A',   // Gris moyen
+  textMuted: '#8A8A8A',       // Gris clair
+
+  // UI
   border: 'rgba(0,0,0,0.08)',
   success: '#27ae60',
   error: '#e74c3c',
-  primary: '#ffffff',
+  primary: '#8B7355',         // Bronze comme couleur primaire
 
   // Gradients
-  headerGradient: ['#6b4423', '#8b5a2b'], // Gradient ajusté
-  navbarBg: 'rgba(107,68,35,0.98)', // Navbar ajustée
+  headerGradient: ['#8B7355', '#A08060'], // Dégradé bronze
+  navbarBg: 'rgba(139,115,85,0.98)',      // Bronze semi-transparent
 
   // Transparents
-  accentLight: 'rgba(201,162,39,0.15)',
   accentMedium: 'rgba(201,162,39,0.3)',
 
-  // Accessibilité - Contraste amélioré (WCAG AA)
-  // Sur fond sombre (#8b5a2b)
+  // Accessibilité - Sur fond header/navbar (bronze)
   textOnDark: '#ffffff',
-  textOnDarkMuted: 'rgba(255,255,255,0.75)', // Meilleur contraste (était 0.5)
-  placeholderOnDark: 'rgba(255,255,255,0.6)', // Meilleur contraste (était 0.3)
-  disabledOnDark: 'rgba(255,255,255,0.6)', // Meilleur contraste (était 0.4)
+  textOnDarkMuted: 'rgba(255,255,255,0.85)',
+  placeholderOnDark: 'rgba(255,255,255,0.7)',
+  disabledOnDark: 'rgba(255,255,255,0.6)',
 
-  // Sur fond clair (#ffffff)
-  textOnLight: '#1a1a2e',
-  textOnLightMuted: 'rgba(0,0,0,0.65)', // Meilleur contraste
-  placeholderOnLight: 'rgba(0,0,0,0.5)', // Meilleur contraste
-  disabledOnLight: 'rgba(0,0,0,0.45)', // Meilleur contraste
+  // Sur fond clair (cards, surfaces, background)
+  textOnLight: '#2D2D2D',
+  textOnLightMuted: 'rgba(0,0,0,0.65)',
+  placeholderOnLight: 'rgba(0,0,0,0.5)',
+  disabledOnLight: 'rgba(0,0,0,0.45)',
 
   // États interactifs
   buttonDisabled: 'rgba(201,162,39,0.5)',
   inputBorder: 'rgba(0,0,0,0.15)',
-  inputBorderFocus: '#c9a227',
+  inputBorderFocus: '#C9A227',
 };
 
 export const spacing = {

@@ -86,6 +86,16 @@ export const AuthService = {
       // Mettre à jour le displayName
       await user.updateProfile({ displayName: name });
 
+      // Envoyer l'email de vérification (en français)
+      try {
+        auth().languageCode = 'fr';
+        await user.sendEmailVerification();
+        logger.log('[Auth] Email de vérification envoyé à', email);
+      } catch (emailError) {
+        logger.warn('[Auth] Erreur envoi email vérification:', emailError);
+        // On continue quand même, ce n'est pas bloquant
+      }
+
       // Créer le profil membre dans Firestore avec retry
       const memberId = generateMemberId();
       const nameParts = name.trim().split(' ');
@@ -197,6 +207,7 @@ export const AuthService = {
    */
   resetPassword: async (email: string): Promise<AuthResult> => {
     try {
+      auth().languageCode = 'fr';
       await auth().sendPasswordResetEmail(email);
       logger.auth('Email de réinitialisation envoyé', email);
       return { success: true };

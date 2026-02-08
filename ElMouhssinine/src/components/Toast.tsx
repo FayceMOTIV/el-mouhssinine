@@ -86,6 +86,7 @@ const ToastItem: React.FC<{
     }, toast.duration || 3000);
 
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Run once on mount, refs are stable
   }, []);
 
   const hideAnimation = () => {

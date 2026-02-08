@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useDeferredValue } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
   const { t, isRTL } = useLanguage();
   const [surahs, setSurahs] = useState(surahsInfo);
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery); // Debounce pour éviter le lag
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'meccan' | 'medinan'>('all');
 
@@ -48,11 +49,12 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
 
   const filteredSurahs = useMemo(() => {
     return surahs.filter((surah) => {
+      const query = deferredSearchQuery.toLowerCase();
       const matchesSearch =
-        surah.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        surah.englishName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        surah.translation?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        surah.number.toString().includes(searchQuery);
+        surah.name.toLowerCase().includes(query) ||
+        surah.englishName.toLowerCase().includes(query) ||
+        surah.translation?.toLowerCase().includes(query) ||
+        surah.number.toString().includes(deferredSearchQuery);
 
       const matchesType =
         filterType === 'all' ||
@@ -61,7 +63,7 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
 
       return matchesSearch && matchesType;
     });
-  }, [surahs, searchQuery, filterType]);
+  }, [surahs, deferredSearchQuery, filterType]);
 
   const handleSurahPress = useCallback((surahNumber: number) => {
     navigation.navigate('Surah', { surahNumber });

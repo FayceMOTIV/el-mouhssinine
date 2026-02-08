@@ -96,10 +96,11 @@ service cloud.firestore {
         request.resource.data.email is string &&
         request.resource.data.email.matches('.*@.*\\..*') &&
         // SÉCURITÉ: Empêcher création avec status 'actif' (doit passer par paiement)
+        // 'sympathisant' autorisé pour les nouvelles inscriptions via l'app mobile
         (!('status' in request.resource.data) ||
-         request.resource.data.status in ['en_attente_paiement', 'en_attente_signature', 'pending']) &&
+         request.resource.data.status in ['en_attente_paiement', 'en_attente_signature', 'pending', 'sympathisant']) &&
         (!('statut' in request.resource.data) ||
-         request.resource.data.statut in ['en_attente_paiement', 'en_attente_signature', 'pending']);
+         request.resource.data.statut in ['en_attente_paiement', 'en_attente_signature', 'pending', 'sympathisant']);
       // Update: admin peut tout modifier, membres ne peuvent PAS modifier les champs critiques
       allow update: if isAdmin() ||
                        ((request.auth.uid == memberId ||

@@ -69,6 +69,7 @@ import { PrayerAPI } from '../services/prayerApi';
 
 // @ts-ignore - Import version from package.json
 import { version as appVersion } from '../../package.json';
+import { BackgroundPattern } from '../components/BackgroundPattern';
 
 const MoreScreen = () => {
   const navigation = useNavigation<any>();
@@ -512,7 +513,7 @@ const MoreScreen = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <BackgroundPattern>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={[styles.title, isRTL && styles.textRTL]}>{t('more')}</Text>
@@ -737,12 +738,12 @@ const MoreScreen = () => {
               {prayerNotifSettings.enabled && (
                 <>
                   {/* Minutes avant */}
-                  <View style={styles.settingRow}>
-                    <View style={styles.settingLeft}>
+                  <View style={styles.settingRowVertical}>
+                    <View style={styles.settingLabelRow}>
                       <Text style={styles.settingIcon}>⏱️</Text>
                       <Text style={styles.settingLabel}>{t('reminderBefore')}</Text>
                     </View>
-                    <View style={styles.picker}>
+                    <View style={styles.pickerFullWidth}>
                       {[5, 10, 15, 30].map((min) => (
                         <TouchableOpacity
                           key={min}
@@ -917,14 +918,14 @@ const MoreScreen = () => {
               {quranReminderSettings.enabled && (
                 <>
                   {/* Choix de l'heure */}
-                  <View style={styles.settingRow}>
-                    <View style={styles.settingLeft}>
+                  <View style={styles.settingRowVertical}>
+                    <View style={styles.settingLabelRow}>
                       <Text style={styles.settingIcon}>⏰</Text>
                       <Text style={styles.settingLabel}>
                         {language === 'ar' ? 'الساعة' : 'Heure'}
                       </Text>
                     </View>
-                    <View style={styles.picker}>
+                    <View style={styles.pickerFullWidth}>
                       {[8, 12, 18, 20, 22].map((hour) => (
                         <TouchableOpacity
                           key={hour}
@@ -949,14 +950,14 @@ const MoreScreen = () => {
                   </View>
 
                   {/* Fréquence */}
-                  <View style={[styles.settingRow, styles.settingRowLast]}>
-                    <View style={styles.settingLeft}>
+                  <View style={[styles.settingRowVertical, styles.settingRowLast]}>
+                    <View style={styles.settingLabelRow}>
                       <Text style={styles.settingIcon}>📅</Text>
                       <Text style={styles.settingLabel}>
                         {language === 'ar' ? 'التكرار' : 'Fréquence'}
                       </Text>
                     </View>
-                    <View style={styles.picker}>
+                    <View style={styles.pickerFullWidth}>
                       <TouchableOpacity
                         style={[
                           styles.pickerOption,
@@ -1213,80 +1214,6 @@ const MoreScreen = () => {
             </View>
           )}
 
-          {/* Reçu Fiscal */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
-              📄 {language === 'ar' ? 'الإيصال الضريبي' : 'Reçu fiscal'}
-            </Text>
-            <View style={styles.card}>
-              <Text style={[styles.recuFiscalInfo, isRTL && styles.textRTL]}>
-                {language === 'ar'
-                  ? 'احصل على إيصالك الضريبي السنوي لتخفيض ضرائبك بنسبة 66%'
-                  : 'Recevez votre reçu fiscal annuel pour déduire 66% de vos dons de vos impôts'}
-              </Text>
-
-              {/* Sélecteur d'année */}
-              <View style={styles.yearSelector}>
-                <Text style={styles.yearLabel}>
-                  {language === 'ar' ? 'السنة:' : 'Année :'}
-                </Text>
-                <View style={styles.yearButtons}>
-                  {[...Array(3)].map((_, i) => {
-                    const year = new Date().getFullYear() - 1 - i;
-                    return (
-                      <TouchableOpacity
-                        key={year}
-                        style={[
-                          styles.yearButton,
-                          selectedYear === year && styles.yearButtonActive
-                        ]}
-                        onPress={() => setSelectedYear(year)}
-                      >
-                        <Text style={[
-                          styles.yearButtonText,
-                          selectedYear === year && styles.yearButtonTextActive
-                        ]}>
-                          {year}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Bouton envoyer */}
-              <TouchableOpacity
-                style={[
-                  styles.recuFiscalButton,
-                  (!userEmail || sendingRecuFiscal) && styles.recuFiscalButtonDisabled
-                ]}
-                onPress={handleRequestRecuFiscal}
-                disabled={!userEmail || sendingRecuFiscal}
-              >
-                {sendingRecuFiscal ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Text style={styles.recuFiscalButtonIcon}>📧</Text>
-                    <Text style={styles.recuFiscalButtonText}>
-                      {language === 'ar'
-                        ? 'إرسال الإيصال عبر البريد الإلكتروني'
-                        : 'Recevoir par email'}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              {!userEmail && (
-                <Text style={styles.recuFiscalWarning}>
-                  {language === 'ar'
-                    ? 'يرجى تسجيل الدخول أولاً'
-                    : 'Connectez-vous pour recevoir votre reçu'}
-                </Text>
-              )}
-            </View>
-          </View>
-
           {/* Langue */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>🌐 {t('language')}</Text>
@@ -1333,14 +1260,13 @@ const MoreScreen = () => {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </BackgroundPattern>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: spacing.lg,
@@ -1362,7 +1288,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
     marginBottom: spacing.md,
   },
   card: {
@@ -1615,6 +1541,26 @@ const styles = StyleSheet.create({
   },
   settingRowLast: {
     borderBottomWidth: 0,
+  },
+  settingRowVertical: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  settingLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  pickerFullWidth: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: '100%',
+    backgroundColor: '#f0f0f5',
+    borderRadius: borderRadius.sm,
+    padding: isSmallScreen ? 2 : 4,
   },
   settingLeft: {
     flexDirection: 'row',

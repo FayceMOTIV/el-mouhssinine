@@ -191,7 +191,7 @@ const QuranReadScreen: React.FC = () => {
       if (parent) {
         parent.setOptions({
           tabBarStyle: {
-            backgroundColor: '#5c3a1a',
+            backgroundColor: colors.accentDark,
             height: 90,
             paddingBottom: 25,
             paddingTop: 10,
@@ -357,11 +357,15 @@ const QuranReadScreen: React.FC = () => {
   // Gestion des swipes (style Mushaf / livre arabe)
   // Dans un Mushaf, on tourne les pages de droite à gauche pour avancer
   // Swipe gauche = page suivante, Swipe droite = page précédente
+  // NOTE: Ne pas bloquer le scroll vertical (permet de lire les longues pages)
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false, // Ne pas capturer au touch initial
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 20;
+        // Capturer SEULEMENT si swipe horizontal significatif ET > vertical
+        // Cela permet au ScrollView de gérer le scroll vertical normalement
+        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
+        return isHorizontalSwipe && Math.abs(gestureState.dx) > 30;
       },
       onPanResponderMove: (_, gestureState) => {
         translateX.setValue(gestureState.dx);

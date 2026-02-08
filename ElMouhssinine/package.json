@@ -32,6 +32,7 @@
     "react-native-markdown-display": "^7.0.2",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-screens": "^4.19.0",
+    "react-native-svg": "^15.15.2",
     "react-native-track-player": "^4.1.2",
     "react-native-tts": "^4.1.1",
     "react-native-vector-icons": "^10.3.0"

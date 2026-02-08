@@ -19,7 +19,8 @@ import {
   subscribeToAdmins,
   addDocument,
   updateDocument,
-  deleteDocument
+  deleteDocument,
+  setDocument
 } from '../services/firebase'
 import { AdminRole, rolePermissions } from '../types'
 import { useAuth } from '../context/AuthContext'
@@ -29,6 +30,7 @@ import { fr } from 'date-fns/locale'
 const defaultAdmin = {
   nom: '',
   email: '',
+  uid: '',
   role: AdminRole.MODERATOR,
   permissions: rolePermissions[AdminRole.MODERATOR],
   actif: true
@@ -78,6 +80,7 @@ export default function Admins() {
       setFormData({
         nom: admin.nom || '',
         email: admin.email || '',
+        uid: admin.id || '',  // L'ID du document = UID Firebase Auth
         role: admin.role || AdminRole.MODERATOR,
         permissions: admin.permissions || rolePermissions[admin.role || AdminRole.MODERATOR],
         actif: admin.actif !== false
@@ -147,18 +150,18 @@ export default function Admins() {
         await updateDocument('admins', editingAdmin.id, data)
         toast.success('Administrateur mis à jour')
       } else {
-        // IMPORTANT: La creation d'un compte Firebase Auth necessite Firebase Admin SDK
-        // Pour l'instant, creez manuellement le compte dans Firebase Console:
-        // 1. Allez sur Firebase Console > Authentication > Users
-        // 2. Ajoutez un utilisateur avec email et mot de passe
-        // 3. Copiez l'UID genere
-        // 4. Le document admin sera cree ici avec l'email correspondant
-        //
-        // TODO: Implementer une Cloud Function createAdmin pour automatiser ce process
-        await addDocument('admins', data)
-        toast.success('Document admin créé. ATTENTION: Créez manuellement le compte Firebase Auth dans la console Firebase avec le même email.', {
-          autoClose: 10000
-        })
+        // IMPORTANT: L'UID doit correspondre à l'utilisateur Firebase Auth
+        // 1. Créez d'abord le compte dans Firebase Console > Authentication > Users
+        // 2. Copiez l'UID généré
+        // 3. Collez-le ici dans le champ UID
+        if (!formData.uid || formData.uid.trim().length < 20) {
+          toast.error('L\'UID Firebase est obligatoire. Créez d\'abord le compte dans Firebase Console > Authentication, puis copiez l\'UID ici.')
+          setSaving(false)
+          return
+        }
+        // Utiliser l'UID comme ID du document (requis par les règles Firestore)
+        await setDocument('admins', formData.uid.trim(), data)
+        toast.success('Administrateur créé avec succès !')
       }
       handleCloseModal()
     } catch (err) {
@@ -394,13 +397,30 @@ export default function Admins() {
             disabled={!!editingAdmin}
           />
           {!editingAdmin && (
-            <PasswordInput
-              label="Mot de passe"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimum 6 caractères"
-              required
-            />
+            <>
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-sm text-blue-200">
+                <p className="font-medium mb-1">⚠️ Étapes pour créer un admin :</p>
+                <ol className="list-decimal list-inside space-y-1 text-blue-200/80">
+                  <li>Firebase Console → Authentication → Users</li>
+                  <li>Cliquez "Ajouter un utilisateur"</li>
+                  <li>Entrez l'email et mot de passe</li>
+                  <li>Copiez l'UID généré et collez-le ci-dessous</li>
+                </ol>
+              </div>
+              <Input
+                label="UID Firebase (obligatoire)"
+                value={formData.uid}
+                onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
+                placeholder="Ex: abc123XYZ... (copié depuis Firebase Console)"
+                required
+              />
+              <PasswordInput
+                label="Mot de passe (pour référence)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimum 6 caractères"
+              />
+            </>
           )}
           <Select
             label="Rôle"

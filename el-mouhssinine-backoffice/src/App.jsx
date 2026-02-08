@@ -99,7 +99,14 @@ function AppRoutes() {
             </AdminRoute>
           }
         />
-        <Route path="parametres" element={<Parametres />} />
+        <Route
+          path="parametres"
+          element={
+            <AdminRoute>
+              <Parametres />
+            </AdminRoute>
+          }
+        />
       </Route>
     </Routes>
   )

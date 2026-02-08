@@ -13,6 +13,7 @@ import { colors } from '../theme';
 import { subscribeToEvents } from '../services/firebase';
 import { useLanguage } from '../context/LanguageContext';
 import { eventCategories } from '../data/mockData';
+import { BackgroundPattern } from '../components/BackgroundPattern';
 
 interface Event {
   id: string;
@@ -87,17 +88,17 @@ const EventsScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <BackgroundPattern>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>{t('loading')}</Text>
         </View>
-      </SafeAreaView>
+      </BackgroundPattern>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <BackgroundPattern>
       <View style={styles.header}>
         <Text style={[styles.title, isRTL && styles.rtlText]}>{t('events')}</Text>
         <Text style={[styles.subtitle, isRTL && styles.rtlText]}>
@@ -187,14 +188,13 @@ const EventsScreen: React.FC = () => {
           ))
         )}
       </ScrollView>
-    </SafeAreaView>
+    </BackgroundPattern>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,

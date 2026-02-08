@@ -334,7 +334,16 @@ export const schedulePrayerNotifications = async (
 
         // ========== NOTIFICATION 1 : RAPPEL (X minutes avant) ==========
         if (settings.minutesBefore > 0) {
-          const reminderTime = subMinutes(prayerTime, settings.minutesBefore);
+          // Vendredi + Dhuhr = Jumu'a : notification spéciale à 13h00
+          const isFriday = baseDate.getDay() === 5;
+          const isJumua = isFriday && prayerKey === 'dhuhr';
+
+          // Pour Jumua : notification 30 min avant le sermon (13h30)
+          // Pour les autres prières : notification X min avant l'adhan
+          const jumuaSermonTime = parsePrayerTime('13:30', baseDate);
+          const reminderTime = isJumua
+            ? subMinutes(jumuaSermonTime, 30) // 13:00
+            : subMinutes(prayerTime, settings.minutesBefore);
           const reminderId = `prayer-${prayerKey}-reminder-${daySuffix}`;
           const reminderTimestamp = reminderTime.getTime();
 
@@ -357,12 +366,9 @@ export const schedulePrayerNotifications = async (
                 timestamp: reminderTimestamp,
               };
 
-              // Vendredi + Dhuhr = Jumu'a
-              const isFriday = baseDate.getDay() === 5;
-              const isJumua = isFriday && prayerKey === 'dhuhr';
               const notifTitle = isJumua ? "🕌 Jumu'a" : prayerName;
               const notifBody = isJumua
-                ? `Sermon 13h30 - Prière ~14h (dans ${settings.minutesBefore} mn)`
+                ? 'Le sermon commence à 13h30'
                 : `${prayerName} dans ${settings.minutesBefore} mn`;
 
               await notifee.createTriggerNotification(

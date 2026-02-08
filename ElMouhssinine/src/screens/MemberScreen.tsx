@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import {
   MemberProfileRealtime,
   subscribeToReglement,
   ReglementData,
+  requestRecuFiscal,
 } from '../services/firebase';
 import { AuthService, MemberProfile } from '../services/auth';
 import { makePayment, showPaymentError, showPaymentSuccess } from '../services/stripe';
@@ -38,6 +39,7 @@ import { useLanguage } from '../context/LanguageContext';
 import MemberCard from '../components/MemberCard';
 import MemberCardFullScreen from '../components/MemberCardFullScreen';
 import { logger } from '../utils';
+import { BackgroundPattern } from '../components/BackgroundPattern';
 
 // ============================================================
 // MEMBER SCREEN - Refonte UX épurée
@@ -46,7 +48,7 @@ import { logger } from '../utils';
 
 const MemberScreen = () => {
   const navigation = useNavigation<any>();
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, language } = useLanguage();
   const { width: screenWidth } = useWindowDimensions();
 
   // États principaux
@@ -75,6 +77,7 @@ const MemberScreen = () => {
   // Formulaire connexion
   const [isRegistering, setIsRegistering] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+  const isRegistrationInProgress = useRef(false); // Empêche le changement de vue pendant l'inscription
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [registerNom, setRegisterNom] = useState('');
@@ -84,6 +87,7 @@ const MemberScreen = () => {
   const [registerGenre, setRegisterGenre] = useState<'homme' | 'femme' | ''>('');
   const [registerDateNaissance, setRegisterDateNaissance] = useState('');
   const [acceptedRules, setAcceptedRules] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
@@ -92,6 +96,10 @@ const MemberScreen = () => {
   const [selectedFormule, setSelectedFormule] = useState<'mensuel' | 'annuel'>('annuel');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [customAmount, setCustomAmount] = useState<string>('');
+
+  // Reçu fiscal
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear() - 1);
+  const [sendingRecuFiscal, setSendingRecuFiscal] = useState(false);
 
   // Calculer cotisation (fixe) et don (surplus)
   // Utilise les prix de Firebase (formulePrices) pour respecter les prix configurés dans le backoffice
@@ -125,6 +133,11 @@ const MemberScreen = () => {
 
   useEffect(() => {
     const unsubscribe = AuthService.onAuthStateChanged(async (user) => {
+      // Ne pas changer la vue pendant l'inscription (évite le flash modal)
+      if (isRegistrationInProgress.current) {
+        return;
+      }
+
       setIsLoading(true);
 
       // Nettoyer l'ancien listener si existant
@@ -190,6 +203,7 @@ const MemberScreen = () => {
         memberProfileUnsubscribe();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Runs once on mount, cleanup handled internally
   }, []);
 
   useEffect(() => {
@@ -271,9 +285,13 @@ const MemberScreen = () => {
 
     setAuthLoading(true);
     try {
-      await AuthService.signIn(loginEmail.trim(), loginPassword);
-      setShowLoginModal(false);
-      resetLoginForm();
+      const result = await AuthService.signIn(loginEmail.trim(), loginPassword);
+      if (result.success) {
+        setShowLoginModal(false);
+        resetLoginForm();
+      } else {
+        Alert.alert('Erreur', result.error || 'Échec de la connexion');
+      }
     } catch (error) {
       const err = error as Error;
       Alert.alert('Erreur', err?.message || 'Échec de la connexion');
@@ -293,14 +311,43 @@ const MemberScreen = () => {
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
-    return age >= 18;
+    return age >= 16;
+  };
+
+  // Auto-formatter la date de naissance (JJ/MM/AAAA)
+  const formatDateInput = (text: string): string => {
+    // Garde uniquement les chiffres
+    const numbers = text.replace(/[^0-9]/g, '');
+    // Limite à 8 chiffres (JJMMAAAA)
+    const limited = numbers.slice(0, 8);
+    // Formate avec les "/"
+    if (limited.length <= 2) return limited;
+    if (limited.length <= 4) return `${limited.slice(0, 2)}/${limited.slice(2)}`;
+    return `${limited.slice(0, 2)}/${limited.slice(2, 4)}/${limited.slice(4)}`;
   };
 
   const handleRegister = async () => {
-    // Validation
+    // Regex de validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^0[1-9][0-9]{8}$/;
+
+    // 1. Validation champs vides
     if (!registerNom.trim() || !registerPrenom.trim() || !registerTelephone.trim() ||
         !registerAdresse.trim() || !loginEmail.trim() || !loginPassword.trim()) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      return;
+    }
+
+    // 2. Validation format email (B3)
+    if (!emailRegex.test(loginEmail.trim())) {
+      Alert.alert('Erreur', 'Veuillez entrer une adresse email valide');
+      return;
+    }
+
+    // 3. Validation format téléphone français (B4)
+    const cleanPhone = registerTelephone.replace(/\s/g, '');
+    if (!phoneRegex.test(cleanPhone)) {
+      Alert.alert('Erreur', 'Veuillez entrer un numéro de téléphone valide (10 chiffres commençant par 0)');
       return;
     }
 
@@ -314,17 +361,9 @@ const MemberScreen = () => {
       return;
     }
 
-    // Vérification de la majorité
+    // 4. Validation âge minimum 16 ans (B6)
     if (!isAdult(registerDateNaissance)) {
-      Alert.alert(
-        'Inscription impossible',
-        'Vous devez être majeur (18 ans ou plus) pour devenir membre de l\'association. Merci de votre compréhension.'
-      );
-      return;
-    }
-
-    if (!acceptedRules) {
-      Alert.alert('Erreur', 'Veuillez accepter le règlement intérieur');
+      Alert.alert('Erreur', 'Vous devez avoir au moins 16 ans pour vous inscrire');
       return;
     }
 
@@ -333,9 +372,17 @@ const MemberScreen = () => {
       return;
     }
 
+    // 5. Validation règlement accepté (B5 - CRITIQUE)
+    if (!acceptedRules) {
+      Alert.alert('Erreur', 'Vous devez accepter le règlement intérieur pour vous inscrire');
+      return;
+    }
+
     setAuthLoading(true);
+    isRegistrationInProgress.current = true; // Bloque le changement de vue pendant l'inscription
+
     try {
-      await AuthService.signUp(
+      const result = await AuthService.signUp(
         loginEmail.trim(),
         loginPassword,
         `${registerPrenom.trim()} ${registerNom.trim()}`,
@@ -344,9 +391,29 @@ const MemberScreen = () => {
         registerGenre,
         registerDateNaissance
       );
-      setShowLoginModal(false);
-      resetLoginForm();
+
+      isRegistrationInProgress.current = false; // Réactive le listener auth
+
+      if (result.success && result.user) {
+        // Inscription réussie - mettre à jour l'état manuellement
+        setIsLoggedIn(true);
+        setShowLoginModal(false);
+        resetLoginForm();
+
+        // Charger le profil membre
+        loadMemberData(result.user.uid);
+
+        // Message de confirmation email
+        Alert.alert(
+          '✅ Compte créé !',
+          'Un email de confirmation a été envoyé à votre adresse. Veuillez cliquer sur le lien pour activer votre compte.',
+          [{ text: 'Compris', style: 'default' }]
+        );
+      } else if (!result.success) {
+        Alert.alert('Erreur', result.error || 'Échec de la création du compte');
+      }
     } catch (error) {
+      isRegistrationInProgress.current = false; // Réactive le listener auth même en cas d'erreur
       const err = error as Error;
       Alert.alert('Erreur', err?.message || 'Échec de la création du compte');
     } finally {
@@ -362,10 +429,14 @@ const MemberScreen = () => {
 
     setAuthLoading(true);
     try {
-      await AuthService.resetPassword(forgotEmail.trim());
-      Alert.alert('Email envoyé', 'Vérifiez votre boîte mail pour réinitialiser votre mot de passe');
-      setShowForgotPassword(false);
-      setForgotEmail('');
+      const result = await AuthService.resetPassword(forgotEmail.trim());
+      if (result.success) {
+        Alert.alert('Email envoyé', 'Vérifiez votre boîte mail pour réinitialiser votre mot de passe');
+        setShowForgotPassword(false);
+        setForgotEmail('');
+      } else {
+        Alert.alert('Erreur', result.error || 'Une erreur est survenue');
+      }
     } catch (error) {
       const err = error as Error;
       Alert.alert('Erreur', err?.message || 'Une erreur est survenue');
@@ -389,6 +460,43 @@ const MemberScreen = () => {
         },
       ]
     );
+  };
+
+  // Demander l'envoi du reçu fiscal
+  const handleRequestRecuFiscal = async () => {
+    if (!memberProfile?.email) {
+      Alert.alert(
+        language === 'ar' ? 'خطأ' : 'Erreur',
+        language === 'ar' ? 'البريد الإلكتروني غير متوفر' : 'Email non disponible'
+      );
+      return;
+    }
+
+    setSendingRecuFiscal(true);
+    try {
+      const result = await requestRecuFiscal(memberProfile.email, selectedYear);
+      if (result.success) {
+        Alert.alert(
+          language === 'ar' ? 'تم الإرسال' : 'Envoyé !',
+          language === 'ar'
+            ? `تم إرسال إيصالك الضريبي بمبلغ ${result.montantTotal?.toFixed(2)}€ إلى ${memberProfile.email}`
+            : `Votre reçu fiscal de ${result.montantTotal?.toFixed(2)}€ a été envoyé à ${memberProfile.email}`
+        );
+      } else {
+        Alert.alert(
+          language === 'ar' ? 'خطأ' : 'Erreur',
+          result.message
+        );
+      }
+    } catch (error) {
+      const err = error as Error;
+      Alert.alert(
+        language === 'ar' ? 'خطأ' : 'Erreur',
+        err?.message || (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue')
+      );
+    } finally {
+      setSendingRecuFiscal(false);
+    }
   };
 
   const resetLoginForm = () => {
@@ -555,8 +663,8 @@ const MemberScreen = () => {
       }
       if (!isAdult(member.dateNaissance)) {
         Alert.alert(
-          'Inscription impossible',
-          `${member.prenom || 'Ce membre'} doit être majeur (18 ans ou plus) pour devenir membre de l'association.`
+          'Adhésion impossible',
+          `${member.prenom || 'Ce membre'} doit avoir au moins 16 ans pour devenir adhérent de l'association.`
         );
         return;
       }
@@ -700,7 +808,7 @@ const MemberScreen = () => {
 
   if (!isLoggedIn) {
     return (
-      <View style={styles.container}>
+      <BackgroundPattern>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {/* Header */}
           <View style={styles.header}>
@@ -729,19 +837,6 @@ const MemberScreen = () => {
             >
               <Text style={styles.secondaryButtonText}>{t('createAccount')}</Text>
             </TouchableOpacity>
-          </View>
-
-          {/* Avantages */}
-          <View style={styles.benefitsSection}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>✨ {t('memberBenefits')}</Text>
-            <View style={styles.benefitItem}>
-              <Text style={styles.benefitIcon}>📧</Text>
-              <Text style={[styles.benefitText, isRTL && styles.rtlText]}>{t('taxReceipt')}</Text>
-            </View>
-            <View style={styles.benefitItem}>
-              <Text style={styles.benefitIcon}>🗳️</Text>
-              <Text style={[styles.benefitText, isRTL && styles.rtlText]}>{t('votingRights')}</Text>
-            </View>
           </View>
         </ScrollView>
 
@@ -784,7 +879,7 @@ const MemberScreen = () => {
             </View>
           </View>
         </Modal>
-      </View>
+      </BackgroundPattern>
     );
   }
 
@@ -847,7 +942,7 @@ const MemberScreen = () => {
 
   if (!isPaid) {
     return (
-      <View style={styles.container}>
+      <BackgroundPattern>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {/* Header avec nom */}
           <View style={styles.header}>
@@ -1011,7 +1106,7 @@ const MemberScreen = () => {
         {renderReglementModal()}
         {renderPaymentModal()}
         {renderFamilyModal()}
-      </View>
+      </BackgroundPattern>
     );
   }
 
@@ -1020,7 +1115,7 @@ const MemberScreen = () => {
   // ============================================================
 
   return (
-    <View style={styles.container}>
+    <BackgroundPattern>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Header avec nom */}
         <View style={styles.header}>
@@ -1103,6 +1198,72 @@ const MemberScreen = () => {
           return null;
         })()}
 
+        {/* Reçu Fiscal */}
+        <View style={styles.recuFiscalSection}>
+          <Text style={[styles.recuFiscalTitle, isRTL && styles.rtlText]}>
+            📄 {language === 'ar' ? 'الإيصال الضريبي' : 'Reçu fiscal'}
+          </Text>
+          <View style={styles.recuFiscalCard}>
+            <Text style={[styles.recuFiscalInfo, isRTL && styles.rtlText]}>
+              {language === 'ar'
+                ? 'احصل على إيصالك الضريبي السنوي لتخفيض ضرائبك بنسبة 66%'
+                : 'Recevez votre reçu fiscal annuel pour déduire 66% de vos dons de vos impôts'}
+            </Text>
+
+            {/* Sélecteur d'année */}
+            <View style={styles.yearSelector}>
+              <Text style={styles.yearLabel}>
+                {language === 'ar' ? 'السنة:' : 'Année :'}
+              </Text>
+              <View style={styles.yearButtons}>
+                {[...Array(3)].map((_, i) => {
+                  const year = new Date().getFullYear() - 1 - i;
+                  return (
+                    <TouchableOpacity
+                      key={year}
+                      style={[
+                        styles.yearButton,
+                        selectedYear === year && styles.yearButtonActive
+                      ]}
+                      onPress={() => setSelectedYear(year)}
+                    >
+                      <Text style={[
+                        styles.yearButtonText,
+                        selectedYear === year && styles.yearButtonTextActive
+                      ]}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Bouton envoyer */}
+            <TouchableOpacity
+              style={[
+                styles.recuFiscalButton,
+                sendingRecuFiscal && styles.recuFiscalButtonDisabled
+              ]}
+              onPress={handleRequestRecuFiscal}
+              disabled={sendingRecuFiscal}
+            >
+              {sendingRecuFiscal ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Text style={styles.recuFiscalButtonIcon}>📧</Text>
+                  <Text style={styles.recuFiscalButtonText}>
+                    {language === 'ar'
+                      ? 'إرسال الإيصال عبر البريد الإلكتروني'
+                      : 'Recevoir par email'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Déconnexion */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>{t('logout')}</Text>
@@ -1120,7 +1281,7 @@ const MemberScreen = () => {
       {renderReglementModal()}
       {renderPaymentModal()}
       {renderFamilyModal()}
-    </View>
+    </BackgroundPattern>
   );
 
   // ============================================================
@@ -1243,7 +1404,7 @@ const MemberScreen = () => {
                       placeholder="01/01/1990"
                       placeholderTextColor="#999"
                       value={registerDateNaissance}
-                      onChangeText={setRegisterDateNaissance}
+                      onChangeText={(text) => setRegisterDateNaissance(formatDateInput(text))}
                       keyboardType="numeric"
                       maxLength={10}
                     />
@@ -1262,24 +1423,36 @@ const MemberScreen = () => {
                 />
 
                 <Text style={styles.inputLabel}>Mot de passe *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="••••••••"
-                  placeholderTextColor="#999"
-                  value={loginPassword}
-                  onChangeText={setLoginPassword}
-                  secureTextEntry
-                />
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    placeholder="••••••••"
+                    placeholderTextColor="#999"
+                    value={loginPassword}
+                    onChangeText={setLoginPassword}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setShowPassword(!showPassword)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
+                  </TouchableOpacity>
+                </View>
 
                 {isRegistering && (
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => setAcceptedRules(!acceptedRules)}
+                    activeOpacity={0.7}
                   >
                     <View style={[styles.checkbox, acceptedRules && styles.checkboxChecked]}>
                       {acceptedRules && <Text style={styles.checkboxCheck}>✓</Text>}
                     </View>
-                    <Text style={styles.checkboxLabel}>J'accepte le règlement intérieur *</Text>
+                    <Text style={styles.checkboxLabel}>
+                      J'accepte le règlement intérieur de la mosquée
+                    </Text>
                   </TouchableOpacity>
                 )}
 
@@ -1655,7 +1828,7 @@ const MemberScreen = () => {
                     placeholder="Date de naissance (JJ/MM/AAAA)"
                     placeholderTextColor="#999"
                     value={member.dateNaissance}
-                    onChangeText={(v) => updateFamilyMember(member.id, 'dateNaissance', v)}
+                    onChangeText={(v) => updateFamilyMember(member.id, 'dateNaissance', formatDateInput(v))}
                     keyboardType="numeric"
                     maxLength={10}
                   />
@@ -1732,7 +1905,6 @@ const MemberScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -2041,6 +2213,84 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.error,
   },
+  // Reçu Fiscal
+  recuFiscalSection: {
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  recuFiscalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  recuFiscalCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+  },
+  recuFiscalInfo: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  yearSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
+  yearLabel: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  yearButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  yearButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  yearButtonActive: {
+    backgroundColor: 'rgba(201,162,39,0.2)',
+    borderColor: colors.accent,
+  },
+  yearButtonText: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  yearButtonTextActive: {
+    color: colors.accent,
+  },
+  recuFiscalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+  },
+  recuFiscalButtonDisabled: {
+    backgroundColor: 'rgba(201,162,39,0.4)',
+  },
+  recuFiscalButtonIcon: {
+    fontSize: 18,
+  },
+  recuFiscalButtonText: {
+    fontSize: fontSize.md,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
 
   // Modal
   modalOverlay: {
@@ -2056,6 +2306,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     width: '100%',
     maxWidth: 400,
+    maxHeight: '90%',
   },
   closeButton: {
     position: 'absolute',
@@ -2091,6 +2342,23 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingRight: 50,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 15,
+    padding: 5,
+  },
+  eyeIcon: {
+    fontSize: 20,
   },
 
   // Checkbox

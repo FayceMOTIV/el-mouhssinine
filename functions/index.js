@@ -1636,17 +1636,30 @@ exports.sendRecuFiscal = functions
         to: email,
         subject: `Reçu fiscal ${annee} - ${association.nom || 'Mosquée El Mouhssinine'}`,
         html: `
-          <h2>Votre reçu fiscal ${annee}</h2>
-          <p>Bonjour ${donateur.prenom || ''} ${donateur.nom || ''},</p>
-          <p>Veuillez trouver ci-joint votre reçu fiscal pour l'année ${annee}.</p>
-          <p><strong>Montant total des dons :</strong> ${totalDons.toFixed(2)} €</p>
-          <p><strong>Numéro du reçu :</strong> ${numeroRecu}</p>
-          <br>
-          <p>Ce document est à joindre à votre déclaration de revenus.</p>
-          <p>Il vous permet de bénéficier d'une réduction d'impôt de 66% du montant de vos dons.</p>
-          <br>
-          <p>Qu'Allah vous récompense pour votre générosité.</p>
-          <p>${association.nom || 'Mosquée El Mouhssinine'}</p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Votre reçu fiscal ${annee}</h2>
+            <p>Bonjour ${donateur.prenom || ''} ${donateur.nom || ''},</p>
+            <p>Veuillez trouver ci-joint votre reçu fiscal pour l'année ${annee}.</p>
+            <p><strong>Montant total des dons :</strong> ${totalDons.toFixed(2)} €</p>
+            <p><strong>Numéro du reçu :</strong> ${numeroRecu}</p>
+            <br>
+            <p>Ce document est à joindre à votre déclaration de revenus.</p>
+            <p>Il vous permet de bénéficier d'une réduction d'impôt de 66% du montant de vos dons.</p>
+            <br>
+            <p>Qu'Allah vous récompense pour votre générosité.</p>
+            <p>${association.nom || 'Mosquée El Mouhssinine'}</p>
+
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
+              <p style="color: #888; font-size: 12px; margin: 0;">
+                ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
+                Pour nous contacter, écrivez à :
+                <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
+              </p>
+              <p style="color: #aaa; font-size: 11px; margin-top: 10px;">
+                Mosquée El Mouhssinine - Bourg-en-Bresse
+              </p>
+            </div>
+          </div>
         `,
         attachments: [
           {
@@ -1914,6 +1927,14 @@ exports.onNewSympathisant = functions
                 ${telephoneMosquee ? `<p style="margin: 5px 0;">📞 ${telephoneMosquee}</p>` : ''}
                 ${emailMosquee ? `<p style="margin: 5px 0;">📧 ${emailMosquee}</p>` : ''}
               </div>
+
+              <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center;">
+                <p style="color: #888; font-size: 12px; margin: 0;">
+                  ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
+                  Pour nous contacter, écrivez à :
+                  <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
+                </p>
+              </div>
             </div>
           </div>
         `,
@@ -2044,6 +2065,17 @@ exports.validateMembership = functions
                   <p style="font-size: 16px; color: #444;">Qu'Allah vous récompense pour votre engagement.</p>
 
                   <p style="font-size: 16px; color: #444;">Fraternellement,<br><strong>Le Bureau de la ${nomMosquee}</strong></p>
+
+                  <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
+                    <p style="color: #888; font-size: 12px; margin: 0;">
+                      ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
+                      Pour nous contacter, écrivez à :
+                      <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
+                    </p>
+                    <p style="color: #aaa; font-size: 11px; margin-top: 10px;">
+                      Mosquée El Mouhssinine - Bourg-en-Bresse
+                    </p>
+                  </div>
                 </div>
               </div>
             `,
@@ -2138,6 +2170,17 @@ exports.validateMembership = functions
                   <p style="font-size: 16px;">Pour toute question, n'hésitez pas à nous contacter via l'application ou à passer au bureau de la mosquée.</p>
 
                   <p style="font-size: 16px; color: #444;">Fraternellement,<br><strong>Le Bureau de la ${nomMosquee}</strong></p>
+
+                  <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
+                    <p style="color: #888; font-size: 12px; margin: 0;">
+                      ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
+                      Pour nous contacter, écrivez à :
+                      <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
+                    </p>
+                    <p style="color: #aaa; font-size: 11px; margin-top: 10px;">
+                      Mosquée El Mouhssinine - Bourg-en-Bresse
+                    </p>
+                  </div>
                 </div>
               </div>
             `,
@@ -2340,4 +2383,5 @@ exports.forceCachePrayerTimes = functions
       throw new functions.https.HttpsError('internal', error.message);
     }
   });
+
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
 import {
   View,
   Text,
@@ -31,12 +31,13 @@ const categoryIcons: Record<string, string> = {
 const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
   const { t, isRTL } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
-  const filteredCategories = adhkarCategories.filter((category) =>
-    category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    category.nameAr.includes(searchQuery) ||
-    category.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredCategories = useMemo(() => adhkarCategories.filter((category) =>
+    category.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+    category.nameAr.includes(deferredSearchQuery) ||
+    category.description?.toLowerCase().includes(deferredSearchQuery.toLowerCase())
+  ), [deferredSearchQuery]);
 
   const handleCategoryPress = (category: AdhkarCategory) => {
     navigation.navigate('AdhkarDetail', { category });

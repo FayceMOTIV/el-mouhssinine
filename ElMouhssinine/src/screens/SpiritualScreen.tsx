@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
+import { BackgroundPattern } from '../components/BackgroundPattern';
 
 interface SpiritualScreenProps {
   navigation: any;
@@ -62,7 +63,7 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
   ];
 
   return (
-    <View style={styles.container}>
+    <BackgroundPattern>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
@@ -168,14 +169,13 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </BackgroundPattern>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: spacing.lg,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   content: {
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
     marginBottom: spacing.md,
   },
   seeAllText: {

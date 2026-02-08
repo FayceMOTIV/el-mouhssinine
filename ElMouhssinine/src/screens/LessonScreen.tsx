@@ -8,7 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { Lesson, LessonStep } from '../data/lessons';
+import { Lesson, LessonStep, completeLesson } from '../data/lessons';
 import { arabicAlphabet } from '../data/alphabet';
 import { vowels } from '../data/vowels';
 import ProgressBar from '../components/ProgressBar';
@@ -50,8 +50,18 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
     }
   };
 
-  const handleFinish = () => {
-    const score = (correctAnswers / lesson.steps.filter((s) => s.type === 'quiz').length) * 100;
+  const handleFinish = async () => {
+    const quizCount = lesson.steps.filter((s) => s.type === 'quiz').length;
+    const score = quizCount > 0 ? (correctAnswers / quizCount) * 100 : 100;
+
+    // Extract letters learned from this lesson
+    const lettersLearned = lesson.steps
+      .filter((s) => s.type === 'letter' && s.content.letterId)
+      .map((s) => s.content.letterId as string);
+
+    // Save progress to AsyncStorage
+    await completeLesson(lesson.id, lesson.xp, lettersLearned);
+
     Alert.alert(
       'Lecon terminee !',
       `Vous avez obtenu ${Math.round(score)}%\n+${lesson.xp} XP`,
