@@ -125,6 +125,11 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
             value={searchQuery}
             onChangeText={setSearchQuery}
             textAlign={isRTL ? 'right' : 'left'}
+            autoCorrect={false}
+            autoCapitalize="none"
+            autoComplete="off"
+            keyboardType="default"
+            returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>

@@ -203,10 +203,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   digit: {
-    fontSize: 24,
-    fontWeight: '300',
+    fontSize: 14,
+    fontWeight: '500',
     color: '#FFFFFF',
-    marginRight: 8,
+    marginRight: 4,
     fontVariant: ['tabular-nums'],
   },
   footer: {

@@ -14,6 +14,9 @@ import {
   Animated,
   TextInput,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -492,115 +495,131 @@ const QuranReadScreen: React.FC = () => {
   // Modal de recherche
   const renderSearchModal = () => (
     <Modal visible={showSearchModal} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Aller à...</Text>
-            <TouchableOpacity onPress={() => setShowSearchModal(false)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Tabs */}
-          <View style={styles.tabs}>
-            {(['surah', 'page', 'juz'] as const).map(tab => (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.tab, searchTab === tab && styles.activeTab]}
-                onPress={() => setSearchTab(tab)}
-              >
-                <Text style={[styles.tabText, searchTab === tab && styles.activeTabText]}>
-                  {tab === 'surah' ? 'Sourate' : tab === 'page' ? 'Page' : 'Juz'}
-                </Text>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Aller à...</Text>
+              <TouchableOpacity onPress={() => setShowSearchModal(false)}>
+                <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Contenu selon le tab */}
-          {searchTab === 'surah' && (
-            <FlatList
-              data={surahsInfo}
-              keyExtractor={item => item.number.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.listItem}
-                  onPress={() => {
-                    setCurrentPage(item.startPage);
-                    setShowSearchModal(false);
-                  }}
-                >
-                  <Text style={styles.listItemNumber}>{item.number}</Text>
-                  <View style={styles.listItemText}>
-                    <Text style={styles.listItemTitle}>{item.nameAr}</Text>
-                    <Text style={styles.listItemSubtitle}>{item.name} - Page {item.startPage}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              style={styles.list}
-            />
-          )}
-
-          {searchTab === 'page' && (
-            <View style={styles.pageInputContainer}>
-              <Text style={styles.pageInputLabel}>Numéro de page (1-604)</Text>
-              <TextInput
-                style={styles.pageInput}
-                keyboardType="number-pad"
-                value={pageInput}
-                onChangeText={setPageInput}
-                placeholder="Ex: 255"
-                placeholderTextColor="#999999"
-                maxLength={3}
-                autoFocus
-              />
-              <TouchableOpacity
-                style={[
-                  styles.goButton,
-                  (!pageInput || parseInt(pageInput, 10) < 1 || parseInt(pageInput, 10) > TOTAL_PAGES) && styles.goButtonDisabled
-                ]}
-                onPress={() => {
-                  const page = parseInt(pageInput, 10);
-                  if (page >= 1 && page <= TOTAL_PAGES) {
-                    Keyboard.dismiss();
-                    setCurrentPage(page);
-                    setShowSearchModal(false);
-                    setPageInput('');
-                  }
-                }}
-                disabled={!pageInput || parseInt(pageInput, 10) < 1 || parseInt(pageInput, 10) > TOTAL_PAGES}
-              >
-                <Text style={styles.goButtonText}>Aller à la page</Text>
-              </TouchableOpacity>
-              {pageInput && (parseInt(pageInput, 10) < 1 || parseInt(pageInput, 10) > TOTAL_PAGES) && (
-                <Text style={styles.pageInputError}>Page invalide (1-604)</Text>
-              )}
             </View>
-          )}
 
-          {searchTab === 'juz' && (
-            <FlatList
-              data={juzInfo}
-              keyExtractor={item => item.number.toString()}
-              renderItem={({ item }) => (
+            {/* Tabs */}
+            <View style={styles.tabs}>
+              {(['surah', 'page', 'juz'] as const).map(tab => (
                 <TouchableOpacity
-                  style={styles.listItem}
-                  onPress={() => {
-                    setCurrentPage(item.startPage);
-                    setShowSearchModal(false);
-                  }}
+                  key={tab}
+                  style={[styles.tab, searchTab === tab && styles.activeTab]}
+                  onPress={() => setSearchTab(tab)}
                 >
-                  <Text style={styles.listItemNumber}>{item.number}</Text>
-                  <View style={styles.listItemText}>
-                    <Text style={styles.listItemTitle}>Juz' {item.number}</Text>
-                    <Text style={styles.listItemSubtitle}>Page {item.startPage}</Text>
-                  </View>
+                  <Text style={[styles.tabText, searchTab === tab && styles.activeTabText]}>
+                    {tab === 'surah' ? 'Sourate' : tab === 'page' ? 'Page' : 'Juz'}
+                  </Text>
                 </TouchableOpacity>
-              )}
-              style={styles.list}
-            />
-          )}
-        </View>
-      </View>
+              ))}
+            </View>
+
+            {/* Contenu selon le tab */}
+            {searchTab === 'surah' && (
+              <FlatList
+                data={surahsInfo}
+                keyExtractor={item => item.number.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.listItem}
+                    onPress={() => {
+                      setCurrentPage(item.startPage);
+                      setShowSearchModal(false);
+                    }}
+                  >
+                    <Text style={styles.listItemNumber}>{item.number}</Text>
+                    <View style={styles.listItemText}>
+                      <Text style={styles.listItemTitle}>{item.nameAr}</Text>
+                      <Text style={styles.listItemSubtitle}>{item.name} - Page {item.startPage}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                style={styles.list}
+                keyboardShouldPersistTaps="handled"
+              />
+            )}
+
+            {searchTab === 'page' && (
+              <View style={styles.pageInputContainer}>
+                <Text style={styles.pageInputLabel}>Numéro de page (1-604)</Text>
+                <TextInput
+                  style={styles.pageInput}
+                  keyboardType="number-pad"
+                  value={pageInput}
+                  onChangeText={setPageInput}
+                  placeholder="Ex: 255"
+                  placeholderTextColor="#999999"
+                  maxLength={3}
+                  returnKeyType="go"
+                  onSubmitEditing={() => {
+                    const page = parseInt(pageInput, 10);
+                    if (page >= 1 && page <= TOTAL_PAGES) {
+                      Keyboard.dismiss();
+                      setCurrentPage(page);
+                      setShowSearchModal(false);
+                      setPageInput('');
+                    }
+                  }}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.goButton,
+                    (!pageInput || parseInt(pageInput, 10) < 1 || parseInt(pageInput, 10) > TOTAL_PAGES) && styles.goButtonDisabled
+                  ]}
+                  onPress={() => {
+                    const page = parseInt(pageInput, 10);
+                    if (page >= 1 && page <= TOTAL_PAGES) {
+                      Keyboard.dismiss();
+                      setCurrentPage(page);
+                      setShowSearchModal(false);
+                      setPageInput('');
+                    }
+                  }}
+                  disabled={!pageInput || parseInt(pageInput, 10) < 1 || parseInt(pageInput, 10) > TOTAL_PAGES}
+                >
+                  <Text style={styles.goButtonText}>Aller à la page</Text>
+                </TouchableOpacity>
+                {pageInput && (parseInt(pageInput, 10) < 1 || parseInt(pageInput, 10) > TOTAL_PAGES) && (
+                  <Text style={styles.pageInputError}>Page invalide (1-604)</Text>
+                )}
+              </View>
+            )}
+
+            {searchTab === 'juz' && (
+              <FlatList
+                data={juzInfo}
+                keyExtractor={item => item.number.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.listItem}
+                    onPress={() => {
+                      setCurrentPage(item.startPage);
+                      setShowSearchModal(false);
+                    }}
+                  >
+                    <Text style={styles.listItemNumber}>{item.number}</Text>
+                    <View style={styles.listItemText}>
+                      <Text style={styles.listItemTitle}>Juz' {item.number}</Text>
+                      <Text style={styles.listItemSubtitle}>Page {item.startPage}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                style={styles.list}
+                keyboardShouldPersistTaps="handled"
+              />
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 
@@ -996,8 +1015,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    minHeight: '50%',
-    maxHeight: '85%',
+    minHeight: '40%',
+    maxHeight: '70%',
   },
   modalHeader: {
     flexDirection: 'row',
