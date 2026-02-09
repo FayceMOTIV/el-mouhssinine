@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 193
+- **Build actuel** : 194
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -197,6 +197,29 @@ firebase deploy --only firestore:rules
 ### Image Hero HomeScreen
 - [x] Debug logging ajouté pour headerImageUrl
 - [x] Géré via backoffice > Paramètres > Image d'en-tête
+
+## Corrige (9 Fev 2026 - Build 194)
+
+### Pages Coran - Textes lisibles
+- [x] QuranScreen.tsx : Textes sombres sur fond clair (subtitle, sectionTitle, filterButtonText)
+- [x] SurahScreen.tsx : Textes noirs (loadingText, surahNumber, metaText, optionText, etc.)
+- [x] QuranReadScreen.tsx : Textes noirs (toutes les références blanches remplacées)
+- [x] Boutons filtre et options avec backgroundColor: colors.card + bordure
+
+### Modal recherche QuranReadScreen
+- [x] KeyboardAvoidingView ajouté pour éviter que le clavier cache l'input
+- [x] TouchableWithoutFeedback pour fermer le clavier
+- [x] Modal réduite (minHeight 40%, maxHeight 70%)
+- [x] keyboardShouldPersistTaps="handled" sur les FlatLists
+- [x] returnKeyType="go" avec onSubmitEditing sur l'input page
+
+### Carte membre optimisée
+- [x] MemberCard.tsx : Chiffres réduits de 50% (fontSize 24→14, margin 8→4)
+- [x] Plus de retour à la ligne sur petits écrans
+
+### Recherche Quran optimisée
+- [x] QuranScreen.tsx : autoCorrect={false}, autoCapitalize="none", autoComplete="off"
+- [x] returnKeyType="search" pour clavier optimisé
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
