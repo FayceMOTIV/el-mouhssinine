@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   content: {
@@ -309,14 +309,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   filterButtonActive: {
     backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   filterButtonText: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   filterButtonTextActive: {
@@ -328,7 +331,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.primary,
     marginBottom: spacing.md,
   },
   popularScroll: {

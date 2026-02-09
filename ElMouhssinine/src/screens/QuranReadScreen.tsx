@@ -815,7 +815,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.1)',
     borderRadius: 2,
     marginTop: 8,
   },
@@ -935,7 +935,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   navArrowDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   navArrowText: {
     color: '#1a1a2e',
@@ -943,7 +943,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   navArrowTextDisabled: {
-    color: 'rgba(255,255,255,0.3)',
+    color: 'rgba(0,0,0,0.3)',
   },
   footerButton: {
     alignItems: 'center',
@@ -979,7 +979,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   fontSizeBtnDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   fontSizeBtnText: {
     color: '#1a1a2e',

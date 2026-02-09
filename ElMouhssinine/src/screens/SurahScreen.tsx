@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: spacing.lg,
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
   },
   header: {
     paddingTop: 50,
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
   },
   surahNumber: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   surahArabicName: {
@@ -485,12 +485,12 @@ const styles = StyleSheet.create({
   surahEnglishName: {
     fontSize: fontSize.xl,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
     marginTop: 4,
   },
   surahTranslation: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   surahMeta: {
@@ -500,11 +500,11 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.textMuted,
   },
   metaDot: {
     marginHorizontal: spacing.sm,
-    color: 'rgba(255,255,255,0.3)',
+    color: colors.textMuted,
   },
   optionsBar: {
     flexDirection: 'row',
@@ -517,19 +517,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
     borderRadius: borderRadius.full,
     gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   optionButtonActive: {
     backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   optionIcon: {
     fontSize: 16,
   },
   optionText: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
   },
   optionTextActive: {
     color: '#ffffff',
@@ -564,11 +567,11 @@ const styles = StyleSheet.create({
   playerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text,
   },
   playerReciter: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   bismillahContainer: {
@@ -577,7 +580,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   bismillah: {
     fontSize: 28,
@@ -585,7 +588,7 @@ const styles = StyleSheet.create({
   },
   bismillahTranslation: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textSecondary,
     marginTop: spacing.sm,
     textAlign: 'center',
   },
@@ -666,8 +669,10 @@ const styles = StyleSheet.create({
   navButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
     borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   navButtonDisabled: {
     opacity: 0.3,
