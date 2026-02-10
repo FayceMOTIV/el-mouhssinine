@@ -1,7 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import TrackPlayer, { Event, State } from 'react-native-track-player';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupPlayer } from '../services/audioPlayer';
+
+// Import TrackPlayer avec protection
+let TrackPlayer: any = null;
+let Event: any = {};
+let State: any = {};
+
+try {
+  const TP = require('react-native-track-player');
+  TrackPlayer = TP.default || TP;
+  Event = TP.Event || {};
+  State = TP.State || {};
+  console.log('[useQuranPlayer] TrackPlayer importé avec succès');
+} catch (e) {
+  console.error('[useQuranPlayer] ERREUR import TrackPlayer:', e);
+}
 
 interface Verse {
   number: number;
@@ -31,6 +45,9 @@ export const useQuranPlayer = ({
   surahName,
   onVerseChange
 }: UseQuranPlayerProps) => {
+  // Log de version pour debug
+  console.log('[useQuranPlayer] Build 202 - Hook initialisé');
+
   // États
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -88,6 +105,10 @@ export const useQuranPlayer = ({
 
     const init = async () => {
       try {
+        if (!TrackPlayer) {
+          console.error('[useQuranPlayer] TrackPlayer non disponible');
+          return;
+        }
         console.log('[useQuranPlayer] Initialisation...');
         await setupPlayer();
         if (mounted) {
@@ -127,7 +148,7 @@ export const useQuranPlayer = ({
 
   // Polling pour la progression audio
   useEffect(() => {
-    if (!isPlaying || !isPlayerReady) return;
+    if (!isPlaying || !isPlayerReady || !TrackPlayer) return;
 
     const interval = setInterval(async () => {
       try {
@@ -146,27 +167,30 @@ export const useQuranPlayer = ({
 
   // Écouter les événements TrackPlayer
   useEffect(() => {
-    if (!isPlayerReady) return;
+    if (!isPlayerReady || !TrackPlayer || !Event.PlaybackState) {
+      console.log('[useQuranPlayer] Skip event listeners - not ready');
+      return;
+    }
 
     const subscriptions: Array<{ remove: () => void }> = [];
 
     try {
       subscriptions.push(
-        TrackPlayer.addEventListener(Event.PlaybackState, async (event) => {
+        TrackPlayer.addEventListener(Event.PlaybackState, async (event: any) => {
           try {
-            const state = event.state as State;
+            const state = event?.state;
 
-            if (state === State.Playing) {
+            if (state === State?.Playing) {
               setIsPlaying(true);
               setIsLoading(false);
-            } else if (state === State.Paused) {
+            } else if (state === State?.Paused) {
               setIsPlaying(false);
-            } else if (state === State.Buffering || state === State.Loading) {
+            } else if (state === State?.Buffering || state === State?.Loading) {
               setIsLoading(true);
-            } else if (state === State.Stopped || state === State.None) {
+            } else if (state === State?.Stopped || state === State?.None) {
               setIsPlaying(false);
               setIsLoading(false);
-            } else if (state === State.Ended) {
+            } else if (state === State?.Ended) {
               console.log('[useQuranPlayer] Verset terminé');
               await handleVerseEndedInternal();
             }
@@ -177,9 +201,9 @@ export const useQuranPlayer = ({
       );
 
       subscriptions.push(
-        TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (event) => {
+        TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (event: any) => {
           try {
-            if (event.lastTrack && !event.track && stateRef.current.isPlaying) {
+            if (event?.lastTrack && !event?.track && stateRef.current.isPlaying) {
               console.log('[useQuranPlayer] Track terminée');
               await handleVerseEndedInternal();
             }
@@ -190,7 +214,7 @@ export const useQuranPlayer = ({
       );
 
       subscriptions.push(
-        TrackPlayer.addEventListener(Event.PlaybackError, (event) => {
+        TrackPlayer.addEventListener(Event.PlaybackError, (event: any) => {
           console.error('[useQuranPlayer] Erreur playback:', event);
           setIsLoading(false);
           setIsPlaying(false);
@@ -213,6 +237,11 @@ export const useQuranPlayer = ({
 
   // Fonction interne pour jouer un verset
   const playVerseInternal = async (index: number): Promise<boolean> => {
+    if (!TrackPlayer) {
+      console.error('[useQuranPlayer] TrackPlayer non disponible');
+      return false;
+    }
+
     const state = stateRef.current;
 
     if (!state.verses || state.verses.length === 0) {
@@ -315,10 +344,14 @@ export const useQuranPlayer = ({
 
   const play = useCallback(async () => {
     if (stateRef.current.isPlaying) return;
+    if (!TrackPlayer) {
+      console.error('[useQuranPlayer] play: TrackPlayer non disponible');
+      return;
+    }
 
     try {
       const state = await TrackPlayer.getPlaybackState();
-      if (state.state === State.Paused) {
+      if (state?.state === State?.Paused) {
         await TrackPlayer.play();
         setIsPlaying(true);
       } else {
@@ -330,6 +363,7 @@ export const useQuranPlayer = ({
   }, []);
 
   const pause = useCallback(async () => {
+    if (!TrackPlayer) return;
     try {
       await TrackPlayer.pause();
       setIsPlaying(false);
@@ -380,9 +414,11 @@ export const useQuranPlayer = ({
   }, []);
 
   const stop = useCallback(async () => {
-    try {
-      await TrackPlayer.reset();
-    } catch {}
+    if (TrackPlayer) {
+      try {
+        await TrackPlayer.reset();
+      } catch {}
+    }
     setIsPlaying(false);
     setIsLoading(false);
     setCurrentVerseIndex(0);
@@ -394,9 +430,11 @@ export const useQuranPlayer = ({
   const changeSpeed = useCallback(async (speed?: PlaybackSpeed) => {
     const newSpeed = speed ?? PLAYBACK_SPEEDS[(PLAYBACK_SPEEDS.indexOf(stateRef.current.playbackSpeed) + 1) % PLAYBACK_SPEEDS.length];
     setPlaybackSpeed(newSpeed);
-    try {
-      await TrackPlayer.setRate(newSpeed);
-    } catch {}
+    if (TrackPlayer) {
+      try {
+        await TrackPlayer.setRate(newSpeed);
+      } catch {}
+    }
   }, []);
 
   const cycleRepeatMode = useCallback(() => {

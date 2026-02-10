@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 201
+- **Build actuel** : 202
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
