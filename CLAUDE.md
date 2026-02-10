@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 200
+- **Build actuel** : 201
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -350,6 +350,52 @@ Le flux `seekToVerse()` → `play()` avait un problème de timing :
 ### Solution
 - Mise à jour du ref IMMÉDIATEMENT (synchrone) avant `setCurrentVerseIndex`
 - `handlePlayVerse` utilise maintenant `playVerseAtIndex` directement
+
+## Corrige (10 Fev 2026 - Build 201)
+
+### Fix Crash Audio Coran - Réécriture complète useQuranPlayer
+- [x] Suppression de `useProgress()` (hook RNTP qui crashait avant init player)
+- [x] Suppression de `useTrackPlayerEvents()` (hook RNTP qui crashait avant init player)
+- [x] Remplacé par `TrackPlayer.addEventListener()` manuel dans un `useEffect` conditionnel sur `isPlayerReady`
+- [x] Polling manuel de la progression avec `setInterval` (200ms)
+- [x] Single `stateRef` pour tout l'état au lieu de 10+ refs individuels
+- [x] Toutes les opérations TrackPlayer wrappées dans try-catch
+- [x] Event listeners subscription/cleanup wrappés dans try-catch
+
+### Cause du crash
+Les hooks `useProgress()` et `useTrackPlayerEvents()` de react-native-track-player étaient appelés avant que le player soit initialisé, causant un crash JavaScript attrapé par ErrorBoundary dans App.tsx.
+
+### Solution architecturale
+```typescript
+// Avant (CRASH) :
+const { position, duration } = useProgress();
+useTrackPlayerEvents([Event.PlaybackState], (event) => { ... });
+
+// Après (STABLE) :
+const [isPlayerReady, setIsPlayerReady] = useState(false);
+useEffect(() => { setupPlayer().then(() => setIsPlayerReady(true)); }, []);
+
+// Polling manuel seulement si player prêt
+useEffect(() => {
+  if (!isPlaying || !isPlayerReady) return;
+  const interval = setInterval(async () => {
+    const position = await TrackPlayer.getPosition();
+    const duration = await TrackPlayer.getDuration();
+    // ...
+  }, 200);
+  return () => clearInterval(interval);
+}, [isPlaying, isPlayerReady]);
+
+// Event listeners seulement si player prêt
+useEffect(() => {
+  if (!isPlayerReady) return;
+  const subs = [];
+  try {
+    subs.push(TrackPlayer.addEventListener(Event.PlaybackState, ...));
+  } catch {}
+  return () => { subs.forEach(s => { try { s.remove(); } catch {} }); };
+}, [isPlayerReady]);
+```
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
