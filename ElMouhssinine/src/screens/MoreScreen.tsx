@@ -1679,11 +1679,11 @@ const styles = StyleSheet.create({
   },
   versionText: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.textMuted,
   },
   copyrightText: {
     fontSize: fontSize.xs,
-    color: 'rgba(255,255,255,0.4)',
+    color: colors.textMuted,
     marginTop: 4,
   },
   // Language selector
@@ -1700,9 +1700,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.card,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: 'rgba(0,0,0,0.08)',
   },
   languageOptionActive: {
     backgroundColor: 'rgba(201,162,39,0.15)',

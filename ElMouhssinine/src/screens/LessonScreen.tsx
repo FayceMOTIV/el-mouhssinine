@@ -348,9 +348,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   closeButtonText: {
     fontSize: 18,
@@ -601,11 +603,13 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   prevButton: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   prevButtonText: {
     fontSize: fontSize.md,

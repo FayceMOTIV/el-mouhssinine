@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     marginTop: spacing.sm,
     textAlign: 'center',
   },
@@ -484,11 +484,13 @@ const styles = StyleSheet.create({
   shareButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   shareButtonIcon: {
     fontSize: 16,

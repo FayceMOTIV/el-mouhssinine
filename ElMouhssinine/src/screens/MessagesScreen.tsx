@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: spacing.xl,
     lineHeight: 22,

@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   content: {
@@ -485,12 +485,12 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   sectionTitle: {
     fontSize: fontSize.xl,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.primary,
     marginBottom: spacing.md,
   },
   levelCard: {
@@ -583,9 +583,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   quitButtonText: {
     fontSize: 18,
@@ -609,7 +611,7 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     height: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.1)',
     marginHorizontal: spacing.lg,
     borderRadius: 3,
     overflow: 'hidden',
@@ -689,7 +691,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -836,7 +838,9 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   backButton: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   backButtonText: {
     fontSize: fontSize.md,

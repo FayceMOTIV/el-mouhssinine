@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: fontSize.md,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   content: {
@@ -287,16 +287,18 @@ const styles = StyleSheet.create({
   levelButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
     borderRadius: borderRadius.full,
     marginRight: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   levelButtonActive: {
     backgroundColor: colors.accent,
   },
   levelButtonText: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   levelButtonTextActive: {
@@ -337,7 +339,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success,
   },
   lessonNumberLocked: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.08)',
   },
   lessonNumberText: {
     fontSize: fontSize.lg,
@@ -419,10 +421,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   reviewButton: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.card,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.sm,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   reviewButtonText: {
     fontSize: fontSize.md,

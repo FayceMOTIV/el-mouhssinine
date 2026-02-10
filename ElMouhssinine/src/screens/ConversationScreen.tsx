@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: fontSize.xs,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textMuted,
     marginTop: spacing.xs,
     textAlign: 'right',
   },

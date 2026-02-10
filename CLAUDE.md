@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 194
+- **Build actuel** : 195
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -220,6 +220,30 @@ firebase deploy --only firestore:rules
 ### Recherche Quran optimisée
 - [x] QuranScreen.tsx : autoCorrect={false}, autoCapitalize="none", autoComplete="off"
 - [x] returnKeyType="search" pour clavier optimisé
+
+## Corrige (10 Fev 2026 - Build 195)
+
+### Audit complet textes blancs sur fond clair
+- [x] QuranHomeScreen.tsx : Tous les textes corrigés (title, quoteFr, quoteRef, footerText)
+- [x] QuranHomeScreen.tsx : StatusBar dark-content, ScrollView ajouté, responsive small screens
+- [x] AlphabetScreen.tsx : subtitle et sectionTitle corrigés
+- [x] AdhkarScreen.tsx : subtitle et sectionTitle corrigés
+- [x] AdhkarDetailScreen.tsx : description et shareButton corrigés
+- [x] LessonsListScreen.tsx : subtitle, levelButton, levelButtonText, reviewButton corrigés
+- [x] QuizScreen.tsx : subtitle, sectionTitle, statDivider, quitButton, progressBarContainer, answerIndex, backButton corrigés
+- [x] LessonScreen.tsx : closeButton et prevButton corrigés
+- [x] MessagesScreen.tsx : emptyText corrigé
+- [x] ConversationScreen.tsx : messageTime corrigé
+- [x] MoreScreen.tsx : versionText, copyrightText, languageOption corrigés
+
+### Carte membre - Chiffres encore réduits
+- [x] MemberCard.tsx : fontSize 14→11, marginRight 4→2, fontWeight 600
+
+### QuranHomeScreen responsive petits écrans
+- [x] ScrollView pour permettre le scroll sur petits écrans
+- [x] Tailles de police réduites sur isSmallScreen
+- [x] Padding et marges adaptés
+- [x] Textes de boutons raccourcis ("Page par page", "Récitation audio")
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
