@@ -150,11 +150,10 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
 
   // Lecture d'un verset spécifique
   const handlePlayVerse = async (index: number) => {
+    console.log('[SurahScreen] handlePlayVerse:', index);
     setShowMiniPlayer(true);
-    await player.seekToVerse(index);
-    if (!player.isPlaying) {
-      await player.play();
-    }
+    // Utiliser playVerseAtIndex directement au lieu de seekToVerse + play
+    await player.playVerseAtIndex(index);
   };
 
   const handlePreviousSurah = useCallback(() => {

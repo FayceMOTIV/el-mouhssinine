@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 199
+- **Build actuel** : 200
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -332,6 +332,24 @@ firebase deploy --only firestore:rules
 - **backgroundLocation.ts** : `checkMosqueProximityForeground()` (haute précision, premier plan)
 - **HomeScreen.tsx** : AppState.addEventListener('change') déclenche la vérification
 - **prayerNotifications.ts** : Logs améliorés pour le diagnostic
+
+## Corrige (10 Fev 2026 - Build 200)
+
+### Fix Audio Coran - Lecture ne démarre pas
+- [x] Bug `seekToVerse` : ref `currentVerseIndexRef` n'était pas mis à jour immédiatement
+- [x] `handlePlayVerse` simplifié : appelle directement `playVerseAtIndex` au lieu de `seekToVerse` + `play()`
+- [x] Mise à jour synchrone du ref dans `playVerseAtIndex` avant le setState
+- [x] Logs de debug détaillés ajoutés dans tout le flux de lecture
+
+### Cause du bug
+Le flux `seekToVerse()` → `play()` avait un problème de timing :
+1. `seekToVerse` appelait `setCurrentVerseIndex(index)` (async)
+2. Le ref `currentVerseIndexRef` était mis à jour dans un `useEffect` (async)
+3. `play()` était appelé immédiatement après et utilisait l'ancienne valeur du ref
+
+### Solution
+- Mise à jour du ref IMMÉDIATEMENT (synchrone) avant `setCurrentVerseIndex`
+- `handlePlayVerse` utilise maintenant `playVerseAtIndex` directement
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)

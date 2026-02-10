@@ -126,16 +126,18 @@ export const useQuranPlayer = ({
 
   // Jouer un verset spécifique
   const playVerseAtIndex = async (index: number) => {
+    console.log('[useQuranPlayer] playVerseAtIndex appelé avec index:', index);
+
     const currentVerses = versesRef.current;
 
     // Vérifier que les versets sont disponibles
     if (!currentVerses || currentVerses.length === 0) {
-      console.warn('[useQuranPlayer] Pas de versets disponibles');
+      console.warn('[useQuranPlayer] Pas de versets disponibles, length:', currentVerses?.length);
       return;
     }
 
     if (index < 0 || index >= currentVerses.length) {
-      console.warn('[useQuranPlayer] Index invalide:', index);
+      console.warn('[useQuranPlayer] Index invalide:', index, 'max:', currentVerses.length - 1);
       return;
     }
 
@@ -143,28 +145,39 @@ export const useQuranPlayer = ({
     const verse = currentVerses[index];
     const audioUrl = getAudioUrl(verse.number);
 
-    console.log('[useQuranPlayer] Lecture verset:', index + 1, 'URL:', audioUrl);
+    console.log('[useQuranPlayer] Lecture verset:', verse.numberInSurah, '(global:', verse.number, ') URL:', audioUrl);
 
     try {
+      console.log('[useQuranPlayer] Setup player...');
       await setupPlayer();
+
+      console.log('[useQuranPlayer] Reset player...');
       await TrackPlayer.reset();
+
+      console.log('[useQuranPlayer] Ajout track...');
       await TrackPlayer.add({
         id: `verse-${verse.number}`,
         url: audioUrl,
         title: `${surahName || 'Sourate'} - Verset ${verse.numberInSurah}`,
         artist: reciterCodeRef.current,
       });
+
+      console.log('[useQuranPlayer] Set rate:', playbackSpeedRef.current);
       await TrackPlayer.setRate(playbackSpeedRef.current);
+
+      console.log('[useQuranPlayer] Play...');
       await TrackPlayer.play();
 
+      // Mettre à jour le ref immédiatement
+      currentVerseIndexRef.current = index;
       setCurrentVerseIndex(index);
       setIsPlaying(true);
       setIsLoading(false);
       onVerseChange?.(index);
 
-      console.log('[useQuranPlayer] Lecture démarrée');
+      console.log('[useQuranPlayer] ✅ Lecture démarrée avec succès');
     } catch (error) {
-      console.error('[useQuranPlayer] Erreur lecture:', error);
+      console.error('[useQuranPlayer] ❌ Erreur lecture:', error);
       setIsLoading(false);
       setIsPlaying(false);
     }
@@ -265,7 +278,12 @@ export const useQuranPlayer = ({
 
   // Lecture
   const play = async () => {
-    if (isPlayingRef.current) return;
+    console.log('[useQuranPlayer] play() appelé, isPlaying:', isPlayingRef.current, 'index:', currentVerseIndexRef.current);
+
+    if (isPlayingRef.current) {
+      console.log('[useQuranPlayer] Déjà en lecture, ignoré');
+      return;
+    }
 
     const currentVerses = versesRef.current;
     if (!currentVerses || currentVerses.length === 0) {
@@ -275,14 +293,18 @@ export const useQuranPlayer = ({
 
     try {
       const state = await TrackPlayer.getPlaybackState();
+      console.log('[useQuranPlayer] État actuel du player:', state.state);
+
       if (state.state === State.Paused) {
+        console.log('[useQuranPlayer] Reprise de la lecture');
         await TrackPlayer.play();
         setIsPlaying(true);
       } else {
+        console.log('[useQuranPlayer] Nouvelle lecture depuis verset:', currentVerseIndexRef.current);
         await playVerseAtIndex(currentVerseIndexRef.current);
       }
     } catch (error) {
-      console.log('[useQuranPlayer] Nouvelle lecture depuis le début');
+      console.log('[useQuranPlayer] Erreur getPlaybackState, nouvelle lecture:', error);
       await playVerseAtIndex(currentVerseIndexRef.current);
     }
   };
@@ -302,12 +324,18 @@ export const useQuranPlayer = ({
     }
   };
 
-  // Aller à un verset spécifique
+  // Aller à un verset spécifique (met à jour l'index IMMÉDIATEMENT dans le ref)
   const seekToVerse = async (index: number) => {
     const currentVerses = versesRef.current;
-    if (!currentVerses || index < 0 || index >= currentVerses.length) return;
+    if (!currentVerses || index < 0 || index >= currentVerses.length) {
+      console.warn('[useQuranPlayer] seekToVerse: index invalide ou pas de versets');
+      return;
+    }
 
+    console.log('[useQuranPlayer] seekToVerse:', index);
     setRepeatCount(0);
+    // IMPORTANT: Mettre à jour le ref IMMÉDIATEMENT (pas attendre le useEffect)
+    currentVerseIndexRef.current = index;
     setCurrentVerseIndex(index);
     onVerseChange?.(index);
   };
