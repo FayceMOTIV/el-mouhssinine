@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 197
+- **Build actuel** : 198
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -308,6 +308,16 @@ firebase deploy --only firestore:rules
 - src/components/QuranVerse.tsx (NOUVEAU)
 - src/components/QuranMiniPlayer.tsx (NOUVEAU)
 - src/screens/SurahScreen.tsx (REFACTORISÉ)
+
+## Corrige (10 Fev 2026 - Build 198)
+
+### Fix useQuranPlayer - Erreur audio Karaoke
+- [x] Ajout de refs (useRef) pour accéder aux valeurs actuelles dans les callbacks async
+- [x] Protection contre tableau verses vide au démarrage
+- [x] Ajout de logs de debug pour tracer les problèmes
+- [x] Event.PlaybackActiveTrackChanged en plus de State.Ended pour détecter fin de verset
+- [x] setIsLoading(false) après succès de lecture
+- [x] Séparation de l'initialisation player et du chargement de progression
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
