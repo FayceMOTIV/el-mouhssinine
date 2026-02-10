@@ -12,6 +12,8 @@ import {
   Vibration,
   Platform,
   Alert,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
@@ -51,6 +53,7 @@ import {
   checkMosqueProximity,
   getMosqueProximitySettings,
 } from '../services/prayerNotifications';
+import { checkMosqueProximityForeground } from '../services/backgroundLocation';
 import Geolocation from '@react-native-community/geolocation';
 import { setInAppNotificationCallback } from '../services/notifications';
 import { logger } from '../utils';
@@ -527,55 +530,44 @@ const HomeScreen = () => {
     setUnreadNotifCount(0);
   }, []);
 
-  // Vérifier la proximité de la mosquée au démarrage (si feature activée)
-  // Note: Le service backgroundLocation.ts gère aussi la vérification en arrière-plan
+  // Vérifier la proximité de la mosquée au démarrage ET quand l'app revient au premier plan
+  // Note: Le service backgroundLocation.ts gère aussi la vérification en arrière-plan (toutes les ~15min)
   useEffect(() => {
     let isMounted = true;
 
     const checkProximity = async () => {
+      if (!isMounted) return;
+
       try {
-        // Vérifier si la feature est activée
-        const settings = await getMosqueProximitySettings();
-        if (!settings.enabled || !isMounted) return;
-
-        // Faire un check quand l'app s'ouvre (en complément du background)
-        Geolocation.getCurrentPosition(
-          async (position) => {
-            // Guard: ne pas mettre à jour si le composant est démonté
-            if (!isMounted) return;
-
-            const { latitude, longitude } = position.coords;
-            logger.log(`[HomeScreen] Position: ${latitude}, ${longitude}`);
-
-            await checkMosqueProximity(latitude, longitude, {
-              title: `🕌 ${t('mosqueSilentModeTitle')}`,
-              body: t('mosqueSilentModeBody'),
-            });
-          },
-          (error) => {
-            if (!isMounted) return;
-            logger.log('[HomeScreen] Erreur géolocalisation:', error.code, error.message);
-          },
-          {
-            enableHighAccuracy: false,
-            timeout: 15000,
-            maximumAge: 60000,
-          }
-        );
-      } catch (error) {
-        if (isMounted) {
-          logger.warn('[HomeScreen] Erreur check proximité:', error);
+        console.log('[HomeScreen] Vérification proximité mosquée (foreground)...');
+        const sent = await checkMosqueProximityForeground(language === 'ar' ? 'ar' : 'fr');
+        if (sent) {
+          console.log('[HomeScreen] Notification mode silencieux envoyée !');
         }
+      } catch (error) {
+        console.warn('[HomeScreen] Erreur check proximité:', error);
       }
     };
 
+    // Vérifier au démarrage
     checkProximity();
 
-    // Cleanup: marquer le composant comme démonté
+    // Écouter les changements d'état de l'app (arrière-plan -> premier plan)
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        console.log('[HomeScreen] App au premier plan, vérification proximité...');
+        checkProximity();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    // Cleanup
     return () => {
       isMounted = false;
+      subscription.remove();
     };
-  }, [t]);
+  }, [language]);
 
   // Gérer le clic sur "J'ai prié" - annule les notifications boost et masque le bouton
   const handlePrayed = useCallback(async () => {

@@ -1172,8 +1172,8 @@ const MOSQUE_COORDS = {
   longitude: 5.2477947,
 };
 
-// Rayon de détection en mètres
-const PROXIMITY_RADIUS_METERS = 100;
+// Rayon de détection en mètres (250m pour compenser l'imprécision GPS en background)
+const PROXIMITY_RADIUS_METERS = 250;
 
 // Intervalle minimum entre 2 notifications (30 minutes)
 const MIN_NOTIF_INTERVAL_MS = 30 * 60 * 1000;
@@ -1229,8 +1229,10 @@ export const checkMosqueProximity = async (
     // Vérifier si la feature est activée
     const settings = await getMosqueProximitySettings();
     if (!settings.enabled) {
+      console.log('[MosqueProximity] Feature désactivée');
       return false;
     }
+    console.log('[MosqueProximity] Vérification position...');
 
     // Calculer la distance
     const distance = calculateDistance(
@@ -1240,19 +1242,23 @@ export const checkMosqueProximity = async (
       MOSQUE_COORDS.longitude
     );
 
-    logger.log(`[MosqueProximity] Distance: ${Math.round(distance)}m`);
+    console.log(`[MosqueProximity] Distance: ${Math.round(distance)}m (rayon: ${PROXIMITY_RADIUS_METERS}m)`);
 
     // Vérifier si dans le rayon
     if (distance > PROXIMITY_RADIUS_METERS) {
+      console.log(`[MosqueProximity] Hors du rayon (${Math.round(distance)}m > ${PROXIMITY_RADIUS_METERS}m)`);
       return false;
     }
+
+    console.log('[MosqueProximity] Dans le rayon ! Vérification cooldown...');
 
     // Vérifier le délai depuis la dernière notification
     const lastNotifTime = await AsyncStorage.getItem(LAST_MOSQUE_NOTIF_KEY);
     if (lastNotifTime) {
       const elapsed = Date.now() - parseInt(lastNotifTime, 10);
       if (elapsed < MIN_NOTIF_INTERVAL_MS) {
-        logger.log('[MosqueProximity] Notification récente, skip');
+        const minutesRemaining = Math.round((MIN_NOTIF_INTERVAL_MS - elapsed) / 60000);
+        console.log(`[MosqueProximity] Cooldown actif, prochaine notif dans ~${minutesRemaining}min`);
         return false;
       }
     }
@@ -1279,7 +1285,7 @@ export const checkMosqueProximity = async (
 
     // Enregistrer le timestamp
     await AsyncStorage.setItem(LAST_MOSQUE_NOTIF_KEY, Date.now().toString());
-    logger.log('[MosqueProximity] ✅ Notification envoyée !');
+    console.log('[MosqueProximity] ✅ Notification mode silencieux envoyée !');
 
     return true;
   } catch (error) {

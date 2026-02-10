@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 198
+- **Build actuel** : 199
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -318,6 +318,20 @@ firebase deploy --only firestore:rules
 - [x] Event.PlaybackActiveTrackChanged en plus de State.Ended pour détecter fin de verset
 - [x] setIsLoading(false) après succès de lecture
 - [x] Séparation de l'initialisation player et du chargement de progression
+
+## Corrige (10 Fev 2026 - Build 199)
+
+### Fix Mode Silencieux Mosquée - Notifications non reçues
+- [x] Rayon de détection augmenté de 100m à 250m (compense imprécision GPS en background)
+- [x] Nouvelle fonction `checkMosqueProximityForeground()` avec haute précision GPS
+- [x] AppState listener dans HomeScreen pour vérifier à chaque passage au premier plan
+- [x] Logs de diagnostic ajoutés (console.log visible même en production)
+- [x] Amélioration des messages de log (distance, rayon, cooldown restant)
+
+### Architecture Mode Silencieux
+- **backgroundLocation.ts** : `checkMosqueProximityForeground()` (haute précision, premier plan)
+- **HomeScreen.tsx** : AppState.addEventListener('change') déclenche la vérification
+- **prayerNotifications.ts** : Logs améliorés pour le diagnostic
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
