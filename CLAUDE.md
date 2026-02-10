@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 196
+- **Build actuel** : 197
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -273,6 +273,41 @@ firebase deploy --only firestore:rules
 ### API Audio Coran
 - Sourate complète : cdn.islamic.network/quran/audio-surah/128/{reciter}/{surahNumber}.mp3
 - Verset par verset : cdn.islamic.network/quran/audio/128/{reciter}/{globalVerseNumber}.mp3
+
+## Corrige (10 Fev 2026 - Build 197)
+
+### Mode Karaoke PRO - Version Professionnelle
+- [x] useQuranPlayer.ts : Hook personnalisé avec gestion audio complète
+- [x] QuranVerse.tsx : Composant verset avec animations fluides (pulse, glow, sound bars)
+- [x] QuranMiniPlayer.tsx : Mini lecteur flottant avec tous les contrôles
+- [x] SurahScreen.tsx : Intégration des 3 composants pro
+
+### Fonctionnalités useQuranPlayer
+- [x] Modes de répétition : none, verse, surah, range
+- [x] Vitesses de lecture : 0.5x, 0.75x, 1x, 1.25x, 1.5x
+- [x] Sauvegarde progression dans AsyncStorage
+- [x] Reprise automatique de la dernière position
+- [x] Callback onVerseChange pour scroll synchronisé
+
+### Animations QuranVerse
+- [x] Pulsation douce (scale 1 → 1.02) quand actif
+- [x] Background animé (transparent → doré)
+- [x] Barres de son animées (4 barres, hauteurs variables)
+- [x] memo() pour éviter re-renders inutiles
+
+### Mini Player Flottant
+- [x] Barre de progression sourate (pourcentage global)
+- [x] Barre de progression verset (position dans l'audio actuel)
+- [x] Contrôles : prev, play/pause, next, stop
+- [x] Boutons vitesse et répétition
+- [x] Animation d'entrée (spring slide-up)
+- [x] Bouton fermer
+
+### Architecture fichiers
+- src/hooks/useQuranPlayer.ts (NOUVEAU)
+- src/components/QuranVerse.tsx (NOUVEAU)
+- src/components/QuranMiniPlayer.tsx (NOUVEAU)
+- src/screens/SurahScreen.tsx (REFACTORISÉ)
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
