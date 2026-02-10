@@ -192,6 +192,11 @@ export const translations = {
     addToFavorites: 'Ajouter aux favoris',
     removeFromFavorites: 'Retirer des favoris',
     copyVerse: 'Copier le verset',
+    listenWithKaraoke: 'Mode Karaoke',
+    karaokeHint: 'Appuyez sur un verset pour le lire',
+    stopKaraoke: 'Arrêter',
+    karaokeVerse: 'Verset',
+    karaokeOf: 'sur',
 
     // Invocations
     invocations: 'Invocations',
@@ -702,6 +707,11 @@ export const translations = {
     addToFavorites: 'إضافة إلى المفضلة',
     removeFromFavorites: 'إزالة من المفضلة',
     copyVerse: 'نسخ الآية',
+    listenWithKaraoke: 'وضع الكاريوكي',
+    karaokeHint: 'اضغط على آية للاستماع إليها',
+    stopKaraoke: 'إيقاف',
+    karaokeVerse: 'آية',
+    karaokeOf: 'من',
 
     // Invocations
     invocations: 'الأذكار',

@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 195
+- **Build actuel** : 196
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -244,6 +244,35 @@ firebase deploy --only firestore:rules
 - [x] Tailles de police réduites sur isSmallScreen
 - [x] Padding et marges adaptés
 - [x] Textes de boutons raccourcis ("Page par page", "Récitation audio")
+
+## Corrige (10 Fev 2026 - Build 196)
+
+### Mode Karaoke - Suivi synchronisé lecture Coran
+- [x] SurahScreen.tsx : Réécriture complète avec mode Karaoke
+- [x] Audio verset par verset (au lieu de sourate entière)
+- [x] Auto-play du verset suivant quand le précédent se termine
+- [x] Auto-scroll vers le verset en cours de lecture
+- [x] Highlighting du verset actif (fond doré transparent, bordure accent)
+- [x] Contrôles Play/Pause/Stop
+- [x] Clic sur un verset pour lire à partir de ce point
+- [x] TrackPlayer events (PlaybackState, PlaybackError)
+- [x] getItemLayout + onScrollToIndexFailed pour scroll fiable
+- [x] removeClippedSubviews={false} pour auto-scroll
+
+### quranApi.ts - IDs réciteurs mis à jour
+- [x] ar.abdulbasit → ar.abdulbasitmurattal
+- [x] ar.abdurrahmaansudais → ar.abdurrahmanalsudais
+- [x] ar.saoodshuraym → ar.shuraim
+- [x] getVerseAudioUrl() ajouté pour audio verset par verset
+
+### i18n - Traductions Karaoke
+- [x] listenWithKaraoke (FR/AR)
+- [x] karaokeHint (FR/AR)
+- [x] stopKaraoke, karaokeVerse, karaokeOf (FR/AR)
+
+### API Audio Coran
+- Sourate complète : cdn.islamic.network/quran/audio-surah/128/{reciter}/{surahNumber}.mp3
+- Verset par verset : cdn.islamic.network/quran/audio/128/{reciter}/{globalVerseNumber}.mp3
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)

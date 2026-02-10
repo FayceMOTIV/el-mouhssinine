@@ -262,16 +262,22 @@ export const getAudioUrl = (surahNumber: number, reciter: string = 'ar.alafasy')
 };
 
 // Liste des recitateurs disponibles
+// Note: Les IDs sont pour l'API audio verset par verset (cdn.islamic.network/quran/audio/128/{id}/{verseNumber}.mp3)
 export const reciters = [
   { id: 'ar.alafasy', name: 'Mishary Rashid Alafasy', nameAr: 'مشاري العفاسي' },
-  { id: 'ar.abdulbasit', name: 'Abdul Basit Abdul Samad', nameAr: 'عبد الباسط عبد الصمد' },
-  { id: 'ar.abdurrahmaansudais', name: 'Abdurrahman As-Sudais', nameAr: 'عبدالرحمن السديس' },
+  { id: 'ar.abdulbasitmurattal', name: 'Abdul Basit Abdul Samad', nameAr: 'عبد الباسط عبد الصمد' },
+  { id: 'ar.abdurrahmanalsudais', name: 'Abdurrahman As-Sudais', nameAr: 'عبدالرحمن السديس' },
   { id: 'ar.hudhaify', name: 'Ali Al-Hudhaify', nameAr: 'علي الحذيفي' },
   { id: 'ar.minshawi', name: 'Mohamed Siddiq Al-Minshawi', nameAr: 'محمد صديق المنشاوي' },
-  { id: 'ar.saoodshuraym', name: 'Saud Al-Shuraim', nameAr: 'سعود الشريم' },
+  { id: 'ar.shuraim', name: 'Saud Al-Shuraim', nameAr: 'سعود الشريم' },
   { id: 'ar.husary', name: 'Mahmoud Khalil Al-Husary', nameAr: 'محمود خليل الحصري' },
   { id: 'ar.mahermuaiqly', name: 'Maher Al-Muaiqly', nameAr: 'ماهر المعيقلي' },
 ];
+
+// URL audio d'un verset specifique (mode karaoke)
+export const getVerseAudioUrl = (globalVerseNumber: number, reciter: string = 'ar.alafasy'): string => {
+  return `https://cdn.islamic.network/quran/audio/128/${reciter}/${globalVerseNumber}.mp3`;
+};
 
 // Donnees statiques des sourates (pour usage hors-ligne)
 export const surahsInfo = [

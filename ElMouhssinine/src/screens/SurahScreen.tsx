@@ -8,14 +8,17 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  Dimensions,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import TrackPlayer, { Event, State, useTrackPlayerEvents } from 'react-native-track-player';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { QuranAPI, surahsInfo, reciters, SurahData, getAudioUrl } from '../services/quranApi';
-import { playAudio, pauseAudio, stopAudio, getIsPlaying } from '../services/audioPlayer';
-import { useTrackPlayerEvents, Event, State } from 'react-native-track-player';
+import { QuranAPI, surahsInfo, reciters, SurahData, getVerseAudioUrl } from '../services/quranApi';
+import { setupPlayer, stopAudio } from '../services/audioPlayer';
 import { useLanguage } from '../context/LanguageContext';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface SurahScreenProps {
   route: any;
@@ -35,22 +38,48 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   const [selectedReciter, setSelectedReciter] = useState(reciters[0]);
   const [selectedAyah, setSelectedAyah] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [playingAyah, setPlayingAyah] = useState<number | null>(null);
-  const [isPlayingSurah, setIsPlayingSurah] = useState(false);
 
-  // Listener pour détecter la fin de lecture d'un verset
-  useTrackPlayerEvents([Event.PlaybackState], async (event) => {
-    if (event.state === State.Ended || event.state === State.Stopped) {
-      setPlayingAyah(null);
+  // Mode Karaoke - États
+  const [isKaraokePlaying, setIsKaraokePlaying] = useState(false);
+  const [currentVerseIndex, setCurrentVerseIndex] = useState(-1);
+  const [isPaused, setIsPaused] = useState(false);
+
+  // Refs pour le scroll automatique
+  const flatListRef = useRef<FlatList>(null);
+  const versesRef = useRef<any[]>([]);
+
+  const surahInfo = surahsInfo.find((s) => s.number === surahNumber);
+  const FAVORITES_KEY = '@quran_favorites';
+
+  // Écouter les événements TrackPlayer pour le mode Karaoke
+  useTrackPlayerEvents([Event.PlaybackState, Event.PlaybackError], async (event) => {
+    if (event.type === Event.PlaybackError) {
+      console.error('Erreur lecture audio:', event);
+      setIsKaraokePlaying(false);
+      setCurrentVerseIndex(-1);
+      return;
+    }
+
+    if (event.type === Event.PlaybackState) {
+      // Quand un verset se termine, passer au suivant
+      if (event.state === State.Ended && isKaraokePlaying && !isPaused) {
+        const verses = surahData?.arabic?.ayahs || [];
+        const nextIndex = currentVerseIndex + 1;
+
+        if (nextIndex < verses.length) {
+          // Jouer le verset suivant
+          await playVerseAtIndex(nextIndex);
+        } else {
+          // Fin de la sourate
+          setIsKaraokePlaying(false);
+          setCurrentVerseIndex(-1);
+          setIsPaused(false);
+        }
+      }
     }
   });
 
-  const surahInfo = surahsInfo.find((s) => s.number === surahNumber);
-
-  // Clé AsyncStorage pour les favoris
-  const FAVORITES_KEY = '@quran_favorites';
-
-  // Charger les favoris depuis AsyncStorage au démarrage
+  // Charger les favoris
   useEffect(() => {
     const loadFavorites = async () => {
       try {
@@ -68,85 +97,98 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
     loadFavorites();
   }, []);
 
-  // URL pour la SOURATE COMPLÈTE
-  const surahAudioUrl = `https://cdn.islamic.network/quran/audio-surah/128/${selectedReciter.id}/${surahNumber}.mp3`;
+  // Fonction pour jouer un verset à un index donné
+  const playVerseAtIndex = async (index: number) => {
+    const verses = surahData?.arabic?.ayahs || [];
+    if (index < 0 || index >= verses.length) return;
 
-  // Jouer/Pause la sourate complète
-  const handlePlaySurah = async () => {
-    try {
-      if (isPlayingSurah) {
-        await pauseAudio();
-        setIsPlayingSurah(false);
-        setPlayingAyah(null);
-      } else {
-        // Arrêter tout audio en cours
-        await stopAudio();
-        setPlayingAyah(null);
-
-        await playAudio(
-          surahAudioUrl,
-          `Sourate ${surahInfo?.englishName || surahNumber}`,
-          selectedReciter.name
-        );
-        setIsPlayingSurah(true);
-      }
-    } catch (error) {
-      console.error('Erreur audio sourate:', error);
-      Alert.alert(t('audioError'), t('cannotPlaySurah'));
-      setIsPlayingSurah(false);
-    }
-  };
-
-  // Jouer l'audio d'un verset spécifique
-  const handlePlayAudio = async (ayahNumber: number) => {
-    const globalAyahNumber = surahData?.arabic.ayahs[ayahNumber - 1]?.number;
-    if (!globalAyahNumber) return;
-
-    // Si on clique sur le même verset en cours de lecture, on pause
-    if (playingAyah === ayahNumber) {
-      await pauseAudio();
-      setPlayingAyah(null);
-      return;
-    }
-
-    // Arrêter la lecture de sourate complète si en cours
-    if (isPlayingSurah) {
-      await stopAudio();
-      setIsPlayingSurah(false);
-    }
-
-    const audioUrl = `https://cdn.islamic.network/quran/audio/128/${selectedReciter.id}/${globalAyahNumber}.mp3`;
+    const verse = verses[index];
+    const globalVerseNumber = verse.number; // Numéro global 1-6236
+    const audioUrl = getVerseAudioUrl(globalVerseNumber, selectedReciter.id);
 
     try {
-      setPlayingAyah(ayahNumber);
-      await playAudio(
-        audioUrl,
-        `Verset ${ayahNumber} - Sourate ${surahNumber}`,
-        selectedReciter.name
-      );
+      await setupPlayer();
+      await TrackPlayer.reset();
+      await TrackPlayer.add({
+        id: `verse-${globalVerseNumber}`,
+        url: audioUrl,
+        title: `${t('verse')} ${verse.numberInSurah} - ${surahInfo?.englishName || ''}`,
+        artist: selectedReciter.name,
+      });
+
+      setCurrentVerseIndex(index);
+      setIsKaraokePlaying(true);
+      setIsPaused(false);
+
+      // Scroll vers le verset avec un petit délai
+      setTimeout(() => {
+        scrollToVerse(index);
+      }, 100);
+
+      await TrackPlayer.play();
     } catch (error) {
-      console.error('Erreur audio:', error);
+      console.error('Erreur lecture verset:', error);
       Alert.alert(t('audioError'), t('cannotPlayAudio'));
-      setPlayingAyah(null);
+      setIsKaraokePlaying(false);
+      setCurrentVerseIndex(-1);
     }
   };
 
-  // Toggle favori (avec persistance AsyncStorage)
+  // Scroll automatique vers le verset en cours
+  const scrollToVerse = (index: number) => {
+    if (flatListRef.current && index >= 0) {
+      flatListRef.current.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.3, // Position le verset à 30% du haut
+      });
+    }
+  };
+
+  // Démarrer/Reprendre la lecture Karaoke
+  const handlePlayKaraoke = async () => {
+    if (isKaraokePlaying && !isPaused) {
+      // Pause
+      await TrackPlayer.pause();
+      setIsPaused(true);
+    } else if (isPaused) {
+      // Reprendre
+      await TrackPlayer.play();
+      setIsPaused(false);
+    } else {
+      // Démarrer depuis le début ou le verset sélectionné
+      const startIndex = selectedAyah ? selectedAyah - 1 : 0;
+      await playVerseAtIndex(startIndex);
+    }
+  };
+
+  // Arrêter complètement
+  const handleStopKaraoke = async () => {
+    await stopAudio();
+    setIsKaraokePlaying(false);
+    setCurrentVerseIndex(-1);
+    setIsPaused(false);
+  };
+
+  // Jouer un verset spécifique (clic sur le verset)
+  const handlePlayVerse = async (ayahNumberInSurah: number) => {
+    const index = ayahNumberInSurah - 1;
+    await playVerseAtIndex(index);
+  };
+
+  // Toggle favori
   const handleToggleFavorite = async (ayahNumber: number) => {
     const key = `${surahNumber}:${ayahNumber}`;
     const newFavorites = new Set(favorites);
 
     if (newFavorites.has(key)) {
       newFavorites.delete(key);
-      Alert.alert(t('favoriteRemoved'), `${t('verse')} ${ayahNumber} ${t('verseRemovedFromFavorites')}`);
     } else {
       newFavorites.add(key);
-      Alert.alert(t('favoriteAdded'), `${t('verse')} ${ayahNumber} ${t('verseAddedToFavorites')}`);
     }
 
     setFavorites(newFavorites);
 
-    // Sauvegarder dans AsyncStorage
     try {
       await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify([...newFavorites]));
     } catch (e) {
@@ -174,58 +216,75 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
 
   const handlePreviousSurah = useCallback(() => {
     if (surahNumber > 1) {
+      handleStopKaraoke();
       navigation.replace('Surah', { surahNumber: surahNumber - 1 });
     }
   }, [surahNumber, navigation]);
 
   const handleNextSurah = useCallback(() => {
     if (surahNumber < 114) {
+      handleStopKaraoke();
       navigation.replace('Surah', { surahNumber: surahNumber + 1 });
     }
   }, [surahNumber, navigation]);
 
-  // IMPORTANT: Tous les useCallback AVANT le return conditionnel
-  // Render individual ayah
+  // Render individual ayah avec surlignage Karaoke
   const renderAyah = useCallback(({ item: ayah, index }: { item: any; index: number }) => {
     const translation = surahData?.translation?.ayahs?.[index];
     const isSelected = selectedAyah === ayah.numberInSurah;
+    const isCurrentlyPlaying = currentVerseIndex === index && isKaraokePlaying;
 
     return (
       <TouchableOpacity
-        style={[styles.ayahCard, isSelected && styles.ayahCardSelected]}
+        style={[
+          styles.ayahCard,
+          isSelected && styles.ayahCardSelected,
+          isCurrentlyPlaying && styles.ayahCardPlaying,
+        ]}
         onPress={() => handleAyahPress(ayah.numberInSurah)}
         activeOpacity={0.7}
-        accessibilityLabel={`${t('verse')} ${ayah.numberInSurah}${translation ? `: ${translation.text.substring(0, 100)}${translation.text.length > 100 ? '...' : ''}` : ''}`}
+        accessibilityLabel={`${t('verse')} ${ayah.numberInSurah}`}
         accessibilityRole="button"
-        accessibilityHint={t('tapToShowActions')}
       >
         <View style={styles.ayahHeader}>
-          <View style={styles.ayahNumberBadge}>
-            <Text style={styles.ayahNumberText}>{ayah.numberInSurah}</Text>
+          <View style={[
+            styles.ayahNumberBadge,
+            isCurrentlyPlaying && styles.ayahNumberBadgePlaying,
+          ]}>
+            <Text style={[
+              styles.ayahNumberText,
+              isCurrentlyPlaying && styles.ayahNumberTextPlaying,
+            ]}>
+              {ayah.numberInSurah}
+            </Text>
           </View>
+
+          {/* Indicateur de lecture en cours */}
+          {isCurrentlyPlaying && (
+            <View style={styles.playingIndicator}>
+              <Text style={styles.playingIcon}>🔊</Text>
+            </View>
+          )}
+
           {isSelected && (
             <View style={styles.ayahActions}>
               <TouchableOpacity
-                style={[styles.ayahActionButton, playingAyah === ayah.numberInSurah && styles.ayahActionButtonActive]}
-                onPress={() => handlePlayAudio(ayah.numberInSurah)}
-                accessibilityLabel={playingAyah === ayah.numberInSurah ? t('pauseVerse') : t('playVerse')}
-                accessibilityRole="button"
+                style={[styles.ayahActionButton, isCurrentlyPlaying && styles.ayahActionButtonActive]}
+                onPress={() => handlePlayVerse(ayah.numberInSurah)}
               >
-                <Text style={styles.ayahActionIcon}>{playingAyah === ayah.numberInSurah ? '⏸️' : '▶️'}</Text>
+                <Text style={styles.ayahActionIcon}>
+                  {isCurrentlyPlaying && !isPaused ? '⏸️' : '▶️'}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.ayahActionButton, isFavorite(ayah.numberInSurah) && styles.ayahActionButtonActive]}
                 onPress={() => handleToggleFavorite(ayah.numberInSurah)}
-                accessibilityLabel={isFavorite(ayah.numberInSurah) ? t('removeFromFavorites') : t('addToFavorites')}
-                accessibilityRole="button"
               >
                 <Text style={styles.ayahActionIcon}>{isFavorite(ayah.numberInSurah) ? '❤️' : '🤍'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.ayahActionButton}
                 onPress={() => handleCopyAyah(ayah.numberInSurah)}
-                accessibilityLabel={t('copyVerse')}
-                accessibilityRole="button"
               >
                 <Text style={styles.ayahActionIcon}>📋</Text>
               </TouchableOpacity>
@@ -233,14 +292,24 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
           )}
         </View>
 
-        <Text style={styles.ayahArabic}>{ayah.text}</Text>
+        <Text style={[
+          styles.ayahArabic,
+          isCurrentlyPlaying && styles.ayahArabicPlaying,
+        ]}>
+          {ayah.text}
+        </Text>
 
         {showTranslation && translation && (
-          <Text style={styles.ayahTranslation}>{translation.text}</Text>
+          <Text style={[
+            styles.ayahTranslation,
+            isCurrentlyPlaying && styles.ayahTranslationPlaying,
+          ]}>
+            {translation.text}
+          </Text>
         )}
       </TouchableOpacity>
     );
-  }, [surahData?.translation?.ayahs, selectedAyah, playingAyah, showTranslation, favorites, t]);
+  }, [surahData?.translation?.ayahs, selectedAyah, currentVerseIndex, isKaraokePlaying, isPaused, showTranslation, favorites, t]);
 
   const ListHeaderComponent = useCallback(() => (
     <>
@@ -248,7 +317,10 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={[styles.backButton, isRTL && styles.backButtonRTL]}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            handleStopKaraoke();
+            navigation.goBack();
+          }}
         >
           <Text style={[styles.backButtonText, isRTL && styles.rtlText]}>
             {isRTL ? `${t('back')} >` : `< ${t('back')}`}
@@ -289,14 +361,34 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* LECTEUR SOURATE COMPLÈTE */}
-      <View style={[styles.audioPlayer, isRTL && styles.audioPlayerRTL]}>
-        <TouchableOpacity onPress={handlePlaySurah} style={styles.playButton}>
-          <Text style={styles.playIcon}>{isPlayingSurah ? '⏸️' : '▶️'}</Text>
-        </TouchableOpacity>
+      {/* LECTEUR KARAOKE */}
+      <View style={[styles.karaokePlayer, isRTL && styles.karaokePlayerRTL]}>
+        <View style={styles.karaokeControls}>
+          <TouchableOpacity onPress={handlePlayKaraoke} style={styles.playButton}>
+            <Text style={styles.playIcon}>
+              {isKaraokePlaying && !isPaused ? '⏸️' : '▶️'}
+            </Text>
+          </TouchableOpacity>
+          {isKaraokePlaying && (
+            <TouchableOpacity onPress={handleStopKaraoke} style={styles.stopButton}>
+              <Text style={styles.stopIcon}>⏹️</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <View style={styles.playerInfo}>
-          <Text style={[styles.playerTitle, isRTL && styles.rtlText]}>{t('listenFullSurah')}</Text>
-          <Text style={[styles.playerReciter, isRTL && styles.rtlText]}>{selectedReciter.name}</Text>
+          <Text style={[styles.playerTitle, isRTL && styles.rtlText]}>
+            {isKaraokePlaying
+              ? `${t('verse')} ${currentVerseIndex + 1} / ${surahData?.arabic?.ayahs?.length || 0}`
+              : t('listenWithKaraoke') || 'Mode Karaoke'}
+          </Text>
+          <Text style={[styles.playerReciter, isRTL && styles.rtlText]}>
+            {selectedReciter.name}
+          </Text>
+          {isKaraokePlaying && (
+            <Text style={[styles.playerHint, isRTL && styles.rtlText]}>
+              {t('karaokeHint') || 'Suivi automatique du texte'}
+            </Text>
+          )}
         </View>
       </View>
 
@@ -312,7 +404,7 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         </View>
       )}
     </>
-  ), [isRTL, t, surahNumber, surahInfo, showTranslation, isPlayingSurah, selectedReciter, navigation, handlePlaySurah]);
+  ), [isRTL, t, surahNumber, surahInfo, showTranslation, isKaraokePlaying, isPaused, currentVerseIndex, selectedReciter, surahData?.arabic?.ayahs?.length, navigation]);
 
   const ListFooterComponent = useCallback(() => (
     <View style={[styles.navigationContainer, isRTL && styles.navigationContainerRTL]}>
@@ -338,6 +430,17 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   ), [isRTL, t, surahNumber, handlePreviousSurah, handleNextSurah]);
 
   const keyExtractor = useCallback((item: any) => item.numberInSurah.toString(), []);
+
+  // Gestion des erreurs de scroll
+  const onScrollToIndexFailed = useCallback((info: { index: number }) => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: info.index,
+        animated: true,
+        viewPosition: 0.3,
+      });
+    }, 500);
+  }, []);
 
   // Chargement de la sourate
   const loadSurah = async () => {
@@ -367,14 +470,13 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
     loadSurah();
   }, [surahNumber]);
 
-  // Cleanup: arrêter l'audio quand on quitte l'écran
+  // Cleanup
   useEffect(() => {
     return () => {
       stopAudio();
     };
   }, []);
 
-  // Écran de chargement APRÈS tous les hooks
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -387,6 +489,7 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   return (
     <View style={styles.container}>
       <FlatList
+        ref={flatListRef}
         data={surahData?.arabic?.ayahs || []}
         renderItem={renderAyah}
         keyExtractor={keyExtractor}
@@ -397,7 +500,13 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         initialNumToRender={10}
         maxToRenderPerBatch={8}
         windowSize={5}
-        removeClippedSubviews={true}
+        removeClippedSubviews={false} // Important pour le scroll automatique
+        onScrollToIndexFailed={onScrollToIndexFailed}
+        getItemLayout={(data, index) => ({
+          length: 180, // Hauteur approximative d'un verset
+          offset: 180 * index + 400, // 400 = hauteur du header approximative
+          index,
+        })}
       />
 
       {/* Modal Recitateur */}
@@ -422,6 +531,10 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
                 onPress={() => {
                   setSelectedReciter(reciter);
                   setShowReciterModal(false);
+                  // Si en lecture, redémarrer avec le nouveau récitateur
+                  if (isKaraokePlaying) {
+                    playVerseAtIndex(currentVerseIndex);
+                  }
                 }}
               >
                 <View style={styles.reciterInfo}>
@@ -538,7 +651,8 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '600',
   },
-  audioPlayer: {
+  // Karaoke Player Styles
+  karaokePlayer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(201,162,39,0.15)',
@@ -546,8 +660,16 @@ const styles = StyleSheet.create({
     padding: 15,
     marginHorizontal: 20,
     marginBottom: 20,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: 'rgba(201,162,39,0.3)',
+  },
+  karaokePlayerRTL: {
+    flexDirection: 'row-reverse',
+  },
+  karaokeControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   playButton: {
     width: 50,
@@ -556,13 +678,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#c9a227',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 15,
+  },
+  stopButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   playIcon: {
     fontSize: 24,
   },
+  stopIcon: {
+    fontSize: 18,
+  },
   playerInfo: {
     flex: 1,
+    marginLeft: 15,
   },
   playerTitle: {
     fontSize: 16,
@@ -573,6 +706,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  playerHint: {
+    fontSize: 11,
+    color: colors.accent,
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   bismillahContainer: {
     alignItems: 'center',
@@ -592,9 +731,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     textAlign: 'center',
   },
-  ayahsContainer: {
-    paddingHorizontal: spacing.lg,
-  },
+  // Ayah Card Styles
   ayahCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
@@ -606,6 +743,18 @@ const styles = StyleSheet.create({
   ayahCardSelected: {
     borderColor: colors.accent,
     backgroundColor: 'rgba(201,162,39,0.05)',
+  },
+  // Style Karaoke - Verset en cours de lecture
+  ayahCardPlaying: {
+    backgroundColor: 'rgba(201,162,39,0.15)',
+    borderColor: colors.accent,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.accent,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   ayahHeader: {
     flexDirection: 'row',
@@ -621,10 +770,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  ayahNumberBadgePlaying: {
+    backgroundColor: colors.accent,
+  },
   ayahNumberText: {
     fontSize: fontSize.sm,
     fontWeight: '600',
     color: colors.accent,
+  },
+  ayahNumberTextPlaying: {
+    color: '#ffffff',
+  },
+  playingIndicator: {
+    marginLeft: spacing.sm,
+  },
+  playingIcon: {
+    fontSize: 16,
   },
   ayahActions: {
     flexDirection: 'row',
@@ -651,6 +812,10 @@ const styles = StyleSheet.create({
     lineHeight: 50,
     marginBottom: spacing.md,
   },
+  ayahArabicPlaying: {
+    color: colors.primary,
+    fontWeight: '500',
+  },
   ayahTranslation: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
@@ -658,6 +823,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.06)',
+  },
+  ayahTranslationPlaying: {
+    color: colors.text,
   },
   navigationContainer: {
     flexDirection: 'row',
@@ -760,9 +928,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
   },
   optionButtonRTL: {
-    flexDirection: 'row-reverse',
-  },
-  audioPlayerRTL: {
     flexDirection: 'row-reverse',
   },
   navigationContainerRTL: {
