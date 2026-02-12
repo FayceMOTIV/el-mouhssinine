@@ -424,8 +424,39 @@ export default function Dons() {
     {
       key: 'donateur',
       label: 'Donateur',
+      render: (row) => {
+        const donorInfo = row.donorInfo
+        const donorType = row.donorType
+        let label = row.donateur || 'Anonyme'
+        if (donorInfo) {
+          if (donorType === 'entreprise') {
+            label = donorInfo.companyName || label
+          } else {
+            const fullName = `${donorInfo.firstName || ''} ${donorInfo.lastName || ''}`.trim()
+            if (fullName) label = fullName
+          }
+        }
+        return (
+          <div>
+            <span className="text-white">{label}</span>
+            {donorInfo?.email && (
+              <p className="text-xs text-white/40">{donorInfo.email}</p>
+            )}
+          </div>
+        )
+      }
+    },
+    {
+      key: 'type',
+      label: 'Type',
       render: (row) => (
-        <span className="text-white">{row.donateur || 'Anonyme'}</span>
+        <span className={`text-xs px-2 py-0.5 rounded-full ${
+          row.donorType === 'entreprise'
+            ? 'bg-blue-500/20 text-blue-300'
+            : 'bg-white/10 text-white/60'
+        }`}>
+          {row.donorType === 'entreprise' ? '🏢 Entreprise' : '👤 Particulier'}
+        </span>
       )
     },
     {
@@ -462,6 +493,15 @@ export default function Dons() {
       label: 'Mode',
       render: (row) => (
         <Badge variant="default">{row.modePaiement || 'N/A'}</Badge>
+      )
+    },
+    {
+      key: 'recu',
+      label: 'Reçu',
+      render: (row) => (
+        row.recuFiscalGenerated
+          ? <span className="text-xs text-green-400">✓ {row.recuFiscalYear || ''}</span>
+          : <span className="text-xs text-white/30">-</span>
       )
     }
   ]

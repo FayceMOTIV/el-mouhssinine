@@ -10,7 +10,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
 import { arabicAlphabet } from '../data/alphabet';
 import { lessons, levels, loadUserProgress, UserProgress } from '../data/lessons';
-import { vocabulary } from '../data/vocabulary';
+// vocabulary section removed
 import ProgressBar from '../components/ProgressBar';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -61,17 +61,6 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
       progress: userProgress.lessonsCompleted.length / lessons.length * 100,
       screen: 'LessonsList',
       color: '#27ae60',
-    },
-    {
-      id: 'vocabulary',
-      titleKey: 'vocabulary',
-      titleArKey: 'vocabularyArabic',
-      descriptionKey: 'vocabularyDescription',
-      icon: '📖',
-      count: `${Object.values(vocabulary).reduce((acc, words) => acc + words.length, 0)} ${t('words')}`,
-      progress: 0, // Pas de tracking vocabulaire implémenté
-      screen: 'Vocabulary',
-      color: '#3498db',
     },
     {
       id: 'practice',

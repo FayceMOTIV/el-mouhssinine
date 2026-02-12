@@ -15,7 +15,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { QuranAPI, surahsInfo, reciters, SurahData } from '../services/quranApi';
-import { stopAudio } from '../services/audioPlayer';
+
 import { useLanguage } from '../context/LanguageContext';
 import { useQuranPlayer, RepeatMode, PlaybackSpeed } from '../hooks/useQuranPlayer';
 import { QuranVerse } from '../components/QuranVerse';
@@ -414,10 +414,10 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
     loadSurah();
   }, [surahNumber]);
 
-  // Cleanup
+  // Cleanup - utiliser player.stop() au lieu de stopAudio() pour respecter les flags internes
   useEffect(() => {
     return () => {
-      stopAudio();
+      player.stop();
     };
   }, []);
 
@@ -515,6 +515,8 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
                 onPress={async () => {
                   setSelectedReciter(reciter);
                   setShowReciterModal(false);
+                  // Forcer la ref AVANT de relancer (évite la race condition du re-render)
+                  player.updateReciterCode(reciter.id);
                   // Redémarrer avec le nouveau récitateur si en lecture
                   if (player.isPlaying) {
                     await player.playVerseAtIndex(player.currentVerseIndex);

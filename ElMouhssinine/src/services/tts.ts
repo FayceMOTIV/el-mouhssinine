@@ -11,7 +11,7 @@ export const initTTS = async (): Promise<boolean> => {
   try {
     // Configure for Arabic
     await Tts.setDefaultLanguage('ar-SA');
-    await Tts.setDefaultRate(0.4); // Slower for learning
+    await Tts.setDefaultRate(0.4, false); // Slower for learning (2nd arg = skipTransform for iOS)
     await Tts.setDefaultPitch(1.0);
 
     // Add event listeners

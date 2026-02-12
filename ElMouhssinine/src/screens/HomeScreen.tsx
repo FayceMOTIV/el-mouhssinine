@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, shadows, MIN_TOUCH_SIZE } from '../theme/colors';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import {
@@ -56,8 +56,10 @@ import {
 import { checkMosqueProximityForeground } from '../services/backgroundLocation';
 import Geolocation from '@react-native-community/geolocation';
 import { setInAppNotificationCallback } from '../services/notifications';
+import auth from '@react-native-firebase/auth';
 import { logger } from '../utils';
 import { HomeScreenSkeleton } from '../components';
+import { subscribeToUserMessages, UserMessage } from '../services/firebase';
 import {
   getNotificationHistory,
   markAllNotificationsAsRead,
@@ -109,6 +111,7 @@ const mockJanazaList = [
 ];
 
 const HomeScreen = () => {
+  const navigation = useNavigation<any>();
   const { t, isRTL, language } = useLanguage();
   const [prayerTimes, setPrayerTimes] = useState<PrayerTime[]>(mockPrayerTimes);
   const [nextPrayer, setNextPrayer] = useState({ name: 'Dhuhr', time: '13:15', icon: '☀️' });
@@ -138,6 +141,7 @@ const HomeScreen = () => {
   const [currentRappel, setCurrentRappel] = useState<Rappel | null>(null);
 
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showServicesModal, setShowServicesModal] = useState(false);
   const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null);
   const [parisTime, setParisTime] = useState('');
   const [rawPrayerTimings, setRawPrayerTimings] = useState<PrayerTimings | null>(null);
@@ -159,10 +163,35 @@ const HomeScreen = () => {
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [notificationHistory, setNotificationHistory] = useState<StoredNotification[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [expandedNotifId, setExpandedNotifId] = useState<string | null>(null);
+
+  // Badge messages non lus
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
 
   // Ramadan mode
   const [ramadanSettings, setRamadanSettings] = useState<RamadanSettings | null>(null);
   const [ramadanDay, setRamadanDay] = useState<number | null>(null);
+
+  // Date relative ("Il y a 2h", "Il y a 30min")
+  const getRelativeTime = useCallback((timestamp: number) => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (isRTL) {
+      if (seconds < 60) return 'الآن';
+      if (minutes < 60) return `منذ ${minutes} د`;
+      if (hours < 24) return `منذ ${hours} س`;
+      return `منذ ${days} ي`;
+    }
+    if (seconds < 60) return "A l'instant";
+    if (minutes < 60) return `Il y a ${minutes}min`;
+    if (hours < 24) return `Il y a ${hours}h`;
+    return `Il y a ${days}j`;
+  }, [isRTL]);
 
   // Traduction des noms de prière
   const getPrayerName = (name: string) => {
@@ -520,14 +549,36 @@ const HomeScreen = () => {
     }, [])
   );
 
+  // Souscrire aux messages de l'utilisateur pour le badge
+  useEffect(() => {
+    const user = auth().currentUser;
+    if (!user) return;
+    const unsubscribe = subscribeToUserMessages(user.uid, (messages: UserMessage[]) => {
+      // Compter les messages avec une réponse de la mosquée non lue
+      const unread = messages.filter(m => {
+        if (!m.reponses || m.reponses.length === 0) return false;
+        const lastReply = m.reponses[m.reponses.length - 1];
+        return lastReply.createdBy === 'mosquee';
+      }).length;
+      setUnreadMsgCount(unread);
+    });
+    return () => { if (unsubscribe) unsubscribe(); };
+  }, []);
+
   // Ouvrir l'historique des notifications
   const openNotificationHistory = useCallback(async () => {
     const history = await getNotificationHistory();
     setNotificationHistory(history);
     setShowNotificationHistory(true);
-    // Marquer toutes comme lues
+    setExpandedNotifId(null);
+  }, []);
+
+  // Marquer toutes les notifications comme lues
+  const handleMarkAllRead = useCallback(async () => {
     await markAllNotificationsAsRead();
     setUnreadNotifCount(0);
+    const history = await getNotificationHistory();
+    setNotificationHistory(history);
   }, []);
 
   // Vérifier la proximité de la mosquée au démarrage ET quand l'app revient au premier plan
@@ -850,6 +901,19 @@ const HomeScreen = () => {
               {isRTL ? 'آخر 24 ساعة' : 'Dernières 24 heures'}
             </Text>
 
+            {/* Bouton Tout marquer comme lu */}
+            {unreadNotifCount > 0 && (
+              <TouchableOpacity
+                style={styles.markAllReadBtn}
+                onPress={handleMarkAllRead}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.markAllReadBtnText}>
+                  {isRTL ? 'تعليم الكل كمقروء' : 'Tout marquer comme lu'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <ScrollView style={styles.historyScroll} showsVerticalScrollIndicator={false}>
               {notificationHistory.length === 0 ? (
                 <View style={styles.historyEmptyContainer}>
@@ -860,24 +924,20 @@ const HomeScreen = () => {
                 </View>
               ) : (
                 notificationHistory.map((notif, index) => {
-                  const date = new Date(notif.timestamp);
-                  const timeStr = date.toLocaleTimeString(isRTL ? 'ar-SA' : 'fr-FR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
-                  const isToday = new Date().toDateString() === date.toDateString();
-                  const dateStr = isToday
-                    ? (isRTL ? 'اليوم' : "Aujourd'hui")
-                    : date.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR', { day: 'numeric', month: 'short' });
+                  const isExpanded = expandedNotifId === notif.id;
 
                   // Icône selon le type
                   let typeIcon = '📢';
                   if (notif.type === 'prayer') typeIcon = '🕌';
                   else if (notif.type === 'message') typeIcon = '💬';
+                  else if (notif.type === 'event') typeIcon = '📅';
+                  else if (notif.type === 'janaza') typeIcon = '⚰️';
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={notif.id}
+                      activeOpacity={0.7}
+                      onPress={() => setExpandedNotifId(isExpanded ? null : notif.id)}
                       style={[
                         styles.historyItem,
                         index === notificationHistory.length - 1 && styles.historyItemLast,
@@ -886,17 +946,22 @@ const HomeScreen = () => {
                     >
                       <Text style={styles.historyItemIcon}>{typeIcon}</Text>
                       <View style={styles.historyItemContent}>
-                        <Text style={[styles.historyItemTitle, isRTL && styles.rtlText]} numberOfLines={1}>
-                          {notif.title}
-                        </Text>
-                        <Text style={[styles.historyItemBody, isRTL && styles.rtlText]} numberOfLines={2}>
-                          {notif.body}
-                        </Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={[styles.historyItemTitle, isRTL && styles.rtlText, { flex: 1 }]} numberOfLines={isExpanded ? undefined : 1}>
+                            {notif.title}
+                          </Text>
+                          <Text style={styles.historyExpandIcon}>{isExpanded ? '▲' : '▼'}</Text>
+                        </View>
+                        {isExpanded && notif.body ? (
+                          <Text style={[styles.historyItemBody, isRTL && styles.rtlText]}>
+                            {notif.body}
+                          </Text>
+                        ) : null}
                         <Text style={[styles.historyItemTime, isRTL && styles.rtlText]}>
-                          {dateStr} • {timeStr}
+                          {getRelativeTime(notif.timestamp)}
                         </Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })
               )}
@@ -908,6 +973,70 @@ const HomeScreen = () => {
               activeOpacity={0.7}
             >
               <Text style={styles.historyOkBtnText}>{isRTL ? 'إغلاق' : 'Fermer'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Nos Services */}
+      <Modal
+        visible={showServicesModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowServicesModal(false)}
+      >
+        <View style={styles.servicesModalOverlay}>
+          <View style={styles.servicesModalContainer}>
+            <TouchableOpacity
+              style={styles.servicesModalCloseBtn}
+              onPress={() => setShowServicesModal(false)}
+              accessibilityLabel="Fermer"
+              accessibilityRole="button"
+            >
+              <Text style={styles.servicesModalCloseBtnText}>×</Text>
+            </TouchableOpacity>
+
+            <Text style={[styles.servicesModalTitle, isRTL && styles.rtlText]}>
+              🕌 {t('services')}
+            </Text>
+            <Text style={[styles.servicesModalSubtitle, isRTL && styles.rtlText]}>
+              {isRTL ? 'جميع الخدمات المتاحة في مسجدنا' : 'Tous les services disponibles dans notre mosquée'}
+            </Text>
+
+            <ScrollView style={styles.servicesModalScroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.servicesModalGrid}>
+                {[
+                  { icon: '🅿️', labelKey: 'parking', descKey: 'parkingDesc' },
+                  { icon: '♿', labelKey: 'accessHandicapes', descKey: 'accessHandicapesDesc' },
+                  { icon: '💧', labelKey: 'salleAblution', descKey: 'salleAblutionDesc' },
+                  { icon: '👩', labelKey: 'espaceFemmes', descKey: 'espaceFemmesDesc' },
+                  { icon: '📚', labelKey: 'coursAdultes', descKey: 'coursAdultesDesc' },
+                  { icon: '👶', labelKey: 'coursEnfants', descKey: 'coursEnfantsDesc' },
+                ].map((service, index) => (
+                  <View key={index} style={styles.servicesModalItem}>
+                    <View style={styles.servicesModalItemIcon}>
+                      <Text style={styles.servicesModalItemIconText}>{service.icon}</Text>
+                    </View>
+                    <View style={styles.servicesModalItemInfo}>
+                      <Text style={[styles.servicesModalItemLabel, isRTL && styles.rtlText]}>
+                        {t(service.labelKey as any)}
+                      </Text>
+                      <Text style={[styles.servicesModalItemDesc, isRTL && styles.rtlText]}>
+                        {isRTL ? 'متوفر' : 'Disponible'}
+                      </Text>
+                    </View>
+                    <Text style={styles.servicesModalItemCheck}>✓</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.servicesModalOkBtn}
+              onPress={() => setShowServicesModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.servicesModalOkBtnText}>{isRTL ? 'إغلاق' : 'Fermer'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -950,25 +1079,42 @@ const HomeScreen = () => {
           </LinearGradient>
         )}
 
-        {/* Titre avec icône cloche */}
+        {/* Titre avec icônes cloche + message */}
         <View style={styles.header}>
           <View style={styles.headerTitleRow}>
             <Text style={[styles.title, isRTL && styles.rtlText]}>🕌 {t('mosqueName')}</Text>
-            <TouchableOpacity
-              onPress={openNotificationHistory}
-              style={styles.bellButton}
-              accessibilityLabel={t('notificationHistory')}
-              accessibilityRole="button"
-            >
-              <Text style={styles.bellIcon}>🔔</Text>
-              {unreadNotifCount > 0 && (
-                <View style={styles.bellBadge}>
-                  <Text style={styles.bellBadgeText}>
-                    {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <TouchableOpacity
+                onPress={() => { setUnreadMsgCount(0); navigation.navigate('Messages'); }}
+                style={styles.bellButton}
+                accessibilityLabel="Messages"
+                accessibilityRole="button"
+              >
+                <Text style={styles.bellIcon}>💬</Text>
+                {unreadMsgCount > 0 && (
+                  <View style={styles.bellBadge}>
+                    <Text style={styles.bellBadgeText}>
+                      {unreadMsgCount > 9 ? '9+' : unreadMsgCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={openNotificationHistory}
+                style={styles.bellButton}
+                accessibilityLabel={t('notificationHistory')}
+                accessibilityRole="button"
+              >
+                <Text style={styles.bellIcon}>🔔</Text>
+                {unreadNotifCount > 0 && (
+                  <View style={styles.bellBadge}>
+                    <Text style={styles.bellBadgeText}>
+                      {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
           <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('mosqueLocation')}</Text>
         </View>
@@ -1026,25 +1172,21 @@ const HomeScreen = () => {
             </Text>
           </View>
 
-          {/* Services */}
-          <View style={styles.servicesSection}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>🕌 {t('services')}</Text>
-            <View style={styles.servicesGrid}>
-              {[
-                { icon: '🅿️', labelKey: 'parking' },
-                { icon: '♿', labelKey: 'accessHandicapes' },
-                { icon: '💧', labelKey: 'salleAblution' },
-                { icon: '👩', labelKey: 'espaceFemmes' },
-                { icon: '📚', labelKey: 'coursAdultes' },
-                { icon: '👶', labelKey: 'coursEnfants' },
-              ].map((service, index) => (
-                <View key={index} style={styles.serviceItem}>
-                  <Text style={styles.serviceIcon}>{service.icon}</Text>
-                  <Text style={[styles.serviceLabel, isRTL && styles.rtlText]}>{t(service.labelKey as any)}</Text>
-                </View>
-              ))}
+          {/* Bouton Nos Services */}
+          <TouchableOpacity
+            style={styles.servicesButton}
+            onPress={() => setShowServicesModal(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.servicesButtonIcon}>🕌</Text>
+            <View style={styles.servicesButtonContent}>
+              <Text style={[styles.servicesButtonText, isRTL && styles.rtlText]}>{t('services')}</Text>
+              <Text style={[styles.servicesButtonSubtext, isRTL && styles.rtlText]}>
+                {isRTL ? 'اكتشف جميع خدماتنا' : 'Découvrir tous nos services'}
+              </Text>
             </View>
-          </View>
+            <Text style={styles.servicesButtonArrow}>→</Text>
+          </TouchableOpacity>
 
           {/* Horaires */}
           <View style={styles.section}>
@@ -1771,31 +1913,136 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   // Services
-  servicesSection: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  // Bouton Nos Services
+  servicesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.3)',
   },
-  servicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
+  servicesButtonIcon: {
+    fontSize: 32,
+    marginRight: spacing.md,
   },
-  serviceItem: {
-    width: '30%',
+  servicesButtonContent: {
+    flex: 1,
+  },
+  servicesButtonText: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  servicesButtonSubtext: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  servicesButtonArrow: {
+    fontSize: 20,
+    color: colors.accent,
+    marginLeft: spacing.sm,
+  },
+  // Modal Services
+  servicesModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  servicesModalContainer: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.xl,
+    maxHeight: '80%',
+  },
+  servicesModalCloseBtn: {
+    position: 'absolute',
+    top: spacing.lg,
+    right: spacing.lg,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
-    marginVertical: spacing.sm,
+    justifyContent: 'center',
+    zIndex: 1,
   },
-  serviceIcon: {
-    fontSize: 28,
-    marginBottom: 5,
-  },
-  serviceLabel: {
-    fontSize: 11,
+  servicesModalCloseBtnText: {
+    fontSize: 20,
     color: colors.text,
+    lineHeight: 22,
+  },
+  servicesModalTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: 'bold',
+    color: colors.accent,
     textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  servicesModalSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+  },
+  servicesModalScroll: {
+    maxHeight: 400,
+  },
+  servicesModalGrid: {
+    gap: spacing.md,
+  },
+  servicesModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+  },
+  servicesModalItemIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(201,162,39,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  servicesModalItemIconText: {
+    fontSize: 24,
+  },
+  servicesModalItemInfo: {
+    flex: 1,
+  },
+  servicesModalItemLabel: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  servicesModalItemDesc: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  servicesModalItemCheck: {
+    fontSize: 18,
+    color: '#22c55e',
+    marginLeft: spacing.sm,
+  },
+  servicesModalOkBtn: {
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.lg,
+  },
+  servicesModalOkBtnText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: '#1a1a2e',
   },
   prayerCard: {
     backgroundColor: colors.card,
@@ -2292,6 +2539,25 @@ const styles = StyleSheet.create({
   historyItemTime: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
+  },
+  historyExpandIcon: {
+    fontSize: 10,
+    color: colors.textMuted,
+    marginLeft: 8,
+  },
+  markAllReadBtn: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  markAllReadBtnText: {
+    fontSize: fontSize.sm,
+    color: colors.accent,
+    fontWeight: '600',
   },
   historyOkBtn: {
     backgroundColor: colors.accent,

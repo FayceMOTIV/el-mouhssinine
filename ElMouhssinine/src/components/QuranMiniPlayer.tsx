@@ -260,10 +260,10 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
           {/* Stop */}
           <TouchableOpacity
             onPress={onStop}
-            style={styles.controlButton}
+            style={styles.stopButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.controlIcon}>⏹</Text>
+            <Text style={styles.stopIcon}>⏹</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -288,6 +288,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 1000,
     backgroundColor: colors.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -407,6 +408,19 @@ const styles = StyleSheet.create({
   playIcon: {
     fontSize: 22,
     color: '#fff',
+  },
+  stopButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(231, 76, 60, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  stopIcon: {
+    fontSize: 16,
+    color: '#e74c3c',
   },
   closeButton: {
     position: 'absolute',

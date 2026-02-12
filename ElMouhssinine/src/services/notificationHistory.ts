@@ -13,7 +13,7 @@ export interface StoredNotification {
   title: string;
   body: string;
   timestamp: number; // Unix timestamp en ms
-  type: 'prayer' | 'backoffice' | 'message' | 'other';
+  type: 'prayer' | 'backoffice' | 'message' | 'event' | 'janaza' | 'other';
   read: boolean;
 }
 
@@ -177,6 +177,28 @@ export const detectNotificationType = (title: string, body: string): StoredNotif
     return 'message';
   }
 
-  // Sinon c'est du backoffice (annonces, événements, etc.)
+  // Notifications janaza
+  if (
+    lowerTitle.includes('janaza') ||
+    lowerTitle.includes('جنازة') ||
+    lowerTitle.includes('décès') ||
+    lowerBody.includes('janaza') ||
+    lowerBody.includes('جنازة')
+  ) {
+    return 'janaza';
+  }
+
+  // Notifications événement
+  if (
+    lowerTitle.includes('événement') ||
+    lowerTitle.includes('evenement') ||
+    lowerTitle.includes('حدث') ||
+    lowerBody.includes('événement') ||
+    lowerBody.includes('evenement')
+  ) {
+    return 'event';
+  }
+
+  // Sinon c'est du backoffice (annonces, etc.)
   return 'backoffice';
 };

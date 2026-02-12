@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { lessons, levels, getUserProgress, Lesson } from '../data/lessons';
+import { lessons, levels, loadUserProgress, UserProgress, Lesson } from '../data/lessons';
 import ProgressBar from '../components/ProgressBar';
 
 interface LessonsListScreenProps {
@@ -15,8 +16,25 @@ interface LessonsListScreenProps {
 }
 
 const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => {
-  const [userProgress] = useState(getUserProgress());
+  const [userProgress, setUserProgress] = useState<UserProgress>({
+    currentLevel: 'debutant',
+    totalXP: 0,
+    lessonsCompleted: [],
+    lettersLearned: [],
+    streak: 0,
+  });
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+
+  // Charger la progression depuis AsyncStorage à chaque focus
+  useFocusEffect(
+    useCallback(() => {
+      const load = async () => {
+        const progress = await loadUserProgress();
+        setUserProgress(progress);
+      };
+      load();
+    }, [])
+  );
 
   const isLessonCompleted = (lessonId: string) => {
     return userProgress.lessonsCompleted.includes(lessonId);

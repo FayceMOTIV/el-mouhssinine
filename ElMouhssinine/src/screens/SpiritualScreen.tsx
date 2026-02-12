@@ -92,10 +92,17 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
                 </View>
                 <View style={styles.moduleInfo}>
                   <View style={styles.moduleHeader}>
-                    <Text style={styles.moduleTitle}>{module.title}</Text>
+                    <Text
+                      style={styles.moduleTitle}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.8}
+                    >
+                      {module.title}
+                    </Text>
                     <Text style={styles.moduleTitleAr}>{module.titleAr}</Text>
                   </View>
-                  <Text style={styles.moduleDescription}>
+                  <Text style={styles.moduleDescription} numberOfLines={2}>
                     {module.description}
                   </Text>
                 </View>

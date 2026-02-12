@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 202
+- **Build actuel** : 213
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -26,7 +26,7 @@
 - **Region** : europe-west1
 - **Collections** : announcements, events, janaza, projects, members, popups, rappels, settings, dates_islamiques, donations, messages, payments
 
-## Cloud Functions (17 deployees)
+## Cloud Functions (21 deployees)
 | Fonction | Type | Description |
 |----------|------|-------------|
 | onNewAnnouncement | Trigger Firestore | Notif auto nouvelle annonce |
@@ -46,6 +46,10 @@
 | createPaymentIntent | Callable (30s) | Paiement Stripe |
 | stripeWebhook | HTTPS (60s) | Webhook Stripe |
 | forceCachePrayerTimes | Callable | Force mise a jour cache horaires |
+| onDonationConfirmation | Trigger Firestore | Email confirmation don (particulier + entreprise) |
+| onCotisationConfirmation | Trigger Firestore | Email confirmation cotisation adherent |
+| generateAnnualRecusFiscaux | Scheduled (2 Jan 06h) | Generation CERFA annuels automatique |
+| forceGenerateRecusFiscaux | Callable | Forcer generation CERFA admin |
 
 ## Fonctionnalites Implementees
 
@@ -397,9 +401,61 @@ useEffect(() => {
 }, [isPlayerReady]);
 ```
 
+## Corrige (11 Fev 2026 - Build 206-212)
+
+### 6 Bugs critiques corriges
+- [x] Karaoke : `useEffect` cleanup + `isActiveRef` pour eviter desync audio/scroll
+- [x] Vocabulaire : Bouton supprimer supprime maintenant le bon mot (index correct)
+- [x] Zakat : `keyboardType="numeric"` sur tous les champs montant
+- [x] Zakat : Bouton CB texte corrige "Payer par CB" au lieu de "Payer la Zakat"
+- [x] RIB : Texte IBAN long ne deborde plus (flexShrink + flexWrap)
+- [x] Lecons : Progression sauvegardee dans AsyncStorage (persistance entre sessions)
+
+### Emails automatiques (Cloud Functions)
+- [x] `onDonationConfirmation` : Email confirmation don particulier + entreprise (onCreate trigger)
+- [x] `onCotisationConfirmation` : Email confirmation cotisation adherent (onCreate trigger)
+- [x] Templates HTML : header gradient vert, encart fiscal, footer association
+- [x] Idempotence : flag `emailConfirmationSent` pour eviter doublons
+- [x] Deduction fiscale : 66% particulier (art. 200 CGI) / 60% entreprise (art. 238 bis CGI)
+
+### CERFA et Recus fiscaux (Cloud Functions)
+- [x] `generateAnnualRecusFiscaux` : Cron 2 janvier 06h00
+- [x] `forceGenerateRecusFiscaux` : Generation forcee admin
+- [x] Templates PDF : 11580*05 (particulier) + 16216*02 (entreprise)
+- [x] Rate limiting : 3/heure max
+
+### Backoffice Dons + Recus Fiscaux
+- [x] Dons.jsx : Colonnes Donateur, Type, Origine, filtres ameliores
+- [x] RecusFiscaux.jsx : Vue par annee, generation individuelle/groupee, stats
+
+### Firestore Rules renforces
+- [x] donations : auth + montant 1-100000€
+- [x] payments : auth + montant 1-10000€
+- [x] processed_payments : verrouille total (if false)
+
+## Corrige (12 Fev 2026 - Build 213)
+
+### Page Membre - Conformite spec UI
+- [x] Icones avantages adherent : ✨ hassanates, 🗳️ vote AG, 🎫 carte membre
+- [x] Suffixes prix : "10€/mois" et "100€/an" (au lieu de juste "10€" et "100€")
+- [x] Descripteurs formule : "Paiement recurrent" (mensuel) / "Paiement unique - ECONOMISEZ" (annuel)
+
+### Fix critique : Metadata addPayment (emails cotisation)
+- [x] `AddPaymentParams` : ajout champ `memberEmail`
+- [x] `addPayment()` : ajout bloc `metadata` dans le document Firestore (memberId, email, period)
+- [x] `MemberScreen.tsx` : passage `memberEmail: memberProfile.email` dans les 2 appels addPayment
+- [x] Sans ce fix, `onCotisationConfirmation` ne trouvait jamais l'email → emails jamais envoyes
+
+### Audit backend complet
+- [x] 21 Cloud Functions : toutes presentes et fonctionnelles
+- [x] Flux Stripe end-to-end : verifie et corrige
+- [x] Securite Firestore : score 8/10
+- [x] Rate limiting : actif sur toutes les fonctions sensibles
+- [x] SMTP Brevo : configure correctement
+
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
 - Mock data present dans les screens (fallback si Firebase vide)
-- Cloud Functions bien structurees, pas de probleme critique
-- Score audit securite : 8.5/10
+- Cloud Functions bien structurees, 21 fonctions deployees
+- Score audit securite : 8/10
 - Score audit i18n : 9/10 (apres corrections Build 98)

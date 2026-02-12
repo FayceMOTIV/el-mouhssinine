@@ -15,6 +15,9 @@ export default function RecusFiscaux() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
 
+  const [forceYear, setForceYear] = useState(new Date().getFullYear() - 1)
+  const [forceGenerating, setForceGenerating] = useState(false)
+
   // Paramètres de l'association
   const [associationInfo, setAssociationInfo] = useState({
     nom: '',
@@ -23,6 +26,7 @@ export default function RecusFiscaux() {
     ville: '',
     siren: '',
     statut: 'Association cultuelle loi 1905',
+    objet: 'Exercice du culte musulman',
     signataire: 'Le Président',
     nomSignataire: ''
   })
@@ -247,6 +251,13 @@ export default function RecusFiscaux() {
               />
             </div>
 
+            <Input
+              label="Objet de l'association"
+              value={associationInfo.objet}
+              onChange={e => setAssociationInfo(prev => ({ ...prev, objet: e.target.value }))}
+              placeholder="Exercice du culte musulman"
+            />
+
             <hr className="border-white/10" />
 
             <div className="flex items-center gap-2 text-lg font-semibold text-white">
@@ -330,7 +341,7 @@ export default function RecusFiscaux() {
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-secondary focus:border-secondary"
                 >
                   {[...Array(5)].map((_, i) => {
-                    const year = new Date().getFullYear() - i
+                    const year = new Date().getFullYear() - 1 - i
                     return (
                       <option key={year} value={year} className="bg-bg-dark text-white">{year}</option>
                     )
@@ -356,10 +367,10 @@ export default function RecusFiscaux() {
                 Comment ça fonctionne ?
               </h4>
               <ul className="text-sm text-blue-400/80 space-y-1">
-                <li>• Le système recherche tous les dons et cotisations de l'email pour l'année</li>
-                <li>• Un PDF conforme est généré avec le montant total</li>
+                <li>• Le système recherche tous les dons de l'email pour l'année</li>
+                <li>• Un PDF CERFA conforme est généré (particulier ou entreprise)</li>
                 <li>• Le reçu est envoyé par email et archivé dans Firebase Storage</li>
-                <li>• Le donateur peut déduire 66% du montant de ses impôts</li>
+                <li>• Particuliers : déduction 66% (art. 200 CGI) / Entreprises : 60% (art. 238 bis CGI)</li>
               </ul>
             </div>
           </div>
@@ -367,6 +378,64 @@ export default function RecusFiscaux() {
       )}
 
       {activeTab === 'historique' && (
+        <>
+        {/* Force generation section */}
+        <Card>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-lg font-semibold text-white">
+              <RefreshCw className="w-5 h-5 text-amber-400" />
+              Génération groupée
+            </div>
+            <p className="text-sm text-white/60">
+              Forcer la génération de tous les reçus fiscaux pour une année. Le cron automatique s'exécute le 2 janvier à 6h.
+            </p>
+            <div className="flex items-end gap-4">
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">Année</label>
+                <select
+                  value={forceYear}
+                  onChange={e => setForceYear(Number(e.target.value))}
+                  className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-secondary focus:border-secondary"
+                >
+                  {[...Array(5)].map((_, i) => {
+                    const year = new Date().getFullYear() - 1 - i
+                    return <option key={year} value={year} className="bg-bg-dark text-white">{year}</option>
+                  })}
+                </select>
+              </div>
+              <Button
+                onClick={async () => {
+                  if (!associationInfo.nom || !associationInfo.siren) {
+                    toast.error('Veuillez d\'abord configurer les paramètres de l\'association (nom et SIREN)')
+                    setActiveTab('parametres')
+                    return
+                  }
+                  if (!window.confirm(`Générer tous les reçus fiscaux pour ${forceYear} ? Cette action enverra un email à chaque donateur.`)) return
+                  setForceGenerating(true)
+                  try {
+                    const fn = getFunctions(undefined, 'europe-west1')
+                    const forceGenerate = httpsCallable(fn, 'forceGenerateRecusFiscaux')
+                    const result = await forceGenerate({ year: forceYear })
+                    const data = result.data
+                    toast.success(`Terminé ! ${data.successCount} reçu(s) envoyé(s)${data.errorCount > 0 ? `, ${data.errorCount} erreur(s)` : ''}`)
+                    await loadRecusEnvoyes()
+                  } catch (err) {
+                    console.error('Erreur génération forcée:', err)
+                    toast.error(err.message || 'Erreur lors de la génération')
+                  } finally {
+                    setForceGenerating(false)
+                  }
+                }}
+                disabled={forceGenerating}
+                loading={forceGenerating}
+                variant="primary"
+              >
+                {forceGenerating ? 'Génération en cours...' : `Générer tous les reçus ${forceYear}`}
+              </Button>
+            </div>
+          </div>
+        </Card>
+
         <Card>
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -401,6 +470,7 @@ export default function RecusFiscaux() {
                     <tr className="border-b border-white/10">
                       <th className="text-left py-3 px-4 text-sm font-medium text-white/60">N° Reçu</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-white/60">Email</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-white/60">Type</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-white/60">Année</th>
                       <th className="text-right py-3 px-4 text-sm font-medium text-white/60">Montant</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-white/60">Date d'envoi</th>
@@ -414,6 +484,15 @@ export default function RecusFiscaux() {
                           <span className="font-mono text-sm text-amber-400">{recu.numeroRecu}</span>
                         </td>
                         <td className="py-3 px-4 text-sm text-white">{recu.email}</td>
+                        <td className="py-3 px-4">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            recu.donorType === 'entreprise'
+                              ? 'bg-blue-500/20 text-blue-300'
+                              : 'bg-white/10 text-white/60'
+                          }`}>
+                            {recu.donorType === 'entreprise' ? '🏢' : '👤'} {recu.donorType || 'particulier'}
+                          </span>
+                        </td>
                         <td className="py-3 px-4 text-sm text-white/70">{recu.annee}</td>
                         <td className="py-3 px-4 text-sm text-right font-medium text-white">
                           {recu.montantTotal?.toFixed(2)} €
@@ -448,6 +527,7 @@ export default function RecusFiscaux() {
             )}
           </div>
         </Card>
+        </>
       )}
     </div>
   )

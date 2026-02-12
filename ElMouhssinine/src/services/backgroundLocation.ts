@@ -31,7 +31,10 @@ const getCurrentPosition = (): Promise<{ latitude: number; longitude: number } |
   return new Promise((resolve) => {
     // Demander la permission iOS si nécessaire
     if (Platform.OS === 'ios') {
-      (Geolocation.requestAuthorization as any)('always');
+      Geolocation.requestAuthorization(
+        () => {}, // success callback
+        (err) => { if (__DEV__) console.log('[BackgroundLocation] Auth error:', err); }
+      );
     }
 
     Geolocation.getCurrentPosition(
@@ -170,7 +173,10 @@ export const checkMosqueProximityForeground = async (language: 'fr' | 'ar' = 'fr
     // Obtenir la position avec haute précision (on est au premier plan)
     const position = await new Promise<{ latitude: number; longitude: number } | null>((resolve) => {
       if (Platform.OS === 'ios') {
-        (Geolocation.requestAuthorization as any)('whenInUse');
+        Geolocation.requestAuthorization(
+          () => {},
+          (err) => { if (__DEV__) console.log('[BackgroundLocation] Foreground auth error:', err); }
+        );
       }
 
       Geolocation.getCurrentPosition(

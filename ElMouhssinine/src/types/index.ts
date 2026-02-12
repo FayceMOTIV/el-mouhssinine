@@ -85,6 +85,20 @@ export interface Member {
   createdAt: Date;
 }
 
+export interface DonorInfo {
+  email: string;
+  address: string;
+  postalCode: string;
+  city: string;
+  // Particulier
+  firstName?: string;
+  lastName?: string;
+  // Entreprise
+  companyName?: string;
+  siret?: string;
+  legalRepresentative?: string;
+}
+
 export interface Donation {
   id: string;
   memberId?: string;
@@ -96,6 +110,12 @@ export interface Donation {
   status: 'pending' | 'completed' | 'failed';
   stripePaymentId?: string;
   createdAt: Date;
+  // Nouveaux champs reçu fiscal
+  donorType?: 'particulier' | 'entreprise';
+  donorInfo?: DonorInfo;
+  recuFiscalGenerated?: boolean;
+  recuFiscalYear?: number | null;
+  recuFiscalUrl?: string | null;
 }
 
 export interface MosqueeInfo {

@@ -47,18 +47,18 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
 
   useEffect(() => {
     if (isActive && isPlaying) {
-      // Animation de pulsation douce
+      // Animation de pulsation douce (useNativeDriver: false car mixé avec backgroundColor/shadowOpacity JS)
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1.01,
             duration: 800,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
             duration: 800,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ])
       ).start();
@@ -255,12 +255,12 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     paddingLeft: 20,
-    marginVertical: 4,
-    marginHorizontal: 8,
-    borderRadius: 12,
+    marginVertical: 6,
+    marginHorizontal: 12,
+    borderRadius: 16,
     shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
+    shadowRadius: 12,
     elevation: 4,
     backgroundColor: colors.card,
   },

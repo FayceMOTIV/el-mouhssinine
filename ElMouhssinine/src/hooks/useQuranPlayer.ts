@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import TrackPlayer, { Event, State } from 'react-native-track-player';
+import TrackPlayer, { State, Event } from 'react-native-track-player';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupPlayer } from '../services/audioPlayer';
 
@@ -24,6 +24,7 @@ export type PlaybackSpeed = 0.5 | 0.75 | 1.0 | 1.25 | 1.5;
 const PLAYBACK_SPEEDS: PlaybackSpeed[] = [0.5, 0.75, 1.0, 1.25, 1.5];
 const STORAGE_KEY_PREFIX = 'quran_progress_';
 
+// Build 210 - Fix race condition + guard loadAndPlayVerse concurrent
 export const useQuranPlayer = ({
   verses,
   reciterCode,
@@ -31,9 +32,7 @@ export const useQuranPlayer = ({
   surahName,
   onVerseChange
 }: UseQuranPlayerProps) => {
-  console.log('[useQuranPlayer] Build 205 - Init');
-
-  // États
+  // === États ===
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -46,7 +45,11 @@ export const useQuranPlayer = ({
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [verseProgress, setVerseProgress] = useState(0);
 
-  // Refs
+  // === Refs ===
+  const versesRef = useRef(verses);
+  const reciterCodeRef = useRef(reciterCode);
+  const surahNameRef = useRef(surahName);
+  const onVerseChangeRef = useRef(onVerseChange);
   const currentVerseIndexRef = useRef(currentVerseIndex);
   const isPlayingRef = useRef(isPlaying);
   const repeatModeRef = useRef(repeatMode);
@@ -54,17 +57,21 @@ export const useQuranPlayer = ({
   const maxRepeatRef = useRef(maxRepeat);
   const rangeStartRef = useRef(rangeStart);
   const rangeEndRef = useRef(rangeEnd);
-  const versesRef = useRef(verses);
-  const reciterCodeRef = useRef(reciterCode);
   const playbackSpeedRef = useRef(playbackSpeed);
-  const surahNameRef = useRef(surahName);
-  const onVerseChangeRef = useRef(onVerseChange);
 
-  // Flag pour ignorer les événements pendant le changement de piste
-  const isChangingTrackRef = useRef(false);
+  // Flag pour savoir si on est en train de charger une piste
+  const isLoadingTrackRef = useRef(false);
+  // Flag pour bloquer les appels re-entrants à handleTrackEnd
+  const isHandlingEndRef = useRef(false);
+  // Dernier ID de piste joué (pour éviter les doublons)
+  const lastPlayedVerseRef = useRef<number | null>(null);
 
-  // Mettre à jour les refs
+  // Sync refs
   useEffect(() => {
+    versesRef.current = verses;
+    reciterCodeRef.current = reciterCode;
+    surahNameRef.current = surahName;
+    onVerseChangeRef.current = onVerseChange;
     currentVerseIndexRef.current = currentVerseIndex;
     isPlayingRef.current = isPlaying;
     repeatModeRef.current = repeatMode;
@@ -72,234 +79,276 @@ export const useQuranPlayer = ({
     maxRepeatRef.current = maxRepeat;
     rangeStartRef.current = rangeStart;
     rangeEndRef.current = rangeEnd;
-    versesRef.current = verses;
-    reciterCodeRef.current = reciterCode;
     playbackSpeedRef.current = playbackSpeed;
-    surahNameRef.current = surahName;
-    onVerseChangeRef.current = onVerseChange;
   });
 
-  // Initialiser le player
+  // === Init player ===
   useEffect(() => {
     let mounted = true;
-
     const init = async () => {
       try {
-        console.log('[useQuranPlayer] Setup player...');
+        console.log('[QuranPlayer] Initialisation...');
         await setupPlayer();
         if (mounted) {
           setIsPlayerReady(true);
-          console.log('[useQuranPlayer] Player prêt');
+          console.log('[QuranPlayer] Player prêt');
         }
       } catch (error) {
-        console.error('[useQuranPlayer] Erreur init:', error);
+        console.error('[QuranPlayer] Erreur init:', error);
       }
     };
-
     init();
     return () => { mounted = false; };
   }, []);
 
-  // Polling pour la progression
+  // === EVENT LISTENER pour fin de piste (plus fiable que polling seul) ===
   useEffect(() => {
-    if (!isPlaying || !isPlayerReady) {
-      return;
-    }
+    if (!isPlayerReady) return;
 
-    const interval = setInterval(async () => {
-      try {
-        const position = await TrackPlayer.getPosition();
-        const duration = await TrackPlayer.getDuration();
-        if (duration > 0) {
-          setVerseProgress(position / duration);
-        }
-      } catch {
-        // Ignorer
-      }
-    }, 250);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, isPlayerReady]);
-
-  // Écouter les événements TrackPlayer
-  useEffect(() => {
-    if (!isPlayerReady) {
-      return;
-    }
-
-    console.log('[useQuranPlayer] Ajout event listeners...');
-
-    const onPlaybackState = TrackPlayer.addEventListener(
-      Event.PlaybackState,
-      async (event) => {
-        const state = event.state;
-        console.log('[useQuranPlayer] State:', state, 'isChangingTrack:', isChangingTrackRef.current);
-
-        // Ignorer les événements pendant le changement de piste
-        if (isChangingTrackRef.current) {
-          return;
-        }
-
-        if (state === State.Playing) {
-          setIsPlaying(true);
-          setIsLoading(false);
-        } else if (state === State.Paused) {
-          setIsPlaying(false);
-        } else if (state === State.Buffering || state === State.Loading) {
-          setIsLoading(true);
-        } else if (state === State.Ready) {
-          setIsLoading(false);
-        } else if (state === State.Stopped || state === State.None) {
-          setIsPlaying(false);
-          setIsLoading(false);
-        } else if (state === State.Ended) {
-          console.log('[useQuranPlayer] Verset terminé naturellement');
-          handleVerseEnded();
-        }
-      }
-    );
-
-    const onPlaybackError = TrackPlayer.addEventListener(
-      Event.PlaybackError,
-      (event) => {
-        console.error('[useQuranPlayer] Erreur playback:', event);
-        isChangingTrackRef.current = false;
-        setIsLoading(false);
-        setIsPlaying(false);
-      }
-    );
+    const subs: { remove: () => void }[] = [];
+    try {
+      subs.push(
+        TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (event) => {
+          // Quand la piste active change à null, c'est la fin
+          if (event.track == null && !isLoadingTrackRef.current && isPlayingRef.current) {
+            await handleTrackEnd();
+          }
+        })
+      );
+      subs.push(
+        TrackPlayer.addEventListener(Event.PlaybackState, async (event) => {
+          if (event.state === State.Ended && !isLoadingTrackRef.current) {
+            await handleTrackEnd();
+          }
+        })
+      );
+    } catch {}
 
     return () => {
-      onPlaybackState.remove();
-      onPlaybackError.remove();
+      subs.forEach(s => { try { s.remove(); } catch {} });
     };
   }, [isPlayerReady]);
 
-  // Gérer la fin d'un verset
-  const handleVerseEnded = async () => {
-    const currentIdx = currentVerseIndexRef.current;
-    const verses = versesRef.current;
-    const mode = repeatModeRef.current;
-    const count = repeatCountRef.current;
-    const max = maxRepeatRef.current;
+  // === POLLING pour progression UI (barre de progression fluide) ===
+  useEffect(() => {
+    if (!isPlayerReady) return;
 
-    console.log('[useQuranPlayer] handleVerseEnded, index:', currentIdx, 'mode:', mode);
+    const pollInterval = setInterval(async () => {
+      if (isLoadingTrackRef.current) return;
 
-    // Mode répétition verset
-    if (mode === 'verse' && count < max - 1) {
-      setRepeatCount(count + 1);
-      await playVerseInternal(currentIdx);
-      return;
-    }
+      try {
+        const state = await TrackPlayer.getPlaybackState();
+        const currentState = state.state;
 
-    // Mode répétition plage
-    if (mode === 'range') {
-      if (currentIdx < rangeEndRef.current) {
-        await playVerseInternal(currentIdx + 1);
+        if (currentState === State.Playing) {
+          if (!isPlayingRef.current) {
+            setIsPlaying(true);
+            setIsLoading(false);
+          }
+
+          const position = await TrackPlayer.getPosition();
+          const duration = await TrackPlayer.getDuration();
+
+          if (duration > 0) {
+            setVerseProgress(position / duration);
+
+            // Backup: détecter fin si event listener n'a pas capté
+            if (position >= duration - 0.15 && duration > 1) {
+              await handleTrackEnd();
+            }
+          }
+        } else if (currentState === State.Paused) {
+          if (isPlayingRef.current && !isLoadingTrackRef.current) {
+            setIsPlaying(false);
+          }
+        } else if (currentState === State.Stopped || currentState === State.None) {
+          if (isPlayingRef.current && !isLoadingTrackRef.current) {
+            setIsPlaying(false);
+          }
+        } else if (currentState === State.Buffering || currentState === State.Loading) {
+          setIsLoading(true);
+        } else if (currentState === State.Ready) {
+          setIsLoading(false);
+        }
+      } catch {}
+    }, 200);
+
+    return () => clearInterval(pollInterval);
+  }, [isPlayerReady]);
+
+  // === Gestion fin de piste ===
+  const handleTrackEnd = async () => {
+    if (isLoadingTrackRef.current) return;
+    if (isHandlingEndRef.current) return;
+    isHandlingEndRef.current = true;
+
+    try {
+      const idx = currentVerseIndexRef.current;
+      const mode = repeatModeRef.current;
+      const count = repeatCountRef.current;
+      const max = maxRepeatRef.current;
+      const versesArray = versesRef.current;
+
+      // handleTrackEnd idx mode
+
+      // Éviter de rejouer le même verset si déjà en cours
+      if (lastPlayedVerseRef.current === idx && mode !== 'verse') {
+        // On a déjà joué ce verset, passer au suivant
+        if (idx < versesArray.length - 1) {
+          await loadAndPlayVerse(idx + 1);
+        } else {
+          // Fin de sourate
+          if (mode === 'surah') {
+            await loadAndPlayVerse(0);
+          } else {
+            setIsPlaying(false);
+            await saveProgress();
+          }
+        }
         return;
-      } else if (count < max - 1) {
+      }
+
+      // Mode répétition verset
+      if (mode === 'verse' && count < max - 1) {
         setRepeatCount(count + 1);
-        await playVerseInternal(rangeStartRef.current);
+        await loadAndPlayVerse(idx);
         return;
       }
-    }
 
-    setRepeatCount(0);
-
-    // Passer au verset suivant
-    if (currentIdx < verses.length - 1) {
-      await playVerseInternal(currentIdx + 1);
-    } else {
-      // Fin de sourate
-      if (mode === 'surah') {
-        await playVerseInternal(0);
-      } else {
-        console.log('[useQuranPlayer] Fin de sourate');
-        setIsPlaying(false);
-        try {
-          await AsyncStorage.setItem(
-            `${STORAGE_KEY_PREFIX}${surahNumber}`,
-            JSON.stringify({ verseIndex: currentIdx, timestamp: Date.now() })
-          );
-        } catch {}
+      // Mode répétition plage
+      if (mode === 'range') {
+        if (idx < rangeEndRef.current) {
+          await loadAndPlayVerse(idx + 1);
+          return;
+        } else if (count < max - 1) {
+          setRepeatCount(count + 1);
+          await loadAndPlayVerse(rangeStartRef.current);
+          return;
+        }
       }
+
+      setRepeatCount(0);
+
+      // Passer au verset suivant
+      if (idx < versesArray.length - 1) {
+        await loadAndPlayVerse(idx + 1);
+      } else {
+        // Fin de sourate
+        if (mode === 'surah') {
+          await loadAndPlayVerse(0);
+        } else {
+          console.log('[QuranPlayer] Fin de sourate');
+          setIsPlaying(false);
+          await saveProgress();
+        }
+      }
+    } finally {
+      isHandlingEndRef.current = false;
     }
   };
 
-  // Jouer un verset
-  const playVerseInternal = async (index: number): Promise<boolean> => {
-    const verses = versesRef.current;
+  // === Charger et jouer un verset ===
+  const loadAndPlayVerse = async (index: number): Promise<boolean> => {
+    if (isLoadingTrackRef.current) return false;
 
-    if (!verses || verses.length === 0) {
-      console.warn('[useQuranPlayer] Pas de versets');
+    const versesArray = versesRef.current;
+
+    if (!versesArray || versesArray.length === 0) {
+      console.warn('[QuranPlayer] Pas de versets');
       return false;
     }
 
-    if (index < 0 || index >= verses.length) {
-      console.warn('[useQuranPlayer] Index invalide:', index);
+    if (index < 0 || index >= versesArray.length) {
+      console.warn('[QuranPlayer] Index invalide:', index);
       return false;
     }
 
-    const verse = verses[index];
+    // Marquer qu'on charge - synchrone AVANT toute opération async
+    isLoadingTrackRef.current = true;
+    currentVerseIndexRef.current = index;
+    setIsLoading(true);
+    setVerseProgress(0);
+
+    const verse = versesArray[index];
     const audioUrl = `https://cdn.islamic.network/quran/audio/128/${reciterCodeRef.current}/${verse.number}.mp3`;
 
-    console.log('[useQuranPlayer] Lecture verset', verse.numberInSurah, 'URL:', audioUrl);
+    // Chargement verset
 
     try {
-      // Marquer qu'on change de piste (ignorer les événements)
-      isChangingTrackRef.current = true;
-      setIsLoading(true);
-      setVerseProgress(0);
-
+      // Arrêter tout d'abord
       await TrackPlayer.reset();
+
+      // Attendre un peu
+      await delay(150);
+
+      // Ajouter la piste
       await TrackPlayer.add({
-        id: `verse-${verse.number}`,
+        id: `verse-${verse.number}-${Date.now()}`,
         url: audioUrl,
         title: `${surahNameRef.current || 'Sourate'} - Verset ${verse.numberInSurah}`,
         artist: reciterCodeRef.current,
       });
+
+      // Configurer la vitesse
       await TrackPlayer.setRate(playbackSpeedRef.current);
 
-      // Fin du changement de piste
-      isChangingTrackRef.current = false;
+      // Attendre encore un peu que la piste soit prête
+      await delay(100);
 
+      // Lancer la lecture
       await TrackPlayer.play();
 
+      // Mettre à jour l'état
+      lastPlayedVerseRef.current = index;
       setCurrentVerseIndex(index);
       setIsPlaying(true);
       setIsLoading(false);
+      isLoadingTrackRef.current = false;
       onVerseChangeRef.current?.(index);
 
-      console.log('[useQuranPlayer] Lecture démarrée');
       return true;
     } catch (error) {
-      console.error('[useQuranPlayer] Erreur lecture:', error);
-      isChangingTrackRef.current = false;
+      console.error('[QuranPlayer] Erreur lecture:', error);
+      isLoadingTrackRef.current = false;
       setIsLoading(false);
       setIsPlaying(false);
       return false;
     }
   };
 
-  // Actions exposées
+  // === Helper delay ===
+  const delay = (ms: number) => new Promise<void>(resolve => setTimeout(() => resolve(), ms));
+
+  // === Sauvegarder progression ===
+  const saveProgress = async () => {
+    try {
+      await AsyncStorage.setItem(
+        `${STORAGE_KEY_PREFIX}${surahNumber}`,
+        JSON.stringify({ verseIndex: currentVerseIndexRef.current, timestamp: Date.now() })
+      );
+    } catch {}
+  };
+
+  // === Actions exposées ===
   const playVerseAtIndex = useCallback(async (index: number) => {
-    console.log('[useQuranPlayer] playVerseAtIndex:', index);
-    await playVerseInternal(index);
+    // playVerseAtIndex
+    await loadAndPlayVerse(index);
   }, []);
 
   const play = useCallback(async () => {
+    // play
     if (isPlayingRef.current) return;
 
     try {
-      const playbackState = await TrackPlayer.getPlaybackState();
-      if (playbackState.state === State.Paused) {
+      const state = await TrackPlayer.getPlaybackState();
+      if (state.state === State.Paused) {
         await TrackPlayer.play();
         setIsPlaying(true);
       } else {
-        await playVerseInternal(currentVerseIndexRef.current);
+        await loadAndPlayVerse(currentVerseIndexRef.current);
       }
     } catch {
-      await playVerseInternal(currentVerseIndexRef.current);
+      await loadAndPlayVerse(currentVerseIndexRef.current);
     }
   }, []);
 
@@ -308,11 +357,12 @@ export const useQuranPlayer = ({
       await TrackPlayer.pause();
       setIsPlaying(false);
     } catch (error) {
-      console.error('[useQuranPlayer] Erreur pause:', error);
+      console.error('[QuranPlayer] Erreur pause:', error);
     }
   }, []);
 
   const togglePlayPause = useCallback(async () => {
+    // togglePlayPause
     if (isPlayingRef.current) {
       await pause();
     } else {
@@ -328,35 +378,39 @@ export const useQuranPlayer = ({
   }, []);
 
   const nextVerse = useCallback(async () => {
-    const currentIdx = currentVerseIndexRef.current;
-    if (currentIdx < versesRef.current.length - 1) {
-      const nextIdx = currentIdx + 1;
-      setCurrentVerseIndex(nextIdx);
-      onVerseChangeRef.current?.(nextIdx);
+    const idx = currentVerseIndexRef.current;
+    if (idx < versesRef.current.length - 1) {
+      const nextIdx = idx + 1;
       if (isPlayingRef.current) {
-        await playVerseInternal(nextIdx);
+        await loadAndPlayVerse(nextIdx);
+      } else {
+        setCurrentVerseIndex(nextIdx);
+        onVerseChangeRef.current?.(nextIdx);
       }
     }
   }, []);
 
   const previousVerse = useCallback(async () => {
-    const currentIdx = currentVerseIndexRef.current;
-    if (currentIdx > 0) {
-      const prevIdx = currentIdx - 1;
-      setCurrentVerseIndex(prevIdx);
-      onVerseChangeRef.current?.(prevIdx);
+    const idx = currentVerseIndexRef.current;
+    if (idx > 0) {
+      const prevIdx = idx - 1;
       if (isPlayingRef.current) {
-        await playVerseInternal(prevIdx);
+        await loadAndPlayVerse(prevIdx);
+      } else {
+        setCurrentVerseIndex(prevIdx);
+        onVerseChangeRef.current?.(prevIdx);
       }
     }
   }, []);
 
   const stop = useCallback(async () => {
-    isChangingTrackRef.current = true;
+    // stop
+    isLoadingTrackRef.current = true;
     try {
       await TrackPlayer.reset();
     } catch {}
-    isChangingTrackRef.current = false;
+    isLoadingTrackRef.current = false;
+    lastPlayedVerseRef.current = null;
     setIsPlaying(false);
     setIsLoading(false);
     setCurrentVerseIndex(0);
@@ -366,8 +420,8 @@ export const useQuranPlayer = ({
   }, []);
 
   const changeSpeed = useCallback(async (speed?: PlaybackSpeed) => {
-    const currentSpeed = playbackSpeedRef.current;
-    const newSpeed = speed ?? PLAYBACK_SPEEDS[(PLAYBACK_SPEEDS.indexOf(currentSpeed) + 1) % PLAYBACK_SPEEDS.length];
+    const current = playbackSpeedRef.current;
+    const newSpeed = speed ?? PLAYBACK_SPEEDS[(PLAYBACK_SPEEDS.indexOf(current) + 1) % PLAYBACK_SPEEDS.length];
     setPlaybackSpeed(newSpeed);
     try {
       await TrackPlayer.setRate(newSpeed);
@@ -376,8 +430,8 @@ export const useQuranPlayer = ({
 
   const cycleRepeatMode = useCallback(() => {
     const modes: RepeatMode[] = ['none', 'verse', 'surah'];
-    const currentMode = repeatModeRef.current;
-    const nextIdx = (modes.indexOf(currentMode) + 1) % modes.length;
+    const current = repeatModeRef.current;
+    const nextIdx = (modes.indexOf(current) + 1) % modes.length;
     setRepeatMode(modes[nextIdx]);
     setRepeatCount(0);
   }, []);
@@ -390,14 +444,11 @@ export const useQuranPlayer = ({
     setRepeatCount(0);
   }, []);
 
-  const saveProgress = useCallback(async () => {
-    try {
-      await AsyncStorage.setItem(
-        `${STORAGE_KEY_PREFIX}${surahNumber}`,
-        JSON.stringify({ verseIndex: currentVerseIndexRef.current, timestamp: Date.now() })
-      );
-    } catch {}
-  }, [surahNumber]);
+  // Permet de forcer le reciterCode ref AVANT de relancer la lecture
+  const updateReciterCode = useCallback((newReciterCode: string) => {
+    // updateReciterCode
+    reciterCodeRef.current = newReciterCode;
+  }, []);
 
   return {
     currentVerseIndex,
@@ -425,6 +476,7 @@ export const useQuranPlayer = ({
     changeSpeed,
     cycleRepeatMode,
     setRepeatRange,
+    updateReciterCode,
   };
 };
 

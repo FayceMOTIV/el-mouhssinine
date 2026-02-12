@@ -57,6 +57,9 @@ const MemberScreen = () => {
   const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(null);
   const [isPaid, setIsPaid] = useState(false);
   const [inscribedMembers, setInscribedMembers] = useState<InscribedMember[]>([]);
+  // 3 pages : 'sympathisant' | 'devenir_adherent' | 'membre_actif'
+  const [memberPage, setMemberPage] = useState<'sympathisant' | 'devenir_adherent' | 'membre_actif'>('sympathisant');
+  const [isExpired, setIsExpired] = useState(false);
 
   // Prix et infos
   const [formulePrices, setFormulePrices] = useState<CotisationPrices>({ mensuel: 10, annuel: 100 });
@@ -168,7 +171,32 @@ const MemberScreen = () => {
               createdAt: new Date(),
             };
             setMemberProfile(memberProf);
-            setIsPaid(profile.cotisation.status === 'active');
+            const isActive = profile.cotisation.status === 'active';
+            setIsPaid(isActive);
+
+            // Detecter expiration
+            const dateFin = profile.cotisation.dateFin;
+            let expired = false;
+            if (dateFin) {
+              const expiryDate = dateFin instanceof Date ? dateFin : (dateFin as any)?.toDate?.() || new Date(dateFin);
+              expired = expiryDate.getTime() < Date.now();
+            }
+            setIsExpired(expired);
+
+            // Determiner la page membre
+            if (isActive && !expired) {
+              setMemberPage('membre_actif');
+            } else if (expired) {
+              setMemberPage('devenir_adherent');
+              Alert.alert(
+                'Cotisation expirée',
+                'Votre adhésion a expiré. Renouvelez-la pour rester membre actif.'
+              );
+            } else if (profile.cotisation.status === 'sympathisant' || profile.cotisation.status === 'none') {
+              setMemberPage('sympathisant');
+            } else {
+              setMemberPage('devenir_adherent');
+            }
 
             // Charger les membres inscrits (une seule fois)
             getMembersInscribedBy(user.uid).then(setInscribedMembers);
@@ -403,11 +431,11 @@ const MemberScreen = () => {
         // Charger le profil membre
         loadMemberData(result.user.uid);
 
-        // Message de confirmation email
+        // Popup de bienvenue après inscription
         Alert.alert(
-          '✅ Compte créé !',
-          'Un email de confirmation a été envoyé à votre adresse. Veuillez cliquer sur le lien pour activer votre compte.',
-          [{ text: 'Compris', style: 'default' }]
+          'Merci pour votre inscription !',
+          'Vous allez recevoir un email de bienvenue et d\'explications.\n\n(Pensez à vérifier vos spams)',
+          [{ text: 'OK', style: 'default' }]
         );
       } else if (!result.success) {
         Alert.alert('Erreur', result.error || 'Échec de la création du compte');
@@ -463,7 +491,8 @@ const MemberScreen = () => {
   };
 
   // Demander l'envoi du reçu fiscal
-  const handleRequestRecuFiscal = async () => {
+  const handleRequestRecuFiscal = async (yearParam?: number) => {
+    const year = yearParam ?? selectedYear;
     if (!memberProfile?.email) {
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
@@ -474,7 +503,7 @@ const MemberScreen = () => {
 
     setSendingRecuFiscal(true);
     try {
-      const result = await requestRecuFiscal(memberProfile.email, selectedYear);
+      const result = await requestRecuFiscal(memberProfile.email, year);
       if (result.success) {
         Alert.alert(
           language === 'ar' ? 'تم الإرسال' : 'Envoyé !',
@@ -581,6 +610,7 @@ const MemberScreen = () => {
           memberId: memberProfile.memberId || '',
           memberUid: memberProfile.uid, // UID Firebase pour la mise à jour du document
           memberName: memberProfile.name,
+          memberEmail: memberProfile.email, // Email pour les emails de confirmation
           amount: breakdown.cotisation,
           stripePaymentIntentId: paymentResult.paymentIntentId,
           paymentMethod: method === 'apple' ? 'Apple Pay' : 'CB',
@@ -591,19 +621,31 @@ const MemberScreen = () => {
         if (breakdown.don > 0) {
           await addPayment({
             memberId: memberProfile.memberId || '',
-            memberUid: memberProfile.uid, // UID Firebase pour la mise à jour du document
+            memberUid: memberProfile.uid,
             memberName: memberProfile.name,
+            memberEmail: memberProfile.email,
             amount: breakdown.don,
             stripePaymentIntentId: paymentResult.paymentIntentId + '_don',
             paymentMethod: method === 'apple' ? 'Apple Pay' : 'CB',
             period: selectedFormule,
-            type: 'don', // Type don pour le reçu fiscal
+            type: 'don',
           });
         }
 
-        showPaymentSuccess('cotisation');
         setShowPaymentModal(false);
         setCustomAmount('');
+
+        // Popup de confirmation adhesion
+        Alert.alert(
+          'Merci pour votre adhésion !',
+          'Vous allez recevoir toutes les infos par email.',
+          [{ text: 'OK', style: 'default' }]
+        );
+
+        // Passer directement en page membre actif
+        setMemberPage('membre_actif');
+        setIsPaid(true);
+        setIsExpired(false);
 
         // Recharger les données
         const user = AuthService.getCurrentUser();
@@ -940,178 +982,8 @@ const MemberScreen = () => {
     })),
   ];
 
-  if (!isPaid) {
-    return (
-      <BackgroundPattern>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {/* Header avec nom */}
-          <View style={styles.header}>
-            <Text style={[styles.greeting, isRTL && styles.rtlText]}>
-              {isRTL ? `${memberProfile?.name?.split(' ')[0] || ''} 👋 مرحبا` : `Bonjour, ${memberProfile?.name?.split(' ')[0] || ''} 👋`}
-            </Text>
-          </View>
-
-          {/* Bouton voir ma carte de membre */}
-          <TouchableOpacity
-            style={styles.memberCardButton}
-            onPress={() => setShowCardFullScreen(true)}
-          >
-            <Text style={styles.memberCardButtonIcon}>🪪</Text>
-            <View style={styles.memberCardButtonContent}>
-              <Text style={[styles.memberCardButtonText, isRTL && styles.rtlText]}>
-                Voir ma carte de membre
-              </Text>
-              <Text style={[styles.memberCardButtonSubtext, isRTL && styles.rtlText]}>
-                Afficher en plein écran
-              </Text>
-            </View>
-            <Text style={styles.memberCardButtonArrow}>→</Text>
-          </TouchableOpacity>
-
-          {/* Bouton voir mes adhésions */}
-          <TouchableOpacity
-            style={styles.membershipsButton}
-            onPress={() => navigation.navigate('MyMemberships')}
-          >
-            <Text style={styles.membershipsButtonIcon}>👥</Text>
-            <View style={styles.membershipsButtonContent}>
-              <Text style={[styles.membershipsButtonText, isRTL && styles.rtlText]}>
-                Voir mes adhésions
-              </Text>
-              <Text style={[styles.membershipsButtonSubtext, isRTL && styles.rtlText]}>
-                {inscribedMembers.length > 0
-                  ? `${inscribedMembers.length + 1} membre${inscribedMembers.length > 0 ? 's' : ''}`
-                  : 'Détails et statuts'}
-              </Text>
-            </View>
-            <Text style={styles.membershipsButtonArrow}>→</Text>
-          </TouchableOpacity>
-
-          {/* Card Sympathisant ou Devenir membre */}
-          {isSympathisant ? (
-            <View style={styles.card}>
-              <Text style={styles.cardIcon}>🙏</Text>
-              <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Bienvenue, sympathisant !</Text>
-              <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
-                Vous avez accès à toutes les fonctionnalités de l'app.
-                {'\n'}Pour devenir membre actif, payez votre cotisation.
-              </Text>
-
-              <View style={styles.sympathisantBenefits}>
-                <Text style={styles.benefitItem}>✅ Carte de membre officielle</Text>
-                <Text style={styles.benefitItem}>✅ Droit de vote en AG</Text>
-                <Text style={styles.benefitItem}>✅ Reçu fiscal pour cotisation</Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => {
-                  setHasScrolledToEnd(false);
-                  setAcceptedReglement(false);
-                  setShowReglementModal(true);
-                }}
-              >
-                <Text style={styles.primaryButtonText}>🎉 Devenir Membre Actif</Text>
-              </TouchableOpacity>
-            </View>
-          ) : isAwaitingValidation ? (
-            <View style={styles.card}>
-              <Text style={styles.cardIcon}>⏳</Text>
-              <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Adhésion en cours de validation</Text>
-              <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
-                Votre paiement a été reçu. Le bureau va valider votre adhésion prochainement.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.card}>
-              <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Activer ma cotisation</Text>
-              <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
-                Choisissez votre formule d'adhésion
-              </Text>
-
-              {/* Formules */}
-              <View style={styles.formulesContainer}>
-                <TouchableOpacity
-                  style={[styles.formuleOption, selectedFormule === 'mensuel' && styles.formuleSelected]}
-                  onPress={() => setSelectedFormule('mensuel')}
-                >
-                  <Text style={[styles.formuleLabel, selectedFormule === 'mensuel' && styles.formuleLabelSelected]}>
-                    Mensuel
-                  </Text>
-                  <Text style={[styles.formulePrice, selectedFormule === 'mensuel' && styles.formulePriceSelected]}>
-                    {formulePrices.mensuel}€
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.formuleOption, selectedFormule === 'annuel' && styles.formuleSelected]}
-                  onPress={() => setSelectedFormule('annuel')}
-                >
-                  <Text style={[styles.formuleLabel, selectedFormule === 'annuel' && styles.formuleLabelSelected]}>
-                    Annuel
-                  </Text>
-                  <Text style={[styles.formulePrice, selectedFormule === 'annuel' && styles.formulePriceSelected]}>
-                    {formulePrices.annuel}€
-                  </Text>
-                  {formulePrices.annuel < formulePrices.mensuel * 12 && (
-                    <View style={styles.economyBadge}>
-                      <Text style={styles.economyText}>-{Math.round((1 - formulePrices.annuel / (formulePrices.mensuel * 12)) * 100)}%</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => {
-                  setHasScrolledToEnd(false);
-                  setAcceptedReglement(false);
-                  setShowReglementModal(true);
-                }}
-              >
-                <Text style={styles.primaryButtonText}>Payer {formulePrices[selectedFormule]}€</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Bouton inscrire famille */}
-          <TouchableOpacity
-            style={styles.familyButton}
-            onPress={() => setShowFamilyModal(true)}
-          >
-            <Text style={styles.familyButtonIcon}>👨‍👩‍👧‍👦</Text>
-            <View style={styles.familyButtonContent}>
-              <Text style={[styles.familyButtonText, isRTL && styles.rtlText]}>{t('registerFamily')}</Text>
-              <Text style={[styles.familyButtonSubtext, isRTL && styles.rtlText]}>
-                Inscrire famille, amis...
-              </Text>
-            </View>
-            <Text style={styles.familyButtonArrow}>→</Text>
-          </TouchableOpacity>
-
-          {/* Déconnexion */}
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutButtonText}>{t('logout')}</Text>
-          </TouchableOpacity>
-        </ScrollView>
-
-        {/* Modales */}
-        <MemberCardFullScreen
-          visible={showCardFullScreen}
-          onClose={() => setShowCardFullScreen(false)}
-          members={allMembersForCard}
-          isRTL={isRTL}
-        />
-
-        {renderReglementModal()}
-        {renderPaymentModal()}
-        {renderFamilyModal()}
-      </BackgroundPattern>
-    );
-  }
-
   // ============================================================
-  // RENDER: LOGGED IN - WITH SUBSCRIPTION (MAIN VIEW)
+  // RENDER: 3 PAGES MEMBRE
   // ============================================================
 
   return (
@@ -1124,150 +996,349 @@ const MemberScreen = () => {
           </Text>
         </View>
 
-        {/* Bouton voir ma carte de membre */}
-        <TouchableOpacity
-          style={styles.memberCardButton}
-          onPress={() => setShowCardFullScreen(true)}
-        >
-          <Text style={styles.memberCardButtonIcon}>🪪</Text>
-          <View style={styles.memberCardButtonContent}>
-            <Text style={[styles.memberCardButtonText, isRTL && styles.rtlText]}>
-              Voir ma carte de membre
-            </Text>
-            <Text style={[styles.memberCardButtonSubtext, isRTL && styles.rtlText]}>
-              {inscribedMembers.length > 0 ? `${inscribedMembers.length + 1} cartes disponibles` : 'Afficher en plein écran'}
-            </Text>
-          </View>
-          <Text style={styles.memberCardButtonArrow}>→</Text>
-        </TouchableOpacity>
+        {/* ============================================ */}
+        {/* PAGE 1 : MEMBRE SYMPATHISANT                */}
+        {/* ============================================ */}
+        {memberPage === 'sympathisant' && (
+          <>
+            {/* Titre page */}
+            <View style={styles.pageTitleContainer}>
+              <Text style={styles.pageTitle}>MEMBRE SYMPATHISANT</Text>
+            </View>
 
-        {/* Bouton voir mes adhésions */}
-        <TouchableOpacity
-          style={styles.membershipsButton}
-          onPress={() => navigation.navigate('MyMemberships')}
-        >
-          <Text style={styles.membershipsButtonIcon}>👥</Text>
-          <View style={styles.membershipsButtonContent}>
-            <Text style={[styles.membershipsButtonText, isRTL && styles.rtlText]}>
-              Voir mes adhésions
-            </Text>
-            <Text style={[styles.membershipsButtonSubtext, isRTL && styles.rtlText]}>
-              {inscribedMembers.length > 0
-                ? `${inscribedMembers.length + 1} membre${inscribedMembers.length > 0 ? 's' : ''} (vous + ${inscribedMembers.length} inscrit${inscribedMembers.length > 1 ? 's' : ''})`
-                : 'Détails et statuts'}
-            </Text>
-          </View>
-          <Text style={styles.membershipsButtonArrow}>→</Text>
-        </TouchableOpacity>
-
-        {/* Bouton inscrire famille */}
-        <TouchableOpacity
-          style={styles.familyButton}
-          onPress={() => setShowFamilyModal(true)}
-        >
-          <Text style={styles.familyButtonIcon}>➕</Text>
-          <View style={styles.familyButtonContent}>
-            <Text style={[styles.familyButtonText, isRTL && styles.rtlText]}>Inscrire d'autres personnes</Text>
-            <Text style={[styles.familyButtonSubtext, isRTL && styles.rtlText]}>
-              Famille, amis...
-            </Text>
-          </View>
-          <Text style={styles.familyButtonArrow}>→</Text>
-        </TouchableOpacity>
-
-        {/* Renouveler si bientôt expiré */}
-        {memberProfile?.cotisationExpiry && (() => {
-          const expiryValue = memberProfile.cotisationExpiry as any;
-          const expiry = expiryValue instanceof Date
-            ? expiryValue
-            : expiryValue?.toDate?.() || new Date(expiryValue);
-          const daysLeft = Math.floor((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-
-          if (daysLeft <= 30 && daysLeft > 0) {
-            return (
-              <TouchableOpacity
-                style={styles.renewButton}
-                onPress={() => setShowPaymentModal(true)}
-              >
-                <Text style={styles.renewButtonText}>
-                  ⚠️ Expire dans {daysLeft} jours - Renouveler
-                </Text>
-              </TouchableOpacity>
-            );
-          }
-          return null;
-        })()}
-
-        {/* Reçu Fiscal */}
-        <View style={styles.recuFiscalSection}>
-          <Text style={[styles.recuFiscalTitle, isRTL && styles.rtlText]}>
-            📄 {language === 'ar' ? 'الإيصال الضريبي' : 'Reçu fiscal'}
-          </Text>
-          <View style={styles.recuFiscalCard}>
-            <Text style={[styles.recuFiscalInfo, isRTL && styles.rtlText]}>
-              {language === 'ar'
-                ? 'احصل على إيصالك الضريبي السنوي لتخفيض ضرائبك بنسبة 66%'
-                : 'Recevez votre reçu fiscal annuel pour déduire 66% de vos dons de vos impôts'}
-            </Text>
-
-            {/* Sélecteur d'année */}
-            <View style={styles.yearSelector}>
-              <Text style={styles.yearLabel}>
-                {language === 'ar' ? 'السنة:' : 'Année :'}
+            <View style={styles.card}>
+              <Text style={[styles.cardSubtitle, isRTL && styles.rtlText, { fontSize: 16, lineHeight: 24 }]}>
+                Bienvenu {memberProfile?.name?.split(' ')[0] || ''},
+                {'\n\n'}Te voilà membre sympathisant, tu as accès à toutes les fonctionnalités de l'application, tu seras informé des événements de la mosquée.
+                {'\n\n'}Si tu veux aller plus loin et devenir membre actif (adhérent de l'association Centre Culturel Islamique de Bourg-en-Bresse) clique ici :
               </Text>
-              <View style={styles.yearButtons}>
-                {[...Array(3)].map((_, i) => {
-                  const year = new Date().getFullYear() - 1 - i;
-                  return (
-                    <TouchableOpacity
-                      key={year}
-                      style={[
-                        styles.yearButton,
-                        selectedYear === year && styles.yearButtonActive
-                      ]}
-                      onPress={() => setSelectedYear(year)}
-                    >
-                      <Text style={[
-                        styles.yearButtonText,
-                        selectedYear === year && styles.yearButtonTextActive
-                      ]}>
-                        {year}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+
+              <TouchableOpacity
+                style={[styles.primaryButton, { marginTop: 24 }]}
+                onPress={() => setMemberPage('devenir_adherent')}
+              >
+                <Text style={styles.primaryButtonText}>Devenir membre actif</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Déconnexion */}
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutButtonText}>{t('logout')}</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* ============================================ */}
+        {/* PAGE 2 : DEVENIR ADHÉRENT (paiement)        */}
+        {/* ============================================ */}
+        {memberPage === 'devenir_adherent' && (
+          <>
+            {/* Titre page */}
+            <View style={styles.pageTitleContainer}>
+              <Text style={styles.pageTitle}>ESPACE ADHÉRENT</Text>
+              <Text style={[styles.pageSubtitle]}>Pour devenir membre actif</Text>
+            </View>
+
+            {/* Message expiration si applicable */}
+            {isExpired && (
+              <View style={[styles.card, { backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', borderWidth: 1 }]}>
+                <Text style={[styles.cardSubtitle, { color: '#ef4444', fontWeight: '600' }]}>
+                  Votre adhésion a expiré. Renouvelez-la pour rester membre actif.
+                </Text>
+              </View>
+            )}
+
+            {/* En attente de validation */}
+            {isAwaitingValidation && (
+              <View style={styles.card}>
+                <Text style={styles.cardIcon}>⏳</Text>
+                <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Adhésion en cours de validation</Text>
+                <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
+                  Votre paiement a été reçu. Le bureau va valider votre adhésion prochainement.
+                </Text>
+              </View>
+            )}
+
+            {/* Section Avantages */}
+            <View style={styles.card}>
+              <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Avantages d'être adhérent :</Text>
+              <View style={styles.sympathisantBenefits}>
+                <View style={styles.advantageRow}>
+                  <Text style={styles.advantageIcon}>✨</Text>
+                  <Text style={styles.benefitItem}>Tu deviens un soutien fort de ta mosquée et tu gagnes des hassanates</Text>
+                </View>
+                <View style={styles.advantageRow}>
+                  <Text style={styles.advantageIcon}>🗳️</Text>
+                  <Text style={styles.benefitItem}>Tu as le droit de vote à chaque assemblée générale/élection</Text>
+                </View>
+                <View style={styles.advantageRow}>
+                  <Text style={styles.advantageIcon}>🎫</Text>
+                  <Text style={styles.benefitItem}>Tu as le droit à la carte membre</Text>
+                </View>
               </View>
             </View>
 
-            {/* Bouton envoyer */}
-            <TouchableOpacity
-              style={[
-                styles.recuFiscalButton,
-                sendingRecuFiscal && styles.recuFiscalButtonDisabled
-              ]}
-              onPress={handleRequestRecuFiscal}
-              disabled={sendingRecuFiscal}
-            >
-              {sendingRecuFiscal ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.recuFiscalButtonIcon}>📧</Text>
-                  <Text style={styles.recuFiscalButtonText}>
-                    {language === 'ar'
-                      ? 'إرسال الإيصال عبر البريد الإلكتروني'
-                      : 'Recevoir par email'}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
+            {/* Section Paiement */}
+            {!isAwaitingValidation && (
+              <View style={styles.card}>
+                <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Activer ma cotisation</Text>
+                <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
+                  Choisissez votre formule d'adhésion
+                </Text>
 
-        {/* Déconnexion */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>{t('logout')}</Text>
-        </TouchableOpacity>
+                {/* Formules */}
+                <View style={styles.formulesContainer}>
+                  <TouchableOpacity
+                    style={[styles.formuleOption, selectedFormule === 'mensuel' && styles.formuleSelected]}
+                    onPress={() => setSelectedFormule('mensuel')}
+                  >
+                    <Text style={[styles.formuleLabel, selectedFormule === 'mensuel' && styles.formuleLabelSelected]}>
+                      Mensuel
+                    </Text>
+                    <Text style={[styles.formulePrice, selectedFormule === 'mensuel' && styles.formulePriceSelected]}>
+                      {formulePrices.mensuel}€/mois
+                    </Text>
+                    <Text style={[styles.formuleDesc, selectedFormule === 'mensuel' && styles.formuleDescSelected]}>
+                      Paiement récurrent
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.formuleOption, selectedFormule === 'annuel' && styles.formuleSelected]}
+                    onPress={() => setSelectedFormule('annuel')}
+                  >
+                    <Text style={[styles.formuleLabel, selectedFormule === 'annuel' && styles.formuleLabelSelected]}>
+                      Annuel
+                    </Text>
+                    <Text style={[styles.formulePrice, selectedFormule === 'annuel' && styles.formulePriceSelected]}>
+                      {formulePrices.annuel}€/an
+                    </Text>
+                    <Text style={[styles.formuleDesc, selectedFormule === 'annuel' && styles.formuleDescSelected]}>
+                      Paiement unique - ÉCONOMISEZ
+                    </Text>
+                    {formulePrices.annuel < formulePrices.mensuel * 12 && (
+                      <View style={styles.economyBadge}>
+                        <Text style={styles.economyText}>-{Math.round((1 - formulePrices.annuel / (formulePrices.mensuel * 12)) * 100)}%</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={() => {
+                    setHasScrolledToEnd(false);
+                    setAcceptedReglement(false);
+                    setShowReglementModal(true);
+                  }}
+                >
+                  <Text style={styles.primaryButtonText}>Activer ma cotisation</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Bouton retour si vient de PAGE 1 */}
+            {isSympathisant && !isExpired && (
+              <TouchableOpacity
+                style={[styles.logoutButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.accent }]}
+                onPress={() => setMemberPage('sympathisant')}
+              >
+                <Text style={[styles.logoutButtonText, { color: colors.accent }]}>Retour</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Déconnexion */}
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutButtonText}>{t('logout')}</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* ============================================ */}
+        {/* PAGE 3 : MEMBRE ACTIF (adhérent)            */}
+        {/* ============================================ */}
+        {memberPage === 'membre_actif' && (
+          <>
+            {/* Titre page */}
+            <View style={styles.pageTitleContainer}>
+              <Text style={styles.pageTitle}>MEMBRE ACTIF</Text>
+            </View>
+
+            {/* Bouton voir ma carte de membre */}
+            <TouchableOpacity
+              style={styles.memberCardButton}
+              onPress={() => setShowCardFullScreen(true)}
+            >
+              <Text style={styles.memberCardButtonIcon}>🪪</Text>
+              <View style={styles.memberCardButtonContent}>
+                <Text style={[styles.memberCardButtonText, isRTL && styles.rtlText]}>
+                  Voir ma carte de membre
+                </Text>
+                <Text style={[styles.memberCardButtonSubtext, isRTL && styles.rtlText]}>
+                  {inscribedMembers.length > 0 ? `${inscribedMembers.length + 1} cartes disponibles` : 'Afficher en plein écran'}
+                </Text>
+              </View>
+              <Text style={styles.memberCardButtonArrow}>→</Text>
+            </TouchableOpacity>
+
+            {/* Bouton inscrire des proches */}
+            <TouchableOpacity
+              style={styles.familyButton}
+              onPress={() => setShowFamilyModal(true)}
+            >
+              <Text style={styles.familyButtonIcon}>👥</Text>
+              <View style={styles.familyButtonContent}>
+                <Text style={[styles.familyButtonText, isRTL && styles.rtlText]}>Inscrire des proches</Text>
+                <Text style={[styles.familyButtonSubtext, isRTL && styles.rtlText]}>
+                  Famille, amis...
+                </Text>
+              </View>
+              <Text style={styles.familyButtonArrow}>→</Text>
+            </TouchableOpacity>
+
+            {/* Logo mosquée placeholder */}
+            <View style={[styles.card, { alignItems: 'center', paddingVertical: 24 }]}>
+              <Text style={{ fontSize: 48 }}>🕌</Text>
+              <Text style={[styles.cardSubtitle, { marginTop: 8, fontWeight: '600', color: colors.accent }]}>El Mouhssinine</Text>
+            </View>
+
+            {/* Bouton voir mes adhésions */}
+            <TouchableOpacity
+              style={styles.membershipsButton}
+              onPress={() => navigation.navigate('MyMemberships')}
+            >
+              <Text style={styles.membershipsButtonIcon}>📋</Text>
+              <View style={styles.membershipsButtonContent}>
+                <Text style={[styles.membershipsButtonText, isRTL && styles.rtlText]}>
+                  Voir mes adhésions
+                </Text>
+                <Text style={[styles.membershipsButtonSubtext, isRTL && styles.rtlText]}>
+                  {inscribedMembers.length > 0
+                    ? `${inscribedMembers.length + 1} membre${inscribedMembers.length > 0 ? 's' : ''}`
+                    : 'Détails et statuts'}
+                </Text>
+              </View>
+              <Text style={styles.membershipsButtonArrow}>→</Text>
+            </TouchableOpacity>
+
+            {/* Bouton annuler abonnement mensuel */}
+            {memberProfile?.cotisationType === 'mensuel' && isPaid && (
+              <TouchableOpacity
+                style={[styles.card, { flexDirection: 'row', alignItems: 'center', borderColor: '#ef4444', borderWidth: 1 }]}
+                onPress={() => {
+                  Alert.alert(
+                    'Annuler mon abonnement',
+                    'Êtes-vous sûr ? Cela arrêtera le prélèvement automatique.',
+                    [
+                      { text: 'Non', style: 'cancel' },
+                      {
+                        text: 'Oui, annuler',
+                        style: 'destructive',
+                        onPress: () => navigation.navigate('Messages'),
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Text style={{ fontSize: 20, marginRight: 12 }}>❌</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardTitle, { color: '#ef4444', fontSize: 15 }]}>Annuler mon abonnement mensuel</Text>
+                  <Text style={[styles.cardSubtitle, { fontSize: 12 }]}>Arrêter le prélèvement automatique</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Renouveler si bientôt expiré */}
+            {memberProfile?.cotisationExpiry && (() => {
+              const expiryValue = memberProfile.cotisationExpiry as any;
+              const expiry = expiryValue instanceof Date
+                ? expiryValue
+                : expiryValue?.toDate?.() || new Date(expiryValue);
+              const daysLeft = Math.floor((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+
+              if (daysLeft <= 30 && daysLeft > 0) {
+                return (
+                  <TouchableOpacity
+                    style={styles.renewButton}
+                    onPress={() => setShowPaymentModal(true)}
+                  >
+                    <Text style={styles.renewButtonText}>
+                      ⚠️ Expire dans {daysLeft} jours - Renouveler
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+              return null;
+            })()}
+
+            {/* Reçus Fiscaux */}
+            <View style={styles.recuFiscalSection}>
+              <Text style={[styles.recuFiscalTitle, isRTL && styles.rtlText]}>
+                📄 {language === 'ar' ? 'إيصالاتي الضريبية' : 'Mes reçus fiscaux'}
+              </Text>
+              <View style={styles.recuFiscalCard}>
+                <Text style={[styles.recuFiscalInfo, isRTL && styles.rtlText]}>
+                  {language === 'ar'
+                    ? 'لديك الحق في خصم 66% من تبرعاتك من الضرائب (المادة 200 من القانون العام للضرائب). تتوفر الإيصالات في بداية يناير عن السنة المنقضية.'
+                    : 'Vous avez droit à 66% de réduction d\'impôt pour vos dons (article 200 CGI). Les reçus sont disponibles début janvier pour l\'année écoulée.'}
+                </Text>
+
+                {/* Liste des 3 dernières années */}
+                {(() => {
+                  const currentYear = new Date().getFullYear();
+                  const years = [currentYear - 1, currentYear - 2, currentYear - 3];
+                  return years.map((year) => {
+                    const available = currentYear > year;
+                    return (
+                      <View key={year} style={styles.recuYearRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
+                            {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
+                          </Text>
+                        </View>
+                        {available ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.recuFiscalButton,
+                              sendingRecuFiscal && selectedYear === year && styles.recuFiscalButtonDisabled,
+                            ]}
+                            onPress={() => {
+                              setSelectedYear(year);
+                              handleRequestRecuFiscal(year);
+                            }}
+                            disabled={sendingRecuFiscal}
+                          >
+                            {sendingRecuFiscal && selectedYear === year ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <>
+                                <Text style={styles.recuFiscalButtonIcon}>📧</Text>
+                                <Text style={styles.recuFiscalButtonText}>
+                                  {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={styles.recuNotAvailable}>
+                            {language === 'ar'
+                              ? `متاح في 01/01/${year + 1}`
+                              : `Disponible le 01/01/${year + 1}`}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  });
+                })()}
+              </View>
+            </View>
+
+            {/* Déconnexion */}
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutButtonText}>{t('logout')}</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       {/* Modales */}
@@ -1670,7 +1741,7 @@ const MemberScreen = () => {
             >
               <Text style={styles.paymentMethodIcon}>💳</Text>
               <View style={styles.paymentMethodContent}>
-                <Text style={styles.paymentMethodTitle}>Carte bancaire</Text>
+                <Text style={styles.paymentMethodTitle} numberOfLines={1} adjustsFontSizeToFit={true}>CB</Text>
                 <Text style={styles.paymentMethodSubtitle}>Visa, Mastercard</Text>
               </View>
               {isProcessingPayment ? <ActivityIndicator /> : <Text style={styles.paymentMethodArrow}>→</Text>}
@@ -1718,7 +1789,8 @@ const MemberScreen = () => {
       <Modal visible={showFamilyModal} transparent animationType="slide">
         <KeyboardAvoidingView
           style={styles.familyModalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 50 : 0}
         >
           <View style={styles.familyModalContent}>
             {/* Header */}
@@ -1916,6 +1988,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: 100,
   },
+  pageTitleContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  pageTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.accent,
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 4,
+    textAlign: 'center',
+  },
 
   // Header
   header: {
@@ -2010,10 +2100,21 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.md,
   },
-  benefitItem: {
+  advantageRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  advantageIcon: {
+    fontSize: 20,
+    marginRight: spacing.sm,
+    marginTop: 2,
+  },
+  benefitItem: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
   benefitIcon: {
     fontSize: 20,
@@ -2060,6 +2161,15 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   formulePriceSelected: {
+    color: colors.accent,
+  },
+  formuleDesc: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  formuleDescSelected: {
     color: colors.accent,
   },
   economyBadge: {
@@ -2235,59 +2345,42 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     lineHeight: 20,
   },
-  yearSelector: {
+  recuYearRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
-  yearLabel: {
+  recuYearText: {
     fontSize: fontSize.md,
-    color: colors.text,
     fontWeight: '500',
+    color: colors.text,
   },
-  yearButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  yearButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  yearButtonActive: {
-    backgroundColor: 'rgba(201,162,39,0.2)',
-    borderColor: colors.accent,
-  },
-  yearButtonText: {
+  recuNotAvailable: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
-    fontWeight: '600',
-  },
-  yearButtonTextActive: {
-    color: colors.accent,
+    fontStyle: 'italic',
   },
   recuFiscalButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.accent,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   recuFiscalButtonDisabled: {
     backgroundColor: 'rgba(201,162,39,0.4)',
   },
   recuFiscalButtonIcon: {
-    fontSize: 18,
+    fontSize: 14,
   },
   recuFiscalButtonText: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     color: '#ffffff',
     fontWeight: '600',
   },
@@ -2636,7 +2729,7 @@ const styles = StyleSheet.create({
   },
   familyScrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingBottom: 150, // Extra padding for keyboard
   },
   familyMemberCard: {
     backgroundColor: colors.surface,

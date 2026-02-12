@@ -151,19 +151,20 @@ service cloud.firestore {
       allow read: if isAdmin() || (isAuthenticated() && isMessageOwner());
 
       // Création: admin (peut créer pour n'importe quel membre) OU utilisateur authentifié avec validation
+      // Note: les champs sont message/userName/userEmail (pas contenu/nom/email)
       allow create: if isAdmin() ||
         (isAuthenticated() &&
          request.resource.data.odUserId == request.auth.uid &&
-         // Champs obligatoires
-         request.resource.data.keys().hasAll(['sujet', 'contenu', 'nom', 'email']) &&
+         // Champs obligatoires (noms alignés avec le code app + backoffice)
+         request.resource.data.keys().hasAll(['sujet', 'message', 'userName', 'userEmail']) &&
          // Validation sujet (max 200 caractères)
          request.resource.data.sujet is string &&
          request.resource.data.sujet.size() > 0 &&
          request.resource.data.sujet.size() <= 200 &&
-         // Validation contenu (max 5000 caractères)
-         request.resource.data.contenu is string &&
-         request.resource.data.contenu.size() > 0 &&
-         request.resource.data.contenu.size() <= 5000);
+         // Validation message (max 5000 caractères)
+         request.resource.data.message is string &&
+         request.resource.data.message.size() > 0 &&
+         request.resource.data.message.size() <= 5000);
 
       // Mise à jour: admin (répondre, changer statut) OU propriétaire (ajouter réponse, soft delete)
       allow update: if isAdmin() || (isAuthenticated() && isMessageOwner());

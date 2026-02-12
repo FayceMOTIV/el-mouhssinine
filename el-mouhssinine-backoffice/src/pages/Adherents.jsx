@@ -410,7 +410,7 @@ export default function Adherents() {
 
   // ========== MESSAGE MEMBRE ==========
   const handleOpenMessageModal = (membre) => {
-    const defaultMessage = `Bonjour ${membre.prenom},\n\nNous vous invitons à venir au bureau de la mosquée pour finaliser votre adhésion.\n\nCordialement,\nLe Bureau`
+    const defaultMessage = `Bonjour ${membre.prenom},\n\nVotre inscription a été prise en compte, consultez votre boîte email.\n\nCordialement,\nLe Bureau`
     setMessageModal({ open: true, membre, message: defaultMessage })
   }
 

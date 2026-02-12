@@ -304,7 +304,10 @@ const MoreScreen = () => {
       if (Platform.OS === 'ios') {
         // iOS - demander l'autorisation "always" pour le background
         return new Promise((resolve) => {
-          (Geolocation.requestAuthorization as any)('always');
+          Geolocation.requestAuthorization(
+            () => {},
+            (err) => { if (__DEV__) console.log('[MoreScreen] Auth error:', err); }
+          );
           // Sur iOS, on teste si la permission est accordée en essayant d'obtenir la position
           setTimeout(() => {
             Geolocation.getCurrentPosition(
@@ -606,9 +609,14 @@ const MoreScreen = () => {
               </View>
 
               <View style={styles.ribRow}>
-                <View style={styles.ribInfo}>
+                <View style={[styles.ribInfo, { flex: 1 }]}>
                   <Text style={styles.ribLabel}>IBAN</Text>
-                  <Text style={styles.ribValue}>{mosqueeInfo.iban}</Text>
+                  <Text
+                    style={styles.ribValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >{mosqueeInfo.iban}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.copyBtn}
@@ -684,31 +692,12 @@ const MoreScreen = () => {
               </TouchableOpacity>
 
               {/* Site web */}
-              <TouchableOpacity style={styles.infoRow} onPress={handleWebsite}>
+              <TouchableOpacity style={[styles.infoRow, styles.infoRowLast]} onPress={handleWebsite}>
                 <View style={styles.infoLeft}>
                   <Text style={styles.infoIcon}>🌐</Text>
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>{t('website')}</Text>
                     <Text style={[styles.infoValue, styles.infoValueLink]}>{mosqueeInfo.website}</Text>
-                  </View>
-                </View>
-                <Text style={styles.infoArrow}>→</Text>
-              </TouchableOpacity>
-
-              {/* Contacter la mosquée */}
-              <TouchableOpacity
-                style={[styles.infoRow, styles.infoRowLast]}
-                onPress={() => navigation.navigate('Messages')}
-              >
-                <View style={styles.infoLeft}>
-                  <Text style={styles.infoIcon}>💬</Text>
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>
-                      {language === 'ar' ? 'راسلنا' : 'Nous contacter'}
-                    </Text>
-                    <Text style={[styles.infoValue, styles.infoValueLink]}>
-                      {language === 'ar' ? 'إرسال رسالة للمسجد' : 'Envoyer un message'}
-                    </Text>
                   </View>
                 </View>
                 <Text style={styles.infoArrow}>→</Text>

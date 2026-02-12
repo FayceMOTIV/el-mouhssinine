@@ -535,6 +535,19 @@ export interface AddDonationParams {
   isAnonymous?: boolean;
   donorEmail?: string;
   donorName?: string;
+  // Nouveaux champs reçu fiscal
+  donorType?: 'particulier' | 'entreprise';
+  donorInfo?: {
+    email: string;
+    address: string;
+    postalCode: string;
+    city: string;
+    firstName?: string;
+    lastName?: string;
+    companyName?: string;
+    siret?: string;
+    legalRepresentative?: string;
+  };
 }
 
 export const addDonation = async (params: AddDonationParams): Promise<string> => {
@@ -558,7 +571,7 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
     // TRANSACTION ATOMIQUE: donation + update projet
     await firestore().runTransaction(async (transaction) => {
       // 1. Créer le don
-      transaction.set(donationRef, {
+      const donationData: Record<string, any> = {
         donateur: params.isAnonymous ? 'Anonyme' : (params.donorName || params.donorEmail || 'Anonyme'),
         donateurEmail: params.isAnonymous ? null : (params.donorEmail || null),
         montant: params.amount,
@@ -571,7 +584,16 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
         source: 'app_mobile',
         date: firestore.FieldValue.serverTimestamp(),
         createdAt: firestore.FieldValue.serverTimestamp(),
-      });
+        // Champs reçu fiscal
+        donorType: params.donorType || 'particulier',
+        recuFiscalGenerated: false,
+        recuFiscalYear: null,
+        recuFiscalUrl: null,
+      };
+      if (params.donorInfo) {
+        donationData.donorInfo = params.donorInfo;
+      }
+      transaction.set(donationRef, donationData);
 
       // 2. Mettre à jour le montant collecté du projet (dans la même transaction)
       if (projectRef) {
@@ -597,6 +619,7 @@ export interface AddPaymentParams {
   memberId: string; // Format ELM-XXXX (pour affichage)
   memberUid?: string; // Firebase Auth UID (pour la mise à jour du document)
   memberName: string;
+  memberEmail?: string; // Email pour les emails de confirmation
   amount: number;
   stripePaymentIntentId: string;
   paymentMethod: string;
@@ -653,6 +676,14 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
         createdAt: firestore.FieldValue.serverTimestamp(),
         // Pour les reçus fiscaux (uniquement pour les dons)
         eligibleRecuFiscal: isDon,
+        // Metadata pour les triggers Cloud Functions (emails de confirmation)
+        metadata: {
+          memberId: params.memberUid || '', // UID Firebase pour lookup membre
+          memberIdDisplay: params.memberId, // Format ELM-XXXX
+          memberName: params.memberName,
+          email: params.memberEmail || '',
+          period: params.period || 'annuel',
+        },
       });
 
       // 2. Mettre à jour le statut du membre (uniquement pour cotisation, pas pour don)
