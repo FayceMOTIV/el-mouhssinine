@@ -41,8 +41,14 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
   };
 
   const isLessonAvailable = (lesson: Lesson, index: number) => {
-    // Tous les cours sont déverrouillés
-    return true;
+    // Premiere lecon toujours disponible
+    if (index === 0 || !lesson.prerequisites || lesson.prerequisites.length === 0) {
+      return true;
+    }
+    // Verifier que tous les prerequis sont completes
+    return lesson.prerequisites.every(prereq =>
+      userProgress.lessonsCompleted.includes(prereq)
+    );
   };
 
   const getFilteredLessons = () => {

@@ -26,6 +26,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
   const [showResult, setShowResult] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [completed, setCompleted] = useState(false);
+  const [revealedItems, setRevealedItems] = useState<Set<number>>(new Set());
 
   const currentStep = lesson.steps[currentStepIndex];
   const progress = ((currentStepIndex + 1) / lesson.steps.length) * 100;
@@ -35,6 +36,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
       setCurrentStepIndex(currentStepIndex + 1);
       setSelectedAnswer(null);
       setShowResult(false);
+      setRevealedItems(new Set());
     } else {
       setCompleted(true);
     }
@@ -127,22 +129,48 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
         );
 
       case 'exercise':
+        const allRevealed = step.content.items ? revealedItems.size >= step.content.items.length : true;
         return (
           <View style={styles.exerciseContent}>
             <Text style={styles.exerciseInstruction}>
               {step.content.instruction}
             </Text>
+            <Text style={styles.exerciseHint}>
+              Appuyez sur chaque carte pour verifier
+            </Text>
             {step.content.items && (
               <View style={styles.exerciseItems}>
-                {step.content.items.map((item: any, index: number) => (
-                  <View key={index} style={styles.exerciseItem}>
-                    <Text style={styles.exerciseItemArabic}>{item.arabic}</Text>
-                    <Text style={styles.exerciseItemAnswer}>
-                      {item.transliteration}
-                    </Text>
-                  </View>
-                ))}
+                {step.content.items.map((item: any, idx: number) => {
+                  const isRevealed = revealedItems.has(idx);
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[
+                        styles.exerciseItem,
+                        isRevealed && styles.exerciseItemRevealed,
+                      ]}
+                      onPress={() => {
+                        const newSet = new Set(revealedItems);
+                        newSet.add(idx);
+                        setRevealedItems(newSet);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.exerciseItemArabic}>{item.arabic}</Text>
+                      {isRevealed ? (
+                        <Text style={styles.exerciseItemAnswerRevealed}>
+                          {item.transliteration}
+                        </Text>
+                      ) : (
+                        <Text style={styles.exerciseItemTap}>Appuyez</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
+            )}
+            {allRevealed && (
+              <Text style={styles.exerciseComplete}>Tout revele !</Text>
             )}
           </View>
         );
@@ -491,6 +519,35 @@ const styles = StyleSheet.create({
   exerciseItemAnswer: {
     fontSize: fontSize.md,
     color: colors.text,
+  },
+  exerciseItemRevealed: {
+    borderColor: colors.success,
+    borderWidth: 2,
+    backgroundColor: 'rgba(39,174,96,0.05)',
+  },
+  exerciseItemAnswerRevealed: {
+    fontSize: fontSize.md,
+    color: colors.success,
+    fontWeight: '600',
+  },
+  exerciseItemTap: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+  },
+  exerciseHint: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    fontStyle: 'italic',
+  },
+  exerciseComplete: {
+    fontSize: fontSize.md,
+    color: colors.success,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: spacing.lg,
   },
   quizContent: {
     alignItems: 'center',

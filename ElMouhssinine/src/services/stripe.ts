@@ -1,6 +1,6 @@
 import { Alert } from 'react-native';
 import { initPaymentSheet, presentPaymentSheet } from '@stripe/stripe-react-native';
-import functions from '@react-native-firebase/functions';
+import { firebase } from '@react-native-firebase/functions';
 import { logger } from '../utils';
 
 // Types
@@ -31,6 +31,13 @@ export interface PaymentResult {
   error?: string;
 }
 
+export interface SubscriptionResult {
+  success: boolean;
+  subscriptionId?: string;
+  paymentIntentId?: string;
+  error?: string;
+}
+
 // Convertir euros en centimes pour Stripe
 const eurosToCents = (euros: number): number => Math.round(euros * 100);
 
@@ -41,7 +48,7 @@ const createPaymentIntent = async (
   metadata: Record<string, any>
 ): Promise<{ clientSecret: string; paymentIntentId: string }> => {
   try {
-    const createPayment = functions().httpsCallable('createPaymentIntent');
+    const createPayment = firebase.app().functions('europe-west1').httpsCallable('createPaymentIntent');
     const result = await createPayment({
       amount: eurosToCents(amount),
       currency: 'eur',
@@ -55,6 +62,29 @@ const createPaymentIntent = async (
     const err = error as Error;
     logger.error('Erreur création PaymentIntent:', err);
     throw new Error(err?.message || 'Erreur lors de la création du paiement');
+  }
+};
+
+// Créer un Subscription via Cloud Function
+const createSubscription = async (
+  amount: number,
+  description: string,
+  metadata: Record<string, any>
+): Promise<{ clientSecret: string; subscriptionId: string; paymentIntentId: string }> => {
+  try {
+    const createSub = firebase.app().functions('europe-west1').httpsCallable('createSubscription');
+    const result = await createSub({
+      amount: eurosToCents(amount),
+      description,
+      metadata,
+    });
+
+    const data = result.data as { clientSecret: string; subscriptionId: string; paymentIntentId: string };
+    return data;
+  } catch (error) {
+    const err = error as Error;
+    logger.error('Erreur création Subscription:', err);
+    throw new Error(err?.message || 'Erreur lors de la création de l\'abonnement');
   }
 };
 
@@ -102,11 +132,11 @@ export const makePayment = async (params: PaymentParams): Promise<PaymentResult>
     // 2. Initialiser le Payment Sheet
     const { error: initError } = await initPaymentSheet({
       paymentIntentClientSecret: clientSecret,
-      merchantDisplayName: 'Mosquée El Mouhssinine',
+      merchantDisplayName: 'Mosquée El Mohsinine',
       style: 'automatic',
       googlePay: {
         merchantCountryCode: 'FR',
-        testEnv: __DEV__,
+        testEnv: false,
       },
       applePay: {
         merchantCountryCode: 'FR',
@@ -184,9 +214,9 @@ export const showPaymentSuccess = (type: 'donation' | 'cotisation') => {
 // Informations bancaires pour les virements (fallback)
 export const bankInfo = {
   bankName: 'Credit Agricole',
-  iban: 'FR76 XXXX XXXX XXXX XXXX XXXX XXX', // A remplir avec le vrai IBAN
+  iban: '', // BUG 8 FIX: Pas de faux IBAN - récupéré depuis Firestore settings/mosquee
   bic: 'AGRIFRPP',
-  beneficiary: 'Association El Mouhssinine',
+  beneficiary: 'Association El Mohsinine',
   reference: 'DON-', // + numero de reference
 };
 
@@ -207,3 +237,100 @@ export const cotisationPrices = {
 
 // Montants suggérés pour les dons
 export const suggestedDonations = [10, 20, 50, 100, 200];
+
+// Créer un abonnement récurrent pour les cotisations mensuelles
+export const makeSubscription = async (params: PaymentParams): Promise<SubscriptionResult> => {
+  const { amount, description, type, metadata = {} } = params;
+
+  // Validation du montant
+  if (typeof amount !== 'number' || isNaN(amount)) {
+    return {
+      success: false,
+      error: 'Montant invalide',
+    };
+  }
+
+  if (amount < MIN_AMOUNT) {
+    return {
+      success: false,
+      error: `Le montant minimum est de ${MIN_AMOUNT}€`,
+    };
+  }
+
+  if (amount > MAX_AMOUNT) {
+    return {
+      success: false,
+      error: `Le montant maximum est de ${MAX_AMOUNT}€`,
+    };
+  }
+
+  try {
+    // 1. Créer la Subscription via Cloud Function
+    const { clientSecret, subscriptionId, paymentIntentId } = await createSubscription(
+      amount,
+      description,
+      {
+        type,
+        ...metadata,
+      }
+    );
+
+    // 2. Initialiser le Payment Sheet (même flow que makePayment)
+    const { error: initError } = await initPaymentSheet({
+      paymentIntentClientSecret: clientSecret,
+      merchantDisplayName: 'Mosquée El Mohsinine',
+      style: 'automatic',
+      googlePay: {
+        merchantCountryCode: 'FR',
+        testEnv: false,
+      },
+      applePay: {
+        merchantCountryCode: 'FR',
+      },
+      defaultBillingDetails: {
+        address: {
+          country: 'FR',
+        },
+      },
+    });
+
+    if (initError) {
+      logger.error('Erreur init Payment Sheet:', initError);
+      return {
+        success: false,
+        error: initError.message,
+      };
+    }
+
+    // 3. Présenter le Payment Sheet
+    const { error: presentError } = await presentPaymentSheet();
+
+    if (presentError) {
+      if (presentError.code === 'Canceled') {
+        return {
+          success: false,
+          error: 'Paiement annulé',
+        };
+      }
+      logger.error('Erreur présentation Payment Sheet:', presentError);
+      return {
+        success: false,
+        error: presentError.message,
+      };
+    }
+
+    // 4. Paiement réussi - abonnement créé
+    return {
+      success: true,
+      subscriptionId,
+      paymentIntentId,
+    };
+  } catch (error) {
+    const err = error as Error;
+    logger.error('Erreur abonnement:', err);
+    return {
+      success: false,
+      error: err?.message || 'Une erreur est survenue',
+    };
+  }
+};

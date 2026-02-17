@@ -1,5 +1,5 @@
 /**
- * Service d'envoi d'emails - El Mouhssinine
+ * Service d'envoi d'emails - El Mohsinine
  *
  * Ce fichier prépare la structure pour l'envoi d'emails automatiques.
  * L'implémentation réelle nécessite la configuration d'un des providers suivants :
@@ -29,13 +29,13 @@ const CONFIG = {
   resend: {
     apiKey: process.env.VITE_RESEND_API_KEY || '',
     fromEmail: 'noreply@el-mouhssinine.fr',
-    fromName: 'Mosquée El Mouhssinine'
+    fromName: 'Mosquée El Mohsinine'
   },
   // Pour SendGrid
   sendgrid: {
     apiKey: process.env.VITE_SENDGRID_API_KEY || '',
     fromEmail: 'noreply@el-mouhssinine.fr',
-    fromName: 'Mosquée El Mouhssinine'
+    fromName: 'Mosquée El Mohsinine'
   },
   // Pour Firebase Extension
   firebase: {
@@ -44,7 +44,7 @@ const CONFIG = {
   },
   // Infos mosquée pour les emails
   mosquee: {
-    nom: 'Mosquée El Mouhssinine',
+    nom: 'Mosquée El Mohsinine',
     adresse: '123 Rue de la Mosquée, 01000 Bourg-en-Bresse',
     telephone: '04 74 XX XX XX',
     email: 'contact@el-mouhssinine.fr',

@@ -56,9 +56,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Settings (horaires, infos mosquée) - Lecture publique, écriture admin
+    // Settings (horaires, infos mosquée) - Lecture publique, sauf 'association' (contient IBAN)
+    // Bug 11 Fix: IBAN protégé - lecture authentifiée uniquement pour le doc association
     match /settings/{docId} {
-      allow read: if true;
+      allow read: if docId != 'association' || request.auth != null;
       allow write: if isAdmin();
     }
 
@@ -117,18 +118,26 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Dons - Lecture admin, création authentifiée avec validation montant ET userId
+    // BUG 1+2 FIX: Dons - Lecture restreinte (RGPD), userId obligatoire
     match /donations/{docId} {
-      allow read: if isAdmin();
-      // Création avec validation du montant (min 1€, max 100000€) et userId
+      // BUG 1 FIX: Lecture restreinte - admin OU propriétaire du don uniquement (RGPD)
+      allow read: if isAdmin() ||
+        (isAuthenticated() &&
+          (resource.data.userId == request.auth.uid ||
+           resource.data.donateurEmail == request.auth.token.email));
+      // Création avec validation du montant (min 1€, max 100000€) via champ montant OU amount
+      // BUG 2 FIX: userId OBLIGATOIRE et doit correspondre à l'utilisateur authentifié
       allow create: if isAuthenticated() &&
-        request.resource.data.amount is number &&
-        request.resource.data.amount >= 1 &&
-        request.resource.data.amount <= 100000 &&
-        // SÉCURITÉ: userId doit correspondre à l'utilisateur authentifié (sauf don anonyme)
-        (!('userId' in request.resource.data) ||
-         request.resource.data.userId == null ||
-         request.resource.data.userId == request.auth.uid);
+        (
+          (request.resource.data.montant is number &&
+           request.resource.data.montant >= 1 &&
+           request.resource.data.montant <= 100000) ||
+          (request.resource.data.amount is number &&
+           request.resource.data.amount >= 1 &&
+           request.resource.data.amount <= 100000)
+        ) &&
+        request.resource.data.userId == request.auth.uid;
+      // SÉCURITÉ: Seuls les admins peuvent modifier/supprimer, les Cloud Functions (admin SDK) bypassent
       allow update, delete: if isAdmin();
     }
 
@@ -184,20 +193,32 @@ service cloud.firestore {
       allow write: if false; // Écriture uniquement via Cloud Functions
     }
 
-    // Payments (historique des paiements cotisations et dons) - Admin lecture/écriture, app création
+    // FIX G4: Payments - User lit ses propres paiements, création par propriétaire, modification admin/CF only
     match /payments/{paymentId} {
-      allow read: if isAdmin();
+      // Lecture: admin peut tout lire, user peut lire ses propres paiements (via metadata.memberId)
+      allow read: if isAdmin() ||
+        (isAuthenticated() &&
+          (resource.data.metadata.memberId == request.auth.uid ||
+           ('userId' in resource.data && resource.data.userId == request.auth.uid)));
       // Création avec validation du montant (min 1€, max 10000€ pour cotisations)
+      // Bug 10 Fix: Vérifier que metadata.memberId correspond à l'utilisateur authentifié
       allow create: if request.auth != null &&
         request.resource.data.montant is number &&
         request.resource.data.montant >= 1 &&
-        request.resource.data.montant <= 10000;
+        request.resource.data.montant <= 10000 &&
+        request.resource.data.metadata.memberId == request.auth.uid;
+      // Seuls les admins peuvent modifier/supprimer, les Cloud Functions (admin SDK) bypassent
       allow update, delete: if isAdmin();
     }
 
     // ==================== COLLECTIONS CLOUD FUNCTIONS ====================
     // Ces collections sont gérées uniquement par les Cloud Functions (SDK admin)
     // Le SDK admin bypass les rules, mais on les déclare explicitement pour la sécurité
+
+    // FIX G4: Litiges Stripe - Aucun accès client (Cloud Functions uniquement)
+    match /disputes/{docId} {
+      allow read, write: if false;
+    }
 
     // Cache horaires de prière - Lecture publique (app), écriture Cloud Functions only
     match /cached_prayer_times/{docId} {
@@ -229,6 +250,12 @@ service cloud.firestore {
     // Rate limits (pour le rate limiting des Cloud Functions) - Aucun accès client
     match /rate_limits/{docId} {
       allow read, write: if false;
+    }
+
+    // Email templates - Lecture admin, écriture admin
+    match /email_templates/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // ==================== RÈGLE PAR DÉFAUT ====================

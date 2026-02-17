@@ -8,11 +8,14 @@ const CARD_MARGIN = 12;
 const CARD_WIDTH = SCREEN_WIDTH - (CARD_MARGIN * 2);
 const CARD_HEIGHT = CARD_WIDTH * 0.6;
 
-export type MembershipStatus = 'active' | 'expiring' | 'expired' | 'inactive' | 'unpaid' | 'none';
+export type MembershipStatus = 'active' | 'expiring' | 'expired' | 'inactive' | 'unpaid' | 'pending_signature' | 'none';
 
 export const getMembershipStatus = (member: MemberCardProps['member']): MembershipStatus => {
   if (member?.status === 'en_attente_paiement' || member?.status === 'unpaid') {
     return 'unpaid';
+  }
+  if (member?.status === 'en_attente_signature') {
+    return 'pending_signature';
   }
   if (!member?.membershipExpirationDate) return 'none';
 
@@ -55,8 +58,22 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth }) => {
   const height = width * 0.55;
 
   const isExpired = member?.status === 'expired' || member?.status === 'inactive';
-  const badgeText = isExpired ? t('memberCardExpired') : t('memberCardActive');
-  const badgeColor = isExpired ? '#EF4444' : '#10B981';
+  const isPendingSignature = member?.status === 'en_attente_signature';
+  const isPendingPayment = member?.status === 'en_attente_paiement' || member?.status === 'unpaid';
+  const badgeText = isPendingSignature
+    ? t('memberCardPendingSignature')
+    : isPendingPayment
+    ? t('memberCardPendingPayment')
+    : isExpired
+    ? t('memberCardExpired')
+    : t('memberCardActive');
+  const badgeColor = isPendingSignature
+    ? '#F59E0B'
+    : isPendingPayment
+    ? '#F59E0B'
+    : isExpired
+    ? '#EF4444'
+    : '#10B981';
 
   const formatDate = () => {
     if (!member?.membershipExpirationDate) return '--/--';
@@ -89,7 +106,7 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth }) => {
               <Text style={styles.logoText}>🕌</Text>
             </View>
             <View style={styles.headerTextContainer}>
-              <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>EL MOUHSSININE</Text>
+              <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>EL MOHSININE</Text>
               <Text style={[styles.mosqueSubtitle, isRTL && styles.textRTL]} numberOfLines={1}>
                 {t('memberCardCenter')} • {t('memberCardCity')}
               </Text>

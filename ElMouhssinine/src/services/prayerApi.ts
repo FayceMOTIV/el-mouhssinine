@@ -1,5 +1,5 @@
 // Service API pour les horaires de prière - MAWAQIT API
-// Horaires EXACTS depuis la mosquée El Mouhssinine via Mawaqit
+// Horaires EXACTS depuis la mosquée El Mohsinine via Mawaqit
 // Avec cache Firestore pour supporter 4000+ utilisateurs
 
 import firestore from '@react-native-firebase/firestore';

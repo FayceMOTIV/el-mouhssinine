@@ -15,7 +15,12 @@ body {
   min-height: 100vh;
 }
 
-/* Scrollbar */
+/* Scrollbar - cross-browser */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #5c3a1a #2a2a2a;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

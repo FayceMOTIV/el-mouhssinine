@@ -480,7 +480,7 @@ export const schedulePrayerNotifications = async (
         await notifee.createTriggerNotification(
           {
             id: appReminderId,
-            title: '🕌 El Mouhssinine',
+            title: '🕌 El Mohsinine',
             body: 'Ouvrez l\'app pour continuer à recevoir les rappels de prière\nافتح التطبيق لمواصلة تلقي تذكيرات الصلاة',
             android: {
               channelId,
@@ -544,6 +544,47 @@ const PRAYER_ORDER = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
 // Clé AsyncStorage pour les settings boost (séparée des settings classiques)
 const BOOST_SETTINGS_KEY = 'prayer_boost_settings';
+const PRAYED_PRAYERS_KEY = 'prayed_prayers_today';
+
+/**
+ * Récupérer les prières faites aujourd'hui (avec vérification de date)
+ */
+export const getPrayedPrayersToday = async (): Promise<Set<string>> => {
+  try {
+    const stored = await AsyncStorage.getItem(PRAYED_PRAYERS_KEY);
+    if (!stored) return new Set();
+    const data = JSON.parse(stored);
+    const today = new Date().toISOString().split('T')[0];
+    if (data.date !== today) {
+      // Nouveau jour, on reset
+      await AsyncStorage.removeItem(PRAYED_PRAYERS_KEY);
+      return new Set();
+    }
+    return new Set(data.prayers || []);
+  } catch {
+    return new Set();
+  }
+};
+
+/**
+ * Marquer une prière comme faite aujourd'hui + annuler ses boost notifications
+ */
+export const markPrayerAsPrayed = async (prayerName: string): Promise<void> => {
+  try {
+    const prayedSet = await getPrayedPrayersToday();
+    prayedSet.add(prayerName);
+    const today = new Date().toISOString().split('T')[0];
+    await AsyncStorage.setItem(PRAYED_PRAYERS_KEY, JSON.stringify({
+      date: today,
+      prayers: Array.from(prayedSet),
+    }));
+    // Annuler les notifications boost de cette prière
+    await cancelBoostNotificationsForPrayer(prayerName);
+    logger.log(`[PrayerBoost] Prière ${prayerName} marquée comme faite, boost annulé`);
+  } catch (error) {
+    logger.error('[PrayerBoost] Erreur markPrayerAsPrayed:', error);
+  }
+};
 
 /**
  * Calcule la fin d'une prière selon le madhab Malikite
@@ -779,7 +820,8 @@ export const scheduleBoostNotifications = async (
     after30min: string;
     midTime: string;
     before15min: string;
-  }
+  },
+  prayedPrayers?: Set<string>
 ): Promise<void> => {
   try {
     // Si désactivé, annuler les notifications boost existantes
@@ -829,6 +871,12 @@ export const scheduleBoostNotifications = async (
       for (const prayer of prayers) {
         // Vérifier si cette prière est activée dans les settings boost
         if (!settings.prayers[prayer.key as keyof typeof settings.prayers]) {
+          continue;
+        }
+
+        // Skip si l'utilisateur a déjà prié cette prière aujourd'hui
+        if (daySuffix === 'today' && prayedPrayers?.has(prayer.name)) {
+          logger.log(`[PrayerBoost] ⏭️ ${prayer.name} déjà priée aujourd'hui, skip`);
           continue;
         }
 
@@ -1166,7 +1214,7 @@ export const DEFAULT_MOSQUE_PROXIMITY_SETTINGS: MosqueProximitySettings = {
 const MOSQUE_PROXIMITY_SETTINGS_KEY = 'mosque_proximity_settings';
 const LAST_MOSQUE_NOTIF_KEY = 'last_mosque_proximity_notif';
 
-// Coordonnées de la Mosquée El Mouhssinine
+// Coordonnées de la Mosquée El Mohsinine
 const MOSQUE_COORDS = {
   latitude: 46.2055668,
   longitude: 5.2477947,

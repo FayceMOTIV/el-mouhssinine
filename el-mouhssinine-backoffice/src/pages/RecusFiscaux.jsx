@@ -209,7 +209,7 @@ export default function RecusFiscaux() {
                 label="Nom de l'association *"
                 value={associationInfo.nom}
                 onChange={e => setAssociationInfo(prev => ({ ...prev, nom: e.target.value }))}
-                placeholder="Association El Mouhssinine"
+                placeholder="Association El Mohsinine"
               />
               <Input
                 label="N° SIREN ou RNA *"

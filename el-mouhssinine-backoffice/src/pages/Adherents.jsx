@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-toastify'
-import { Users, Plus, Pencil, Trash2, Search, Download, Mail, Phone, Eye, Calendar, MapPin, CreditCard, Settings2, CheckCircle2, XCircle, Clock, Banknote, Smartphone, Building2, FileText, AlertCircle, TrendingUp, UserCheck, UserX, PieChart, BarChart3, MessageCircle, ShieldCheck, Link2, Heart } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, Search, Download, Mail, Phone, Eye, Calendar, MapPin, CreditCard, Settings2, CheckCircle2, XCircle, Clock, Banknote, Smartphone, Building2, FileText, AlertCircle, AlertTriangle, TrendingUp, UserCheck, UserX, PieChart, BarChart3, MessageCircle, ShieldCheck, Link2, Heart, Undo2 } from 'lucide-react'
 import {
   Card,
   Button,
@@ -25,6 +25,7 @@ import {
   PaymentType,
   subscribeToMessages
 } from '../services/firebase'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import { CotisationType, CotisationStatut } from '../types'
 import { format, addMonths, addYears, isPast } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -110,6 +111,9 @@ export default function Adherents() {
   })
   // Tracking des membres contactés par la mosquée
   const [membresContactes, setMembresContactes] = useState(new Set())
+  const [refunding, setRefunding] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [refundAmount, setRefundAmount] = useState('')
 
   useEffect(() => {
     const unsubscribe = subscribeToMembres((data) => {
@@ -236,7 +240,9 @@ export default function Adherents() {
       })
     }
 
-    if (statusFilter !== 'all') {
+    if (statusFilter === 'annule') {
+      filtered = filtered.filter(m => !!m.subscriptionCancelledAt)
+    } else if (statusFilter !== 'all') {
       filtered = filtered.filter(m => getCotisationStatus(m) === statusFilter)
     }
 
@@ -323,6 +329,59 @@ export default function Adherents() {
 
   const handlePaymentModeChange = async (mode) => {
     await handleCotisationUpdate({ modePaiement: mode })
+  }
+
+  // ========== REMBOURSEMENT ==========
+  const handleRefundPayment = async (membre, amount = null) => {
+    if (!membre) return
+    const confirmText = membre.stripePaymentId
+      ? `Rembourser ${membre.prenom} ${membre.nom} via Stripe ? Le paiement sera remboursé sur la carte bancaire.${amount ? ` Montant: ${amount}€` : ''}`
+      : `Annuler le paiement de ${membre.prenom} ${membre.nom} ? (paiement manuel, pas de remboursement Stripe)`
+
+    if (!window.confirm(confirmText)) return
+
+    setRefunding(true)
+    try {
+      const fn = getFunctions(undefined, 'europe-west1')
+      const refundFn = httpsCallable(fn, 'refundPayment')
+      const payload = { memberId: membre.id, reason: 'Annulation depuis le backoffice' }
+      if (amount) {
+        payload.amount = parseFloat(amount)
+      }
+      const result = await refundFn(payload)
+      toast.success(result.data.message || 'Remboursement effectué')
+      setCotisationModal({ open: false, membre: null })
+      setRefundAmount('')
+    } catch (err) {
+      console.error('Error refunding:', err)
+      toast.error(err.message || 'Erreur lors du remboursement')
+    } finally {
+      setRefunding(false)
+    }
+  }
+
+  // ========== ANNULATION ABONNEMENT ==========
+  const handleCancelSubscription = async (membre) => {
+    if (!membre) return
+
+    if (!window.confirm(`Êtes-vous sûr de vouloir annuler l'abonnement de ${membre.prenom} ${membre.nom} ?`)) return
+
+    setCancelling(true)
+    try {
+      const fn = getFunctions(undefined, 'europe-west1')
+      const cancelFn = httpsCallable(fn, 'adminCancelSubscription')
+      const result = await cancelFn({
+        memberId: membre.id,
+        reason: 'Annulé par admin depuis le backoffice'
+      })
+      toast.success(result.data.message || 'Abonnement annulé')
+      setCotisationModal({ open: false, membre: null })
+    } catch (err) {
+      console.error('Error cancelling subscription:', err)
+      toast.error(err.message || 'Erreur lors de l\'annulation')
+    } finally {
+      setCancelling(false)
+    }
   }
 
   // ========== VALIDATION BUREAU ==========
@@ -618,6 +677,36 @@ export default function Adherents() {
       }
     },
     {
+      key: 'cotisationType',
+      label: 'Type',
+      render: (row) => {
+        const type = row.cotisationType
+        if (!type) return <span className="text-white/30">—</span>
+        return (
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+            type === 'mensuel' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'
+          }`}>
+            {type === 'mensuel' ? '🔄 Mensuel' : '📅 Annuel'}
+          </span>
+        )
+      }
+    },
+    {
+      key: 'annulation',
+      label: 'Annulé le',
+      render: (row) => {
+        if (!row.subscriptionCancelledAt) return <span className="text-white/30">—</span>
+        try {
+          const date = row.subscriptionCancelledAt?.toDate?.() || new Date(row.subscriptionCancelledAt)
+          return (
+            <span className="text-orange-400 text-xs font-medium">
+              ⚠️ {format(date, 'dd/MM/yyyy')}
+            </span>
+          )
+        } catch { return <span className="text-orange-400 text-xs">⚠️ Annulé</span> }
+      }
+    },
+    {
       key: 'actions',
       label: 'Actions',
       render: (row) => (
@@ -882,6 +971,7 @@ export default function Adherents() {
             <option value={CotisationStatut.EN_ATTENTE_SIGNATURE}>Attente signature</option>
             <option value={CotisationStatut.EN_ATTENTE_PAIEMENT}>Attente paiement</option>
             <option value={CotisationStatut.EXPIRE}>Expiré</option>
+            <option value="annule">Abonnements annulés</option>
           </select>
           <select value={payeurFilter} onChange={(e) => setPayeurFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
             <option value="all">Tous les payeurs</option>
@@ -994,6 +1084,29 @@ export default function Adherents() {
                   <p className="text-white/40 text-xs mt-3">
                     En cas de refus, le paiement de {m.cotisation?.montant || 0}€ sera converti en don (éligible au reçu fiscal).
                   </p>
+                </div>
+              )}
+
+              {/* Alerte annulation abonnement */}
+              {m.subscriptionCancelledAt && (
+                <div className="p-4 bg-orange-500/10 border border-orange-500/30 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                      <AlertTriangle className="w-5 h-5 text-orange-400" />
+                    </div>
+                    <div>
+                      <p className="text-orange-400 font-medium">Abonnement annulé</p>
+                      <p className="text-white/60 text-sm">
+                        Le {(() => {
+                          try {
+                            const date = m.subscriptionCancelledAt?.toDate?.() || new Date(m.subscriptionCancelledAt)
+                            return format(date, 'dd/MM/yyyy à HH:mm')
+                          } catch { return 'date inconnue' }
+                        })()}
+                        {' — '}Raison : {m.subscriptionCancelReason || 'Non spécifiée'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1218,17 +1331,48 @@ export default function Adherents() {
               )}
 
               {/* Boutons action + fermer */}
-              <div className="flex justify-between pt-4 border-t border-white/10">
-                {!isAwaitingValidation && (
-                  <button
-                    onClick={() => handleOpenMessageModal(m)}
-                    className="flex items-center gap-2 px-4 py-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    Envoyer un message
-                  </button>
-                )}
-                <div className={!isAwaitingValidation ? '' : 'ml-auto'}>
+              <div className="flex justify-between items-center pt-4 border-t border-white/10 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {!isAwaitingValidation && (
+                    <button
+                      onClick={() => handleOpenMessageModal(m)}
+                      className="flex items-center gap-2 px-4 py-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Message
+                    </button>
+                  )}
+                  {m.stripeSubscriptionId && !m.subscriptionCancelledAt && (
+                    <button
+                      onClick={() => handleCancelSubscription(m)}
+                      disabled={cancelling}
+                      className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 border border-red-500/30"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      {cancelling ? 'Annulation...' : 'Annuler l\'abonnement'}
+                    </button>
+                  )}
+                  {isPaid && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        placeholder="Montant (optionnel)"
+                        value={refundAmount}
+                        onChange={(e) => setRefundAmount(e.target.value)}
+                        className="w-40 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/30 focus:outline-none focus:border-secondary"
+                      />
+                      <button
+                        onClick={() => handleRefundPayment(m, refundAmount || null)}
+                        disabled={refunding}
+                        className="flex items-center gap-2 px-4 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Undo2 className="w-4 h-4" />
+                        {refunding ? 'Remboursement...' : 'Rembourser'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div>
                   <Button variant="ghost" onClick={() => setCotisationModal({ open: false, membre: null })}>
                     Fermer
                   </Button>

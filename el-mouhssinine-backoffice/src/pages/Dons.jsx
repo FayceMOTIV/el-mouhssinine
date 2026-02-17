@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'react-toastify'
 import {
-  Coins, Plus, Pencil, Trash2, FileText, Upload, X, Download, File, Image as ImageIcon, Search
+  Coins, Plus, Pencil, Trash2, FileText, Upload, X, Download, File, Image as ImageIcon, Search, RefreshCw
 } from 'lucide-react'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import AIWriteButton from '../components/common/AIWriteButton'
 import {
   Card,
@@ -96,6 +97,10 @@ export default function Dons() {
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const DONS_PER_PAGE = 20
+  const [refundingDon, setRefundingDon] = useState(null)
+  const [refundAmount, setRefundAmount] = useState('')
 
   // Filtrer les projets par recherche
   const filteredProjets = useMemo(() => {
@@ -122,6 +127,16 @@ export default function Dons() {
     })
   }, [dons, projets, searchQuery])
 
+  // Réinitialiser la page quand le filtre change
+  useEffect(() => { setCurrentPage(1) }, [searchQuery])
+
+  // Pagination des dons
+  const totalPages = Math.ceil(filteredDons.length / DONS_PER_PAGE)
+  const paginatedDons = useMemo(() => {
+    const start = (currentPage - 1) * DONS_PER_PAGE
+    return filteredDons.slice(start, start + DONS_PER_PAGE)
+  }, [filteredDons, currentPage, DONS_PER_PAGE])
+
   useEffect(() => {
     const unsubProjets = subscribeToProjets((data) => {
       setProjets(data)
@@ -146,6 +161,7 @@ export default function Dons() {
         montantActuel: projet.montantActuel || 0,
         categorie: projet.categorie || CategorieProjet.INTERNE,
         actif: projet.actif !== false,
+        statut: projet.statut || undefined,
         fichiers: projet.fichiers || [],
         iban: projet.iban || '',
         lieu: projet.lieu || ''
@@ -234,6 +250,7 @@ export default function Dons() {
         montantActuel: parseFloat(formData.montantActuel) || 0,
         categorie: formData.categorie,
         actif: formData.actif,
+        statut: formData.statut || null,
         iban: formData.iban || '',
         lieu: formData.lieu || ''
       }
@@ -266,6 +283,67 @@ export default function Dons() {
       console.error('Error deleting:', err)
       toast.error('Erreur lors de la suppression')
     }
+  }
+
+  const handleRefundDonation = async (donationId, amount, totalAmount) => {
+    const refundAmountValue = parseFloat(amount) || totalAmount
+
+    const confirmed = window.confirm(
+      `Confirmer le remboursement de ${refundAmountValue.toFixed(2)}€ sur un total de ${totalAmount.toFixed(2)}€ ?`
+    )
+
+    if (!confirmed) return
+
+    try {
+      const functions = getFunctions(undefined, 'europe-west1')
+      const refundDonationFn = httpsCallable(functions, 'refundDonation')
+
+      await refundDonationFn({
+        donationId,
+        amount: parseFloat(amount) || undefined
+      })
+
+      toast.success('Remboursement effectué avec succès')
+      setRefundingDon(null)
+      setRefundAmount('')
+
+      // Refresh donations list (the subscription will update automatically)
+    } catch (err) {
+      console.error('Error refunding donation:', err)
+      toast.error(err.message || 'Erreur lors du remboursement')
+    }
+  }
+
+  const exportDonsCSV = () => {
+    if (filteredDons.length === 0) {
+      toast.error('Aucun don à exporter')
+      return
+    }
+    const headers = ['Date', 'Donateur', 'Montant (€)', 'Projet', 'Mode de paiement', 'Type', 'Email']
+    const rows = filteredDons.map(d => {
+      const projet = projets.find(p => p.id === d.projetId)
+      const date = d.createdAt?.toDate
+        ? format(d.createdAt.toDate(), 'dd/MM/yyyy HH:mm', { locale: fr })
+        : d.date || ''
+      return [
+        date,
+        d.donateur || 'Anonyme',
+        (d.montant || d.amount || 0).toFixed(2),
+        projet?.titre || d.projetNom || 'Don libre',
+        d.modePaiement || d.metadata?.paymentMethod || '',
+        d.donorType || 'particulier',
+        d.donateurEmail || d.metadata?.donorEmail || ''
+      ]
+    })
+    const csvContent = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `dons_export_${format(new Date(), 'yyyy-MM-dd')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`${filteredDons.length} don(s) exporté(s)`)
   }
 
   const getFileIcon = (type) => {
@@ -319,8 +397,8 @@ export default function Dons() {
       key: 'actif',
       label: 'Statut',
       render: (row) => (
-        <Badge variant={row.actif ? 'success' : 'default'}>
-          {row.actif ? 'Actif' : 'Terminé'}
+        <Badge variant={row.statut === 'en_pause' ? 'warning' : row.actif ? 'success' : 'default'}>
+          {row.statut === 'en_pause' ? 'En pause' : row.actif ? 'Actif' : 'Terminé'}
         </Badge>
       )
     },
@@ -393,8 +471,8 @@ export default function Dons() {
       key: 'actif',
       label: 'Statut',
       render: (row) => (
-        <Badge variant={row.actif ? 'success' : 'default'}>
-          {row.actif ? 'Actif' : 'Terminé'}
+        <Badge variant={row.statut === 'en_pause' ? 'warning' : row.actif ? 'success' : 'default'}>
+          {row.statut === 'en_pause' ? 'En pause' : row.actif ? 'Actif' : 'Terminé'}
         </Badge>
       )
     },
@@ -503,6 +581,67 @@ export default function Dons() {
           ? <span className="text-xs text-green-400">✓ {row.recuFiscalYear || ''}</span>
           : <span className="text-xs text-white/30">-</span>
       )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (row) => {
+        const isRefundable = row.status === 'succeeded' || row.status === 'completed'
+        const isRefunded = row.refunded === true || row.status === 'refunded'
+
+        if (isRefunded) {
+          return <span className="text-xs text-white/30">Remboursé</span>
+        }
+
+        if (!isRefundable) {
+          return <span className="text-xs text-white/30">-</span>
+        }
+
+        if (refundingDon === row.id) {
+          return (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value)}
+                placeholder={row.montant?.toFixed(2) || '0'}
+                className="w-20 px-2 py-1 text-xs bg-white/5 border border-white/10 rounded text-white"
+                step="0.01"
+                min="0"
+                max={row.montant}
+              />
+              <button
+                onClick={() => handleRefundDonation(row.id, refundAmount, row.montant)}
+                className="px-2 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+              >
+                OK
+              </button>
+              <button
+                onClick={() => {
+                  setRefundingDon(null)
+                  setRefundAmount('')
+                }}
+                className="px-2 py-1 text-xs bg-white/10 hover:bg-white/20 text-white rounded transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )
+        }
+
+        return (
+          <button
+            onClick={() => {
+              setRefundingDon(row.id)
+              setRefundAmount(row.montant?.toFixed(2) || '')
+            }}
+            className="px-2 py-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors flex items-center gap-1"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Rembourser
+          </button>
+        )
+      }
     }
   ]
 
@@ -658,10 +797,21 @@ export default function Dons() {
       {/* Dons Tab */}
       {activeTab === 'dons' && (
         <>
-          <p className="text-white/50 text-sm mb-4">
-            {filteredDons.length} don{filteredDons.length !== 1 ? 's' : ''}
-            {searchQuery && ` sur ${dons.length}`}
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-white/50 text-sm">
+              {filteredDons.length} don{filteredDons.length !== 1 ? 's' : ''}
+              {searchQuery && ` sur ${dons.length}`}
+            </p>
+            {filteredDons.length > 0 && (
+              <button
+                onClick={exportDonsCSV}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm text-white/70 hover:text-white transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </button>
+            )}
+          </div>
           {dons.length === 0 ? (
             <EmptyState
               icon={Coins}
@@ -674,7 +824,55 @@ export default function Dons() {
             </Card>
           ) : (
             <Card>
-              <Table columns={donColumns} data={filteredDons} />
+              <Table columns={donColumns} data={paginatedDons} />
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-white/10">
+                  <span className="text-sm text-white/50">
+                    {filteredDons.length} don(s) — Page {currentPage}/{totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded disabled:opacity-30 disabled:cursor-not-allowed text-sm"
+                    >
+                      ← Précédent
+                    </button>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let page
+                      if (totalPages <= 5) {
+                        page = i + 1
+                      } else if (currentPage <= 3) {
+                        page = i + 1
+                      } else if (currentPage >= totalPages - 2) {
+                        page = totalPages - 4 + i
+                      } else {
+                        page = currentPage - 2 + i
+                      }
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-1 rounded text-sm ${
+                            currentPage === page
+                              ? 'bg-secondary text-white'
+                              : 'bg-white/10 hover:bg-white/20 text-white/70'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    })}
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded disabled:opacity-30 disabled:cursor-not-allowed text-sm"
+                    >
+                      Suivant →
+                    </button>
+                  </div>
+                </div>
+              )}
             </Card>
           )}
         </>
@@ -833,10 +1031,22 @@ export default function Dons() {
             </div>
           )}
 
-          <Toggle
-            label="Projet actif"
-            checked={formData.actif}
-            onChange={(checked) => setFormData({ ...formData, actif: checked })}
+          <Select
+            label="Statut du projet"
+            value={formData.statut || (formData.actif ? 'actif' : 'termine')}
+            onChange={(e) => {
+              const val = e.target.value
+              setFormData({
+                ...formData,
+                statut: val === 'en_pause' ? 'en_pause' : undefined,
+                actif: val === 'actif'
+              })
+            }}
+            options={[
+              { value: 'actif', label: 'Actif — Visible et ouvert aux dons' },
+              { value: 'en_pause', label: 'En pause — Visible mais dons suspendus' },
+              { value: 'termine', label: 'Terminé — Masqué dans l\'app' }
+            ]}
           />
         </div>
         <div className="flex justify-end gap-3 mt-6">

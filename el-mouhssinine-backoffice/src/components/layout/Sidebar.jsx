@@ -15,10 +15,11 @@ import {
   LogOut,
   X,
   BookOpen,
-  TrendingUp,
+  Wallet,
   FileText,
   Bell,
-  Moon
+  Moon,
+  Mail
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { subscribeToUnreadMessagesCount } from '../../services/firebase'
@@ -33,11 +34,12 @@ const menuItems = [
   { path: '/janaza', icon: Heart, label: 'Salat Janaza' },
   { path: '/dons', icon: Coins, label: 'Dons & Projets' },
   { path: '/adherents', icon: Users, label: 'Membres' },
-  { path: '/revenus', icon: TrendingUp, label: 'Gestion revenus' },
+  { path: '/revenus', icon: Wallet, label: 'Finances' },
   { path: '/recus-fiscaux', icon: FileText, label: 'Reçus fiscaux' },
   { path: '/messages', icon: MessageCircle, label: 'Messages', hasBadge: true },
   { path: '/notifications', icon: Bell, label: 'Notifications' },
   { path: '/ramadan', icon: Moon, label: 'Mode Ramadan' },
+  { path: '/emails', icon: Mail, label: 'Emails envoyés' },
   { path: '/admins', icon: Shield, label: 'Gestion Admins', adminOnly: true },
   { path: '/parametres', icon: Settings, label: 'Paramètres' }
 ]
@@ -86,7 +88,7 @@ export default function Sidebar({ isOpen, onClose }) {
                 <span className="text-white font-bold text-lg">EM</span>
               </div>
               <div>
-                <h1 className="text-white font-semibold">El Mouhssinine</h1>
+                <h1 className="text-white font-semibold">El Mohsinine</h1>
                 <p className="text-xs text-white/50">Backoffice</p>
               </div>
             </div>

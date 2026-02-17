@@ -104,6 +104,7 @@ const MessagesScreen = () => {
       } else {
         setIsLoggedIn(false);
         setMemberProfile(null);
+        setMessages([]);
         setLoading(false);
       }
     });

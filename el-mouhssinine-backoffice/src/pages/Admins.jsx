@@ -20,8 +20,10 @@ import {
   addDocument,
   updateDocument,
   deleteDocument,
-  setDocument
+  setDocument,
+  functions
 } from '../services/firebase'
+import { httpsCallable } from 'firebase/functions'
 import { AdminRole, rolePermissions } from '../types'
 import { useAuth } from '../context/AuthContext'
 import { format } from 'date-fns'
@@ -150,23 +152,23 @@ export default function Admins() {
         await updateDocument('admins', editingAdmin.id, data)
         toast.success('Administrateur mis à jour')
       } else {
-        // IMPORTANT: L'UID doit correspondre à l'utilisateur Firebase Auth
-        // 1. Créez d'abord le compte dans Firebase Console > Authentication > Users
-        // 2. Copiez l'UID généré
-        // 3. Collez-le ici dans le champ UID
-        if (!formData.uid || formData.uid.trim().length < 20) {
-          toast.error('L\'UID Firebase est obligatoire. Créez d\'abord le compte dans Firebase Console > Authentication, puis copiez l\'UID ici.')
-          setSaving(false)
-          return
-        }
-        // Utiliser l'UID comme ID du document (requis par les règles Firestore)
-        await setDocument('admins', formData.uid.trim(), data)
-        toast.success('Administrateur créé avec succès !')
+        // Créer l'admin via Cloud Function (Auth + Firestore en une étape)
+        const createAdmin = httpsCallable(functions, 'createAdmin')
+        const result = await createAdmin({
+          email: formData.email,
+          password: password,
+          nom: formData.nom,
+          role: formData.role,
+          permissions: formData.permissions,
+          actif: formData.actif
+        })
+        toast.success(result.data.message || 'Administrateur créé avec succès !')
       }
       handleCloseModal()
     } catch (err) {
       console.error('Error saving admin:', err)
-      toast.error('Erreur lors de la sauvegarde')
+      const errorMessage = err?.message || err?.details || 'Erreur lors de la sauvegarde'
+      toast.error(errorMessage)
     } finally {
       setSaving(false)
     }
@@ -398,27 +400,12 @@ export default function Admins() {
           />
           {!editingAdmin && (
             <>
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-sm text-blue-200">
-                <p className="font-medium mb-1">⚠️ Étapes pour créer un admin :</p>
-                <ol className="list-decimal list-inside space-y-1 text-blue-200/80">
-                  <li>Firebase Console → Authentication → Users</li>
-                  <li>Cliquez "Ajouter un utilisateur"</li>
-                  <li>Entrez l'email et mot de passe</li>
-                  <li>Copiez l'UID généré et collez-le ci-dessous</li>
-                </ol>
-              </div>
-              <Input
-                label="UID Firebase (obligatoire)"
-                value={formData.uid}
-                onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
-                placeholder="Ex: abc123XYZ... (copié depuis Firebase Console)"
-                required
-              />
               <PasswordInput
-                label="Mot de passe (pour référence)"
+                label="Mot de passe"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Minimum 6 caractères"
+                required
               />
             </>
           )}

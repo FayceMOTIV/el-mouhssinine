@@ -1,5 +1,5 @@
 /**
- * Cloud Functions pour El Mouhssinine
+ * Cloud Functions pour El Mohsinine
  * Gestion des notifications push via Firebase Cloud Messaging
  * Paiements Stripe
  */
@@ -9,6 +9,7 @@ const admin = require('firebase-admin');
 const Stripe = require('stripe');
 const PDFDocument = require('pdfkit');
 const nodemailer = require('nodemailer');
+const https = require('https');
 
 admin.initializeApp();
 
@@ -125,6 +126,128 @@ const formatDateFr = (dateStr) => {
   }
 };
 
+// ==================== EMAIL TEMPLATE HELPERS ====================
+
+/**
+ * Charge un template email depuis Firestore et remplace les variables
+ * @param {string} templateId - ID du document dans email_templates
+ * @param {Object} variables - Objet clé:valeur des variables à remplacer
+ * @returns {Promise<{subject: string, body: string}|null>}
+ */
+// Échapper les caractères HTML pour éviter les injections XSS dans les emails
+const escapeHtml = (text) => {
+  if (!text || typeof text !== 'string') return text || '';
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return text.replace(/[&<>"']/g, m => map[m]);
+};
+
+const loadEmailTemplate = async (templateId, variables = {}) => {
+  try {
+    const doc = await admin.firestore().collection('email_templates').doc(templateId).get();
+    if (!doc.exists) {
+      console.log(`Template email ${templateId} non trouvé dans Firestore, fallback hardcodé`);
+      return null;
+    }
+    const data = doc.data();
+    let subject = data.subject || '';
+    let body = data.body || '';
+
+    // Remplacer les variables {nom_variable} avec échappement HTML
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`\\{${key}\\}`, 'g');
+      const escaped = escapeHtml(value || '');
+      subject = subject.replace(regex, escaped);
+      body = body.replace(regex, escaped);
+    }
+
+    return { subject, body };
+  } catch (error) {
+    console.error(`Erreur chargement template ${templateId}:`, error);
+    return null;
+  }
+};
+
+/**
+ * Convertit un texte brut en HTML email stylisé
+ * @param {string} body - Texte brut du corps de l'email
+ * @param {Object} options - Options de style
+ * @param {string} options.headerTitle - Titre du header
+ * @param {string} options.headerGradient - Gradient CSS du header (ex: '#2e7d32, #4caf50')
+ * @param {string} options.footerAssociation - Nom de l'association pour le footer
+ * @param {string} options.footerAdresse - Adresse pour le footer
+ * @param {string} options.footerTelephone - Téléphone pour le footer
+ * @returns {string} HTML email complet
+ */
+const textToEmailHtml = (body, options = {}) => {
+  const {
+    headerTitle = '',
+    headerGradient = '#2e7d32, #4caf50',
+    footerAssociation = '',
+    footerAdresse = '',
+    footerTelephone = '',
+  } = options;
+
+  // Convertir le texte brut en HTML avec paragraphes
+  const htmlBody = body
+    .split('\n\n')
+    .map(paragraph => {
+      // Gérer les listes à puces
+      const lines = paragraph.split('\n');
+      const listItems = lines.filter(l => l.startsWith('- '));
+      const numberedItems = lines.filter(l => /^\d+\.\s/.test(l));
+
+      // Bug 16 Fix: escapeHtml sur le contenu des listes et paragraphes (prévention injection HTML)
+      if (listItems.length > 0 && listItems.length === lines.length) {
+        return `<ul style="color: #444; line-height: 1.8; margin: 10px 0;">${listItems.map(l => `<li>${escapeHtml(l.substring(2))}</li>`).join('')}</ul>`;
+      }
+      if (numberedItems.length > 0 && numberedItems.length === lines.length) {
+        return `<ol style="color: #444; line-height: 1.8; margin: 10px 0;">${numberedItems.map(l => `<li>${escapeHtml(l.replace(/^\d+\.\s/, ''))}</li>`).join('')}</ol>`;
+      }
+
+      // Paragraphe normal (avec retours à la ligne simples préservés)
+      const text = escapeHtml(paragraph).replace(/\n/g, '<br>');
+      return `<p style="font-size: 16px; color: #444; margin: 10px 0;">${text}</p>`;
+    })
+    .join('');
+
+  // Mettre en gras les textes entre **...**
+  const htmlBodyBold = htmlBody.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+  let headerHtml = '';
+  if (headerTitle) {
+    headerHtml = `
+      <div style="background: linear-gradient(135deg, ${headerGradient}); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0;">${headerTitle}</h1>
+      </div>`;
+  }
+
+  let footerHtml = '';
+  if (footerAssociation) {
+    footerHtml = `
+      <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+      <div style="font-size: 13px; color: #888; text-align: center;">
+        <p style="margin: 5px 0;"><strong>${footerAssociation}</strong></p>
+        ${footerAdresse ? `<p style="margin: 5px 0;">📍 ${footerAdresse}</p>` : ''}
+        ${footerTelephone ? `<p style="margin: 5px 0;">📞 ${footerTelephone}</p>` : ''}
+      </div>`;
+  }
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      ${headerHtml}
+      <div style="background: #f9f9f9; padding: 30px; border-radius: ${headerTitle ? '0 0 10px 10px' : '10px'};">
+        ${htmlBodyBold}
+        ${footerHtml}
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center;">
+          <p style="color: #888; font-size: 12px; margin: 0;">
+            ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
+            Pour nous contacter : <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
+          </p>
+        </div>
+      </div>
+    </div>`;
+};
+
 // ==================== NOTIFICATION ANNONCE ====================
 // Trigger : quand une nouvelle annonce est créée
 
@@ -133,13 +256,6 @@ exports.onNewAnnouncement = functions
   .firestore
   .document('announcements/{announcementId}')
   .onCreate(async (snap, context) => {
-    // DESACTIVE: Notifications automatiques désactivées
-    // Utiliser le bouton "Envoyer notification" dans le backoffice
-    console.log('Notification auto désactivée pour annonces - utilisez le backoffice');
-    return null;
-
-    // Code original conservé mais non exécuté
-    /*
     const announcement = snap.data();
 
     // Ne pas notifier si l'annonce n'est pas active
@@ -148,15 +264,34 @@ exports.onNewAnnouncement = functions
       return null;
     }
 
+    // Ne pas envoyer en double si déjà envoyé
+    if (announcement.notificationSent) {
+      console.log('Notification déjà envoyée pour cette annonce');
+      return null;
+    }
+
     const message = {
       notification: {
-        title: announcement.titre || 'Nouvelle annonce',
+        title: '📢 ' + (announcement.titre || 'Nouvelle annonce'),
         body: truncate(announcement.contenu, 150),
       },
       data: {
         type: 'announcement',
         id: context.params.announcementId,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'announcements',
+        },
       },
       topic: 'announcements',
     };
@@ -165,10 +300,20 @@ exports.onNewAnnouncement = functions
       const response = await admin.messaging().send(message);
       console.log('Notification annonce envoyée:', response);
 
-      // Mettre à jour le document avec le statut de notification
       await snap.ref.update({
         notificationSent: true,
         notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Enregistrer dans l'historique
+      await admin.firestore().collection('notifications_history').add({
+        titre: message.notification.title,
+        message: message.notification.body,
+        topic: 'announcements',
+        type: 'auto_announcement',
+        envoyeePar: 'system',
+        envoyeeA: new Date(),
+        messageId: response,
       });
 
       return { success: true, messageId: response };
@@ -176,7 +321,6 @@ exports.onNewAnnouncement = functions
       console.error('Erreur notification annonce:', error);
       return { error: error.message };
     }
-    */
   });
 
 // ==================== NOTIFICATION ÉVÉNEMENT ====================
@@ -187,17 +331,15 @@ exports.onNewEvent = functions
   .firestore
   .document('events/{eventId}')
   .onCreate(async (snap, context) => {
-    // DESACTIVE: Notifications automatiques désactivées
-    // Utiliser le bouton "Envoyer notification" dans le backoffice
-    console.log('Notification auto désactivée pour événements - utilisez le backoffice');
-    return null;
-
-    // Code original conservé mais non exécuté
-    /*
     const event = snap.data();
 
     if (!event.actif) {
       console.log('Événement inactif, pas de notification');
+      return null;
+    }
+
+    if (event.notificationSent) {
+      console.log('Notification déjà envoyée pour cet événement');
       return null;
     }
 
@@ -206,13 +348,26 @@ exports.onNewEvent = functions
 
     const message = {
       notification: {
-        title: event.titre || 'Nouvel événement',
+        title: '📅 ' + (event.titre || 'Nouvel événement'),
         body: truncate(body, 150),
       },
       data: {
         type: 'event',
         id: context.params.eventId,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'events',
+        },
       },
       topic: 'events',
     };
@@ -226,12 +381,21 @@ exports.onNewEvent = functions
         notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      await admin.firestore().collection('notifications_history').add({
+        titre: message.notification.title,
+        message: message.notification.body,
+        topic: 'events',
+        type: 'auto_event',
+        envoyeePar: 'system',
+        envoyeeA: new Date(),
+        messageId: response,
+      });
+
       return { success: true, messageId: response };
     } catch (error) {
       console.error('Erreur notification événement:', error);
       return { error: error.message };
     }
-    */
   });
 
 // ==================== NOTIFICATION JANAZA ====================
@@ -242,17 +406,15 @@ exports.onNewJanaza = functions
   .firestore
   .document('janaza/{janazaId}')
   .onCreate(async (snap, context) => {
-    // DESACTIVE: Notifications automatiques désactivées
-    // Utiliser le bouton "Envoyer notification" dans le backoffice
-    console.log('Notification auto désactivée pour janaza - utilisez le backoffice');
-    return null;
-
-    // Code original conservé mais non exécuté
-    /*
     const janaza = snap.data();
 
     if (!janaza.actif) {
       console.log('Janaza inactive, pas de notification');
+      return null;
+    }
+
+    if (janaza.notificationSent) {
+      console.log('Notification déjà envoyée pour cette janaza');
       return null;
     }
 
@@ -269,15 +431,13 @@ exports.onNewJanaza = functions
 
     const message = {
       notification: {
-        title: 'Salat Janaza',
+        title: '⚰️ Salat Janaza',
         body: truncate(body, 150),
       },
       data: {
         type: 'janaza',
         id: context.params.janazaId,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
       },
-      // High priority pour les notifications urgentes
       android: {
         priority: 'high',
         notification: {
@@ -290,6 +450,7 @@ exports.onNewJanaza = functions
           aps: {
             sound: 'default',
             badge: 1,
+            'interruption-level': 'time-sensitive',
           },
         },
       },
@@ -305,27 +466,95 @@ exports.onNewJanaza = functions
         notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      await admin.firestore().collection('notifications_history').add({
+        titre: message.notification.title,
+        message: message.notification.body,
+        topic: 'janaza',
+        type: 'auto_janaza',
+        envoyeePar: 'system',
+        envoyeeA: new Date(),
+        messageId: response,
+      });
+
       return { success: true, messageId: response };
     } catch (error) {
       console.error('Erreur notification Janaza:', error);
       return { error: error.message };
     }
-    */
   });
 
 // ==================== NOTIFICATION POPUP ====================
-// DESACTIVE: Les popups s'affichent dans l'app, pas besoin de notification push
-// Les popups et notifications sont deux fonctionnalites distinctes:
-// - Popup = message affiche dans l'app a l'ouverture
-// - Notification = push envoyee au telephone
-//
-// exports.onNewPopup = functions
-//   .region('europe-west1')
-//   .firestore
-//   .document('popups/{popupId}')
-//   .onCreate(async (snap, context) => {
-//     // ... fonction desactivee
-//   });
+// Envoie une notification push quand une popup active est créée
+// La popup s'affiche aussi dans l'app à l'ouverture
+
+exports.onNewPopup = functions
+  .region('europe-west1')
+  .firestore
+  .document('popups/{popupId}')
+  .onCreate(async (snap, context) => {
+    const popup = snap.data();
+
+    if (!popup.actif) {
+      console.log('Popup inactive, pas de notification');
+      return null;
+    }
+
+    if (popup.notificationSent) {
+      console.log('Notification déjà envoyée pour cette popup');
+      return null;
+    }
+
+    const message = {
+      notification: {
+        title: '🕌 ' + (popup.titre || 'Nouveau message'),
+        body: truncate(popup.contenu || popup.message, 150),
+      },
+      data: {
+        type: 'popup',
+        id: context.params.popupId,
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'general',
+        },
+      },
+      topic: 'general',
+    };
+
+    try {
+      const response = await admin.messaging().send(message);
+      console.log('Notification popup envoyée:', response);
+
+      await snap.ref.update({
+        notificationSent: true,
+        notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await admin.firestore().collection('notifications_history').add({
+        titre: message.notification.title,
+        message: message.notification.body,
+        topic: 'general',
+        type: 'auto_popup',
+        envoyeePar: 'system',
+        envoyeeA: new Date(),
+        messageId: response,
+      });
+
+      return { success: true, messageId: response };
+    } catch (error) {
+      console.error('Erreur notification popup:', error);
+      return { error: error.message };
+    }
+  });
 
 // ==================== NOTIFICATION DEPUIS BACKOFFICE ====================
 // Trigger : quand une notification est créée/mise à jour avec statut "envoyée"
@@ -690,12 +919,17 @@ exports.cleanupOldNotifications = functions
         .where('sentAt', '<', thirtyDaysAgo)
         .get();
 
-      const batch = admin.firestore().batch();
-      snapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-
-      await batch.commit();
+      // Bug 12 Fix: Supprimer par chunks de 500 (limite Firestore batch)
+      const docs = snapshot.docs;
+      const chunkSize = 500;
+      for (let i = 0; i < docs.length; i += chunkSize) {
+        const chunk = docs.slice(i, i + chunkSize);
+        const batch = admin.firestore().batch();
+        chunk.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+      }
       console.log(`Nettoyage: ${snapshot.size} notifications supprimées`);
       return null;
     } catch (error) {
@@ -754,6 +988,209 @@ exports.getNotificationStats = functions
     } catch (error) {
       console.error('Erreur stats notifications:', error);
       throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ==================== NOTIFICATION NOUVEAU MESSAGE ====================
+// Trigger : quand un utilisateur envoie un nouveau message à la mosquée
+
+exports.onNewMessage = functions
+  .region('europe-west1')
+  .firestore
+  .document('messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    const messageId = context.params.messageId;
+
+    // Skip messages système (créés par Cloud Functions, ex: bienvenue)
+    if (data.createdBy === 'mosquee' || data.type === 'system') {
+      console.log('Message système, skip notification:', messageId);
+      return null;
+    }
+
+    const userName = sanitizeString(data.userName, 50) || 'Un utilisateur';
+    const userEmail = data.userEmail || '';
+    const sujet = sanitizeString(data.sujet, 100) || 'Sans sujet';
+    const messageText = sanitizeString(data.message, 300) || '';
+
+    console.log('📩 Nouveau message de', userName, '- sujet:', sujet);
+
+    // === 1. Push notification aux admins ===
+    try {
+      const adminsSnapshot = await admin.firestore().collection('admins').get();
+
+      if (!adminsSnapshot.empty) {
+        const adminIds = adminsSnapshot.docs.map(doc => doc.id);
+        const adminTokens = [];
+        const batchSize = 30;
+
+        for (let i = 0; i < adminIds.length; i += batchSize) {
+          const batchIds = adminIds.slice(i, i + batchSize);
+          const membersSnapshot = await admin.firestore()
+            .collection('members')
+            .where(admin.firestore.FieldPath.documentId(), 'in', batchIds)
+            .get();
+
+          membersSnapshot.docs.forEach(memberDoc => {
+            if (memberDoc.data().fcmToken) {
+              adminTokens.push(memberDoc.data().fcmToken);
+            }
+          });
+        }
+
+        if (adminTokens.length > 0) {
+          const pushMessage = {
+            notification: {
+              title: '📩 Nouveau message',
+              body: `${userName} : ${sujet}`,
+            },
+            data: {
+              type: 'new_message',
+              messageId: messageId,
+              click_action: 'FLUTTER_NOTIFICATION_CLICK',
+            },
+            apns: {
+              headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
+              payload: { aps: { sound: 'default', badge: 1 } },
+            },
+            android: {
+              priority: 'high',
+              notification: { sound: 'default', channelId: 'messages' },
+            },
+          };
+
+          const responses = await admin.messaging().sendEachForMulticast({
+            tokens: adminTokens,
+            ...pushMessage,
+          });
+
+          console.log('🔔 Push admins:', responses.successCount, '/', adminTokens.length);
+        }
+      }
+    } catch (pushError) {
+      console.error('⚠️ Erreur push nouveau message:', pushError.message);
+    }
+
+    // === 2. Email aux admins ===
+    try {
+      const brevoUser = functions.config().brevo?.smtp_user;
+      const brevoPass = functions.config().brevo?.smtp_pass;
+      const fromEmail = functions.config().brevo?.from_email;
+      const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+      const adminEmail = fromEmail || 'centreculturelislamique@orange.fr';
+
+      if (!brevoUser || !brevoPass || !fromEmail) {
+        console.error('Configuration Brevo manquante, email non envoyé');
+        return null;
+      }
+
+      const transporter = nodemailer.createTransport({
+        host: 'smtp-relay.brevo.com',
+        port: 587,
+        secure: false,
+        auth: { user: brevoUser, pass: brevoPass },
+      });
+
+      const emailHtml = `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #1565c0, #42a5f5); padding: 30px; text-align: center;">
+          <h1 style="color: #fff; margin: 0; font-size: 22px;">📩 Nouveau message</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Un adhérent vous a envoyé un message</p>
+        </div>
+        <div style="padding: 30px;">
+          <div style="background: #fff; border-left: 4px solid #1565c0; padding: 15px 20px; margin: 0 0 20px; border-radius: 0 8px 8px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 6px 0; color: #888; font-size: 13px; width: 80px;">De</td>
+                <td style="padding: 6px 0; color: #333; font-size: 15px; font-weight: 600;">${escapeHtml(userName)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #888; font-size: 13px;">Email</td>
+                <td style="padding: 6px 0; color: #333; font-size: 15px;">${escapeHtml(userEmail)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #888; font-size: 13px;">Sujet</td>
+                <td style="padding: 6px 0; color: #333; font-size: 15px; font-weight: 600;">${escapeHtml(sujet)}</td>
+              </tr>
+            </table>
+          </div>
+          <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <p style="color: #555; font-size: 15px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${escapeHtml(messageText)}</p>
+          </div>
+          <p style="color: #888; font-size: 13px; margin-top: 20px; text-align: center;">
+            Répondez depuis le <a href="https://el-mouhssinine.web.app" style="color: #1565c0;">backoffice</a> → Messages
+          </p>
+        </div>
+        <div style="background: #f0f0f0; padding: 20px; text-align: center; font-size: 12px; color: #999;">
+          <p style="margin: 0;">Association El Mohsinine</p>
+        </div>
+      </div>`;
+
+      await transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to: adminEmail,
+        subject: `Nouveau message de ${userName} - ${sujet}`,
+        html: emailHtml,
+      });
+
+      console.log('📧 Email nouveau message envoyé aux admins');
+
+      // === 3. Email de confirmation à l'utilisateur ===
+      if (userEmail) {
+        const prenom = userName.split(' ')[0] || 'Membre';
+
+        const userEmailHtml = `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9f9f9;">
+          <div style="background: linear-gradient(135deg, #2e7d32, #4caf50); padding: 30px; text-align: center;">
+            <h1 style="color: #fff; margin: 0; font-size: 22px;">🕌 Message bien reçu</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Votre message a été envoyé à la mosquée</p>
+          </div>
+          <div style="padding: 30px;">
+            <p style="color: #333; font-size: 16px;">Salam alaykoum ${escapeHtml(prenom)},</p>
+            <p style="color: #555; font-size: 15px; line-height: 1.6;">
+              Nous avons bien reçu votre message et nous vous répondrons dans les plus brefs délais insha'Allah.
+            </p>
+            <div style="background: #fff; border-left: 4px solid #4caf50; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+              <p style="color: #888; font-size: 13px; margin: 0 0 8px;">Sujet</p>
+              <p style="color: #333; font-size: 15px; font-weight: 600; margin: 0 0 12px;">${escapeHtml(sujet)}</p>
+              <p style="color: #888; font-size: 13px; margin: 0 0 8px;">Votre message</p>
+              <p style="color: #555; font-size: 14px; margin: 0; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(messageText)}</p>
+            </div>
+            <p style="color: #555; font-size: 15px; line-height: 1.6;">
+              Vous recevrez une notification et un email dès que nous aurons répondu. Vous pouvez aussi consulter vos messages dans l'application.
+            </p>
+          </div>
+          <div style="background: #f0f0f0; padding: 20px; text-align: center; font-size: 12px; color: #999;">
+            <p style="margin: 0;">Association El Mohsinine</p>
+            <p style="margin: 4px 0;">centreculturelislamique@orange.fr</p>
+          </div>
+        </div>`;
+
+        await transporter.sendMail({
+          from: `"${fromName}" <${fromEmail}>`,
+          to: userEmail,
+          subject: `Message bien reçu - El Mohsinine`,
+          html: userEmailHtml,
+        });
+
+        console.log('📧 Email confirmation envoyé à', userEmail.replace(/(.{2}).*(@.*)/, '$1***$2'));
+      }
+
+      // Enregistrer dans l'historique
+      await admin.firestore().collection('notifications_history').add({
+        title: 'Nouveau message adhérent',
+        body: `${userName} : ${sujet}`,
+        targetAdmins: true,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        success: true,
+        source: 'new_message_email',
+        relatedMessageId: messageId,
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Erreur email nouveau message:', error.message);
+      return { error: error.message };
     }
   });
 
@@ -848,6 +1285,95 @@ exports.onMessageReply = functions
           source: 'message_reply_to_user',
           relatedMessageId: context.params.messageId,
         });
+
+        // === EMAIL à l'utilisateur ===
+        try {
+          const memberData = memberDoc.exists ? memberDoc.data() : null;
+          const userEmail = memberData?.email || after.userEmail;
+          const prenom = memberData?.prenom || after.userName || 'Membre';
+
+          if (userEmail) {
+            const brevoUser = functions.config().brevo?.smtp_user;
+            const brevoPass = functions.config().brevo?.smtp_pass;
+            const fromEmail = functions.config().brevo?.from_email;
+            const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+
+            if (brevoUser && brevoPass && fromEmail) {
+              const transporter = nodemailer.createTransport({
+                host: 'smtp-relay.brevo.com',
+                port: 587,
+                secure: false,
+                auth: { user: brevoUser, pass: brevoPass },
+              });
+
+              const sujet = sanitizeString(after.sujet, 100) || 'votre message';
+              const replyPreview = sanitizeString(newReply.message, 200) || '';
+
+              // Charger template depuis Firestore
+              const replyTemplate = await loadEmailTemplate('message_reply', {
+                prenom,
+                sujet,
+                reponse: replyPreview,
+              });
+
+              let emailHtml;
+              let emailSubject;
+
+              if (replyTemplate) {
+                emailSubject = replyTemplate.subject || `Réponse à votre message - El Mohsinine`;
+                emailHtml = textToEmailHtml(replyTemplate.body, {
+                  headerTitle: '🕌 Nouvelle réponse',
+                  headerGradient: '#2e7d32, #4caf50',
+                });
+              } else {
+                // Fallback hardcodé
+                emailSubject = `Réponse à votre message - El Mohsinine`;
+                emailHtml = `
+                <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9f9f9;">
+                  <div style="background: linear-gradient(135deg, #2e7d32, #4caf50); padding: 30px; text-align: center;">
+                    <h1 style="color: #fff; margin: 0; font-size: 22px;">🕌 Nouvelle réponse</h1>
+                    <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">La mosquée a répondu à votre message</p>
+                  </div>
+                  <div style="padding: 30px;">
+                    <p style="color: #333; font-size: 16px;">Salam alaykoum ${escapeHtml(prenom)},</p>
+                    <p style="color: #555; font-size: 15px; line-height: 1.6;">
+                      Nous avons répondu à votre message concernant <strong>"${escapeHtml(sujet)}"</strong>.
+                    </p>
+                    <div style="background: #fff; border-left: 4px solid #4caf50; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                      <p style="color: #333; font-size: 15px; margin: 0; line-height: 1.6; font-style: italic;">
+                        "${escapeHtml(replyPreview)}"
+                      </p>
+                    </div>
+                    <p style="color: #555; font-size: 15px; line-height: 1.6;">
+                      Pour consulter la réponse complète et continuer la conversation, ouvrez l'application El Mohsinine dans la section <strong>Messages</strong>.
+                    </p>
+                    <div style="text-align: center; margin: 25px 0;">
+                      <span style="display: inline-block; background: #2e7d32; color: #fff; padding: 12px 30px; border-radius: 8px; font-size: 15px; font-weight: 600; text-decoration: none;">
+                        Ouvrir l'application
+                      </span>
+                    </div>
+                  </div>
+                  <div style="background: #f0f0f0; padding: 20px; text-align: center; font-size: 12px; color: #999;">
+                    <p style="margin: 0;">Association El Mohsinine</p>
+                    <p style="margin: 4px 0;">centreculturelislamique@orange.fr</p>
+                  </div>
+                </div>`;
+              }
+
+              await transporter.sendMail({
+                from: `"${fromName}" <${fromEmail}>`,
+                to: userEmail,
+                subject: emailSubject,
+                html: emailHtml,
+              });
+
+              console.log('📧 Email réponse envoyé à', userEmail.replace(/(.{2}).*(@.*)/, '$1***$2'));
+            }
+          }
+        } catch (emailError) {
+          // Ne pas bloquer la fonction si l'email échoue
+          console.error('⚠️ Erreur envoi email réponse (non bloquant):', emailError.message);
+        }
 
         return { success: true, messageId: response };
       } catch (error) {
@@ -970,11 +1496,18 @@ exports.createPaymentIntent = functions
 
     const { amount, currency, description, metadata } = data;
 
-    // Validation des paramètres - montant min 1€, max 10000€
-    if (!amount || typeof amount !== 'number') {
+    // Validation stricte des paramètres côté serveur
+    if (!amount || typeof amount !== 'number' || isNaN(amount)) {
       throw new functions.https.HttpsError(
         'invalid-argument',
-        'Le montant est requis et doit être un nombre'
+        'Le montant est requis et doit être un nombre valide'
+      );
+    }
+
+    if (!Number.isInteger(amount)) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Le montant doit être en centimes entiers'
       );
     }
 
@@ -985,10 +1518,10 @@ exports.createPaymentIntent = functions
       );
     }
 
-    if (amount > 1000000) { // maximum 10000€ = 1000000 centimes
+    if (amount > 10000000) { // maximum 100000€ = 10000000 centimes
       throw new functions.https.HttpsError(
         'invalid-argument',
-        'Le montant maximum est de 10 000€'
+        'Le montant maximum est de 100 000€'
       );
     }
 
@@ -996,6 +1529,14 @@ exports.createPaymentIntent = functions
       throw new functions.https.HttpsError(
         'invalid-argument',
         'La devise est requise'
+      );
+    }
+
+    // BUG 6 FIX: Valider que la devise est EUR (seule devise acceptée)
+    if (currency !== 'eur') {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Seule la devise EUR est acceptée'
       );
     }
 
@@ -1008,7 +1549,7 @@ exports.createPaymentIntent = functions
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount, // déjà en centimes
         currency: currency,
-        description: description || 'Don Mosquée El Mouhssinine',
+        description: description || 'Don Mosquée El Mohsinine',
         metadata: {
           ...metadata,
           userId: userId,
@@ -1028,6 +1569,130 @@ exports.createPaymentIntent = functions
       };
     } catch (error) {
       console.error('Erreur création PaymentIntent:', error);
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ==================== CREATE SUBSCRIPTION ====================
+// Créer un abonnement Stripe récurrent pour les cotisations mensuelles
+// Retourne clientSecret pour Payment Sheet
+
+exports.createSubscription = functions
+  .runWith({
+    timeoutSeconds: 30,
+    memory: '256MB',
+  })
+  .region('europe-west1')
+  .https.onCall(async (data, context) => {
+    // SÉCURITÉ: Authentification requise pour les abonnements
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Authentification requise pour créer un abonnement'
+      );
+    }
+
+    const uid = context.auth.uid;
+    const { amount, description, metadata } = data;
+
+    // Validation
+    if (!amount || typeof amount !== 'number' || amount < 100 || amount > 10000000) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Montant invalide (entre 1€ et 100 000€)'
+      );
+    }
+
+    const email = metadata?.email;
+    if (!email) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Email requis pour créer un abonnement'
+      );
+    }
+
+    // Rate limiting: max 3 tentatives de création d'abonnement par 5 minutes
+    await checkRateLimit(uid, 'subscription', 3, 300);
+
+    try {
+      console.log('Création abonnement Stripe pour:', email);
+
+      // 1. Trouver ou créer le Customer Stripe
+      let customer;
+      const existingCustomers = await stripe.customers.list({ email: email, limit: 1 });
+
+      if (existingCustomers.data.length > 0) {
+        customer = existingCustomers.data[0];
+        console.log('Customer Stripe existant:', customer.id);
+      } else {
+        customer = await stripe.customers.create({
+          email: email,
+          metadata: {
+            firebaseUid: uid,
+            memberName: metadata?.memberName || '',
+          },
+        });
+        console.log('Nouveau Customer Stripe créé:', customer.id);
+      }
+
+      // 2. Créer un Price Stripe pour le montant de l'abonnement
+      const price = await stripe.prices.create({
+        unit_amount: amount,
+        currency: 'eur',
+        recurring: { interval: 'month' },
+        product_data: {
+          name: description || 'Cotisation mensuelle - El Mohsinine',
+        },
+      });
+      console.log('Price créé:', price.id);
+
+      // 3. Créer la Subscription avec payment_behavior 'default_incomplete'
+      // Cela permet de récupérer le payment_intent pour Payment Sheet
+      const subscription = await stripe.subscriptions.create({
+        customer: customer.id,
+        items: [{ price: price.id }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: {
+          save_default_payment_method: 'on_subscription',
+          payment_method_types: ['card'],
+        },
+        expand: ['latest_invoice.payment_intent'],
+        metadata: {
+          ...metadata,
+          userId: uid,
+          source: 'app_mobile',
+          type: 'cotisation',
+          period: 'mensuel',
+        },
+      });
+
+      console.log('Subscription créée:', subscription.id);
+
+      // Récupérer le PaymentIntent de la première invoice
+      const invoice = subscription.latest_invoice;
+      const paymentIntent = invoice.payment_intent;
+
+      if (!paymentIntent || !paymentIntent.client_secret) {
+        throw new Error('Impossible de récupérer le client_secret du PaymentIntent');
+      }
+
+      // 4. Stocker les IDs dans le document membre
+      const memberRef = admin.firestore().collection('members').doc(uid);
+      await memberRef.update({
+        stripeCustomerId: customer.id,
+        stripeSubscriptionId: subscription.id,
+        cotisationType: 'mensuel',
+      });
+
+      console.log('IDs Stripe sauvegardés dans Firestore');
+
+      return {
+        clientSecret: paymentIntent.client_secret,
+        subscriptionId: subscription.id,
+        paymentIntentId: paymentIntent.id,
+      };
+    } catch (error) {
+      console.error('Erreur création subscription:', error);
       throw new functions.https.HttpsError('internal', error.message);
     }
   });
@@ -1087,6 +1752,17 @@ exports.stripeWebhook = functions
             }
           }
 
+          // FIX G2: Valider le montant de la cotisation par rapport aux tarifs attendus
+          if (metadata.type === 'cotisation' && metadata.montantCotisation) {
+            const declaredCotisation = parseFloat(metadata.montantCotisation) || 0;
+            // Vérifier que le montant est cohérent (au moins 1€ pour une cotisation)
+            if (declaredCotisation < 1) {
+              console.error(`⚠️ MONTANT SUSPECT: cotisation de ${declaredCotisation}€ (PI: ${paymentIntentId})`);
+              // On flag le paiement mais on continue le traitement (l'argent est déjà encaissé)
+              metadata._montantSuspect = true;
+            }
+          }
+
           // ATOMICITÉ + IDEMPOTENCE: Tout dans une seule transaction
           await admin.firestore().runTransaction(async (transaction) => {
             // 1. Vérification idempotence DANS la transaction
@@ -1127,18 +1803,19 @@ exports.stripeWebhook = functions
               }
 
               // Créer le document payment (cotisation)
-              const paymentRef = admin.firestore().collection('payments').doc();
+              // Bug 2 Fix: utiliser paymentIntentId comme docId (idempotence, évite doublon avec l'app)
+              const paymentRef = admin.firestore().collection('payments').doc(paymentIntentId);
               transaction.set(paymentRef, {
                 stripePaymentIntentId: paymentIntentId,
                 amount: montantCotisation,
                 montant: montantCotisation, // Compatibilité: écrire les deux champs
                 currency: paymentIntent.currency,
-                status: 'succeeded',
+                status: metadata._montantSuspect ? 'montant_suspect' : 'succeeded',
                 type: 'cotisation',
                 description: paymentIntent.description,
                 metadata: metadata,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              });
+                webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
 
               // Si don supplémentaire inclus, créer aussi un document donation
               if (montantDon > 0) {
@@ -1181,22 +1858,29 @@ exports.stripeWebhook = functions
                 }
               }
             } else {
-              // Don - Créer le document donation
-              const donationRef = admin.firestore().collection('donations').doc();
+              // Don - Créer/merger le document donation (docId = paymentIntentId pour idempotence anti-doublon avec l'app)
+              // Bug 1 Fix: { merge: true } pour ne pas écraser donorType/donorInfo créés par l'app (nécessaires CERFA)
+              const donationRef = admin.firestore().collection('donations').doc(paymentIntentId);
               transaction.set(donationRef, {
                 stripePaymentIntentId: paymentIntentId,
                 amount: amountEuros,
                 montant: amountEuros, // Compatibilité: écrire les deux champs
                 currency: paymentIntent.currency,
                 status: 'succeeded',
+                statut: 'completed', // Compatibilité avec l'app
                 type: 'donation',
                 description: paymentIntent.description,
                 metadata: metadata,
+                donateur: metadata.donorName || metadata.donorEmail || 'Anonyme',
+                donateurEmail: metadata.donorEmail ? metadata.donorEmail.toLowerCase() : null,
                 projectId: metadata.projectId || null,
                 projectName: metadata.projectName || null,
+                projetId: metadata.projectId || null,
+                projetNom: metadata.projectName || null,
                 isAnonymous: metadata.isAnonymous === 'true',
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              });
+                source: 'webhook_stripe',
+                webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
 
               // Mettre à jour le montant collecté du projet
               if (metadata.projectId) {
@@ -1205,7 +1889,7 @@ exports.stripeWebhook = functions
                 const projectDoc = await transaction.get(projectRef);
                 if (projectDoc.exists) {
                   transaction.update(projectRef, {
-                    montantCollecte: admin.firestore.FieldValue.increment(amountEuros),
+                    montantActuel: admin.firestore.FieldValue.increment(amountEuros),
                   });
                 } else {
                   console.warn('Projet non trouvé pour update:', metadata.projectId);
@@ -1243,6 +1927,508 @@ exports.stripeWebhook = functions
           console.error('Erreur enregistrement échec:', err);
         }
         break;
+
+      case 'invoice.payment_succeeded':
+        // Événement déclenché pour chaque paiement récurrent réussi d'un abonnement
+        const invoice = event.data.object;
+        const subscriptionId = invoice.subscription;
+
+        console.log('Paiement récurrent réussi pour subscription:', subscriptionId);
+
+        try {
+          // Bug 3 Fix: Idempotence - vérifier si cet invoice a déjà été traité
+          const invoiceProcessedRef = admin.firestore().collection('processed_payments').doc(invoice.id);
+          const invoiceProcessedDoc = await invoiceProcessedRef.get();
+          if (invoiceProcessedDoc.exists) {
+            console.log('Invoice déjà traitée (idempotent):', invoice.id);
+            break;
+          }
+
+          // Récupérer la subscription pour avoir les metadata
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+          const customerId = subscription.customer;
+          const metadata = subscription.metadata || {};
+          const amountEuros = invoice.amount_paid / 100;
+
+          // Récupérer l'email du customer
+          const customer = await stripe.customers.retrieve(customerId);
+          const email = customer.email;
+
+          // Trouver le membre par stripeCustomerId
+          const membersSnapshot = await admin.firestore()
+            .collection('members')
+            .where('stripeCustomerId', '==', customerId)
+            .limit(1)
+            .get();
+
+          if (membersSnapshot.empty) {
+            console.warn('Membre non trouvé pour customer:', customerId);
+            break;
+          }
+
+          const memberDoc = membersSnapshot.docs[0];
+          const memberId = memberDoc.id;
+          const memberData = memberDoc.data();
+
+          // Créer un document payment pour ce renouvellement
+          // Bug 3 Fix: utiliser invoice.id comme docId pour idempotence
+          const paymentRef = admin.firestore().collection('payments').doc(invoice.id);
+          await paymentRef.set({
+            stripePaymentIntentId: invoice.payment_intent,
+            stripeSubscriptionId: subscriptionId,
+            stripeInvoiceId: invoice.id,
+            amount: amountEuros,
+            montant: amountEuros,
+            currency: invoice.currency,
+            status: 'succeeded',
+            type: 'cotisation',
+            description: 'Renouvellement cotisation mensuelle',
+            memberId: metadata.memberIdDisplay || '',
+            memberName: memberData.prenom + ' ' + memberData.nom,
+            period: 'mensuel',
+            source: 'stripe_subscription',
+            metadata: {
+              memberId: memberId,
+              memberIdDisplay: metadata.memberIdDisplay || '',
+              memberName: memberData.prenom + ' ' + memberData.nom,
+              email: email,
+              period: 'mensuel',
+            },
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // Étendre la date de fin de cotisation de 1 mois
+          const now = new Date();
+          let newEndDate;
+
+          if (memberData.cotisation?.dateFin) {
+            const currentEnd = memberData.cotisation.dateFin.toDate();
+            // Si la date de fin est dans le futur, on ajoute 1 mois à partir de cette date
+            // Sinon, on ajoute 1 mois à partir d'aujourd'hui
+            if (currentEnd > now) {
+              newEndDate = new Date(currentEnd);
+              const origDay1 = newEndDate.getDate();
+              newEndDate.setMonth(newEndDate.getMonth() + 1);
+              // Bug 5 Fix: débordement mois (31 jan → 3 mars)
+              if (newEndDate.getDate() !== origDay1) newEndDate.setDate(0);
+            } else {
+              newEndDate = new Date(now);
+              const origDay2 = newEndDate.getDate();
+              newEndDate.setMonth(newEndDate.getMonth() + 1);
+              if (newEndDate.getDate() !== origDay2) newEndDate.setDate(0);
+            }
+          } else {
+            newEndDate = new Date(now);
+            const origDay3 = newEndDate.getDate();
+            newEndDate.setMonth(newEndDate.getMonth() + 1);
+            if (newEndDate.getDate() !== origDay3) newEndDate.setDate(0);
+          }
+
+          // Mettre à jour le membre
+          await memberDoc.ref.update({
+            status: 'actif',
+            statut: 'actif',
+            datePaiement: admin.firestore.FieldValue.serverTimestamp(),
+            montantPaye: amountEuros,
+            stripePaymentId: invoice.payment_intent,
+            cotisation: {
+              type: 'mensuel',
+              montant: amountEuros,
+              dateDebut: memberData.cotisation?.dateDebut || admin.firestore.Timestamp.fromDate(now),
+              dateFin: admin.firestore.Timestamp.fromDate(newEndDate),
+            },
+          });
+
+          // Bug 3 Fix: Marquer l'invoice comme traitée (idempotence)
+          await invoiceProcessedRef.set({
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+            type: 'invoice_payment',
+            invoiceId: invoice.id,
+            subscriptionId: subscriptionId,
+          });
+
+          console.log('Cotisation renouvelée jusqu\'au:', newEndDate.toISOString());
+        } catch (err) {
+          console.error('Erreur traitement invoice.payment_succeeded:', err);
+        }
+        break;
+
+      case 'invoice.payment_failed':
+        // Événement déclenché quand un paiement récurrent d'abonnement échoue
+        const failedInvoice = event.data.object;
+        const failedSubId = failedInvoice.subscription;
+        const attemptCount = failedInvoice.attempt_count || 1;
+
+        console.log('Paiement récurrent échoué pour subscription:', failedSubId, 'tentative:', attemptCount);
+
+        try {
+          if (!failedSubId) {
+            console.log('Pas de subscription associée, skip');
+            break;
+          }
+
+          const failedSubscription = await stripe.subscriptions.retrieve(failedSubId);
+          const failedCustomerId = failedSubscription.customer;
+          const failedCustomer = await stripe.customers.retrieve(failedCustomerId);
+          const failedEmail = failedCustomer.email;
+
+          const failedMembersSnapshot = await admin.firestore()
+            .collection('members')
+            .where('stripeCustomerId', '==', failedCustomerId)
+            .limit(1)
+            .get();
+
+          let failedMemberPrenom = '';
+          let failedMemberDoc = null;
+
+          if (!failedMembersSnapshot.empty) {
+            failedMemberDoc = failedMembersSnapshot.docs[0];
+            const failedMemberData = failedMemberDoc.data();
+            failedMemberPrenom = failedMemberData.prenom || '';
+
+            const statusUpdate = {
+              paymentFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+              paymentFailedCount: attemptCount,
+            };
+
+            if (attemptCount >= 3) {
+              statusUpdate.status = 'sympathisant';
+              statusUpdate.statut = 'sympathisant';
+              console.log('3 tentatives échouées, membre passé en sympathisant');
+            }
+
+            await failedMemberDoc.ref.update(statusUpdate);
+          }
+
+          await admin.firestore().collection('failed_payments').add({
+            stripeInvoiceId: failedInvoice.id,
+            stripeSubscriptionId: failedSubId,
+            stripeCustomerId: failedCustomerId,
+            attemptCount: attemptCount,
+            amountDue: (failedInvoice.amount_due || 0) / 100,
+            error: failedInvoice.last_finalization_error?.message || 'Paiement refusé',
+            memberId: failedMemberDoc ? failedMemberDoc.id : null,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          if (failedEmail) {
+            const brevoUser = functions.config().brevo?.smtp_user;
+            const brevoPass = functions.config().brevo?.smtp_pass;
+            const fromEmail = functions.config().brevo?.from_email;
+            const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+
+            if (brevoUser && brevoPass && fromEmail) {
+              const amountDue = ((failedInvoice.amount_due || 0) / 100).toFixed(2);
+
+              const pfTemplate = await loadEmailTemplate('payment_failed', {
+                prenom: failedMemberPrenom,
+                montant: amountDue + ' €',
+                tentative: String(attemptCount),
+                date: new Date().toLocaleDateString('fr-FR'),
+              });
+
+              const pfSubject = pfTemplate?.subject || 'Échec de paiement - El Mohsinine';
+              let pfHtmlBody;
+
+              if (pfTemplate?.body) {
+                const settingsDoc = await admin.firestore().collection('settings').doc('association').get();
+                const assocData = settingsDoc.exists ? settingsDoc.data() : {};
+                pfHtmlBody = textToEmailHtml(pfTemplate.body, {
+                  headerTitle: '⚠️ Échec de paiement',
+                  headerGradient: '#e65100, #ff9800',
+                  footerAssociation: assocData.nom || 'Mosquée El Mohsinine',
+                  footerAdresse: assocData.adresse || '',
+                  footerTelephone: assocData.telephone || '',
+                });
+              } else {
+                const settingsDoc = await admin.firestore().collection('settings').doc('association').get();
+                const assocData = settingsDoc.exists ? settingsDoc.data() : {};
+                pfHtmlBody = `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: linear-gradient(135deg, #e65100, #ff9800); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                      <h1 style="color: white; margin: 0;">⚠️ Échec de paiement</h1>
+                    </div>
+                    <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                      <p style="font-size: 16px; color: #444;">Salam alaykoum${failedMemberPrenom ? ' ' + failedMemberPrenom : ''},</p>
+                      <p style="font-size: 16px; color: #444;">Votre paiement de cotisation mensuelle de <strong>${amountDue} €</strong> a été <strong>refusé par votre banque</strong>.</p>
+                      <div style="background: #fff3e0; border-left: 4px solid #e65100; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                        <p style="margin: 0; color: #e65100; font-weight: bold;">Tentative ${attemptCount}/3</p>
+                        <p style="margin: 5px 0 0; color: #444;">${attemptCount >= 3
+                          ? 'Toutes les tentatives ont échoué. Votre abonnement a été suspendu et votre statut est repassé en sympathisant.'
+                          : 'Stripe réessaiera automatiquement dans quelques jours. Veuillez vérifier votre carte bancaire.'}</p>
+                      </div>
+                      <p style="font-size: 16px; color: #444;"><strong>Que faire ?</strong></p>
+                      <ul style="color: #444; line-height: 1.8;">
+                        <li>Vérifiez que votre carte bancaire est valide</li>
+                        <li>Assurez-vous que votre compte dispose de fonds suffisants</li>
+                        <li>Si le problème persiste, contactez votre banque</li>
+                        <li>Vous pouvez renouveler votre cotisation depuis l'application</li>
+                      </ul>
+                      <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                      <div style="font-size: 13px; color: #888; text-align: center;">
+                        <p style="margin: 5px 0;"><strong>${assocData.nom || 'Mosquée El Mohsinine'}</strong></p>
+                        ${assocData.adresse ? '<p style="margin: 5px 0;">📍 ' + assocData.adresse + '</p>' : ''}
+                        ${assocData.telephone ? '<p style="margin: 5px 0;">📞 ' + assocData.telephone + '</p>' : ''}
+                      </div>
+                    </div>
+                  </div>`;
+              }
+
+              const pfTransporter = nodemailer.createTransport({
+                host: 'smtp-relay.brevo.com',
+                port: 587,
+                secure: false,
+                auth: { user: brevoUser, pass: brevoPass },
+              });
+
+              await pfTransporter.sendMail({
+                from: `"${fromName}" <${fromEmail}>`,
+                to: failedEmail,
+                subject: pfSubject,
+                html: pfHtmlBody,
+              });
+
+              console.log('Email échec de paiement envoyé à:', failedEmail.substring(0, 3) + '***');
+            }
+          }
+        } catch (err) {
+          console.error('Erreur traitement invoice.payment_failed:', err);
+        }
+        break;
+
+      case 'customer.subscription.deleted':
+        // Événement déclenché quand un abonnement est annulé ou expire
+        const deletedSubscription = event.data.object;
+        const deletedSubId = deletedSubscription.id;
+
+        console.log('Subscription supprimée:', deletedSubId);
+
+        try {
+          // Trouver le membre par stripeSubscriptionId
+          const subMembersSnapshot = await admin.firestore()
+            .collection('members')
+            .where('stripeSubscriptionId', '==', deletedSubId)
+            .limit(1)
+            .get();
+
+          if (!subMembersSnapshot.empty) {
+            const subMemberDoc = subMembersSnapshot.docs[0];
+            const subMemberData = subMemberDoc.data();
+            await subMemberDoc.ref.update({
+              status: 'sympathisant',
+              statut: 'sympathisant',
+              cotisationType: null,
+              stripeSubscriptionId: null,
+              subscriptionCancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            console.log('Membre mis à jour en sympathisant suite à annulation abonnement');
+
+            // Envoyer email de confirmation d'annulation
+            const cancelEmail = subMemberData.email;
+            const cancelPrenom = subMemberData.prenom || subMemberData.nom || 'Membre';
+            if (cancelEmail) {
+              try {
+                const brevoUser = functions.config().brevo?.smtp_user;
+                const brevoPass = functions.config().brevo?.smtp_pass;
+                const fromEmail = functions.config().brevo?.from_email;
+                const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+
+                if (brevoUser && brevoPass && fromEmail) {
+                  // Charger les infos association
+                  const cancelSettingsDoc = await admin.firestore().collection('settings').doc('association').get();
+                  const cancelAssocData = cancelSettingsDoc.exists ? cancelSettingsDoc.data() : {};
+                  const nomAssociation = cancelAssocData.nom || 'Mosquée El Mohsinine';
+
+                  const cancelTemplate = await loadEmailTemplate('cotisation_cancelled', {
+                    prenom: cancelPrenom,
+                    nom_association: nomAssociation,
+                    date: new Date().toLocaleDateString('fr-FR'),
+                  });
+
+                  let cancelSubject, cancelHtmlBody;
+                  if (cancelTemplate) {
+                    cancelSubject = cancelTemplate.subject;
+                    cancelHtmlBody = textToEmailHtml(cancelTemplate.body, {
+                      headerTitle: '📋 Annulation de cotisation',
+                      headerGradient: '#455a64, #78909c',
+                      footerAssociation: nomAssociation,
+                      footerAdresse: cancelAssocData.adresse ? `${cancelAssocData.adresse}, ${cancelAssocData.codePostal || ''} ${cancelAssocData.ville || ''}` : '',
+                      footerTelephone: cancelAssocData.telephone || '',
+                    });
+                  } else {
+                    // Fallback hardcodé
+                    cancelSubject = 'Confirmation d\'annulation de cotisation - ' + nomAssociation;
+                    cancelHtmlBody = textToEmailHtml(
+                      `Salam alaykoum {prenom},\n\nNous vous confirmons que votre cotisation mensuelle auprès de ${nomAssociation} a bien été annulée.\n\nVotre statut est désormais "sympathisant". Vous ne serez plus prélevé automatiquement.\n\nSi cette annulation est une erreur ou si vous souhaitez reprendre votre adhésion, vous pouvez à tout moment vous réinscrire depuis l'application dans l'onglet "Adhérent".\n\nNous vous remercions pour votre soutien passé et espérons vous revoir bientôt parmi nos membres actifs.\n\nBaraka Allahou fikoum,\nL'équipe ${nomAssociation}`
+                        .replace(/\{prenom\}/g, cancelPrenom),
+                      {
+                        headerTitle: '📋 Annulation de cotisation',
+                        headerGradient: '#455a64, #78909c',
+                        footerAssociation: nomAssociation,
+                        footerAdresse: cancelAssocData.adresse ? `${cancelAssocData.adresse}, ${cancelAssocData.codePostal || ''} ${cancelAssocData.ville || ''}` : '',
+                        footerTelephone: cancelAssocData.telephone || '',
+                      }
+                    );
+                  }
+
+                  const cancelTransporter = nodemailer.createTransport({
+                    host: 'smtp-relay.brevo.com',
+                    port: 587,
+                    secure: false,
+                    auth: { user: brevoUser, pass: brevoPass },
+                  });
+
+                  await cancelTransporter.sendMail({
+                    from: `"${fromName}" <${fromEmail}>`,
+                    to: cancelEmail,
+                    subject: cancelSubject,
+                    html: cancelHtmlBody,
+                  });
+
+                  console.log(`✅ Email annulation cotisation envoyé à ${cancelEmail.substring(0, 3)}***`);
+                }
+              } catch (emailErr) {
+                console.error('Erreur envoi email annulation:', emailErr);
+                // Ne pas bloquer le flux principal si l'email échoue
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Erreur traitement customer.subscription.deleted:', err);
+        }
+        break;
+
+      case 'customer.subscription.updated':
+        // Événement déclenché quand un abonnement est modifié
+        const updatedSubscription = event.data.object;
+        console.log('Subscription mise à jour:', updatedSubscription.id, 'status:', updatedSubscription.status);
+
+        try {
+          // Si l'abonnement passe en cancel_at_period_end, on peut logger ou notifier
+          if (updatedSubscription.cancel_at_period_end) {
+            console.log('Abonnement marqué pour annulation à la fin de la période:', updatedSubscription.cancel_at);
+          }
+
+          // Trouver le membre et mettre à jour son statut si nécessaire
+          const updatedSubMembersSnapshot = await admin.firestore()
+            .collection('members')
+            .where('stripeSubscriptionId', '==', updatedSubscription.id)
+            .limit(1)
+            .get();
+
+          if (!updatedSubMembersSnapshot.empty) {
+            const updatedSubMemberDoc = updatedSubMembersSnapshot.docs[0];
+            const updateData = {};
+
+            // Mettre à jour le statut selon le statut Stripe
+            if (updatedSubscription.status === 'active') {
+              updateData.status = 'actif';
+              updateData.statut = 'actif';
+            } else if (updatedSubscription.status === 'canceled' || updatedSubscription.status === 'unpaid') {
+              updateData.status = 'sympathisant';
+              updateData.statut = 'sympathisant';
+            }
+
+            if (Object.keys(updateData).length > 0) {
+              await updatedSubMemberDoc.ref.update(updateData);
+              console.log('Membre mis à jour suite à changement de statut abonnement');
+            }
+          }
+        } catch (err) {
+          console.error('Erreur traitement customer.subscription.updated:', err);
+        }
+        break;
+
+      // FIX D4: Handler litiges Stripe (disputes)
+      case 'charge.dispute.created': {
+        const dispute = event.data.object;
+        console.log('⚠️ LITIGE STRIPE créé:', dispute.id, 'montant:', dispute.amount / 100, dispute.currency);
+
+        try {
+          // 1. Créer doc dans collection "disputes"
+          await admin.firestore().collection('disputes').doc(dispute.id).set({
+            disputeId: dispute.id,
+            paymentIntentId: dispute.payment_intent,
+            chargeId: dispute.charge,
+            amount: dispute.amount / 100,
+            currency: dispute.currency,
+            reason: dispute.reason,
+            status: dispute.status,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            evidenceDueBy: dispute.evidence_details?.due_by
+              ? new Date(dispute.evidence_details.due_by * 1000)
+              : null,
+          });
+
+          // 2. Envoyer email alerte admin
+          const brevoUser = functions.config().brevo?.smtp_user;
+          const brevoPass = functions.config().brevo?.smtp_pass;
+          const fromEmail = functions.config().brevo?.from_email;
+          const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+
+          if (brevoUser && brevoPass && fromEmail) {
+            const disputeTransporter = nodemailer.createTransport({
+              host: 'smtp-relay.brevo.com',
+              port: 587,
+              secure: false,
+              auth: { user: brevoUser, pass: brevoPass },
+            });
+
+            const evidenceDate = dispute.evidence_details?.due_by
+              ? new Date(dispute.evidence_details.due_by * 1000).toLocaleDateString('fr-FR')
+              : 'Non précisé';
+
+            await disputeTransporter.sendMail({
+              from: `"${fromName}" <${fromEmail}>`,
+              to: fromEmail,
+              subject: `⚠️ LITIGE STRIPE — Un paiement de ${dispute.amount / 100}€ est contesté`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <div style="background: linear-gradient(135deg, #d32f2f, #f44336); padding: 20px; text-align: center;">
+                    <h1 style="color: white; margin: 0;">⚠️ Litige Stripe</h1>
+                  </div>
+                  <div style="padding: 20px; background: #fff;">
+                    <p>Un paiement a été contesté par le titulaire de la carte.</p>
+                    <div style="background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin: 15px 0;">
+                      <p><strong>Montant contesté :</strong> ${dispute.amount / 100} ${dispute.currency?.toUpperCase()}</p>
+                      <p><strong>Raison :</strong> ${dispute.reason || 'Non spécifiée'}</p>
+                      <p><strong>ID litige :</strong> ${dispute.id}</p>
+                      <p><strong>ID paiement :</strong> ${dispute.payment_intent}</p>
+                      <p><strong>Date limite preuve :</strong> ${evidenceDate}</p>
+                    </div>
+                    <p style="color: #d32f2f; font-weight: bold;">
+                      Action requise : Connectez-vous au Dashboard Stripe pour soumettre des preuves avant la date limite.
+                    </p>
+                    <a href="https://dashboard.stripe.com/disputes/${dispute.id}" style="display: inline-block; padding: 10px 20px; background: #d32f2f; color: white; text-decoration: none; border-radius: 5px;">
+                      Voir le litige sur Stripe
+                    </a>
+                  </div>
+                </div>
+              `,
+            });
+            console.log('Email alerte litige envoyé à l\'admin');
+          }
+        } catch (err) {
+          console.error('Erreur traitement charge.dispute.created:', err);
+        }
+        break;
+      }
+
+      case 'charge.dispute.closed': {
+        const closedDispute = event.data.object;
+        console.log('Litige Stripe fermé:', closedDispute.id, 'status:', closedDispute.status);
+
+        try {
+          await admin.firestore().collection('disputes').doc(closedDispute.id).update({
+            status: closedDispute.status,
+            closedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          console.log('Litige mis à jour dans Firestore');
+        } catch (err) {
+          console.error('Erreur traitement charge.dispute.closed:', err);
+        }
+        break;
+      }
 
       default:
         console.log('Événement non géré:', event.type);
@@ -1332,12 +2518,36 @@ const amountToWords = (amount) => {
 };
 
 /**
+ * Télécharge une image depuis une URL et retourne un Buffer
+ */
+const fetchImageBuffer = (url) => {
+  return new Promise((resolve, reject) => {
+    https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to fetch image: ${response.statusCode}`));
+        return;
+      }
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => resolve(Buffer.concat(chunks)));
+      response.on('error', reject);
+    }).on('error', reject);
+  });
+};
+
+/**
  * Génère le PDF CERFA pour un PARTICULIER (article 200 du CGI - 66%)
  */
 const generateCERFAParticulier = async (data) => {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+  return new Promise(async (resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 30, bottom: 25, left: 40, right: 40 } });
     const chunks = [];
+    const pageWidth = 595.28; // A4
+    const contentLeft = 40;
+    const contentRight = pageWidth - 40;
+    const contentWidth = contentRight - contentLeft;
+    const boxLeft = contentLeft;
+    const boxInner = contentLeft + 10;
 
     doc.on('data', chunk => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -1345,101 +2555,165 @@ const generateCERFAParticulier = async (data) => {
 
     const { association, donateur, don, numeroRecu } = data;
 
-    // En-tête CERFA
-    doc.fontSize(16).font('Helvetica-Bold').text('REÇU AU TITRE DES DONS', { align: 'center' });
-    doc.fontSize(10).font('Helvetica').text('À DES ORGANISMES D\'INTÉRÊT GÉNÉRAL', { align: 'center' });
-    doc.fontSize(9).text('Article 200, 238 bis et 978 du code général des impôts (CGI)', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(8).fillColor('#666666').text('N° CERFA 11580*05', { align: 'center' });
+    // Charger images signature et cachet si disponibles
+    let signatureBuffer = null;
+    let cachetBuffer = null;
+    try {
+      if (association.signatureUrl) {
+        signatureBuffer = await fetchImageBuffer(association.signatureUrl);
+      }
+      if (association.cachetUrl) {
+        cachetBuffer = await fetchImageBuffer(association.cachetUrl);
+      }
+    } catch (imgErr) {
+      console.warn('Impossible de charger signature/cachet:', imgErr.message);
+    }
+
+    // === EN-TÊTE CERFA ===
+    doc.fontSize(14).font('Helvetica-Bold').text('REÇU AU TITRE DES DONS', { align: 'center' });
+    doc.fontSize(9).font('Helvetica').text('À DES ORGANISMES D\'INTÉRÊT GÉNÉRAL', { align: 'center' });
+    doc.fontSize(8).text('Article 200 du code général des impôts (CGI)', { align: 'center' });
+    doc.moveDown(0.2);
+    doc.fontSize(7).fillColor('#666666').text('N° CERFA 11580*05', { align: 'center' });
     doc.fillColor('#000000');
-    doc.moveDown(1.5);
+    doc.moveDown(0.4);
 
-    // Numéro et date
-    doc.fontSize(11).font('Helvetica-Bold');
-    doc.text(`Reçu n° : ${numeroRecu}`, { align: 'right' });
+    // Numéro et date (sur une seule ligne)
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text(`Reçu n° : ${numeroRecu}`, boxLeft, doc.y, { continued: true, width: contentWidth });
     doc.font('Helvetica').text(`Date d'émission : ${new Date().toLocaleDateString('fr-FR')}`, { align: 'right' });
-    doc.moveDown(1.5);
+    doc.moveDown(0.6);
 
-    // Cadre 1 : Organisme bénéficiaire
-    doc.rect(50, doc.y, 500, 110).stroke();
-    const boxY = doc.y + 10;
-    doc.fontSize(10).font('Helvetica-Bold').text('1. ORGANISME BÉNÉFICIAIRE', 60, boxY);
-    doc.moveDown(0.5);
-    doc.font('Helvetica');
-    doc.text(`Nom : ${association.nom || '[À compléter]'}`, 60);
-    doc.text(`Adresse : ${association.adresse || '[À compléter]'}`, 60);
-    doc.text(`${association.codePostal || ''} ${association.ville || ''}`, 60);
-    doc.text(`N° SIREN/RNA : ${association.siren || '[À compléter]'}`, 60);
-    doc.text(`Statut juridique : ${association.statut || 'Association cultuelle loi 1905'}`, 60);
-    doc.text(`Objet : ${association.objet || 'Exercice du culte musulman'}`, 60);
-    doc.y = boxY + 120;
-
-    // Cadre 2 : Donateur (particulier)
-    doc.rect(50, doc.y, 500, 90).stroke();
-    const donY = doc.y + 10;
-    doc.fontSize(10).font('Helvetica-Bold').text('2. DONATEUR (Particulier)', 60, donY);
-    doc.moveDown(0.5);
-    doc.font('Helvetica');
-    doc.text(`Nom : ${donateur.nom || ''}`, 60);
-    doc.text(`Prénom : ${donateur.prenom || ''}`, 60);
-    doc.text(`Adresse : ${donateur.adresse || 'Non renseignée'}`, 60);
-    doc.text(`${donateur.codePostal || ''} ${donateur.ville || ''}`, 60);
-    doc.y = donY + 100;
-
-    // Cadre 3 : Don
-    doc.rect(50, doc.y, 500, 130).stroke();
-    const giftY = doc.y + 10;
-    doc.fontSize(10).font('Helvetica-Bold').text('3. DON', 60, giftY);
-    doc.moveDown(0.5);
-    doc.font('Helvetica');
-    doc.text(`Date du (des) versement(s) : ${don.date}`, 60);
-    doc.text(`Mode de versement : ${don.mode}`, 60);
-    doc.moveDown(0.5);
-    doc.font('Helvetica-Bold').fontSize(12);
-    doc.text(`Montant : ${don.montant.toFixed(2)} €`, 60);
-    doc.font('Helvetica').fontSize(10);
-    doc.text(`Soit en toutes lettres : ${amountToWords(don.montant)}`, 60);
-    doc.moveDown(0.5);
-    doc.text('Nature du don : Don en numéraire', 60);
-    doc.text('Forme du don : Acte authentique / Acte sous seing privé / Don manuel / Autres', 60);
-    doc.y = giftY + 140;
-
-    // Cadre 4 : Article applicable
-    doc.moveDown(0.5);
-    doc.rect(50, doc.y, 500, 45).stroke();
-    const artY = doc.y + 8;
-    doc.fontSize(10).font('Helvetica-Bold').text('4. ARTICLE DU CGI APPLICABLE', 60, artY);
+    // === CADRE 1 : Organisme bénéficiaire ===
+    const box1H = 150;
+    doc.rect(boxLeft, doc.y, contentWidth, box1H).stroke();
+    const box1Y = doc.y + 6;
+    doc.fontSize(9).font('Helvetica-Bold').text('1. ORGANISME BÉNÉFICIAIRE', boxInner, box1Y);
     doc.moveDown(0.3);
-    doc.font('Helvetica');
-    doc.text('[X] Article 200 du CGI (impôt sur le revenu)', 60);
-    doc.text('[  ] Article 238 bis du CGI (impôt sur les sociétés)', 60);
-    doc.y = artY + 55;
-
-    // Mentions légales
-    doc.moveDown(0.5);
     doc.fontSize(8).font('Helvetica');
-    doc.text(
-      'Le bénéficiaire certifie sur l\'honneur que les dons et versements qu\'il reçoit ouvrent droit à la réduction d\'impôt prévue à l\'article 200 du CGI.',
-      50, doc.y, { width: 500, align: 'justify' }
-    );
-    doc.moveDown(0.5);
+    doc.text(`Nom : ${association.nom || '[À compléter]'}`, boxInner);
+    doc.text(`Adresse : ${association.adresse || '[À compléter]'}  ${association.codePostal || ''} ${association.ville || ''}`, boxInner);
+    doc.text(`N° SIREN/RNA : ${association.siren || '[À compléter]'}  —  Statut : ${association.statut || 'Association cultuelle loi 1905'}`, boxInner);
+    doc.text(`Objet : ${association.objet || 'Exercice du culte musulman'}`, boxInner);
+    doc.moveDown(0.2);
+    doc.fontSize(7).font('Helvetica-Bold').text('Catégorie au regard de l\'article 200 du CGI :', boxInner);
+    doc.font('Helvetica');
+    doc.text('[  ] Œuvre ou organisme d\'intérêt général   [  ] Fondation ou association reconnue d\'utilité publique', boxInner);
+    doc.text('[  ] Fondation d\'entreprise   [  ] Établissement d\'enseignement supérieur ou artistique', boxInner);
+    doc.text('[X] Association cultuelle ou de bienfaisance autorisée à recevoir des dons et legs', boxInner);
+    doc.y = box1Y + box1H + 4;
+
+    // === CADRE 2 : Donateur (particulier) ===
+    const box2H = 70;
+    doc.rect(boxLeft, doc.y, contentWidth, box2H).stroke();
+    const box2Y = doc.y + 6;
+    doc.fontSize(9).font('Helvetica-Bold').text('2. DONATEUR (Particulier)', boxInner, box2Y);
+    doc.moveDown(0.2);
+    doc.fontSize(8).font('Helvetica');
+    doc.text(`Nom : ${donateur.nom || ''}   Prénom : ${donateur.prenom || ''}`, boxInner);
+    doc.text(`Adresse : ${donateur.adresse || 'Non renseignée'}  ${donateur.codePostal || ''} ${donateur.ville || ''}`, boxInner);
+    doc.y = box2Y + box2H + 4;
+
+    // === CADRE 3 : Don ===
+    const box3H = 115;
+    doc.rect(boxLeft, doc.y, contentWidth, box3H).stroke();
+    const box3Y = doc.y + 6;
+    doc.fontSize(9).font('Helvetica-Bold').text('3. DON', boxInner, box3Y);
+    doc.moveDown(0.2);
+    doc.fontSize(8).font('Helvetica');
+    doc.text(`Date du (des) versement(s) : ${don.date}     Mode de versement : ${don.mode}`, boxInner);
+    doc.moveDown(0.3);
+    doc.font('Helvetica-Bold').fontSize(11);
+    doc.text(`Montant : ${don.montant.toFixed(2)} €`, boxInner);
+    doc.font('Helvetica').fontSize(8);
+    doc.text(`Soit en toutes lettres : ${amountToWords(don.montant)}`, boxInner);
+    doc.moveDown(0.2);
+    doc.text('Nature du don : Don en numéraire', boxInner);
+    doc.moveDown(0.2);
+    doc.text('Forme du don :   [  ] Acte authentique   [  ] Acte sous seing privé   [X] Don manuel   [  ] Autres', boxInner);
+    doc.y = box3Y + box3H + 4;
+
+    // === CADRE 4 : Dispositif légal applicable (art. 200 + 978 pour particulier) ===
+    const box4H = 55;
+    doc.rect(boxLeft, doc.y, contentWidth, box4H).stroke();
+    const box4Y = doc.y + 6;
+    doc.fontSize(9).font('Helvetica-Bold').text('4. DISPOSITIF LÉGAL APPLICABLE', boxInner, box4Y);
+    doc.moveDown(0.2);
+    doc.fontSize(7).font('Helvetica');
+    doc.text('Le bénéficiaire certifie sur l\'honneur que les dons et versements qu\'il reçoit ouvrent droit à la réduction d\'impôt prévue à l\'article :', boxInner);
+    doc.moveDown(0.2);
+    doc.fontSize(9).font('Helvetica');
+    doc.text('[X] 200 du CGI (impôt sur le revenu)     [  ] 978 du CGI (IFI — impôt sur la fortune immobilière)', boxInner);
+    doc.y = box4Y + box4H + 4;
+
+    // === Mentions légales ===
+    doc.moveDown(0.2);
+    doc.fontSize(7).font('Helvetica');
     doc.text(
       'Ce don ouvre droit à une réduction d\'impôt sur le revenu égale à 66% du montant versé, dans la limite de 20% du revenu imposable. Si le montant des dons dépasse cette limite, l\'excédent est reporté sur les 5 années suivantes.',
-      50, doc.y, { width: 500, align: 'justify' }
+      boxLeft, doc.y, { width: contentWidth, align: 'justify' }
     );
+    doc.moveDown(0.2);
+    doc.fontSize(7).font('Helvetica-Oblique').fillColor('#333333');
+    doc.text(
+      'Le don a été effectué sans aucune contrepartie directe ou indirecte au profit du donateur.',
+      boxLeft, doc.y, { width: contentWidth, align: 'center' }
+    );
+    doc.font('Helvetica').fillColor('#000000');
 
-    // Signature
-    doc.moveDown(1.5);
-    doc.fontSize(10);
-    doc.text(`Fait à ${association.ville || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR')}`, { align: 'right' });
-    doc.moveDown(0.8);
-    doc.text(`${association.signataire || 'Le Président'}`, { align: 'right' });
-    doc.text(`${association.nomSignataire || '[Nom du signataire]'}`, { align: 'right' });
+    // === BLOC SIGNATURE (bas-droite, position fixe) ===
+    const sigBlockX = contentRight - 200; // aligné à droite
+    const sigBlockY = 610; // position fixe en bas de page (après contrepartie, avant tampon)
 
-    // Pied de page
-    doc.fontSize(7).text(
+    doc.fontSize(9).font('Helvetica');
+    doc.text(`Fait à ${association.ville || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR')}`, sigBlockX, sigBlockY, { width: 200, align: 'right' });
+    doc.moveDown(0.3);
+    doc.text(`${association.signataire || 'Le Président'}`, sigBlockX, doc.y, { width: 200, align: 'right' });
+    doc.text(`${association.nomSignataire || '[Nom du signataire]'}`, sigBlockX, doc.y, { width: 200, align: 'right' });
+
+    // Tampon (cachet image ou cachet simulé)
+    const cachetY = doc.y + 4;
+    const cachetX = contentRight - 140;
+    const cachetSize = 100;
+    if (cachetBuffer) {
+      try {
+        doc.image(cachetBuffer, cachetX, cachetY, { width: cachetSize, height: cachetSize });
+      } catch (e) {
+        console.warn('Erreur ajout cachet PDF:', e.message);
+      }
+    } else {
+      // Cachet simulé (rond officiel) si pas d'image
+      const cx = cachetX + cachetSize / 2;
+      const cy = cachetY + cachetSize / 2;
+      const r = cachetSize / 2;
+      doc.save();
+      doc.circle(cx, cy, r).lineWidth(2).stroke('#1a1a1a');
+      doc.circle(cx, cy, r - 6).lineWidth(0.5).stroke('#1a1a1a');
+      doc.fontSize(6).font('Helvetica-Bold').fillColor('#1a1a1a');
+      doc.text('CENTRE CULTUREL', cachetX + 10, cy - 22, { width: cachetSize - 20, align: 'center' });
+      doc.text('ISLAMIQUE', cachetX + 10, doc.y, { width: cachetSize - 20, align: 'center' });
+      doc.fontSize(7).font('Helvetica-Bold');
+      doc.text('El Mohsinine', cachetX + 10, doc.y + 2, { width: cachetSize - 20, align: 'center' });
+      doc.fontSize(5).font('Helvetica');
+      doc.text('Bourg-en-Bresse', cachetX + 10, doc.y + 2, { width: cachetSize - 20, align: 'center' });
+      doc.text(association.siren || 'W012004130', cachetX + 10, doc.y, { width: cachetSize - 20, align: 'center' });
+      doc.restore();
+      doc.fillColor('#000000');
+    }
+
+    // Signature par-dessus le tampon si disponible
+    if (signatureBuffer) {
+      try {
+        doc.image(signatureBuffer, cachetX + 10, cachetY + 10, { width: 80, height: 40 });
+      } catch (e) {
+        console.warn('Erreur ajout signature PDF:', e.message);
+      }
+    }
+
+    // === FOOTER (tout en bas de la page 1) ===
+    doc.fontSize(6).font('Helvetica').text(
       'Document à conserver. Il vous permet de bénéficier d\'une réduction d\'impôt. Ne pas joindre à la déclaration de revenus.',
-      50, 750, { align: 'center', width: 500 }
+      boxLeft, 790, { align: 'center', width: contentWidth }
     );
 
     doc.end();
@@ -1450,9 +2724,15 @@ const generateCERFAParticulier = async (data) => {
  * Génère le PDF CERFA pour une ENTREPRISE (article 238 bis du CGI - 60%)
  */
 const generateCERFAEntreprise = async (data) => {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+  return new Promise(async (resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 30, bottom: 25, left: 40, right: 40 } });
     const chunks = [];
+    const pageWidth = 595.28;
+    const contentLeft = 40;
+    const contentRight = pageWidth - 40;
+    const contentWidth = contentRight - contentLeft;
+    const boxLeft = contentLeft;
+    const boxInner = contentLeft + 10;
 
     doc.on('data', chunk => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -1460,102 +2740,166 @@ const generateCERFAEntreprise = async (data) => {
 
     const { association, donateur, don, numeroRecu } = data;
 
-    // En-tête CERFA
-    doc.fontSize(16).font('Helvetica-Bold').text('REÇU AU TITRE DES DONS', { align: 'center' });
-    doc.fontSize(10).font('Helvetica').text('À DES ORGANISMES D\'INTÉRÊT GÉNÉRAL', { align: 'center' });
-    doc.fontSize(9).text('Article 200, 238 bis et 978 du code général des impôts (CGI)', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(8).fillColor('#666666').text('N° CERFA 16216*02', { align: 'center' });
+    // Charger images signature et cachet si disponibles
+    let signatureBuffer = null;
+    let cachetBuffer = null;
+    try {
+      if (association.signatureUrl) {
+        signatureBuffer = await fetchImageBuffer(association.signatureUrl);
+      }
+      if (association.cachetUrl) {
+        cachetBuffer = await fetchImageBuffer(association.cachetUrl);
+      }
+    } catch (imgErr) {
+      console.warn('Impossible de charger signature/cachet:', imgErr.message);
+    }
+
+    // === EN-TÊTE CERFA ===
+    doc.fontSize(14).font('Helvetica-Bold').text('REÇU AU TITRE DES DONS', { align: 'center' });
+    doc.fontSize(9).font('Helvetica').text('À DES ORGANISMES D\'INTÉRÊT GÉNÉRAL', { align: 'center' });
+    doc.fontSize(8).text('Article 200 et 238 bis du code général des impôts (CGI)', { align: 'center' });
+    doc.moveDown(0.2);
+    doc.fontSize(7).fillColor('#666666').text('N° CERFA 16216*02', { align: 'center' });
     doc.fillColor('#000000');
-    doc.moveDown(1.5);
+    doc.moveDown(0.4);
 
-    // Numéro et date
-    doc.fontSize(11).font('Helvetica-Bold');
-    doc.text(`Reçu n° : ${numeroRecu}`, { align: 'right' });
+    // Numéro et date (sur une seule ligne)
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text(`Reçu n° : ${numeroRecu}`, boxLeft, doc.y, { continued: true, width: contentWidth });
     doc.font('Helvetica').text(`Date d'émission : ${new Date().toLocaleDateString('fr-FR')}`, { align: 'right' });
-    doc.moveDown(1.5);
+    doc.moveDown(0.6);
 
-    // Cadre 1 : Organisme bénéficiaire
-    doc.rect(50, doc.y, 500, 110).stroke();
-    const boxY = doc.y + 10;
-    doc.fontSize(10).font('Helvetica-Bold').text('1. ORGANISME BÉNÉFICIAIRE', 60, boxY);
-    doc.moveDown(0.5);
-    doc.font('Helvetica');
-    doc.text(`Nom : ${association.nom || '[À compléter]'}`, 60);
-    doc.text(`Adresse : ${association.adresse || '[À compléter]'}`, 60);
-    doc.text(`${association.codePostal || ''} ${association.ville || ''}`, 60);
-    doc.text(`N° SIREN/RNA : ${association.siren || '[À compléter]'}`, 60);
-    doc.text(`Statut juridique : ${association.statut || 'Association cultuelle loi 1905'}`, 60);
-    doc.text(`Objet : ${association.objet || 'Exercice du culte musulman'}`, 60);
-    doc.y = boxY + 120;
-
-    // Cadre 2 : Donateur (entreprise)
-    doc.rect(50, doc.y, 500, 110).stroke();
-    const donY = doc.y + 10;
-    doc.fontSize(10).font('Helvetica-Bold').text('2. DONATEUR (Entreprise)', 60, donY);
-    doc.moveDown(0.5);
-    doc.font('Helvetica');
-    doc.text(`Raison sociale : ${donateur.companyName || donateur.nom || ''}`, 60);
-    doc.text(`N° SIRET : ${donateur.siret || 'Non renseigné'}`, 60);
-    doc.text(`Représentant légal : ${donateur.legalRepresentative || donateur.prenom || ''}`, 60);
-    doc.text(`Adresse du siège : ${donateur.adresse || 'Non renseignée'}`, 60);
-    doc.text(`${donateur.codePostal || ''} ${donateur.ville || ''}`, 60);
-    doc.y = donY + 120;
-
-    // Cadre 3 : Don
-    doc.rect(50, doc.y, 500, 130).stroke();
-    const giftY = doc.y + 10;
-    doc.fontSize(10).font('Helvetica-Bold').text('3. DON', 60, giftY);
-    doc.moveDown(0.5);
-    doc.font('Helvetica');
-    doc.text(`Date du (des) versement(s) : ${don.date}`, 60);
-    doc.text(`Mode de versement : ${don.mode}`, 60);
-    doc.moveDown(0.5);
-    doc.font('Helvetica-Bold').fontSize(12);
-    doc.text(`Montant : ${don.montant.toFixed(2)} €`, 60);
-    doc.font('Helvetica').fontSize(10);
-    doc.text(`Soit en toutes lettres : ${amountToWords(don.montant)}`, 60);
-    doc.moveDown(0.5);
-    doc.text('Nature du don : Don en numéraire', 60);
-    doc.text('Forme du don : Acte authentique / Acte sous seing privé / Don manuel / Autres', 60);
-    doc.y = giftY + 140;
-
-    // Cadre 4 : Article applicable
-    doc.moveDown(0.5);
-    doc.rect(50, doc.y, 500, 45).stroke();
-    const artY = doc.y + 8;
-    doc.fontSize(10).font('Helvetica-Bold').text('4. ARTICLE DU CGI APPLICABLE', 60, artY);
+    // === CADRE 1 : Organisme bénéficiaire ===
+    const box1H = 155;
+    doc.rect(boxLeft, doc.y, contentWidth, box1H).stroke();
+    const box1Y = doc.y + 6;
+    doc.fontSize(9).font('Helvetica-Bold').text('1. ORGANISME BÉNÉFICIAIRE', boxInner, box1Y);
     doc.moveDown(0.3);
-    doc.font('Helvetica');
-    doc.text('[  ] Article 200 du CGI (impôt sur le revenu)', 60);
-    doc.text('[X] Article 238 bis du CGI (impôt sur les sociétés)', 60);
-    doc.y = artY + 55;
-
-    // Mentions légales
-    doc.moveDown(0.5);
     doc.fontSize(8).font('Helvetica');
-    doc.text(
-      'Le bénéficiaire certifie sur l\'honneur que les dons et versements qu\'il reçoit ouvrent droit à la réduction d\'impôt prévue à l\'article 238 bis du CGI.',
-      50, doc.y, { width: 500, align: 'justify' }
-    );
-    doc.moveDown(0.5);
+    doc.text(`Nom : ${association.nom || '[À compléter]'}`, boxInner);
+    doc.text(`Adresse : ${association.adresse || '[À compléter]'}  ${association.codePostal || ''} ${association.ville || ''}`, boxInner);
+    doc.text(`N° SIREN/RNA : ${association.siren || '[À compléter]'}  —  Statut : ${association.statut || 'Association cultuelle loi 1905'}`, boxInner);
+    doc.text(`Objet : ${association.objet || 'Exercice du culte musulman'}`, boxInner);
+    doc.moveDown(0.2);
+    doc.fontSize(7).font('Helvetica-Bold').text('Catégorie au regard des articles 200 et 238 bis du CGI :', boxInner);
+    doc.font('Helvetica');
+    doc.text('[  ] Œuvre ou organisme d\'intérêt général   [  ] Fondation ou association reconnue d\'utilité publique', boxInner);
+    doc.text('[  ] Fondation d\'entreprise   [  ] Établissement d\'enseignement supérieur ou artistique', boxInner);
+    doc.text('[X] Association cultuelle ou de bienfaisance autorisée à recevoir des dons et legs', boxInner);
+    doc.y = box1Y + box1H + 4;
+
+    // === CADRE 2 : Donateur (entreprise) ===
+    const box2H = 80;
+    doc.rect(boxLeft, doc.y, contentWidth, box2H).stroke();
+    const box2Y = doc.y + 6;
+    doc.fontSize(9).font('Helvetica-Bold').text('2. DONATEUR (Entreprise)', boxInner, box2Y);
+    doc.moveDown(0.2);
+    doc.fontSize(8).font('Helvetica');
+    doc.text(`Raison sociale : ${donateur.companyName || donateur.nom || ''}   SIRET : ${donateur.siret || 'Non renseigné'}`, boxInner);
+    doc.text(`Représentant légal : ${donateur.legalRepresentative || donateur.prenom || ''}`, boxInner);
+    doc.text(`Adresse : ${donateur.adresse || 'Non renseignée'}  ${donateur.codePostal || ''} ${donateur.ville || ''}`, boxInner);
+    doc.y = box2Y + box2H + 4;
+
+    // === CADRE 3 : Don ===
+    const box3H = 115;
+    doc.rect(boxLeft, doc.y, contentWidth, box3H).stroke();
+    const box3Y = doc.y + 6;
+    doc.fontSize(9).font('Helvetica-Bold').text('3. DON', boxInner, box3Y);
+    doc.moveDown(0.2);
+    doc.fontSize(8).font('Helvetica');
+    doc.text(`Date du (des) versement(s) : ${don.date}     Mode de versement : ${don.mode}`, boxInner);
+    doc.moveDown(0.3);
+    doc.font('Helvetica-Bold').fontSize(11);
+    doc.text(`Montant : ${don.montant.toFixed(2)} €`, boxInner);
+    doc.font('Helvetica').fontSize(8);
+    doc.text(`Soit en toutes lettres : ${amountToWords(don.montant)}`, boxInner);
+    doc.moveDown(0.2);
+    doc.text('Nature du don : Don en numéraire', boxInner);
+    doc.moveDown(0.2);
+    doc.text('Forme du don :   [  ] Acte authentique   [  ] Acte sous seing privé   [X] Don manuel   [  ] Autres', boxInner);
+    doc.y = box3Y + box3H + 4;
+
+    // === CADRE 4 : Dispositif légal applicable (art. 238 bis) ===
+    const box4H = 55;
+    doc.rect(boxLeft, doc.y, contentWidth, box4H).stroke();
+    const box4Y = doc.y + 6;
+    doc.fontSize(9).font('Helvetica-Bold').text('4. DISPOSITIF LÉGAL APPLICABLE', boxInner, box4Y);
+    doc.moveDown(0.2);
+    doc.fontSize(7).font('Helvetica');
+    doc.text('Le bénéficiaire certifie sur l\'honneur que les dons et versements qu\'il reçoit ouvrent droit à la réduction d\'impôt prévue à l\'article :', boxInner);
+    doc.moveDown(0.2);
+    doc.fontSize(9).font('Helvetica');
+    doc.text('[  ] 200 du CGI (impôt sur le revenu)     [X] 238 bis du CGI (impôt sur les sociétés)', boxInner);
+    doc.y = box4Y + box4H + 4;
+
+    // === Mentions légales ===
+    doc.moveDown(0.2);
+    doc.fontSize(7).font('Helvetica');
     doc.text(
       'Ce don ouvre droit à une réduction d\'impôt sur les sociétés égale à 60% du montant versé, dans la limite de 20 000 € ou 5‰ du chiffre d\'affaires HT (le montant le plus élevé étant retenu). Si le montant des dons dépasse cette limite, l\'excédent est reporté sur les 5 exercices suivants.',
-      50, doc.y, { width: 500, align: 'justify' }
+      boxLeft, doc.y, { width: contentWidth, align: 'justify' }
     );
+    doc.moveDown(0.2);
+    doc.fontSize(7).font('Helvetica-Oblique').fillColor('#333333');
+    doc.text(
+      'Le don a été effectué sans aucune contrepartie directe ou indirecte au profit du donateur.',
+      boxLeft, doc.y, { width: contentWidth, align: 'center' }
+    );
+    doc.font('Helvetica').fillColor('#000000');
 
-    // Signature
-    doc.moveDown(1.5);
-    doc.fontSize(10);
-    doc.text(`Fait à ${association.ville || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR')}`, { align: 'right' });
-    doc.moveDown(0.8);
-    doc.text(`${association.signataire || 'Le Président'}`, { align: 'right' });
-    doc.text(`${association.nomSignataire || '[Nom du signataire]'}`, { align: 'right' });
+    // === BLOC SIGNATURE (bas-droite, position fixe) ===
+    const sigBlockX = contentRight - 200;
+    const sigBlockY = 610;
 
-    // Pied de page
-    doc.fontSize(7).text(
-      'Document à conserver. Il vous permet de bénéficier d\'une réduction d\'impôt sur les sociétés.',
-      50, 750, { align: 'center', width: 500 }
+    doc.fontSize(9).font('Helvetica');
+    doc.text(`Fait à ${association.ville || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR')}`, sigBlockX, sigBlockY, { width: 200, align: 'right' });
+    doc.moveDown(0.3);
+    doc.text(`${association.signataire || 'Le Président'}`, sigBlockX, doc.y, { width: 200, align: 'right' });
+    doc.text(`${association.nomSignataire || '[Nom du signataire]'}`, sigBlockX, doc.y, { width: 200, align: 'right' });
+
+    // Tampon (cachet image ou cachet simulé)
+    const cachetY = doc.y + 4;
+    const cachetX = contentRight - 140;
+    const cachetSize = 100;
+    if (cachetBuffer) {
+      try {
+        doc.image(cachetBuffer, cachetX, cachetY, { width: cachetSize, height: cachetSize });
+      } catch (e) {
+        console.warn('Erreur ajout cachet PDF:', e.message);
+      }
+    } else {
+      // Cachet simulé (rond officiel) si pas d'image
+      const cx = cachetX + cachetSize / 2;
+      const cy = cachetY + cachetSize / 2;
+      const r = cachetSize / 2;
+      doc.save();
+      doc.circle(cx, cy, r).lineWidth(2).stroke('#1a1a1a');
+      doc.circle(cx, cy, r - 6).lineWidth(0.5).stroke('#1a1a1a');
+      doc.fontSize(6).font('Helvetica-Bold').fillColor('#1a1a1a');
+      doc.text('CENTRE CULTUREL', cachetX + 10, cy - 22, { width: cachetSize - 20, align: 'center' });
+      doc.text('ISLAMIQUE', cachetX + 10, doc.y, { width: cachetSize - 20, align: 'center' });
+      doc.fontSize(7).font('Helvetica-Bold');
+      doc.text('El Mohsinine', cachetX + 10, doc.y + 2, { width: cachetSize - 20, align: 'center' });
+      doc.fontSize(5).font('Helvetica');
+      doc.text('Bourg-en-Bresse', cachetX + 10, doc.y + 2, { width: cachetSize - 20, align: 'center' });
+      doc.text(association.siren || 'W012004130', cachetX + 10, doc.y, { width: cachetSize - 20, align: 'center' });
+      doc.restore();
+      doc.fillColor('#000000');
+    }
+
+    // Signature par-dessus le tampon si disponible
+    if (signatureBuffer) {
+      try {
+        doc.image(signatureBuffer, cachetX + 10, cachetY + 10, { width: 80, height: 40 });
+      } catch (e) {
+        console.warn('Erreur ajout signature PDF:', e.message);
+      }
+    }
+
+    // === FOOTER (tout en bas de la page 1) ===
+    doc.fontSize(6).font('Helvetica').text(
+      'Document à conserver. Il vous permet de bénéficier d\'une réduction d\'impôt sur les sociétés. Ne pas joindre à la déclaration de revenus.',
+      boxLeft, 790, { align: 'center', width: contentWidth }
     );
 
     doc.end();
@@ -1603,7 +2947,13 @@ exports.sendRecuFiscal = functions
 
     // Vérifier que l'utilisateur demande son propre reçu fiscal
     const userEmail = context.auth.token.email;
-    if (userEmail && userEmail.toLowerCase() !== email.toLowerCase()) {
+    if (!userEmail) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Votre compte n\'a pas d\'email associé'
+      );
+    }
+    if (userEmail.toLowerCase() !== email.toLowerCase()) {
       throw new functions.https.HttpsError(
         'permission-denied',
         'Vous ne pouvez demander que votre propre reçu fiscal'
@@ -1629,6 +2979,33 @@ exports.sendRecuFiscal = functions
 
       const association = settingsDoc.data();
 
+      // Charger également les paramètres association pour signatureUrl et cachetUrl
+      const associationDoc = await admin.firestore()
+        .collection('settings')
+        .doc('association')
+        .get();
+
+      if (associationDoc.exists) {
+        const associationData = associationDoc.data();
+        if (associationData.signatureUrl) {
+          association.signatureUrl = associationData.signatureUrl;
+        }
+        if (associationData.cachetUrl) {
+          association.cachetUrl = associationData.cachetUrl;
+        }
+        if (associationData.nomSignataire) {
+          association.nomSignataire = associationData.nomSignataire;
+        }
+      }
+
+      // Vérifier que le nom du signataire est configuré (obligatoire pour validité CERFA)
+      if (!association.nomSignataire || !association.nomSignataire.trim()) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          'Le nom du signataire n\'est pas configuré. Rendez-vous dans Paramètres > Association pour le renseigner.'
+        );
+      }
+
       // 2. Récupérer les DONS de l'utilisateur pour l'année
       // IMPORTANT: Seuls les dons sont éligibles au reçu fiscal, PAS les cotisations
       // Les cotisations fixes (10€ mensuel, 100€ annuel) ne donnent pas droit à déduction
@@ -1636,12 +3013,12 @@ exports.sendRecuFiscal = functions
       const endDate = new Date(annee, 11, 31, 23, 59, 59);
 
       // Dons dans la collection donations (dons pour projets)
+      // Utilise donateurEmail (champ normalisé app + webhook)
       const donationsSnapshot = await admin.firestore()
         .collection('donations')
-        .where('metadata.donorEmail', '==', email.toLowerCase())
+        .where('donateurEmail', '==', email.toLowerCase())
         .where('createdAt', '>=', startDate)
         .where('createdAt', '<=', endDate)
-        .where('status', '==', 'succeeded')
         .get();
 
       // Dons dans la collection payments (surplus au-dessus de la cotisation)
@@ -1664,11 +3041,14 @@ exports.sendRecuFiscal = functions
       // Les donations (pour projets) sont toujours des dons
       donationsSnapshot.docs.forEach(doc => {
         const d = doc.data();
-        totalDons += d.amount || 0;
+        // Filtrer : accepter status=succeeded OU statut=completed
+        if (d.status !== 'succeeded' && d.statut !== 'completed') return;
+        const montantDon = d.amount || d.montant || 0;
+        totalDons += montantDon;
         donsDetails.push({
           date: d.createdAt?.toDate?.()?.toLocaleDateString('fr-FR') || 'N/A',
-          montant: d.amount || 0,
-          mode: d.metadata?.paymentMethod || 'Carte bancaire',
+          montant: montantDon,
+          mode: d.modePaiement || d.metadata?.paymentMethod || 'Carte bancaire',
           type: 'Don projet',
         });
         // Détecter le type de donateur depuis le don le plus récent
@@ -1799,7 +3179,7 @@ exports.sendRecuFiscal = functions
       const brevoUser = functions.config().brevo?.smtp_user;
       const brevoPass = functions.config().brevo?.smtp_pass;
       const fromEmail = functions.config().brevo?.from_email;
-      const fromName = functions.config().brevo?.from_name || 'Mosquée El Mouhssinine';
+      const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
 
       if (!brevoUser || !brevoPass || !fromEmail) {
         throw new functions.https.HttpsError(
@@ -1825,37 +3205,31 @@ exports.sendRecuFiscal = functions
         ? (donateur.companyName || donateur.nom || '')
         : `${donateur.prenom || ''} ${donateur.nom || ''}`.trim();
 
+      // Charger template CERFA depuis Firestore
+      const cerfaTemplate = await loadEmailTemplate('annual_cerfa', {
+        nom: donateurLabel || '',
+        annee: String(annee),
+        montant_total: totalDons.toFixed(2),
+        reference: numeroRecu,
+        nom_association: association.nom || 'Mosquée El Mohsinine',
+      });
+
+      let cerfaSubject, cerfaHtml;
+      if (cerfaTemplate) {
+        cerfaSubject = cerfaTemplate.subject;
+        cerfaHtml = textToEmailHtml(cerfaTemplate.body, {
+          footerAssociation: association.nom || 'Mosquée El Mohsinine',
+        });
+      } else {
+        cerfaSubject = `Reçu fiscal ${annee} - ${association.nom || 'Mosquée El Mohsinine'}`;
+        cerfaHtml = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h2>Votre reçu fiscal ${annee}</h2><p>Bonjour ${donateurLabel || ''},</p><p>Veuillez trouver ci-joint votre reçu fiscal pour l'année ${annee}.</p><p><strong>Montant total des dons :</strong> ${totalDons.toFixed(2)} €</p><p><strong>Numéro du reçu :</strong> ${numeroRecu}</p><p>Qu'Allah vous récompense pour votre générosité.</p><p>${association.nom || 'Mosquée El Mohsinine'}</p></div>`;
+      }
+
       await transporter.sendMail({
         from: `"${fromName}" <${fromEmail}>`,
         to: email,
-        subject: `Reçu fiscal ${annee} - ${association.nom || 'Mosquée El Mouhssinine'}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>Votre reçu fiscal ${annee}</h2>
-            <p>Bonjour ${donateurLabel || ''},</p>
-            <p>Veuillez trouver ci-joint votre reçu fiscal pour l'année ${annee}.</p>
-            <p><strong>Montant total des dons :</strong> ${totalDons.toFixed(2)} €</p>
-            <p><strong>Numéro du reçu :</strong> ${numeroRecu}</p>
-            ${detectedDonorType === 'entreprise' ? '<p><strong>Type :</strong> Entreprise (CERFA 16216)</p>' : '<p><strong>Type :</strong> Particulier (CERFA 11580)</p>'}
-            <br>
-            <p>Ce document est à conserver.</p>
-            <p>${reductionText}</p>
-            <br>
-            <p>Qu'Allah vous récompense pour votre générosité.</p>
-            <p>${association.nom || 'Mosquée El Mouhssinine'}</p>
-
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
-              <p style="color: #888; font-size: 12px; margin: 0;">
-                ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
-                Pour nous contacter, écrivez à :
-                <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
-              </p>
-              <p style="color: #aaa; font-size: 11px; margin-top: 10px;">
-                Mosquée El Mouhssinine - Bourg-en-Bresse
-              </p>
-            </div>
-          </div>
-        `,
+        subject: cerfaSubject,
+        html: cerfaHtml,
         attachments: [
           {
             filename: `recu_fiscal_${annee}_${numeroRecu}.pdf`,
@@ -1885,7 +3259,7 @@ exports.sendRecuFiscal = functions
         metadata: { contentType: 'application/pdf' },
       });
 
-      console.log('Reçu fiscal envoyé:', numeroRecu, 'à', email);
+      console.log('Reçu fiscal envoyé:', numeroRecu, 'à', email.replace(/(.{2}).*(@.*)/, '$1***$2'));
 
       // Copie dans messagerie interne
       try {
@@ -1894,7 +3268,7 @@ exports.sendRecuFiscal = functions
           userName: `${donateur.prenom || ''} ${donateur.nom || ''}`.trim(),
           userEmail: email,
           sujet: `Reçu fiscal ${annee}`,
-          message: `Bonjour ${donateurLabel || ''},\n\nVotre reçu fiscal pour l'année ${annee} a été envoyé à ${email}.\n\nMontant total des dons : ${totalDons.toFixed(2)} €\nNuméro du reçu : ${numeroRecu}\nType : ${detectedDonorType === 'entreprise' ? 'Entreprise (art. 238 bis - 60%)' : 'Particulier (art. 200 - 66%)'}\n\nQu'Allah vous récompense pour votre générosité.\nMosquée El Mouhssinine`,
+          message: `Bonjour ${donateurLabel || ''},\n\nVotre reçu fiscal pour l'année ${annee} a été envoyé à ${email}.\n\nMontant total des dons : ${totalDons.toFixed(2)} €\nNuméro du reçu : ${numeroRecu}\nType : ${detectedDonorType === 'entreprise' ? 'Entreprise (art. 238 bis - 60%)' : 'Particulier (art. 200 - 66%)'}\n\nQu'Allah vous récompense pour votre générosité.\nMosquée El Mohsinine`,
           status: 'resolu',
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2052,7 +3426,7 @@ exports.onNewSympathisant = functions
       return null;
     }
 
-    console.log('🎉 Nouveau sympathisant:', prenom, email);
+    console.log('🎉 Nouveau sympathisant:', prenom, email.replace(/(.{2}).*(@.*)/, '$1***$2'));
 
     try {
       // Récupérer les infos de la mosquée
@@ -2062,7 +3436,7 @@ exports.onNewSympathisant = functions
         .get();
 
       const mosquee = mosqueeDoc.exists ? mosqueeDoc.data() : {};
-      const nomMosquee = mosquee.nom || 'Mosquée El Mouhssinine';
+      const nomMosquee = mosquee.nom || 'Mosquée El Mohsinine';
       const adresseMosquee = mosquee.adresse || '';
       const villeMosquee = mosquee.ville || 'Bourg-en-Bresse';
       const telephoneMosquee = mosquee.telephone || '';
@@ -2089,73 +3463,37 @@ exports.onNewSympathisant = functions
         },
       });
 
+      // Charger le template depuis Firestore
+      const template = await loadEmailTemplate('welcome_member', {
+        prenom,
+        nom_mosquee: nomMosquee,
+      });
+
+      let emailSubject, emailHtml;
+      if (template) {
+        emailSubject = template.subject;
+        emailHtml = textToEmailHtml(template.body, {
+          headerTitle: '🕌 Bienvenue',
+          headerGradient: '#6b4423, #8b5a2b',
+          footerAssociation: nomMosquee,
+          footerAdresse: adresseMosquee ? `${adresseMosquee}, ${villeMosquee}` : '',
+          footerTelephone: telephoneMosquee,
+        });
+      } else {
+        // Fallback hardcodé
+        emailSubject = `Bienvenue à la ${nomMosquee} !`;
+        emailHtml = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><div style="background: linear-gradient(135deg, #6b4423 0%, #8b5a2b 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;"><h1 style="color: white; margin: 0;">🕌 Bienvenue</h1></div><div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;"><p style="font-size: 16px;">Assalamu alaykum <strong>${prenom}</strong>,</p><p style="font-size: 16px;">Bienvenue en tant que <strong>membre sympathisant</strong> de la ${nomMosquee} !</p><p style="font-size: 16px; color: #444;">Qu'Allah vous bénisse et accepte vos bonnes actions.</p><p style="font-size: 16px; color: #444;">Fraternellement,<br><strong>Le Bureau de la ${nomMosquee}</strong></p></div></div>`;
+      }
+
       // Envoyer l'email de bienvenue
       await transporter.sendMail({
         from: `"${fromName}" <${fromEmail}>`,
         to: email,
-        subject: `Bienvenue à la ${nomMosquee} !`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #6b4423 0%, #8b5a2b 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-              <h1 style="color: white; margin: 0;">🕌 Bienvenue</h1>
-            </div>
-
-            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-              <p style="font-size: 16px;">Assalamu alaykum <strong>${prenom}</strong>,</p>
-
-              <p style="font-size: 16px;">Bienvenue en tant que <strong>membre sympathisant</strong> de la ${nomMosquee} !</p>
-
-              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6b4423;">
-                <h3 style="color: #6b4423; margin-top: 0;">🎁 En tant que sympathisant, vous avez accès à :</h3>
-                <ul style="color: #444; line-height: 1.8;">
-                  <li>📍 Les horaires de prière en temps réel</li>
-                  <li>📖 Le Coran complet avec audio et traduction</li>
-                  <li>📢 Les annonces et événements de la mosquée</li>
-                  <li>🤲 Les invocations (adhkar)</li>
-                  <li>📝 L'alphabet arabe et les leçons</li>
-                  <li>💬 La messagerie avec le bureau</li>
-                </ul>
-              </div>
-
-              <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #2e7d32; margin-top: 0;">💳 Pour devenir membre actif (adhérent)</h3>
-                <ol style="color: #444; line-height: 1.8;">
-                  <li>Ouvrez l'application et allez dans "Membre"</li>
-                  <li>Cliquez sur "Devenir Membre Actif"</li>
-                  <li>Lisez et acceptez les statuts et règlement intérieur</li>
-                  <li>Payez votre cotisation (mensuelle ou annuelle)</li>
-                  <li>Votre adhésion sera validée par le bureau</li>
-                </ol>
-                <p style="font-size: 14px; color: #666; margin-bottom: 0;">
-                  <em>En tant que membre actif, vous bénéficiez d'une carte de membre, du droit de vote en AG, et d'un reçu fiscal pour votre cotisation.</em>
-                </p>
-              </div>
-
-              <p style="font-size: 16px; color: #444;">Qu'Allah vous bénisse et accepte vos bonnes actions.</p>
-
-              <p style="font-size: 16px; color: #444;">Fraternellement,<br><strong>Le Bureau de la ${nomMosquee}</strong></p>
-
-              <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-
-              <div style="font-size: 13px; color: #888; text-align: center;">
-                ${adresseMosquee ? `<p style="margin: 5px 0;">📍 ${adresseMosquee}, ${villeMosquee}</p>` : ''}
-                ${telephoneMosquee ? `<p style="margin: 5px 0;">📞 ${telephoneMosquee}</p>` : ''}
-                ${emailMosquee ? `<p style="margin: 5px 0;">📧 ${emailMosquee}</p>` : ''}
-              </div>
-
-              <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center;">
-                <p style="color: #888; font-size: 12px; margin: 0;">
-                  ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
-                  Pour nous contacter, écrivez à :
-                  <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
-                </p>
-              </div>
-            </div>
-          </div>
-        `,
+        subject: emailSubject,
+        html: emailHtml,
       });
 
-      console.log('✅ Email de bienvenue envoyé à', email);
+      console.log('✅ Email de bienvenue envoyé à', email.replace(/(.{2}).*(@.*)/, '$1***$2'));
 
       // Copie dans messagerie interne (ne bloque pas si erreur)
       try {
@@ -2163,7 +3501,7 @@ exports.onNewSympathisant = functions
           odUserId: snap.id,
           userName: `${prenom} ${member.nom || ''}`.trim(),
           userEmail: email,
-          sujet: 'Bienvenue à El Mouhssinine',
+          sujet: 'Bienvenue à El Mohsinine',
           message: `Assalamu alaykum ${prenom},\n\nBienvenue en tant que membre sympathisant de la ${nomMosquee} !\n\nVous avez accès à :\n- Les horaires de prière en temps réel\n- Le Coran complet avec audio et traduction\n- Les annonces et événements de la mosquée\n- Les invocations (adhkar)\n- L'alphabet arabe et les leçons\n- La messagerie avec le bureau\n\nPour devenir membre actif, ouvrez l'onglet "Membre" et cliquez sur "Devenir Membre Actif".\n\nQu'Allah vous bénisse.\n\nLe Bureau de la ${nomMosquee}`,
           status: 'resolu',
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2239,7 +3577,7 @@ exports.validateMembership = functions
         .get();
 
       const mosquee = mosqueeDoc.exists ? mosqueeDoc.data() : {};
-      const nomMosquee = mosquee.nom || 'Mosquée El Mouhssinine';
+      const nomMosquee = mosquee.nom || 'Mosquée El Mohsinine';
 
       // Configuration email
       const brevoUser = functions.config().brevo?.smtp_user;
@@ -2271,49 +3609,29 @@ exports.validateMembership = functions
 
         // Envoyer email de confirmation
         if (transporter && email) {
+          const validationTemplate = await loadEmailTemplate('membership_manual_validation', {
+            prenom,
+            nom_mosquee: nomMosquee,
+          });
+
+          let validationSubject, validationHtml;
+          if (validationTemplate) {
+            validationSubject = validationTemplate.subject;
+            validationHtml = textToEmailHtml(validationTemplate.body, {
+              headerTitle: '✅ Adhésion Validée',
+              headerGradient: '#2e7d32, #4caf50',
+              footerAssociation: nomMosquee,
+            });
+          } else {
+            validationSubject = `🎉 Votre adhésion est validée - ${nomMosquee}`;
+            validationHtml = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;"><h1 style="color: white; margin: 0;">✅ Adhésion Validée</h1></div><div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;"><p>Assalamu alaykum ${prenom},</p><p>Votre adhésion a été validée ! Vous êtes maintenant membre actif.</p><p>Fraternellement, Le Bureau de la ${nomMosquee}</p></div></div>`;
+          }
+
           await transporter.sendMail({
             from: `"${fromName}" <${fromEmail}>`,
             to: email,
-            subject: `🎉 Votre adhésion est validée - ${nomMosquee}`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-                  <h1 style="color: white; margin: 0;">✅ Adhésion Validée</h1>
-                </div>
-
-                <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-                  <p style="font-size: 16px;">Assalamu alaykum <strong>${prenom}</strong>,</p>
-
-                  <p style="font-size: 16px;">Nous avons le plaisir de vous informer que votre adhésion à la ${nomMosquee} a été <strong style="color: #2e7d32;">validée</strong> !</p>
-
-                  <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <h3 style="color: #2e7d32; margin-top: 0;">Vous êtes maintenant membre actif</h3>
-                    <ul style="color: #444; line-height: 1.8;">
-                      <li>🎫 Carte de membre officielle</li>
-                      <li>🗳️ Droit de vote en Assemblée Générale</li>
-                      <li>📜 Reçu fiscal pour votre cotisation</li>
-                    </ul>
-                  </div>
-
-                  <p style="font-size: 16px;">Votre carte de membre est disponible dans l'application.</p>
-
-                  <p style="font-size: 16px; color: #444;">Qu'Allah vous récompense pour votre engagement.</p>
-
-                  <p style="font-size: 16px; color: #444;">Fraternellement,<br><strong>Le Bureau de la ${nomMosquee}</strong></p>
-
-                  <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
-                    <p style="color: #888; font-size: 12px; margin: 0;">
-                      ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
-                      Pour nous contacter, écrivez à :
-                      <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
-                    </p>
-                    <p style="color: #aaa; font-size: 11px; margin-top: 10px;">
-                      Mosquée El Mouhssinine - Bourg-en-Bresse
-                    </p>
-                  </div>
-                </div>
-              </div>
-            `,
+            subject: validationSubject,
+            html: validationHtml,
           });
         }
 
@@ -2432,7 +3750,7 @@ exports.validateMembership = functions
                       <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
                     </p>
                     <p style="color: #aaa; font-size: 11px; margin-top: 10px;">
-                      Mosquée El Mouhssinine - Bourg-en-Bresse
+                      Mosquée El Mohsinine - Bourg-en-Bresse
                     </p>
                   </div>
                 </div>
@@ -2680,17 +3998,43 @@ const processAnnualRecusFiscaux = async (year) => {
 
   const association = settingsDoc.data();
 
+  // Charger également les paramètres association pour signatureUrl et cachetUrl
+  const associationDoc = await admin.firestore()
+    .collection('settings')
+    .doc('association')
+    .get();
+
+  if (associationDoc.exists) {
+    const associationData = associationDoc.data();
+    if (associationData.signatureUrl) {
+      association.signatureUrl = associationData.signatureUrl;
+    }
+    if (associationData.cachetUrl) {
+      association.cachetUrl = associationData.cachetUrl;
+    }
+    if (associationData.nomSignataire) {
+      association.nomSignataire = associationData.nomSignataire;
+    }
+  }
+
+  // Vérifier que le nom du signataire est configuré (obligatoire pour validité CERFA)
+  if (!association.nomSignataire || !association.nomSignataire.trim()) {
+    console.error('❌ Nom du signataire non configuré — Reçus fiscaux CERFA non valides sans signature');
+    return { success: false, error: 'Nom du signataire non configuré dans Paramètres > Association' };
+  }
+
   // 2. Récupérer tous les dons de l'année
   const startDate = new Date(year, 0, 1);
   const endDate = new Date(year, 11, 31, 23, 59, 59);
 
+  // Récupérer donations (sans filtre status car app=completed, webhook=succeeded)
   const donationsSnapshot = await admin.firestore()
     .collection('donations')
     .where('createdAt', '>=', startDate)
     .where('createdAt', '<=', endDate)
-    .where('status', '==', 'succeeded')
     .get();
 
+  // Récupérer payments avec type=don uniquement
   const paymentsSnapshot = await admin.firestore()
     .collection('payments')
     .where('createdAt', '>=', startDate)
@@ -2703,7 +4047,10 @@ const processAnnualRecusFiscaux = async (year) => {
 
   donationsSnapshot.docs.forEach(docSnap => {
     const d = docSnap.data();
-    const donorEmail = (d.donorInfo?.email || d.metadata?.donorEmail || '').toLowerCase();
+    // Filtrer : accepter status=succeeded OU statut=completed
+    if (d.status !== 'succeeded' && d.statut !== 'completed') return;
+    // Chercher email dans tous les champs possibles (app: donateurEmail, webhook: metadata.donorEmail)
+    const donorEmail = (d.donateurEmail || d.donorInfo?.email || d.metadata?.donorEmail || '').toLowerCase();
     if (!donorEmail) return;
 
     if (!donorMap[donorEmail]) {
@@ -2714,11 +4061,12 @@ const processAnnualRecusFiscaux = async (year) => {
         donorInfo: d.donorInfo || null,
       };
     }
-    donorMap[donorEmail].total += d.amount || 0;
+    const montantDon = d.amount || d.montant || 0;
+    donorMap[donorEmail].total += montantDon;
     donorMap[donorEmail].donsDetails.push({
       date: d.createdAt?.toDate?.()?.toLocaleDateString('fr-FR') || 'N/A',
-      montant: d.amount || 0,
-      mode: d.metadata?.paymentMethod || 'Carte bancaire',
+      montant: montantDon,
+      mode: d.modePaiement || d.metadata?.paymentMethod || 'Carte bancaire',
       type: 'Don projet',
     });
     // Mettre à jour donorType/donorInfo si plus récent (par timestamp)
@@ -2769,7 +4117,7 @@ const processAnnualRecusFiscaux = async (year) => {
   const brevoUser = functions.config().brevo?.smtp_user;
   const brevoPass = functions.config().brevo?.smtp_pass;
   const fromEmail = functions.config().brevo?.from_email;
-  const fromName = functions.config().brevo?.from_name || 'Mosquée El Mouhssinine';
+  const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
 
   let transporter = null;
   if (brevoUser && brevoPass && fromEmail) {
@@ -2786,195 +4134,218 @@ const processAnnualRecusFiscaux = async (year) => {
   let errorCount = 0;
   const errors = [];
 
-  for (const email of emails) {
-    try {
-      const donor = donorMap[email];
-      if (donor.total <= 0) continue;
+  // Bug 13 Fix: Traiter par batch de 3 en parallèle (au lieu de séquentiel)
+  // Promise.allSettled = chaque erreur est isolée, pas de crash global
+  // Batch de 3 pour éviter les conflits sur le compteur de numéros de reçus
+  const processDonor = async (email) => {
+    const donor = donorMap[email];
+    if (donor.total <= 0) return 'skipped';
 
-      // Construire l'objet donateur
-      let donateur;
-      if (donor.donorInfo) {
-        if (donor.donorType === 'entreprise') {
-          donateur = {
-            nom: donor.donorInfo.companyName || '',
-            prenom: donor.donorInfo.legalRepresentative || '',
-            adresse: donor.donorInfo.address || '',
-            codePostal: donor.donorInfo.postalCode || '',
-            ville: donor.donorInfo.city || '',
-            companyName: donor.donorInfo.companyName || '',
-            siret: donor.donorInfo.siret || '',
-            legalRepresentative: donor.donorInfo.legalRepresentative || '',
-          };
-        } else {
-          donateur = {
-            nom: donor.donorInfo.lastName || '',
-            prenom: donor.donorInfo.firstName || '',
-            adresse: donor.donorInfo.address || '',
-            codePostal: donor.donorInfo.postalCode || '',
-            ville: donor.donorInfo.city || '',
-          };
-        }
-      } else {
-        // Fallback membre
-        const memberSnap = await admin.firestore()
-          .collection('members')
-          .where('email', '==', email)
-          .limit(1)
-          .get();
-        if (!memberSnap.empty) {
-          const m = memberSnap.docs[0].data();
-          donateur = { nom: m.nom || '', prenom: m.prenom || '', adresse: m.adresse || '', codePostal: m.codePostal || '', ville: m.ville || '' };
-        } else {
-          donateur = { nom: '', prenom: '', adresse: '', codePostal: '', ville: '' };
-        }
-      }
+    // Vérifier si un reçu fiscal existe déjà pour cet email et cette année
+    const existingRecu = await admin.firestore()
+      .collection('recus_fiscaux')
+      .where('email', '==', email)
+      .where('annee', '==', year)
+      .limit(1)
+      .get();
 
-      // Numéro de reçu
-      const recuCounterRef = admin.firestore().collection('counters').doc('recusFiscaux');
-      const newNumber = await admin.firestore().runTransaction(async (transaction) => {
-        const counterDoc = await transaction.get(recuCounterRef);
-        let currentNumber = 0;
-        if (counterDoc.exists) {
-          currentNumber = counterDoc.data()[`year_${year}`] || 0;
-        }
-        const nextNumber = currentNumber + 1;
-        transaction.set(recuCounterRef, { [`year_${year}`]: nextNumber }, { merge: true });
-        return nextNumber;
-      });
-      const numeroRecu = `RF-${year}-${String(newNumber).padStart(5, '0')}`;
-
-      // Générer PDF
-      const pdfBuffer = await generateRecuFiscalPDF({
-        association,
-        donateur,
-        don: {
-          date: `Année ${year}`,
-          montant: donor.total,
-          mode: 'Divers (voir détails)',
-        },
-        numeroRecu,
-        donorType: donor.donorType,
-      });
-
-      // Upload Storage
-      const bucket = admin.storage().bucket();
-      const typeSuffix = donor.donorType === 'entreprise' ? 'entreprise' : 'particulier';
-      const filePath = `recus-fiscaux/${year}/${email.replace(/[^a-z0-9]/gi, '_')}_${typeSuffix}.pdf`;
-      await bucket.file(filePath).save(pdfBuffer, {
-        metadata: { contentType: 'application/pdf' },
-      });
-
-      // Envoyer email
-      if (transporter) {
-        const donateurLabel = donor.donorType === 'entreprise'
-          ? (donateur.companyName || donateur.nom || '')
-          : `${donateur.prenom || ''} ${donateur.nom || ''}`.trim();
-        const reductionText = donor.donorType === 'entreprise'
-          ? '60% (article 238 bis du CGI)'
-          : '66% (article 200 du CGI)';
-
-        await transporter.sendMail({
-          from: `"${fromName}" <${fromEmail}>`,
-          to: email,
-          subject: `Reçu fiscal ${year} - ${association.nom || 'Mosquée El Mouhssinine'}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>Votre reçu fiscal ${year}</h2>
-              <p>Bonjour ${donateurLabel},</p>
-              <p>Veuillez trouver ci-joint votre reçu fiscal pour l'année ${year}.</p>
-              <p><strong>Montant total des dons :</strong> ${donor.total.toFixed(2)} €</p>
-              <p><strong>Réduction fiscale :</strong> ${reductionText}</p>
-              <p><strong>Numéro du reçu :</strong> ${numeroRecu}</p>
-              <br>
-              <p>Qu'Allah vous récompense pour votre générosité.</p>
-              <p>${association.nom || 'Mosquée El Mouhssinine'}</p>
-              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
-                <p style="color: #888; font-size: 12px;">
-                  ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
-                  Pour nous contacter : <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
-                </p>
-              </div>
-            </div>
-          `,
-          attachments: [{ filename: `recu_fiscal_${year}_${numeroRecu}.pdf`, content: pdfBuffer }],
-        });
-      }
-
-      // Sauvegarder dans Firestore
-      await admin.firestore().collection('recus_fiscaux').add({
-        numeroRecu,
-        annee: year,
-        email,
-        donateur,
-        donorType: donor.donorType,
-        montantTotal: donor.total,
-        donsDetails: donor.donsDetails,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
-        status: 'sent',
-        source: 'auto_annual',
-      });
-
-      // Message in-app
-      try {
-        // Trouver l'uid du donateur
-        const userRecord = await admin.auth().getUserByEmail(email).catch(() => null);
-        if (userRecord) {
-          await admin.firestore().collection('messages').add({
-            odUserId: userRecord.uid,
-            userName: donor.donorType === 'entreprise'
-              ? (donateur.companyName || donateur.nom || '')
-              : `${donateur.prenom || ''} ${donateur.nom || ''}`.trim(),
-            userEmail: email,
-            sujet: `Reçu fiscal ${year}`,
-            message: `Bonjour,\n\nVotre reçu fiscal pour l'année ${year} a été généré et envoyé à ${email}.\n\nMontant : ${donor.total.toFixed(2)} €\nNuméro : ${numeroRecu}\n\nMosquée El Mouhssinine`,
-            status: 'resolu',
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            createdBy: 'mosquee',
-            type: 'system',
-            reponses: [],
-          });
-        }
-      } catch (msgErr) {
-        console.error(`⚠️ Erreur message in-app pour ${email}:`, msgErr.message);
-      }
-
-      // Marquer les donations comme ayant un reçu généré
-      const donDocs = donationsSnapshot.docs.filter(d => {
-        const dEmail = (d.data().donorInfo?.email || d.data().metadata?.donorEmail || '').toLowerCase();
-        return dEmail === email;
-      });
-      for (const donDoc of donDocs) {
-        await donDoc.ref.update({
-          recuFiscalGenerated: true,
-          recuFiscalYear: year,
-        });
-      }
-
-      // Marquer aussi les payments comme ayant un reçu généré
-      const payDocs = paymentsSnapshot.docs.filter(p => {
-        const pData = p.data();
-        const isDon = pData.type === 'don' || pData.eligibleRecuFiscal === true;
-        if (!isDon) return false;
-        const pEmail = (pData.metadata?.email || '').toLowerCase();
-        return pEmail === email;
-      });
-      for (const payDoc of payDocs) {
-        await payDoc.ref.update({
-          recuFiscalGenerated: true,
-          recuFiscalYear: year,
-        });
-      }
-
-      successCount++;
-      console.log(`✅ Reçu ${numeroRecu} envoyé à ${email} (${donor.total.toFixed(2)}€, ${donor.donorType})`);
-
-    } catch (err) {
-      errorCount++;
-      errors.push({ email, error: err.message });
-      console.error(`❌ Erreur reçu pour ${email}:`, err.message);
+    if (!existingRecu.empty) {
+      console.log(`⏭️ Reçu fiscal déjà existant pour ${email} (${year}), skip`);
+      return 'already_exists';
     }
+
+    // Construire l'objet donateur
+    let donateur;
+    if (donor.donorInfo) {
+      if (donor.donorType === 'entreprise') {
+        donateur = {
+          nom: donor.donorInfo.companyName || '',
+          prenom: donor.donorInfo.legalRepresentative || '',
+          adresse: donor.donorInfo.address || '',
+          codePostal: donor.donorInfo.postalCode || '',
+          ville: donor.donorInfo.city || '',
+          companyName: donor.donorInfo.companyName || '',
+          siret: donor.donorInfo.siret || '',
+          legalRepresentative: donor.donorInfo.legalRepresentative || '',
+        };
+      } else {
+        donateur = {
+          nom: donor.donorInfo.lastName || '',
+          prenom: donor.donorInfo.firstName || '',
+          adresse: donor.donorInfo.address || '',
+          codePostal: donor.donorInfo.postalCode || '',
+          ville: donor.donorInfo.city || '',
+        };
+      }
+    } else {
+      // Fallback membre
+      const memberSnap = await admin.firestore()
+        .collection('members')
+        .where('email', '==', email)
+        .limit(1)
+        .get();
+      if (!memberSnap.empty) {
+        const m = memberSnap.docs[0].data();
+        donateur = { nom: m.nom || '', prenom: m.prenom || '', adresse: m.adresse || '', codePostal: m.codePostal || '', ville: m.ville || '' };
+      } else {
+        donateur = { nom: '', prenom: '', adresse: '', codePostal: '', ville: '' };
+      }
+    }
+
+    // Numéro de reçu (transaction atomique sur le compteur)
+    const recuCounterRef = admin.firestore().collection('counters').doc('recusFiscaux');
+    const newNumber = await admin.firestore().runTransaction(async (transaction) => {
+      const counterDoc = await transaction.get(recuCounterRef);
+      let currentNumber = 0;
+      if (counterDoc.exists) {
+        currentNumber = counterDoc.data()[`year_${year}`] || 0;
+      }
+      const nextNumber = currentNumber + 1;
+      transaction.set(recuCounterRef, { [`year_${year}`]: nextNumber }, { merge: true });
+      return nextNumber;
+    });
+    const numeroRecu = `RF-${year}-${String(newNumber).padStart(5, '0')}`;
+
+    // Générer PDF
+    const pdfBuffer = await generateRecuFiscalPDF({
+      association,
+      donateur,
+      don: {
+        date: `Année ${year}`,
+        montant: donor.total,
+        mode: 'Divers (voir détails)',
+      },
+      numeroRecu,
+      donorType: donor.donorType,
+    });
+
+    // Upload Storage
+    const bucket = admin.storage().bucket();
+    const typeSuffix = donor.donorType === 'entreprise' ? 'entreprise' : 'particulier';
+    const filePath = `recus-fiscaux/${year}/${email.replace(/[^a-z0-9]/gi, '_')}_${typeSuffix}.pdf`;
+    await bucket.file(filePath).save(pdfBuffer, {
+      metadata: { contentType: 'application/pdf' },
+    });
+
+    // Envoyer email
+    if (transporter) {
+      const donateurLabel = donor.donorType === 'entreprise'
+        ? (donateur.companyName || donateur.nom || '')
+        : `${donateur.prenom || ''} ${donateur.nom || ''}`.trim();
+
+      const annualTemplate = await loadEmailTemplate('annual_cerfa', {
+        nom: donateurLabel,
+        annee: String(year),
+        montant_total: donor.total.toFixed(2),
+        reference: numeroRecu,
+        nom_association: association.nom || 'Mosquée El Mohsinine',
+      });
+
+      let annualSubject, annualHtml;
+      if (annualTemplate) {
+        annualSubject = annualTemplate.subject;
+        annualHtml = textToEmailHtml(annualTemplate.body, {
+          footerAssociation: association.nom || 'Mosquée El Mohsinine',
+        });
+      } else {
+        annualSubject = `Reçu fiscal ${year} - ${association.nom || 'Mosquée El Mohsinine'}`;
+        annualHtml = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><h2>Votre reçu fiscal ${year}</h2><p>Bonjour ${donateurLabel},</p><p>Veuillez trouver ci-joint votre reçu fiscal pour l'année ${year}.</p><p><strong>Montant total :</strong> ${donor.total.toFixed(2)} €</p><p>Qu'Allah vous récompense.</p><p>${association.nom || 'Mosquée El Mohsinine'}</p></div>`;
+      }
+
+      await transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to: email,
+        subject: annualSubject,
+        html: annualHtml,
+        attachments: [{ filename: `recu_fiscal_${year}_${numeroRecu}.pdf`, content: pdfBuffer }],
+      });
+    }
+
+    // Sauvegarder dans Firestore
+    await admin.firestore().collection('recus_fiscaux').add({
+      numeroRecu,
+      annee: year,
+      email,
+      donateur,
+      donorType: donor.donorType,
+      montantTotal: donor.total,
+      donsDetails: donor.donsDetails,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'sent',
+      source: 'auto_annual',
+    });
+
+    // Message in-app
+    try {
+      const userRecord = await admin.auth().getUserByEmail(email).catch(() => null);
+      if (userRecord) {
+        await admin.firestore().collection('messages').add({
+          odUserId: userRecord.uid,
+          userName: donor.donorType === 'entreprise'
+            ? (donateur.companyName || donateur.nom || '')
+            : `${donateur.prenom || ''} ${donateur.nom || ''}`.trim(),
+          userEmail: email,
+          sujet: `Reçu fiscal ${year}`,
+          message: `Bonjour,\n\nVotre reçu fiscal pour l'année ${year} a été généré et envoyé à ${email}.\n\nMontant : ${donor.total.toFixed(2)} €\nNuméro : ${numeroRecu}\n\nMosquée El Mohsinine`,
+          status: 'resolu',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdBy: 'mosquee',
+          type: 'system',
+          reponses: [],
+        });
+      }
+    } catch (msgErr) {
+      console.error(`⚠️ Erreur message in-app pour ${email}:`, msgErr.message);
+    }
+
+    // Marquer les donations comme ayant un reçu généré
+    const donDocs = donationsSnapshot.docs.filter(d => {
+      const dEmail = (d.data().donorInfo?.email || d.data().metadata?.donorEmail || '').toLowerCase();
+      return dEmail === email;
+    });
+    for (const donDoc of donDocs) {
+      await donDoc.ref.update({
+        recuFiscalGenerated: true,
+        recuFiscalYear: year,
+      });
+    }
+
+    // Marquer aussi les payments comme ayant un reçu généré
+    const payDocs = paymentsSnapshot.docs.filter(p => {
+      const pData = p.data();
+      const isDon = pData.type === 'don' || pData.eligibleRecuFiscal === true;
+      if (!isDon) return false;
+      const pEmail = (pData.metadata?.email || '').toLowerCase();
+      return pEmail === email;
+    });
+    for (const payDoc of payDocs) {
+      await payDoc.ref.update({
+        recuFiscalGenerated: true,
+        recuFiscalYear: year,
+      });
+    }
+
+    console.log(`✅ Reçu ${numeroRecu} envoyé à ${email} (${donor.total.toFixed(2)}€, ${donor.donorType})`);
+    return 'success';
+  };
+
+  // Traiter par batch de 3 en parallèle
+  const batchSize = 3;
+  for (let i = 0; i < emails.length; i += batchSize) {
+    const batch = emails.slice(i, i + batchSize);
+    const results = await Promise.allSettled(batch.map(email => processDonor(email)));
+
+    results.forEach((result, idx) => {
+      if (result.status === 'fulfilled' && result.value === 'success') {
+        successCount++;
+      } else if (result.status === 'rejected') {
+        errorCount++;
+        errors.push({ email: batch[idx], error: result.reason?.message || 'Unknown error' });
+        console.error(`❌ Erreur reçu pour ${batch[idx]}:`, result.reason?.message);
+      }
+    });
   }
 
   const result = {
@@ -3009,9 +4380,27 @@ exports.generateAnnualRecusFiscaux = functions
     try {
       const result = await processAnnualRecusFiscaux(lastYear);
       console.log('Résultat cron:', JSON.stringify(result));
+      // Sauvegarder le résultat pour suivi admin
+      await admin.firestore().collection('settings').doc('cron_logs').set({
+        lastRecusFiscauxRun: admin.firestore.FieldValue.serverTimestamp(),
+        lastRecusFiscauxYear: lastYear,
+        lastRecusFiscauxResult: result || {},
+        lastRecusFiscauxStatus: 'success',
+      }, { merge: true });
       return null;
     } catch (error) {
       console.error('❌ Erreur cron reçus fiscaux:', error);
+      // Sauvegarder l'erreur pour suivi admin
+      try {
+        await admin.firestore().collection('settings').doc('cron_logs').set({
+          lastRecusFiscauxRun: admin.firestore.FieldValue.serverTimestamp(),
+          lastRecusFiscauxYear: lastYear,
+          lastRecusFiscauxStatus: 'error',
+          lastRecusFiscauxError: error?.message || String(error),
+        }, { merge: true });
+      } catch (logErr) {
+        console.error('Erreur sauvegarde log cron:', logErr);
+      }
       return null;
     }
   });
@@ -3151,110 +4540,63 @@ exports.onDonationConfirmation = functions
       });
 
       let subject, htmlContent;
+      const footerOpts = {
+        footerAssociation: nomAssociation,
+        footerAdresse: adresseAssociation ? `${adresseAssociation}, ${codePostalAssociation} ${villeAssociation}` : '',
+        footerTelephone: telephoneMosquee,
+      };
 
       if (donorType === 'entreprise') {
         // ===== EMAIL CONFIRMATION DON ENTREPRISE =====
         const montantDeductible = (montant * 0.60).toFixed(2);
-        subject = `Reçu de don entreprise - El Mouhssinine`;
-        htmlContent = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #1565c0 0%, #42a5f5 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-              <h1 style="color: white; margin: 0;">🏢 Reçu de don entreprise</h1>
-            </div>
-            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-              <p style="font-size: 16px;">Salam alaykoum,</p>
-              <p style="font-size: 16px;">Nous accusons bonne réception du don de <strong>${montant.toFixed(2)} €</strong> effectué par <strong>${companyName}</strong> au profit de l'association ${nomAssociation}.</p>
-              <p style="font-size: 16px;">Qu'Allah vous récompense pour votre générosité.</p>
+        const template = await loadEmailTemplate('donation_confirmation_company', {
+          raison_sociale: companyName,
+          siret,
+          nom_association: nomAssociation,
+          montant: montant.toFixed(2),
+          date: dateStr,
+          projet: projetNom,
+          reference,
+          montant_deductible: montantDeductible,
+          annee_suivante: String(anneSuivante),
+        });
 
-              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1565c0;">
-                <h3 style="color: #1565c0; margin-top: 0;">📋 Récapitulatif du don</h3>
-                <table style="width: 100%; color: #444; font-size: 15px;">
-                  <tr><td style="padding: 8px 0; font-weight: bold;">Raison sociale</td><td style="padding: 8px 0;">${companyName}</td></tr>
-                  <tr><td style="padding: 8px 0; font-weight: bold;">SIRET</td><td style="padding: 8px 0;">${siret}</td></tr>
-                  ${legalRep ? `<tr><td style="padding: 8px 0; font-weight: bold;">Représentant légal</td><td style="padding: 8px 0;">${legalRep}</td></tr>` : ''}
-                  <tr><td style="padding: 8px 0; font-weight: bold;">Montant</td><td style="padding: 8px 0;"><strong>${montant.toFixed(2)} €</strong></td></tr>
-                  <tr><td style="padding: 8px 0; font-weight: bold;">Date</td><td style="padding: 8px 0;">${dateStr}</td></tr>
-                  <tr><td style="padding: 8px 0; font-weight: bold;">Projet</td><td style="padding: 8px 0;">${projetNom}</td></tr>
-                  <tr><td style="padding: 8px 0; font-weight: bold;">Référence</td><td style="padding: 8px 0; font-size: 12px;">${reference}</td></tr>
-                </table>
-              </div>
-
-              <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #1565c0; margin-top: 0;">📋 Avantage fiscal entreprise</h3>
-                <p style="color: #444; line-height: 1.6;">Ce don ouvre droit à une réduction d'impôt de <strong>60%</strong> de son montant, dans la limite de 20 000 € ou 0,5% du chiffre d'affaires HT (article 238 bis du Code Général des Impôts).</p>
-                <p style="background: white; padding: 12px; border-radius: 6px; text-align: center; font-size: 18px; color: #1565c0; font-weight: bold;">Montant déductible : ${montantDeductible} €</p>
-                <p style="color: #666; font-size: 13px; margin-bottom: 0;">Un reçu fiscal (CERFA) vous sera automatiquement adressé en <strong>janvier ${anneSuivante}</strong>.</p>
-              </div>
-
-              <p style="font-size: 16px; color: #444;">Cordialement,<br><strong>Le Bureau de ${nomAssociation}</strong></p>
-
-              <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-              <div style="font-size: 13px; color: #888; text-align: center;">
-                <p style="margin: 5px 0;"><strong>${nomAssociation}</strong></p>
-                <p style="margin: 5px 0;">Association loi 1901</p>
-                ${adresseAssociation ? `<p style="margin: 5px 0;">📍 ${adresseAssociation}, ${codePostalAssociation} ${villeAssociation}</p>` : ''}
-                ${siretAssociation ? `<p style="margin: 5px 0;">SIRET : ${siretAssociation}</p>` : ''}
-                ${telephoneMosquee ? `<p style="margin: 5px 0;">📞 ${telephoneMosquee}</p>` : ''}
-              </div>
-              <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center;">
-                <p style="color: #888; font-size: 12px; margin: 0;">
-                  ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
-                  Pour nous contacter : <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
-                </p>
-              </div>
-            </div>
-          </div>
-        `;
+        if (template) {
+          subject = template.subject;
+          htmlContent = textToEmailHtml(template.body, {
+            headerTitle: '🏢 Reçu de don entreprise',
+            headerGradient: '#1565c0, #42a5f5',
+            ...footerOpts,
+          });
+        } else {
+          subject = `Reçu de don entreprise - El Mohsinine`;
+          htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><div style="background: linear-gradient(135deg, #1565c0 0%, #42a5f5 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;"><h1 style="color: white; margin: 0;">🏢 Reçu de don entreprise</h1></div><div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;"><p>Salam alaykoum,</p><p>Don de ${montant.toFixed(2)} € reçu de ${companyName}.</p><p>Cordialement, Le Bureau de ${nomAssociation}</p></div></div>`;
+        }
       } else {
         // ===== EMAIL CONFIRMATION DON PARTICULIER =====
         const montantDeductible = (montant * 0.66).toFixed(2);
-        subject = `Reçu de don - El Mouhssinine`;
-        htmlContent = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-              <h1 style="color: white; margin: 0;">🤲 Reçu de don</h1>
-            </div>
-            <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-              <p style="font-size: 16px;">Salam alaykoum <strong>${donorFirstName}</strong>,</p>
-              <p style="font-size: 16px;">Nous vous remercions chaleureusement pour votre généreux don de <strong>${montant.toFixed(2)} €</strong> à l'association ${nomAssociation}.</p>
-              <p style="font-size: 16px;">Qu'Allah accepte votre don et vous en récompense.</p>
+        const template = await loadEmailTemplate('donation_confirmation_individual', {
+          prenom: donorFirstName,
+          nom_association: nomAssociation,
+          montant: montant.toFixed(2),
+          date: dateStr,
+          projet: projetNom,
+          reference,
+          montant_deductible: montantDeductible,
+          annee_suivante: String(anneSuivante),
+        });
 
-              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2e7d32;">
-                <h3 style="color: #2e7d32; margin-top: 0;">📋 Récapitulatif de votre don</h3>
-                <table style="width: 100%; color: #444; font-size: 15px;">
-                  <tr><td style="padding: 8px 0; font-weight: bold;">Montant</td><td style="padding: 8px 0;"><strong>${montant.toFixed(2)} €</strong></td></tr>
-                  <tr><td style="padding: 8px 0; font-weight: bold;">Date</td><td style="padding: 8px 0;">${dateStr}</td></tr>
-                  <tr><td style="padding: 8px 0; font-weight: bold;">Projet</td><td style="padding: 8px 0;">${projetNom}</td></tr>
-                  <tr><td style="padding: 8px 0; font-weight: bold;">Référence</td><td style="padding: 8px 0; font-size: 12px;">${reference}</td></tr>
-                </table>
-              </div>
-
-              <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #2e7d32; margin-top: 0;">📋 Avantage fiscal</h3>
-                <p style="color: #444; line-height: 1.6;">En tant que particulier, votre don ouvre droit à une réduction d'impôt de <strong>66%</strong> de son montant, dans la limite de 20% de votre revenu imposable (article 200 du Code Général des Impôts).</p>
-                <p style="background: white; padding: 12px; border-radius: 6px; text-align: center; font-size: 18px; color: #2e7d32; font-weight: bold;">Montant déductible : ${montantDeductible} €</p>
-                <p style="color: #666; font-size: 13px; margin-bottom: 0;">Un reçu fiscal (CERFA n°11580*05) vous sera automatiquement adressé en <strong>janvier ${anneSuivante}</strong>, vous permettant de déclarer votre don lors de votre déclaration de revenus.</p>
-              </div>
-
-              <p style="font-size: 16px; color: #444;">Barakallahou fikoum,<br><strong>Le Bureau de ${nomAssociation}</strong></p>
-
-              <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-              <div style="font-size: 13px; color: #888; text-align: center;">
-                <p style="margin: 5px 0;"><strong>${nomAssociation}</strong></p>
-                <p style="margin: 5px 0;">Association loi 1901</p>
-                ${adresseAssociation ? `<p style="margin: 5px 0;">📍 ${adresseAssociation}, ${codePostalAssociation} ${villeAssociation}</p>` : ''}
-                ${siretAssociation ? `<p style="margin: 5px 0;">SIRET : ${siretAssociation}</p>` : ''}
-                ${telephoneMosquee ? `<p style="margin: 5px 0;">📞 ${telephoneMosquee}</p>` : ''}
-              </div>
-              <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center;">
-                <p style="color: #888; font-size: 12px; margin: 0;">
-                  ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
-                  Pour nous contacter : <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
-                </p>
-              </div>
-            </div>
-          </div>
-        `;
+        if (template) {
+          subject = template.subject;
+          htmlContent = textToEmailHtml(template.body, {
+            headerTitle: '🤲 Reçu de don',
+            headerGradient: '#2e7d32, #4caf50',
+            ...footerOpts,
+          });
+        } else {
+          subject = `Reçu de don - El Mohsinine`;
+          htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;"><h1 style="color: white; margin: 0;">🤲 Reçu de don</h1></div><div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;"><p>Salam alaykoum ${donorFirstName},</p><p>Merci pour votre don de ${montant.toFixed(2)} €.</p><p>Barakallahou fikoum, Le Bureau de ${nomAssociation}</p></div></div>`;
+        }
       }
 
       await transporter.sendMail({
@@ -3395,61 +4737,31 @@ exports.onCotisationConfirmation = functions
         auth: { user: brevoUser, pass: brevoPass },
       });
 
-      // 8. Email HTML
-      const subject = `Bienvenue parmi les membres actifs - El Mouhssinine`;
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="color: white; margin: 0;">🎉 Bienvenue parmi les membres actifs</h1>
-          </div>
-          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-            <p style="font-size: 16px;">Salam alaykoum <strong>${prenom}</strong>,</p>
-            <p style="font-size: 16px;">Merci pour votre adhésion au ${nomAssociation} !</p>
-            <p style="font-size: 16px;">Vous êtes désormais <strong>membre actif</strong> de notre association.</p>
+      // 8. Email HTML - Charger template depuis Firestore
+      const template = await loadEmailTemplate('membership_confirmation', {
+        prenom,
+        nom_association: nomAssociation,
+        montant: montant.toFixed(2),
+        type_cotisation: periodLabel,
+        date_debut: dateDebutStr,
+        date_prochaine_echeance: prochaineEcheanceStr,
+        annee_suivante: String(anneSuivante),
+      });
 
-            <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2e7d32;">
-              <h3 style="color: #2e7d32; margin-top: 0;">✨ Vos avantages en tant que membre actif</h3>
-              <ul style="color: #444; line-height: 1.8; font-size: 15px;">
-                <li>✨ Vous soutenez activement votre mosquée et gagnez des hassanates</li>
-                <li>🗳️ Droit de vote aux assemblées générales et élections</li>
-                <li>🎫 Accès à votre carte de membre numérique</li>
-                <li>📧 Reçu fiscal automatique pour réduction d'impôts</li>
-              </ul>
-            </div>
-
-            <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #C9A227;">
-              <h3 style="color: #C9A227; margin-top: 0;">📋 Récapitulatif de votre adhésion</h3>
-              <table style="width: 100%; color: #444; font-size: 15px;">
-                <tr><td style="padding: 8px 0; font-weight: bold;">Type</td><td style="padding: 8px 0;">${periodLabel} (${montant.toFixed(2)} €)</td></tr>
-                <tr><td style="padding: 8px 0; font-weight: bold;">Date de début</td><td style="padding: 8px 0;">${dateDebutStr}</td></tr>
-                <tr><td style="padding: 8px 0; font-weight: bold;">Prochaine échéance</td><td style="padding: 8px 0;">${prochaineEcheanceStr}</td></tr>
-              </table>
-            </div>
-
-            <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="color: #2e7d32; margin-top: 0;">🎫 Votre carte de membre</h3>
-              <p style="color: #444; line-height: 1.6;">Votre carte de membre est disponible dans l'application :<br><strong>Onglet Adhérent → Voir ma carte de membre</strong></p>
-              <p style="color: #666; font-size: 13px; margin-bottom: 0;">Vous recevrez votre reçu fiscal (CERFA) en début d'année <strong>${anneSuivante}</strong>.</p>
-            </div>
-
-            <p style="font-size: 16px; color: #444;">Qu'Allah vous récompense pour votre soutien.</p>
-            <p style="font-size: 16px; color: #444;">Barakallahou fikoum,<br><strong>Le Bureau de ${nomAssociation}</strong></p>
-
-            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-            <div style="font-size: 13px; color: #888; text-align: center;">
-              <p style="margin: 5px 0;"><strong>${nomAssociation}</strong></p>
-              ${adresseAssociation ? `<p style="margin: 5px 0;">📍 ${adresseAssociation}, ${codePostalAssociation} ${villeAssociation}</p>` : ''}
-              ${telephoneMosquee ? `<p style="margin: 5px 0;">📞 ${telephoneMosquee}</p>` : ''}
-            </div>
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center;">
-              <p style="color: #888; font-size: 12px; margin: 0;">
-                ⚠️ <strong>Cette adresse email n'est pas relevée.</strong><br>
-                Pour nous contacter : <a href="mailto:centreculturelislamique@orange.fr" style="color: #C9A227;">centreculturelislamique@orange.fr</a>
-              </p>
-            </div>
-          </div>
-        </div>
-      `;
+      let subject, htmlContent;
+      if (template) {
+        subject = template.subject;
+        htmlContent = textToEmailHtml(template.body, {
+          headerTitle: '🎉 Bienvenue parmi les membres actifs',
+          headerGradient: '#2e7d32, #4caf50',
+          footerAssociation: nomAssociation,
+          footerAdresse: adresseAssociation ? `${adresseAssociation}, ${codePostalAssociation} ${villeAssociation}` : '',
+          footerTelephone: telephoneMosquee,
+        });
+      } else {
+        subject = `Bienvenue parmi les membres actifs - El Mohsinine`;
+        htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;"><h1 style="color: white; margin: 0;">🎉 Bienvenue parmi les membres actifs</h1></div><div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;"><p>Salam alaykoum ${prenom},</p><p>Merci pour votre adhésion ! Vous êtes maintenant membre actif.</p><p>Barakallahou fikoum, Le Bureau de ${nomAssociation}</p></div></div>`;
+      }
 
       await transporter.sendMail({
         from: `"${fromName}" <${fromEmail}>`,
@@ -3472,5 +4784,734 @@ exports.onCotisationConfirmation = functions
       console.error('❌ Erreur envoi email confirmation cotisation:', error);
       return { error: error.message };
     }
+  });
+
+// ========================================================================
+// REFUND PAYMENT - Rembourser un paiement via Stripe
+// ========================================================================
+exports.refundPayment = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    // Vérifier admin
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+    const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
+    if (!adminDoc.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux admins');
+    }
+
+    // FIX D3: Ajout paramètre amount optionnel pour remboursement partiel
+    const { memberId, reason, amount } = data;
+    if (!memberId) {
+      throw new functions.https.HttpsError('invalid-argument', 'memberId requis');
+    }
+
+    try {
+      // Chercher le membre
+      const memberRef = admin.firestore().collection('members').doc(memberId);
+      const memberDoc = await memberRef.get();
+      if (!memberDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Membre non trouvé');
+      }
+
+      const memberData = memberDoc.data();
+      const stripePaymentId = memberData.stripePaymentId;
+
+      // BUG 4 FIX: Vérifier si déjà remboursé pour éviter double remboursement
+      if (memberData.refunded === true) {
+        throw new functions.https.HttpsError(
+          'already-exists',
+          'Ce paiement a déjà été remboursé'
+        );
+      }
+
+      let refundResult = null;
+
+      // Si paiement Stripe, rembourser via Stripe
+      if (stripePaymentId) {
+        try {
+          const refundParams = {
+            payment_intent: stripePaymentId,
+            reason: 'requested_by_customer',
+          };
+          // FIX D3: Si montant fourni, remboursement partiel
+          if (amount && amount > 0) {
+            refundParams.amount = Math.round(amount * 100);
+          }
+          refundResult = await stripe.refunds.create(refundParams);
+          console.log(`💰 Remboursement Stripe effectué: ${refundResult.id} pour ${refundResult.amount / 100}€`);
+        } catch (stripeError) {
+          console.error('⚠️ Erreur remboursement Stripe:', stripeError.message);
+          if (stripeError.code !== 'charge_already_refunded') {
+            throw new functions.https.HttpsError('internal', `Erreur Stripe: ${stripeError.message}`);
+          }
+        }
+      }
+
+      // FIX D3: Déterminer si remboursement partiel ou total
+      const refundedAmount = refundResult ? refundResult.amount / 100 : 0;
+      const paidAmount = memberData.montantPaye || 0;
+      const isPartialRefund = amount && amount > 0 && amount < paidAmount;
+
+      // Mettre à jour le membre
+      const memberUpdate = {
+        refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+        refundedBy: context.auth.uid,
+        refundReason: reason || 'Annulation admin',
+        refundStripeId: refundResult?.id || null,
+        refundAmount: refundedAmount,
+      };
+
+      if (isPartialRefund) {
+        // Remboursement partiel : garder le membre actif mais noter le remboursement
+        memberUpdate.partialRefund = true;
+      } else {
+        // Remboursement total : annuler le paiement
+        memberUpdate.refunded = true; // BUG 4 FIX: Flag anti-double remboursement
+        memberUpdate.aPaye = false;
+        memberUpdate.datePaiement = null;
+        memberUpdate.stripePaymentId = null;
+        memberUpdate.status = 'en_attente_paiement';
+        memberUpdate.statut = 'en_attente_paiement';
+      }
+
+      await memberRef.update(memberUpdate);
+
+      // Marquer le paiement comme remboursé dans la collection payments
+      if (stripePaymentId) {
+        const paymentQuery = await admin.firestore()
+          .collection('payments')
+          .where('stripePaymentIntentId', '==', stripePaymentId)
+          .limit(1)
+          .get();
+
+        if (!paymentQuery.empty) {
+          await paymentQuery.docs[0].ref.update({
+            status: isPartialRefund ? 'partially_refunded' : 'refunded',
+            refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+            refundStripeId: refundResult?.id || null,
+            refundAmount: refundedAmount,
+          });
+        }
+      }
+
+      console.log(`✅ Remboursement effectué pour membre ${memberId}: ${refundedAmount}€ (${isPartialRefund ? 'partiel' : 'total'})`);
+      return {
+        success: true,
+        refunded: !!refundResult,
+        stripeRefundId: refundResult?.id || null,
+        refundedAmount: refundedAmount,
+        isPartial: isPartialRefund,
+        message: stripePaymentId
+          ? `Paiement Stripe remboursé${isPartialRefund ? ' partiellement' : ''} (${refundedAmount}€)`
+          : 'Paiement annulé (pas de remboursement Stripe - paiement manuel)',
+      };
+    } catch (error) {
+      console.error('❌ Erreur refundPayment:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ========================================================================
+// CANCEL SUBSCRIPTION - Annuler un abonnement mensuel
+// ========================================================================
+exports.cancelSubscription = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+
+    const uid = context.auth.uid;
+
+    try {
+      const memberRef = admin.firestore().collection('members').doc(uid);
+      const memberDoc = await memberRef.get();
+
+      if (!memberDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Profil membre non trouvé');
+      }
+
+      const memberData = memberDoc.data();
+      const stripeSubscriptionId = memberData.stripeSubscriptionId;
+
+      // Vérifier qu'il y a un abonnement mensuel actif
+      // Bug 6 Fix: || au lieu de && (bloquer si PAS mensuel OU PAS de subscriptionId)
+      if (memberData.cotisationType !== 'mensuel' || !stripeSubscriptionId) {
+        throw new functions.https.HttpsError('failed-precondition', 'Pas d\'abonnement mensuel actif');
+      }
+
+      // Annuler l'abonnement Stripe si un ID est présent
+      if (stripeSubscriptionId) {
+        try {
+          // Option 1: Annulation immédiate
+          // await stripe.subscriptions.cancel(stripeSubscriptionId);
+
+          // Option 2: Annulation à la fin de la période (recommandé)
+          // Le membre garde l'accès jusqu'à la fin de la période payée
+          await stripe.subscriptions.update(stripeSubscriptionId, {
+            cancel_at_period_end: true,
+          });
+
+          console.log('Abonnement Stripe annulé à la fin de la période:', stripeSubscriptionId);
+        } catch (stripeError) {
+          console.error('Erreur annulation Stripe:', stripeError);
+          // On continue quand même pour mettre à jour Firestore
+          // (l'abonnement pourrait déjà être annulé côté Stripe)
+        }
+      }
+
+      // BUG 3 FIX: Ne PAS changer le status immédiatement
+      // Le membre garde son statut actif jusqu'à la fin de la période payée
+      // Le webhook customer.subscription.deleted gèrera le passage en sympathisant
+      await memberRef.update({
+        abonnementActif: false,
+        subscriptionCancelPending: true,
+        subscriptionCancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+        subscriptionCancelReason: data?.reason || 'Annulé par le membre',
+        // NE PAS modifier status/statut ici - le webhook s'en chargera à expiration
+      });
+
+      console.log(`✅ Abonnement mensuel annulé (fin de période) pour ${uid}`);
+      return {
+        success: true,
+        message: 'Votre abonnement mensuel sera annulé à la fin de la période en cours. Vous gardez votre accès membre actif jusque-là.',
+      };
+    } catch (error) {
+      console.error('❌ Erreur cancelSubscription:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ========================================================================
+// FIX C6: ADMIN CANCEL SUBSCRIPTION - Annuler un abonnement depuis le backoffice
+// ========================================================================
+exports.adminCancelSubscription = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    // Vérifier admin
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+    const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
+    if (!adminDoc.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux admins');
+    }
+
+    const { memberId, reason } = data;
+    if (!memberId) {
+      throw new functions.https.HttpsError('invalid-argument', 'memberId requis');
+    }
+
+    try {
+      const memberRef = admin.firestore().collection('members').doc(memberId);
+      const memberDoc = await memberRef.get();
+
+      if (!memberDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Membre non trouvé');
+      }
+
+      const memberData = memberDoc.data();
+      const stripeSubscriptionId = memberData.stripeSubscriptionId;
+
+      if (!stripeSubscriptionId) {
+        throw new functions.https.HttpsError('failed-precondition', 'Ce membre n\'a pas d\'abonnement actif');
+      }
+
+      // Annuler immédiatement sur Stripe (pas cancel_at_period_end, car c'est l'admin qui décide)
+      try {
+        await stripe.subscriptions.cancel(stripeSubscriptionId);
+        console.log('Abonnement Stripe annulé immédiatement par admin:', stripeSubscriptionId);
+      } catch (stripeError) {
+        console.error('Erreur annulation Stripe:', stripeError.message);
+        // Continuer quand même pour mettre à jour Firestore
+      }
+
+      // Mettre à jour Firestore
+      await memberRef.update({
+        subscriptionStatus: 'canceled',
+        subscriptionCancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+        subscriptionCancelReason: reason || 'Annulé par admin',
+        subscriptionCancelledBy: 'admin',
+        cancelledByAdminId: context.auth.uid,
+      });
+
+      console.log(`✅ Abonnement annulé par admin pour membre ${memberId}`);
+      return {
+        success: true,
+        message: `Abonnement de ${memberData.prenom} ${memberData.nom} annulé`,
+      };
+    } catch (error) {
+      console.error('❌ Erreur adminCancelSubscription:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ========================================================================
+// FIX D1: REFUND DONATION - Rembourser un don via Stripe
+// ========================================================================
+exports.refundDonation = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    // Vérifier admin
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+    const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
+    if (!adminDoc.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux admins');
+    }
+
+    const { donationId, amount } = data; // amount optionnel pour remboursement partiel
+    if (!donationId) {
+      throw new functions.https.HttpsError('invalid-argument', 'donationId requis');
+    }
+
+    try {
+      const donRef = admin.firestore().collection('donations').doc(donationId);
+      const donDoc = await donRef.get();
+
+      if (!donDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Don introuvable');
+      }
+
+      const donation = donDoc.data();
+      const paymentIntentId = donation.stripePaymentIntentId || donation.paymentIntentId;
+
+      if (!paymentIntentId) {
+        throw new functions.https.HttpsError('failed-precondition', 'Pas de paiement Stripe associé à ce don');
+      }
+
+      // Créer le remboursement Stripe
+      const refundParams = { payment_intent: paymentIntentId };
+      if (amount && amount > 0) {
+        refundParams.amount = Math.round(amount * 100); // remboursement partiel
+      }
+
+      let refundResult;
+      try {
+        refundResult = await stripe.refunds.create(refundParams);
+        console.log(`💰 Remboursement don Stripe effectué: ${refundResult.id} pour ${refundResult.amount / 100}€`);
+      } catch (stripeError) {
+        console.error('⚠️ Erreur remboursement Stripe:', stripeError.message);
+        throw new functions.https.HttpsError('internal', `Erreur Stripe: ${stripeError.message}`);
+      }
+
+      const refundedAmount = refundResult.amount / 100;
+      const donationTotal = donation.amount || donation.montant || 0;
+      const isPartial = amount && amount < donationTotal;
+
+      // Mettre à jour le don
+      await donRef.update({
+        statut: isPartial ? 'partiellement_remboursé' : 'remboursé',
+        status: isPartial ? 'partially_refunded' : 'refunded',
+        refundId: refundResult.id,
+        refundAmount: refundedAmount,
+        refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+        refundedBy: context.auth.uid,
+      });
+
+      // Si don affecté à un projet, décrémenter montantActuel
+      const projectId = donation.projectId || donation.projetId;
+      if (projectId) {
+        try {
+          const projectRef = admin.firestore().collection('projects').doc(projectId);
+          const projectDoc = await projectRef.get();
+          if (projectDoc.exists) {
+            await projectRef.update({
+              montantActuel: admin.firestore.FieldValue.increment(-refundedAmount),
+            });
+          }
+        } catch (projErr) {
+          console.warn('Erreur mise à jour projet:', projErr.message);
+        }
+      }
+
+      console.log(`✅ Don ${donationId} remboursé: ${refundedAmount}€`);
+      return {
+        success: true,
+        refundId: refundResult.id,
+        refundedAmount: refundedAmount,
+        message: `Don remboursé: ${refundedAmount}€`,
+      };
+    } catch (error) {
+      console.error('❌ Erreur refundDonation:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ==================== CREATE ADMIN ====================
+// Crée un utilisateur Firebase Auth + document admin en une seule étape
+// Appelé depuis le backoffice pour simplifier la création d'administrateurs
+
+exports.createAdmin = functions
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .region('europe-west1')
+  .https.onCall(async (data, context) => {
+    // Vérifier que l'appelant est un admin
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentification requise');
+    }
+    const callerDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
+    if (!callerDoc.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Seuls les administrateurs peuvent créer des admins');
+    }
+
+    const { email, password, nom, role, permissions, actif } = data;
+
+    if (!email || !password || !nom) {
+      throw new functions.https.HttpsError('invalid-argument', 'Email, mot de passe et nom sont requis');
+    }
+    if (password.length < 6) {
+      throw new functions.https.HttpsError('invalid-argument', 'Le mot de passe doit contenir au moins 6 caractères');
+    }
+
+    try {
+      // 1. Créer l'utilisateur Firebase Auth
+      const userRecord = await admin.auth().createUser({
+        email: email,
+        password: password,
+        displayName: nom,
+      });
+
+      console.log('Utilisateur Firebase Auth créé:', userRecord.uid);
+
+      // 2. Créer le document admin dans Firestore avec l'UID comme ID
+      await admin.firestore().collection('admins').doc(userRecord.uid).set({
+        nom: nom,
+        email: email,
+        role: role || 'editeur',
+        permissions: permissions || {},
+        actif: actif !== false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdBy: context.auth.token.email || 'admin',
+      });
+
+      console.log('Document admin créé dans Firestore:', userRecord.uid);
+
+      return {
+        success: true,
+        uid: userRecord.uid,
+        message: `Admin "${nom}" créé avec succès`,
+      };
+    } catch (error) {
+      console.error('Erreur création admin:', error);
+      if (error.code === 'auth/email-already-exists') {
+        throw new functions.https.HttpsError('already-exists', 'Un compte avec cet email existe déjà');
+      }
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ==================== VÉRIFICATION COTISATIONS EXPIRANTES ====================
+// Cron quotidien à 08h00 : vérifie les cotisations qui expirent bientôt ou déjà expirées
+// Envoie des emails de rappel à 30 jours, 7 jours, et le jour de l'expiration
+
+exports.checkExpiringCotisations = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .pubsub.schedule('0 8 * * *')
+  .timeZone('Europe/Paris')
+  .onRun(async (context) => {
+    console.log('=== Vérification des cotisations expirantes ===');
+
+    const brevoUser = functions.config().brevo?.smtp_user;
+    const brevoPass = functions.config().brevo?.smtp_pass;
+    const fromEmail = functions.config().brevo?.from_email;
+    const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+
+    if (!brevoUser || !brevoPass || !fromEmail) {
+      console.error('Configuration Brevo manquante');
+      return null;
+    }
+
+    const settingsDoc = await admin.firestore().collection('settings').doc('association').get();
+    const assocData = settingsDoc.exists ? settingsDoc.data() : {};
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
+      auth: { user: brevoUser, pass: brevoPass },
+    });
+
+    // Récupérer tous les membres actifs
+    const membersSnapshot = await admin.firestore()
+      .collection('members')
+      .where('status', 'in', ['actif', 'active'])
+      .get();
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    let emailsSent = { remind30: 0, remind7: 0, expired: 0 };
+
+    for (const memberDoc of membersSnapshot.docs) {
+      const member = memberDoc.data();
+      const dateFin = member.cotisation?.dateFin;
+
+      if (!dateFin) continue;
+
+      // Ne pas envoyer de rappels aux abonnés mensuels (gérés automatiquement par Stripe)
+      if (member.cotisationType === 'mensuel' || member.cotisation?.type === 'mensuel') continue;
+
+      const expiryDate = dateFin.toDate ? dateFin.toDate() : new Date(dateFin);
+      const diffMs = expiryDate.getTime() - today.getTime();
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+      const email = member.email;
+      if (!email) continue;
+
+      const prenom = member.prenom || '';
+      const montant = member.cotisation?.montant || member.montantPaye || '';
+      const dateFinStr = expiryDate.toLocaleDateString('fr-FR');
+
+      let templateId = null;
+      let emailType = null;
+
+      if (diffDays === 30) {
+        templateId = 'cotisation_expiring_30';
+        emailType = 'remind30';
+      } else if (diffDays === 7) {
+        templateId = 'cotisation_expiring_7';
+        emailType = 'remind7';
+      } else if (diffDays === 0) {
+        templateId = 'cotisation_expired';
+        emailType = 'expired';
+      } else {
+        continue;
+      }
+
+      // Vérifier qu'on n'a pas déjà envoyé ce rappel
+      const reminderKey = `${emailType}_${expiryDate.getFullYear()}_${expiryDate.getMonth()}_${expiryDate.getDate()}`;
+      if (member[`reminder_${reminderKey}`]) {
+        continue;
+      }
+
+      try {
+        const template = await loadEmailTemplate(templateId, {
+          prenom: prenom,
+          montant: String(montant) + ' €',
+          date_expiration: dateFinStr,
+          jours_restants: String(diffDays),
+        });
+
+        let subject, htmlBody;
+
+        if (diffDays === 30) {
+          subject = template?.subject || 'Votre cotisation expire dans 30 jours - El Mohsinine';
+          const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\nVotre cotisation annuelle auprès de la mosquée **El Mohsinine** expire le **${dateFinStr}**, soit dans **30 jours**.\n\nNous vous invitons à renouveler votre adhésion depuis l'application pour continuer à bénéficier de vos avantages de membre actif :\n\n- ✨ Multiplier vos hassanates\n- 🗳️ Droit de vote en Assemblée Générale\n- 🎫 Carte de membre digitale\n- 📄 Reçu fiscal annuel\n\nPour renouveler, ouvrez l'application El Mohsinine et rendez-vous dans l'onglet **Adhérent**.`;
+          htmlBody = textToEmailHtml(body, {
+            headerTitle: '📋 Rappel de cotisation',
+            headerGradient: '#1565c0, #42a5f5',
+            footerAssociation: assocData.nom || 'Mosquée El Mohsinine',
+            footerAdresse: assocData.adresse || '',
+            footerTelephone: assocData.telephone || '',
+          });
+        } else if (diffDays === 7) {
+          subject = template?.subject || 'Votre cotisation expire dans 7 jours - El Mohsinine';
+          const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\n⚠️ Votre cotisation annuelle expire le **${dateFinStr}**, soit dans **7 jours** seulement.\n\nSans renouvellement, votre statut passera de **membre actif** à **sympathisant** et vous perdrez vos avantages (vote AG, carte membre, reçu fiscal).\n\n**Renouvelez maintenant** depuis l'application El Mohsinine → onglet **Adhérent**.`;
+          htmlBody = textToEmailHtml(body, {
+            headerTitle: '⚠️ Cotisation bientôt expirée',
+            headerGradient: '#e65100, #ff9800',
+            footerAssociation: assocData.nom || 'Mosquée El Mohsinine',
+            footerAdresse: assocData.adresse || '',
+            footerTelephone: assocData.telephone || '',
+          });
+        } else {
+          subject = template?.subject || 'Votre cotisation a expiré - El Mohsinine';
+          const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\nVotre cotisation annuelle auprès de la mosquée **El Mohsinine** a **expiré aujourd'hui** (${dateFinStr}).\n\nVotre statut est désormais **sympathisant**. Pour redevenir membre actif et retrouver vos avantages, renouvelez votre cotisation depuis l'application.\n\nNous espérons vous revoir bientôt parmi nos membres actifs. Qu'Allah vous récompense pour votre soutien passé. 🤲`;
+          htmlBody = textToEmailHtml(body, {
+            headerTitle: '❌ Cotisation expirée',
+            headerGradient: '#c62828, #ef5350',
+            footerAssociation: assocData.nom || 'Mosquée El Mohsinine',
+            footerAdresse: assocData.adresse || '',
+            footerTelephone: assocData.telephone || '',
+          });
+
+          // Passer le membre en sympathisant
+          await memberDoc.ref.update({
+            status: 'sympathisant',
+            statut: 'sympathisant',
+            cotisationExpiredAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        await transporter.sendMail({
+          from: `"${fromName}" <${fromEmail}>`,
+          to: email,
+          subject: subject,
+          html: htmlBody,
+        });
+
+        // Marquer le rappel comme envoyé (idempotence)
+        await memberDoc.ref.update({
+          [`reminder_${reminderKey}`]: true,
+          [`reminder_${reminderKey}_sentAt`]: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        emailsSent[emailType]++;
+        console.log(`Email ${emailType} envoyé à ${email.substring(0, 3)}*** (expire: ${dateFinStr})`);
+      } catch (err) {
+        console.error(`Erreur envoi email ${emailType}:`, err.message);
+      }
+    }
+
+    console.log(`=== Résultat: 30j=${emailsSent.remind30}, 7j=${emailsSent.remind7}, expirés=${emailsSent.expired} ===`);
+    return null;
+  });
+
+// ==================== RÉCONCILIATION STRIPE/FIRESTORE ====================
+// FIX G5: Cron hebdomadaire pour détecter les paiements Stripe non tracés dans Firestore
+
+exports.reconcileStripePayments = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .pubsub.schedule('every sunday 03:00')
+  .timeZone('Europe/Paris')
+  .onRun(async (context) => {
+    console.log('=== Réconciliation Stripe/Firestore ===');
+
+    try {
+      const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+
+      // 1. Lister tous les PaymentIntents succeeded des 7 derniers jours depuis Stripe
+      const paymentIntents = await stripe.paymentIntents.list({
+        created: { gte: sevenDaysAgo },
+        limit: 100,
+      });
+
+      const mismatches = [];
+
+      for (const pi of paymentIntents.data) {
+        if (pi.status !== 'succeeded') continue;
+
+        // 2. Vérifier si ce paiement existe dans Firestore (donations OU payments OU processed_payments)
+        const [donSnap, paySnap, processedSnap] = await Promise.all([
+          admin.firestore().collection('donations').where('stripePaymentIntentId', '==', pi.id).limit(1).get(),
+          admin.firestore().collection('payments').where('stripePaymentIntentId', '==', pi.id).limit(1).get(),
+          admin.firestore().collection('processed_payments').doc(pi.id).get(),
+        ]);
+
+        // Vérifier aussi par docId (donations/{paymentIntentId})
+        let donByDocId = { exists: false };
+        try {
+          donByDocId = await admin.firestore().collection('donations').doc(pi.id).get();
+        } catch (e) { /* ignore */ }
+
+        if (donSnap.empty && paySnap.empty && !processedSnap.exists && !donByDocId.exists) {
+          mismatches.push({
+            paymentIntentId: pi.id,
+            amount: pi.amount / 100,
+            currency: pi.currency,
+            created: new Date(pi.created * 1000).toLocaleDateString('fr-FR'),
+            metadata: pi.metadata,
+          });
+        }
+      }
+
+      // 3. Vérifier aussi les invoices (abonnements mensuels)
+      const invoices = await stripe.invoices.list({
+        created: { gte: sevenDaysAgo },
+        status: 'paid',
+        limit: 100,
+      });
+
+      for (const inv of invoices.data) {
+        if (!inv.payment_intent) continue;
+
+        const [donSnap, paySnap] = await Promise.all([
+          admin.firestore().collection('donations').where('stripePaymentIntentId', '==', inv.payment_intent).limit(1).get(),
+          admin.firestore().collection('payments').where('stripePaymentIntentId', '==', inv.payment_intent).limit(1).get(),
+        ]);
+
+        if (donSnap.empty && paySnap.empty) {
+          // Vérifier que ce n'est pas déjà dans les mismatches
+          if (!mismatches.find(m => m.paymentIntentId === inv.payment_intent)) {
+            mismatches.push({
+              paymentIntentId: inv.payment_intent,
+              invoiceId: inv.id,
+              amount: inv.amount_paid / 100,
+              currency: inv.currency,
+              created: new Date(inv.created * 1000).toLocaleDateString('fr-FR'),
+              metadata: inv.subscription ? { source: 'subscription', subscriptionId: inv.subscription } : {},
+            });
+          }
+        }
+      }
+
+      console.log(`Réconciliation terminée: ${paymentIntents.data.length} PI + ${invoices.data.length} invoices vérifiés, ${mismatches.length} décalages`);
+
+      // 4. Si des décalages trouvés, envoyer email alerte admin
+      if (mismatches.length > 0) {
+        console.error('⚠️ RECONCILIATION MISMATCH:', JSON.stringify(mismatches));
+
+        const brevoUser = functions.config().brevo?.smtp_user;
+        const brevoPass = functions.config().brevo?.smtp_pass;
+        const fromEmail = functions.config().brevo?.from_email;
+        const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+
+        if (brevoUser && brevoPass && fromEmail) {
+          const reconTransporter = nodemailer.createTransport({
+            host: 'smtp-relay.brevo.com',
+            port: 587,
+            secure: false,
+            auth: { user: brevoUser, pass: brevoPass },
+          });
+
+          const rows = mismatches.map(m => `
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;">${m.paymentIntentId}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${m.amount} ${m.currency?.toUpperCase() || 'EUR'}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${m.created}</td>
+            </tr>
+          `).join('');
+
+          await reconTransporter.sendMail({
+            from: `"${fromName}" <${fromEmail}>`,
+            to: fromEmail,
+            subject: `⚠️ RÉCONCILIATION — ${mismatches.length} paiement(s) Stripe non trouvé(s) dans Firestore`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #ff9800, #f57c00); padding: 20px; text-align: center;">
+                  <h1 style="color: white; margin: 0;">⚠️ Réconciliation hebdomadaire</h1>
+                </div>
+                <div style="padding: 20px; background: #fff;">
+                  <p><strong>${mismatches.length} paiement(s) trouvé(s) dans Stripe mais absents de Firestore</strong> (7 derniers jours).</p>
+                  <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+                    <tr style="background: #f5f5f5;">
+                      <th style="padding: 8px; border: 1px solid #ddd;">PaymentIntent ID</th>
+                      <th style="padding: 8px; border: 1px solid #ddd;">Montant</th>
+                      <th style="padding: 8px; border: 1px solid #ddd;">Date</th>
+                    </tr>
+                    ${rows}
+                  </table>
+                  <p>Cela peut indiquer un webhook qui a échoué silencieusement. Vérifiez dans le Dashboard Stripe.</p>
+                  <a href="https://dashboard.stripe.com/payments" style="display: inline-block; padding: 10px 20px; background: #ff9800; color: white; text-decoration: none; border-radius: 5px;">
+                    Voir les paiements Stripe
+                  </a>
+                </div>
+              </div>
+            `,
+          });
+          console.log('Email réconciliation envoyé à l\'admin');
+        }
+      } else {
+        console.log('✅ Aucun décalage détecté — Stripe et Firestore sont synchronisés');
+      }
+    } catch (error) {
+      console.error('❌ Erreur réconciliation:', error);
+    }
+
+    return null;
   });
 

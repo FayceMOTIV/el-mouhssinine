@@ -1,5 +1,5 @@
 /**
- * Logger utilitaire pour El Mouhssinine
+ * Logger utilitaire pour El Mohsinine
  *
  * Protège les logs en production pour éviter d'exposer des informations sensibles.
  * En mode __DEV__, tous les logs sont affichés.

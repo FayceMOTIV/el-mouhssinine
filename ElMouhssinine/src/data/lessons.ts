@@ -577,6 +577,497 @@ export const lessons: Lesson[] = [
       }
     ]
   },
+  {
+    id: 'lesson_11',
+    order: 11,
+    title: 'Les lettres Taa, Dhaa',
+    titleAr: 'ط ظ',
+    description: 'Les emphatiques de Ta et Dhal.',
+    duration: '15 min',
+    xp: 75,
+    level: 'intermediaire',
+    category: 'alphabet',
+    prerequisites: ['lesson_10'],
+    steps: [
+      {
+        type: 'intro',
+        content: {
+          title: 'Emphatiques (suite)',
+          text: 'Taa et Dhaa sont les versions emphatiques de Ta et Dhal. La langue recule dans la bouche.'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'taa',
+          explanation: 'SANS point - Son: T emphatique (plus grave que Ta)'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'dhaa',
+          explanation: '1 point AU-DESSUS - Son: DH emphatique'
+        }
+      },
+      {
+        type: 'exercise',
+        content: {
+          instruction: 'Associez chaque lettre a son son:',
+          items: [
+            { arabic: 'ط', transliteration: 'Taa (T emphatique)' },
+            { arabic: 'ت', transliteration: 'Ta (T normal)' },
+            { arabic: 'ظ', transliteration: 'Dhaa (DH emphatique)' },
+            { arabic: 'ذ', transliteration: 'Dhal (DH normal)' }
+          ]
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Quelle est la version emphatique de Ta (ت)?',
+          arabicDisplay: 'ط',
+          options: ['Taa', 'Dad', 'Sad', 'Dhal'],
+          correctAnswer: 'Taa',
+          explanation: 'Taa (ط) est la version emphatique de Ta.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'lesson_12',
+    order: 12,
+    title: 'Les lettres Fa, Qaf',
+    titleAr: 'ف ق',
+    description: 'Deux lettres a forme arrondie.',
+    duration: '12 min',
+    xp: 65,
+    level: 'intermediaire',
+    category: 'alphabet',
+    prerequisites: ['lesson_11'],
+    steps: [
+      {
+        type: 'intro',
+        content: {
+          title: 'Forme arrondie',
+          text: 'Fa et Qaf se ressemblent. Attention aux points!'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'fa',
+          explanation: '1 point AU-DESSUS - Son: F francais'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'qaf',
+          explanation: '2 points AU-DESSUS - Son: Q guttural profond (du fond de la gorge)'
+        }
+      },
+      {
+        type: 'exercise',
+        content: {
+          instruction: 'Lisez ces mots:',
+          items: [
+            { arabic: 'فِيل', transliteration: 'fiil (elephant)' },
+            { arabic: 'قَلْب', transliteration: 'qalb (coeur)' },
+            { arabic: 'قُرْآن', transliteration: 'Qur\'an (Coran)' }
+          ]
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Combien de points a la lettre Qaf (ق)?',
+          options: ['0', '1', '2', '3'],
+          correctAnswer: '2',
+          explanation: 'Qaf a 2 points au-dessus, Fa n\'en a qu\'un.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'lesson_13',
+    order: 13,
+    title: 'Les lettres Kaf, Lam',
+    titleAr: 'ك ل',
+    description: 'Deux lettres tres courantes.',
+    duration: '12 min',
+    xp: 65,
+    level: 'intermediaire',
+    category: 'alphabet',
+    prerequisites: ['lesson_12'],
+    steps: [
+      {
+        type: 'intro',
+        content: {
+          title: 'Lettres courantes',
+          text: 'Kaf et Lam sont parmi les lettres les plus utilisees en arabe.'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'kaf',
+          explanation: 'Son: K francais. La forme change beaucoup selon la position.'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'lam',
+          explanation: 'Son: L francais. Presente dans "Al-" (l\'article defini).'
+        }
+      },
+      {
+        type: 'exercise',
+        content: {
+          instruction: 'Lisez ces mots:',
+          items: [
+            { arabic: 'كِتَاب', transliteration: 'kitaab (livre)' },
+            { arabic: 'لَيْل', transliteration: 'layl (nuit)' },
+            { arabic: 'كَلْب', transliteration: 'kalb (chien)' }
+          ]
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Que signifie كِتَاب?',
+          options: ['Nuit', 'Livre', 'Chien', 'Coeur'],
+          correctAnswer: 'Livre',
+          explanation: 'Kitaab (كِتَاب) signifie "livre".'
+        }
+      }
+    ]
+  },
+  {
+    id: 'lesson_14',
+    order: 14,
+    title: 'Les lettres Mim, Nun',
+    titleAr: 'م ن',
+    description: 'Deux lettres nasales tres frequentes.',
+    duration: '12 min',
+    xp: 65,
+    level: 'intermediaire',
+    category: 'alphabet',
+    prerequisites: ['lesson_13'],
+    steps: [
+      {
+        type: 'intro',
+        content: {
+          title: 'Les nasales',
+          text: 'Mim et Nun sont des consonnes nasales comme M et N en francais.'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'mim',
+          explanation: 'Son: M francais. Forme ronde caracteristique.'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'nun',
+          explanation: '1 point AU-DESSUS - Son: N francais. Ressemble a Ba mais le point est au-dessus.'
+        }
+      },
+      {
+        type: 'exercise',
+        content: {
+          instruction: 'Lisez ces mots:',
+          items: [
+            { arabic: 'مَسْجِد', transliteration: 'masjid (mosquee)' },
+            { arabic: 'نُور', transliteration: 'nuur (lumiere)' },
+            { arabic: 'مُسْلِم', transliteration: 'muslim (musulman)' }
+          ]
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Que signifie نُور?',
+          options: ['Mosquee', 'Lumiere', 'Musulman', 'Paix'],
+          correctAnswer: 'Lumiere',
+          explanation: 'Nuur (نُور) signifie "lumiere".'
+        }
+      }
+    ]
+  },
+  {
+    id: 'lesson_15',
+    order: 15,
+    title: 'La lettre Haa',
+    titleAr: 'ه',
+    description: 'Le H leger aspire.',
+    duration: '10 min',
+    xp: 55,
+    level: 'intermediaire',
+    category: 'alphabet',
+    prerequisites: ['lesson_14'],
+    steps: [
+      {
+        type: 'intro',
+        content: {
+          title: 'H leger vs H guttural',
+          text: 'Haa est un H leger (comme hello). Ne confondez pas avec Ha (ح) qui est guttural!'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'haa',
+          explanation: 'Son: H aspire leger (comme "hello" en anglais). Forme tres variable.'
+        }
+      },
+      {
+        type: 'exercise',
+        content: {
+          instruction: 'Distinguez les deux H:',
+          items: [
+            { arabic: 'ه', transliteration: 'Haa - H leger (hello)' },
+            { arabic: 'ح', transliteration: 'Ha - H guttural (gorge)' },
+            { arabic: 'هُوَ', transliteration: 'huwa (il/lui)' }
+          ]
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Quelle lettre se prononce comme le H de "hello"?',
+          options: ['Ha (ح)', 'Haa (ه)', 'Kha (خ)', 'Ayn (ع)'],
+          correctAnswer: 'Haa (ه)',
+          explanation: 'Haa (ه) est le H leger. Ha (ح) est le H guttural.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'lesson_16',
+    order: 16,
+    title: 'Les lettres Waw, Ya',
+    titleAr: 'و ي',
+    description: 'Les deux dernieres lettres de l\'alphabet.',
+    duration: '15 min',
+    xp: 80,
+    level: 'intermediaire',
+    category: 'alphabet',
+    prerequisites: ['lesson_15'],
+    steps: [
+      {
+        type: 'intro',
+        content: {
+          title: 'Les semi-voyelles',
+          text: 'Waw et Ya sont aussi des voyelles longues (OU et II). Waw ne se connecte pas a gauche.'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'waw',
+          explanation: 'Son: W/OU. Ne se connecte pas a gauche (comme Alif, Dal, Ra).'
+        }
+      },
+      {
+        type: 'letter',
+        content: {
+          letterId: 'ya',
+          explanation: '2 points EN-DESSOUS - Son: Y/II. Derniere lettre de l\'alphabet!'
+        }
+      },
+      {
+        type: 'exercise',
+        content: {
+          instruction: 'Lisez ces mots:',
+          items: [
+            { arabic: 'يَوْم', transliteration: 'yawm (jour)' },
+            { arabic: 'وَلَد', transliteration: 'walad (enfant)' },
+            { arabic: 'يَد', transliteration: 'yad (main)' }
+          ]
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Quelle lettre ne se connecte PAS a gauche?',
+          options: ['Ya (ي)', 'Waw (و)', 'Mim (م)', 'Nun (ن)'],
+          correctAnswer: 'Waw (و)',
+          explanation: 'Waw ne se connecte pas a gauche, comme Alif, Dal, Dhal, Ra, Zay.'
+        }
+      },
+      {
+        type: 'summary',
+        content: {
+          title: 'Felicitations!',
+          points: [
+            'Vous connaissez maintenant les 28 lettres de l\'alphabet arabe!',
+            'Waw et Ya sont aussi des voyelles longues',
+            'Il reste a pratiquer la lecture de mots complets'
+          ]
+        }
+      }
+    ]
+  },
+  {
+    id: 'lesson_17',
+    order: 17,
+    title: 'Revision: Alphabet partie 2',
+    titleAr: 'مراجعة الجزء الثاني',
+    description: 'Testez vos connaissances sur les 14 dernieres lettres.',
+    duration: '20 min',
+    xp: 100,
+    level: 'intermediaire',
+    category: 'revision',
+    prerequisites: ['lesson_16'],
+    steps: [
+      {
+        type: 'intro',
+        content: {
+          title: 'Grand quiz',
+          text: 'Vous avez appris tout l\'alphabet! Voyons ce que vous avez retenu.'
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Quelle lettre se prononce comme le F francais?',
+          arabicDisplay: 'ف',
+          options: ['Qaf', 'Fa', 'Kaf', 'Ghayn'],
+          correctAnswer: 'Fa',
+          explanation: 'Fa (ف) se prononce comme le F francais.'
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Que signifie le mot مَسْجِد?',
+          options: ['Livre', 'Lumiere', 'Mosquee', 'Jour'],
+          correctAnswer: 'Mosquee',
+          explanation: 'Masjid (مَسْجِد) signifie "mosquee".'
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Combien de lettres ne se connectent pas a gauche?',
+          options: ['4', '5', '6', '7'],
+          correctAnswer: '6',
+          explanation: 'Alif, Dal, Dhal, Ra, Zay et Waw ne se connectent pas a gauche.'
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Quelle est la derniere lettre de l\'alphabet?',
+          options: ['Waw', 'Haa', 'Ya', 'Nun'],
+          correctAnswer: 'Ya',
+          explanation: 'Ya (ي) est la 28eme et derniere lettre.'
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Quel mot signifie "coeur"?',
+          arabicDisplay: 'قَلْب',
+          options: ['kalb', 'qalb', 'layl', 'nuur'],
+          correctAnswer: 'qalb',
+          explanation: 'Qalb (قَلْب) signifie "coeur".'
+        }
+      },
+      {
+        type: 'summary',
+        content: {
+          title: 'Bravo!',
+          points: [
+            'Vous maitrisez les 28 lettres de l\'alphabet arabe!',
+            'Vous savez distinguer les lettres emphatiques',
+            'Vous connaissez plusieurs mots arabes',
+            'Continuez a pratiquer pour renforcer vos acquis!'
+          ]
+        }
+      }
+    ]
+  },
+  {
+    id: 'lesson_18',
+    order: 18,
+    title: 'Lire ses premiers mots',
+    titleAr: 'قراءة الكلمات الأولى',
+    description: 'Assemblez les lettres et voyelles pour lire des mots complets.',
+    duration: '20 min',
+    xp: 120,
+    level: 'avance',
+    category: 'lecture',
+    prerequisites: ['lesson_17'],
+    steps: [
+      {
+        type: 'intro',
+        content: {
+          title: 'De la lettre au mot',
+          text: 'Vous connaissez toutes les lettres et les voyelles. Apprenons a lire des mots complets insha\'Allah!'
+        }
+      },
+      {
+        type: 'exercise',
+        content: {
+          instruction: 'Lisez ces mots islamiques courants:',
+          items: [
+            { arabic: 'بِسْمِ اللَّه', transliteration: 'bismillah (au nom d\'Allah)' },
+            { arabic: 'إِنْ شَاءَ اللَّه', transliteration: 'insha\'Allah (si Dieu le veut)' },
+            { arabic: 'الْحَمْدُ لِلَّه', transliteration: 'al-hamdulillah (louange a Allah)' },
+            { arabic: 'سُبْحَانَ اللَّه', transliteration: 'subhanAllah (gloire a Allah)' }
+          ]
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Comment se lit بِسْمِ اللَّه?',
+          options: ['alhamdulillah', 'bismillah', 'subhanAllah', 'insha\'Allah'],
+          correctAnswer: 'bismillah',
+          explanation: 'Bismillah signifie "au nom d\'Allah".'
+        }
+      },
+      {
+        type: 'exercise',
+        content: {
+          instruction: 'Mots du quotidien:',
+          items: [
+            { arabic: 'مَاء', transliteration: 'maa\' (eau)' },
+            { arabic: 'خُبْز', transliteration: 'khubz (pain)' },
+            { arabic: 'بَيْت', transliteration: 'bayt (maison)' },
+            { arabic: 'كَبِير', transliteration: 'kabiir (grand)' }
+          ]
+        }
+      },
+      {
+        type: 'quiz',
+        content: {
+          question: 'Que signifie بَيْت?',
+          options: ['Eau', 'Pain', 'Maison', 'Grand'],
+          correctAnswer: 'Maison',
+          explanation: 'Bayt (بَيْت) signifie "maison".'
+        }
+      },
+      {
+        type: 'summary',
+        content: {
+          title: 'MashaAllah!',
+          points: [
+            'Vous savez lire des mots arabes complets!',
+            'Continuez a pratiquer avec le Coran dans l\'app',
+            'Utilisez la section Alphabet pour reviser les lettres',
+            'Qu\'Allah facilite votre apprentissage!'
+          ]
+        }
+      }
+    ]
+  },
 ];
 
 export interface Level {

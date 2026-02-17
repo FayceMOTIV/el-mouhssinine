@@ -43,7 +43,7 @@ export default function Login() {
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-bold text-3xl">EM</span>
           </div>
-          <h1 className="text-2xl font-bold text-white">El Mouhssinine</h1>
+          <h1 className="text-2xl font-bold text-white">El Mohsinine</h1>
           <p className="text-white/50 mt-1">Backoffice Administration</p>
         </div>
 
@@ -115,7 +115,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-white/30 text-sm mt-6">
-          Mosquée El Mouhssinine - Pantin © 2024
+          Mosquée El Mohsinine - Pantin © 2024
         </p>
       </div>
     </div>

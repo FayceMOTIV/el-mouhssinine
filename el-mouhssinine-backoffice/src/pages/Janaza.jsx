@@ -442,7 +442,7 @@ export default function Janaza() {
               label="Lieu"
               value={formData.lieu}
               onChange={(e) => setFormData({ ...formData, lieu: e.target.value })}
-              placeholder="Ex: Mosquée El Mouhssinine"
+              placeholder="Ex: Mosquée El Mohsinine"
             />
           </div>
           <div className="relative">

@@ -24,7 +24,7 @@ import { initSentry, captureError } from './src/services/sentry';
 // NOTE: Les clés publishable sont conçues pour être dans le code client.
 // La clé secrète (sk_) est dans Firebase Functions config (ne jamais la mettre ici!)
 // =============================================================================
-const STRIPE_PUBLISHABLE_KEY = 'pk_test_VOTRE_CLE_STRIPE'; // TODO: Remplacer par la vraie clé
+const STRIPE_PUBLISHABLE_KEY = 'pk_live_51SzXh73gslOPb7CbYOlhID74OLIqS8OSJUuSAbrQKzi5iftBbKM1LxnpOISC2iA86pFL7vSyW2z4cxh8fnysIxC3009Tc5PF80';
 
 // Error Boundary pour capturer les crashes
 interface ErrorBoundaryState {
@@ -85,21 +85,20 @@ const App: React.FC = () => {
       // Initialiser TTS au démarrage
       initTTS();
 
-      // Initialiser FCM pour les notifications push
-      await initializeFCM();
-
-      // Initialiser le background location pour les rappels de proximité mosquée
-      await initBackgroundLocation();
-
-      // Effacer le badge à l'ouverture de l'app
-      await clearBadgeCount();
+      // Bug 14 Fix: try/catch individuel pour éviter splash infinie si un service échoue
+      try { await initializeFCM(); } catch (e) { console.warn('[App] FCM init failed:', e); }
+      try { await initBackgroundLocation(); } catch (e) { console.warn('[App] BackgroundLocation init failed:', e); }
+      try { await clearBadgeCount(); } catch (e) { console.warn('[App] clearBadge failed:', e); }
 
       // Attendre 2 secondes pour garder la splash visible
       await new Promise<void>(resolve => setTimeout(resolve, 2000));
       setAppReady(true);
     };
 
-    prepare();
+    prepare().catch(e => {
+      console.error('[App] prepare() failed:', e);
+      setAppReady(true); // Montrer l'app même si init échoue
+    });
   }, []);
 
   // Gérer les notifications en foreground (FCM)

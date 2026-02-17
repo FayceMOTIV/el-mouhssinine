@@ -12,6 +12,7 @@ const pageTitles = {
   '/janaza': 'Salat Janaza',
   '/dons': 'Dons & Projets',
   '/adherents': 'Membres',
+  '/revenus': 'Gestion financière',
   '/notifications': 'Notifications',
   '/admins': 'Gestion Admins',
   '/parametres': 'Paramètres'
@@ -21,7 +22,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
 
-  const title = pageTitles[location.pathname] || 'El Mouhssinine'
+  const title = pageTitles[location.pathname] || 'El Mohsinine'
 
   return (
     <div className="min-h-screen bg-bg-dark flex">

@@ -428,6 +428,45 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
     }
   }, [player.isPlaying, player.isLoading]);
 
+  // Cacher la tabBar quand le mini player est visible
+  useEffect(() => {
+    // setOptions sur tous les niveaux de parents pour cibler le Tab.Navigator
+    const parents = [navigation.getParent(), navigation.getParent()?.getParent()].filter(Boolean);
+    const defaultTabBarStyle = {
+      backgroundColor: colors.accentDark,
+      height: 90,
+      paddingBottom: 25,
+      paddingTop: 10,
+      borderTopWidth: 0,
+      position: 'absolute' as const,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      flexDirection: 'row' as const,
+    };
+
+    parents.forEach(parent => {
+      if (showMiniPlayer) {
+        parent?.setOptions({
+          tabBarStyle: { display: 'none' as const },
+        });
+      } else {
+        parent?.setOptions({
+          tabBarStyle: defaultTabBarStyle,
+        });
+      }
+    });
+
+    // Restaurer la tabBar quand on quitte l'écran
+    return () => {
+      parents.forEach(parent => {
+        parent?.setOptions({
+          tabBarStyle: defaultTabBarStyle,
+        });
+      });
+    };
+  }, [showMiniPlayer, navigation]);
+
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>

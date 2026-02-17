@@ -17,7 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import CompassHeading from 'react-native-compass-heading';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, platformShadow, isSmallScreen } from '../theme/colors';
-import { subscribeToMosqueeInfo, requestRecuFiscal, subscribeToRamadanSettings, RamadanSettings } from '../services/firebase';
+import { subscribeToMosqueeInfo, subscribeToRamadanSettings, RamadanSettings } from '../services/firebase';
 import { AuthService } from '../services/auth';
 import { MosqueeInfo } from '../types';
 import { useLanguage } from '../context/LanguageContext';
@@ -74,18 +74,19 @@ import { BackgroundPattern } from '../components/BackgroundPattern';
 const MoreScreen = () => {
   const navigation = useNavigation<any>();
   const { language, setLanguage, t, isRTL } = useLanguage();
+  // BUG 8 FIX: Pas de faux IBAN/données en fallback - valeurs vides par défaut
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo>({
-    name: 'Mosquée El Mouhssinine',
-    address: '123 Rue de la Mosquée',
+    name: 'Mosquée El Mohsinine',
+    address: '',
     city: 'Bourg-en-Bresse',
     postalCode: '01000',
-    phone: '04 74 XX XX XX',
-    email: 'contact@elmouhssinine.fr',
+    phone: '',
+    email: 'centreculturelislamique@orange.fr',
     website: 'el-mouhssinine.web.app',
-    iban: 'FR76 1234 5678 9012 3456 7890 123',
-    bic: 'AGRIFRPP',
-    bankName: 'Crédit Agricole',
-    accountHolder: 'Association El Mouhssinine',
+    iban: '',
+    bic: '',
+    bankName: '',
+    accountHolder: 'Association El Mohsinine',
   });
 
   const [copied, setCopied] = useState('');
@@ -110,10 +111,7 @@ const MoreScreen = () => {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const qiblaDirection = 119; // Direction Qibla pour Bourg-en-Bresse
 
-  // Reçu fiscal
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear() - 1);
-  const [sendingRecuFiscal, setSendingRecuFiscal] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeToMosqueeInfo((info) => {
@@ -467,44 +465,6 @@ const MoreScreen = () => {
     Linking.openURL(`https://${mosqueeInfo.website}`);
   };
 
-  // Demander l'envoi du reçu fiscal
-  const handleRequestRecuFiscal = async () => {
-    if (!userEmail) {
-      Alert.alert(
-        language === 'ar' ? 'تسجيل الدخول مطلوب' : 'Connexion requise',
-        language === 'ar'
-          ? 'يرجى تسجيل الدخول لطلب إيصالك الضريبي'
-          : 'Veuillez vous connecter pour demander votre reçu fiscal'
-      );
-      return;
-    }
-
-    setSendingRecuFiscal(true);
-    try {
-      const result = await requestRecuFiscal(userEmail, selectedYear);
-      if (result.success) {
-        Alert.alert(
-          language === 'ar' ? 'تم الإرسال' : 'Envoyé !',
-          language === 'ar'
-            ? `تم إرسال إيصالك الضريبي بمبلغ ${result.montantTotal?.toFixed(2)}€ إلى ${userEmail}`
-            : `Votre reçu fiscal de ${result.montantTotal?.toFixed(2)}€ a été envoyé à ${userEmail}`
-        );
-      } else {
-        Alert.alert(
-          language === 'ar' ? 'خطأ' : 'Erreur',
-          result.message
-        );
-      }
-    } catch (error) {
-      const err = error as Error;
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        err?.message || (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue')
-      );
-    } finally {
-      setSendingRecuFiscal(false);
-    }
-  };
 
   const Switch = ({ active, onToggle }: { active: boolean; onToggle: () => void }) => (
     <TouchableOpacity
@@ -627,7 +587,7 @@ const MoreScreen = () => {
               </View>
 
               <View style={[styles.ribRow, styles.ribRowLast]}>
-                <View style={styles.ribInfo}>
+                <View style={[styles.ribInfo, { flex: 1 }]}>
                   <Text style={styles.ribLabel}>BIC</Text>
                   <Text style={styles.ribValue}>{mosqueeInfo.bic}</Text>
                 </View>
@@ -713,7 +673,7 @@ const MoreScreen = () => {
               <View style={styles.settingRow}>
                 <View style={styles.settingLeft}>
                   <Text style={styles.settingIcon}>🔔</Text>
-                  <Text style={styles.settingLabel}>{t('enableReminders')}</Text>
+                  <Text style={styles.settingLabel} numberOfLines={2}>{t('enableReminders')}</Text>
                 </View>
                 <Switch
                   active={prayerNotifSettings.enabled}
@@ -819,7 +779,7 @@ const MoreScreen = () => {
                   <View style={[styles.settingRow, styles.settingRowLast]}>
                     <View style={styles.settingLeft}>
                       <Text style={styles.settingIcon}>🕌</Text>
-                      <Text style={styles.settingLabel}>{t('jumuaFriday')}</Text>
+                      <Text style={styles.settingLabel} numberOfLines={2}>{t('jumuaFriday')}</Text>
                     </View>
                     <Switch
                       active={jumuaReminderEnabled}
@@ -841,7 +801,7 @@ const MoreScreen = () => {
               <View style={styles.settingRow}>
                 <View style={styles.settingLeft}>
                   <Text style={styles.settingIcon}>🚀</Text>
-                  <Text style={styles.settingLabel}>{t('enableProgressiveReminders')}</Text>
+                  <Text style={styles.settingLabel} numberOfLines={2}>{t('enableProgressiveReminders')}</Text>
                 </View>
                 <Switch
                   active={boostSettings.enabled}
@@ -891,7 +851,7 @@ const MoreScreen = () => {
               <View style={styles.settingRow}>
                 <View style={styles.settingLeft}>
                   <Text style={styles.settingIcon}>📖</Text>
-                  <Text style={styles.settingLabel}>
+                  <Text style={styles.settingLabel} numberOfLines={2}>
                     {language === 'ar' ? 'تفعيل التذكير اليومي' : 'Activer le rappel quotidien'}
                   </Text>
                 </View>
@@ -1006,7 +966,7 @@ const MoreScreen = () => {
               <View style={styles.settingRow}>
                 <View style={styles.settingLeft}>
                   <Text style={styles.settingIcon}>🔕</Text>
-                  <Text style={styles.settingLabel}>{t('enableMosqueProximity')}</Text>
+                  <Text style={styles.settingLabel} numberOfLines={2}>{t('enableMosqueProximity')}</Text>
                 </View>
                 <Switch
                   active={mosqueProximitySettings.enabled}
@@ -1037,7 +997,7 @@ const MoreScreen = () => {
                 <View style={styles.settingRow}>
                   <View style={styles.settingLeft}>
                     <Text style={styles.settingIcon}>🌙</Text>
-                    <Text style={styles.settingLabel}>
+                    <Text style={styles.settingLabel} numberOfLines={2}>
                       {language === 'ar' ? 'تذكير السحور' : 'Rappel Suhoor'}
                     </Text>
                   </View>
@@ -1052,14 +1012,14 @@ const MoreScreen = () => {
 
                 {/* Minutes avant Suhoor */}
                 {ramadanNotifSettings.suhoor.enabled && (
-                  <View style={styles.settingRow}>
-                    <View style={styles.settingLeft}>
+                  <View style={styles.settingRowVertical}>
+                    <View style={styles.settingLabelRow}>
                       <Text style={styles.settingIcon}>⏰</Text>
-                      <Text style={styles.settingLabel}>
+                      <Text style={styles.settingLabel} numberOfLines={1}>
                         {language === 'ar' ? 'قبل الفجر بـ' : 'Avant Fajr'}
                       </Text>
                     </View>
-                    <View style={styles.picker}>
+                    <View style={styles.pickerFullWidth}>
                       {[15, 30, 45].map((min) => (
                         <TouchableOpacity
                           key={min}
@@ -1089,7 +1049,7 @@ const MoreScreen = () => {
                 <View style={styles.settingRow}>
                   <View style={styles.settingLeft}>
                     <Text style={styles.settingIcon}>🌅</Text>
-                    <Text style={styles.settingLabel}>
+                    <Text style={styles.settingLabel} numberOfLines={2}>
                       {language === 'ar' ? 'تذكير الإفطار' : 'Rappel Iftar'}
                     </Text>
                   </View>
@@ -1104,14 +1064,14 @@ const MoreScreen = () => {
 
                 {/* Minutes avant Iftar */}
                 {ramadanNotifSettings.iftar.enabled && (
-                  <View style={styles.settingRow}>
-                    <View style={styles.settingLeft}>
+                  <View style={styles.settingRowVertical}>
+                    <View style={styles.settingLabelRow}>
                       <Text style={styles.settingIcon}>⏰</Text>
-                      <Text style={styles.settingLabel}>
+                      <Text style={styles.settingLabel} numberOfLines={1}>
                         {language === 'ar' ? 'قبل المغرب بـ' : 'Avant Maghrib'}
                       </Text>
                     </View>
-                    <View style={styles.picker}>
+                    <View style={styles.pickerFullWidth}>
                       {[0, 5, 10, 15].map((min) => (
                         <TouchableOpacity
                           key={min}
@@ -1143,7 +1103,7 @@ const MoreScreen = () => {
                 <View style={styles.settingRow}>
                   <View style={styles.settingLeft}>
                     <Text style={styles.settingIcon}>🕌</Text>
-                    <Text style={styles.settingLabel}>
+                    <Text style={styles.settingLabel} numberOfLines={2}>
                       {language === 'ar' ? 'تذكير التراويح' : 'Rappel Tarawih'}
                     </Text>
                   </View>
@@ -1158,14 +1118,14 @@ const MoreScreen = () => {
 
                 {/* Minutes avant Tarawih */}
                 {ramadanNotifSettings.tarawih.enabled && (
-                  <View style={[styles.settingRow, styles.settingRowLast]}>
-                    <View style={styles.settingLeft}>
+                  <View style={[styles.settingRowVertical, styles.settingRowLast]}>
+                    <View style={styles.settingLabelRow}>
                       <Text style={styles.settingIcon}>⏰</Text>
-                      <Text style={styles.settingLabel}>
+                      <Text style={styles.settingLabel} numberOfLines={1}>
                         {language === 'ar' ? 'قبل التراويح بـ' : 'Avant Tarawih'}
                       </Text>
                     </View>
-                    <View style={styles.picker}>
+                    <View style={styles.pickerFullWidth}>
                       {[10, 15, 30].map((min) => (
                         <TouchableOpacity
                           key={min}
@@ -1242,10 +1202,48 @@ const MoreScreen = () => {
             </View>
           </View>
 
+
+          {/* Déconnexion */}
+          {userEmail && (
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={() => {
+                Alert.alert(
+                  language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter',
+                  language === 'ar' ? 'هل أنت متأكد؟' : 'Êtes-vous sûr de vouloir vous déconnecter ?',
+                  [
+                    { text: language === 'ar' ? 'إلغاء' : 'Annuler', style: 'cancel' },
+                    {
+                      text: language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          await AuthService.signOut();
+                        } catch (error) {
+                          Alert.alert(
+                            language === 'ar' ? 'خطأ' : 'Erreur',
+                            language === 'ar' ? 'فشل تسجيل الخروج' : 'Impossible de se déconnecter'
+                          );
+                        }
+                      },
+                    },
+                  ]
+                );
+              }}
+            >
+              <View style={[styles.settingRow, { justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>🚪</Text>
+                <Text style={[styles.settingLabel, { color: '#ef4444' }]}>
+                  {language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
           {/* Version */}
           <View style={styles.versionContainer}>
             <Text style={styles.versionText}>{t('version')} {appVersion}</Text>
-            <Text style={styles.copyrightText}>© 2026 El Mouhssinine</Text>
+            <Text style={styles.copyrightText}>© 2026 El Mohsinine</Text>
           </View>
         </View>
       </ScrollView>
@@ -1442,11 +1440,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.06)',
+    gap: spacing.sm,
   },
   ribRowLast: {
     borderBottomWidth: 0,
   },
-  ribInfo: {},
+  ribInfo: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
   ribLabel: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
@@ -1454,7 +1456,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   ribValue: {
-    fontSize: fontSize.md,
+    fontSize: isSmallScreen ? fontSize.sm : fontSize.md,
     color: colors.text,
     fontWeight: '500',
   },
@@ -1463,6 +1465,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.sm,
+    flexShrink: 0,
   },
   copyBtnText: {
     fontSize: fontSize.sm,
@@ -1527,6 +1530,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.06)',
+    gap: spacing.sm,
   },
   settingRowLast: {
     borderBottomWidth: 0,
@@ -1556,6 +1560,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     flexShrink: 1,
+    minWidth: 0,
   },
   settingIcon: {
     fontSize: isSmallScreen ? 14 : 18,
@@ -1565,6 +1570,7 @@ const styles = StyleSheet.create({
     fontSize: isSmallScreen ? fontSize.sm : fontSize.md,
     color: colors.text,
     flexShrink: 1,
+    minWidth: 0,
   },
   // Switch - Accessible touch target
   switch: {
@@ -1575,6 +1581,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 2,
     minHeight: 44, // Touch target wrapper
+    flexShrink: 0,
+    marginLeft: spacing.sm,
   },
   switchActive: {
     backgroundColor: colors.accent,
@@ -1596,7 +1604,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f5',
     borderRadius: borderRadius.sm,
     padding: isSmallScreen ? 2 : 4,
-    flexShrink: 0,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   pickerOption: {
     paddingHorizontal: isSmallScreen ? 8 : spacing.sm,
@@ -1644,6 +1653,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
+    gap: spacing.sm,
   },
   prayerToggleRowLast: {
     borderBottomWidth: 0,
@@ -1717,74 +1727,14 @@ const styles = StyleSheet.create({
   rowRTL: {
     flexDirection: 'row-reverse',
   },
-  // Reçu fiscal
-  recuFiscalInfo: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginBottom: spacing.lg,
-    lineHeight: 20,
-  },
-  yearSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  yearLabel: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  yearButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  yearButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  logoutButton: {
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: borderRadius.lg,
+    marginHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  yearButtonActive: {
-    backgroundColor: 'rgba(201,162,39,0.2)',
-    borderColor: colors.accent,
-  },
-  yearButtonText: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-  yearButtonTextActive: {
-    color: colors.accent,
-  },
-  recuFiscalButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accent,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    gap: spacing.sm,
-  },
-  recuFiscalButtonDisabled: {
-    backgroundColor: 'rgba(201,162,39,0.4)',
-  },
-  recuFiscalButtonIcon: {
-    fontSize: 18,
-  },
-  recuFiscalButtonText: {
-    fontSize: fontSize.md,
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  recuFiscalWarning: {
-    fontSize: fontSize.sm,
-    color: '#FFA726',
-    textAlign: 'center',
-    marginTop: spacing.md,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
   },
   // Ramadan card
   ramadanCard: {

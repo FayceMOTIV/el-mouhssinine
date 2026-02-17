@@ -14,7 +14,7 @@ export const translations = {
     // Home Screen
     welcome: 'السلام عليكم ورحمة الله وبركاته',
     salamTranslation: 'Que la paix, la miséricorde et les bénédictions d\'Allah soient sur vous',
-    mosqueName: 'El Mouhssinine',
+    mosqueName: 'El Mohsinine',
     mosqueLocation: 'Mosquée - Bourg-en-Bresse',
     nextPrayer: 'Prochaine prière',
     todaySchedule: 'Horaires du jour',
@@ -334,7 +334,7 @@ export const translations = {
     addressLabel: 'Adresse',
     addressPlaceholder: 'Votre adresse postale',
     membershipFormula: 'Formule d\'adhésion',
-    acceptRulesText: 'En devenant membre, j\'accepte le règlement intérieur de l\'association El Mouhssinine et m\'engage à le respecter.',
+    acceptRulesText: 'En devenant membre, j\'accepte le règlement intérieur de l\'association El Mohsinine et m\'engage à le respecter.',
     paymentNoteMonthly: 'Le paiement mensuel n\'est pas automatique. Le renouvellement sera à effectuer manuellement chaque mois.',
 
     // Member screen

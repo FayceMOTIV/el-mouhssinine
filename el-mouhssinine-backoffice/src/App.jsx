@@ -23,6 +23,7 @@ import Revenus from './pages/Revenus'
 import RecusFiscaux from './pages/RecusFiscaux'
 import Notifications from './pages/Notifications'
 import Ramadan from './pages/Ramadan'
+import EmailTemplates from './pages/EmailTemplates'
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -91,6 +92,7 @@ function AppRoutes() {
         <Route path="messages" element={<Messages />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="ramadan" element={<Ramadan />} />
+        <Route path="emails" element={<EmailTemplates />} />
         <Route
           path="admins"
           element={

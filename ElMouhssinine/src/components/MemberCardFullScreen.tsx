@@ -186,7 +186,7 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
             <View style={styles.logo}>
               <Text style={styles.logoText}>🕌</Text>
             </View>
-            <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>EL MOUHSSININE</Text>
+            <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>EL MOHSININE</Text>
             <Text style={[styles.mosqueCity, isRTL && styles.textRTL]}>{t('memberCardCity')}</Text>
           </View>
 
@@ -225,6 +225,12 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
               <Text style={[styles.label, isRTL && styles.textRTL]}>{t('memberCardValidity')}</Text>
               <Text style={[styles.value, isRTL && styles.textRTL]}>{dateStr}</Text>
             </View>
+          </View>
+
+          {/* QR CODE SECTION */}
+          <View style={styles.qrCodeSection}>
+            <Text style={[styles.qrCodeId, isRTL && styles.textRTL]}>N° {memberId}</Text>
+            <Text style={[styles.qrCodeHint, isRTL && styles.textRTL]}>Scannez pour vérifier</Text>
           </View>
         </View>
       </View>
@@ -515,6 +521,27 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     fontSize: 14,
   },
+
+  // QR CODE SECTION
+  qrCodeSection: {
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+    marginTop: 12,
+  },
+  qrCodeId: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  qrCodeHint: {
+    fontSize: 8,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 2,
+  },
+
   // RTL Styles
   textRTL: {
     textAlign: 'right',

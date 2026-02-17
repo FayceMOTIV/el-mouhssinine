@@ -1,4 +1,4 @@
-// Données Mock réalistes pour la démo El Mouhssinine
+// Données Mock réalistes pour la démo El Mohsinine
 // Ces données sont utilisées quand Firebase est vide ou en erreur
 
 // ==================== ANNONCES ====================
@@ -34,7 +34,7 @@ export const mockEvents = [
     description: 'Venez découvrir notre mosquée et rencontrer la communauté. Programme: visite guidée, présentation des activités, collation offerte.',
     date: new Date('2026-01-25'),
     time: '14:00',
-    location: 'Mosquée El Mouhssinine',
+    location: 'Mosquée El Mohsinine',
     isActive: true,
     category: 'communaute',
   },
@@ -88,7 +88,7 @@ export const mockJanaza = [
     deceasedNameAr: 'محمد بن أحمد',
     prayerDate: new Date('2026-01-12'),
     prayerTime: 'Après Dhuhr',
-    location: 'Mosquée El Mouhssinine',
+    location: 'Mosquée El Mohsinine',
     message: "Qu'Allah lui fasse miséricorde et l'accueille dans Son vaste paradis.",
     messageAr: 'رحمه الله وأسكنه فسيح جناته',
     isActive: true,
@@ -203,17 +203,7 @@ export const mockMembers = [
 ];
 
 // ==================== POPUPS ====================
-export const mockPopups = [
-  {
-    id: '1',
-    titre: 'Bienvenue !',
-    contenu: "Bienvenue sur l'application de la mosquée El Mouhssinine. Retrouvez les horaires de prière, les annonces et bien plus encore.",
-    actif: true,
-    dateDebut: '2026-01-01',
-    dateFin: '2026-12-31',
-    priorite: 1,
-  },
-];
+export const mockPopups: any[] = [];
 
 // ==================== RAPPELS DU JOUR (Hadiths) ====================
 export const mockRappels = [
@@ -480,7 +470,7 @@ export const mockRappels = [
 
 // ==================== INFOS MOSQUÉE ====================
 export const mockMosqueeInfo = {
-  name: 'Mosquée El Mouhssinine',
+  name: 'Mosquée El Mohsinine',
   address: '29 Rue de la Croix Blanche',
   postalCode: '01000',
   city: 'Bourg-en-Bresse',
@@ -490,7 +480,7 @@ export const mockMosqueeInfo = {
   iban: 'FR76 XXXX XXXX XXXX XXXX XXXX XXX',
   bic: 'AGRIFRPP',
   bankName: 'Crédit Agricole',
-  accountHolder: 'Association El Mouhssinine',
+  accountHolder: 'Association El Mohsinine',
 };
 
 // ==================== SERVICES MOSQUÉE ====================

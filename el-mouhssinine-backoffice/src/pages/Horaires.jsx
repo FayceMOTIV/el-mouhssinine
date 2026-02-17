@@ -51,11 +51,11 @@ export default function Horaires() {
   const [loadingApi, setLoadingApi] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Fetch Adhan times from Aladhan API - Ajusté pour Mawaqit El Mouhssinine
+  // Fetch Adhan times from Aladhan API - Ajusté pour Mawaqit El Mohsinine
   const fetchAdhanTimes = async () => {
     setLoadingApi(true)
     try {
-      // Method 12 + tune pour correspondre aux horaires Mawaqit El Mouhssinine
+      // Method 12 + tune pour correspondre aux horaires Mawaqit El Mohsinine
       // tune: Fajr -20min, Dhuhr +2min, Asr +4min, Maghrib +8min, Isha +27min
       const response = await fetch(
         'https://api.aladhan.com/v1/timingsByCity?city=Bourg-en-Bresse&country=France&method=12&tune=0,-20,0,2,4,8,0,27,0'

@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 213
+- **Build actuel** : 228
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -26,7 +26,7 @@
 - **Region** : europe-west1
 - **Collections** : announcements, events, janaza, projects, members, popups, rappels, settings, dates_islamiques, donations, messages, payments
 
-## Cloud Functions (21 deployees)
+## Cloud Functions (32 deployees)
 | Fonction | Type | Description |
 |----------|------|-------------|
 | onNewAnnouncement | Trigger Firestore | Notif auto nouvelle annonce |
@@ -43,8 +43,9 @@
 | cachePrayerTimesDaily | Scheduled | Cache horaires priere |
 | sendRecuFiscal | Callable (120s, 512MB) | Genere PDF recu fiscal + envoi email |
 | getDonsByYear | Callable | Total dons par annee pour un email |
-| createPaymentIntent | Callable (30s) | Paiement Stripe |
-| stripeWebhook | HTTPS (60s) | Webhook Stripe |
+| createPaymentIntent | Callable (30s) | Paiement Stripe one-time |
+| createSubscription | Callable (30s) | Abonnement Stripe recurrent mensuel |
+| stripeWebhook | HTTPS (60s) | Webhook Stripe (payment_intent + invoice + subscription) |
 | forceCachePrayerTimes | Callable | Force mise a jour cache horaires |
 | onDonationConfirmation | Trigger Firestore | Email confirmation don (particulier + entreprise) |
 | onCotisationConfirmation | Trigger Firestore | Email confirmation cotisation adherent |
@@ -107,7 +108,11 @@
 
 ### Webhook Stripe
 - URL : `https://europe-west1-el-mouhssinine.cloudfunctions.net/stripeWebhook`
-- Events : `payment_intent.succeeded`, `payment_intent.payment_failed`
+- Events : `payment_intent.succeeded`, `payment_intent.payment_failed`, `invoice.payment_succeeded`, `customer.subscription.deleted`, `customer.subscription.updated`
+
+### Apple Pay
+- Merchant ID : `merchant.fr.elmouhssinine.mosquee`
+- Configure dans : `ElMouhssinine.entitlements` + `App.tsx` (StripeProvider) + `stripe.ts` (merchantCountryCode: FR)
 
 ## Configuration Email
 - SMTP Brevo (smtp-relay.brevo.com:587)
@@ -453,9 +458,97 @@ useEffect(() => {
 - [x] Rate limiting : actif sur toutes les fonctions sensibles
 - [x] SMTP Brevo : configure correctement
 
+## Corrige (15 Fev 2026 - Build 225)
+
+### Bug changement de compte (account switching)
+- [x] MemberScreen.tsx : Reset isExpired, inscribedMembers, memberPage au logout
+- [x] MessagesScreen.tsx : Reset messages[] au logout
+- [x] HomeScreen.tsx : Messages subscription avec onAuthStateChanged() + cleanup listener
+- [x] DonationsScreen.tsx : Prefill donateur avec onAuthStateChanged() + cleanup au logout
+
+### Phrase RIB supprimee
+- [x] DonationsScreen.tsx : Suppression du bloc taxReceiptNote dans la modal RIB
+
+### Section recu fiscal deplacee
+- [x] DonationsScreen.tsx : Bloc vert legalBox deplace du haut vers le bas de la page 1
+
+### Backoffice - Page Finances (nouveau)
+- [x] Revenus.jsx : Reecrit avec 4 onglets (Vue d'ensemble, Dons, Cotisations, Abonnements)
+- [x] Sidebar.jsx : Icone Wallet + label "Finances"
+- [x] Layout.jsx : Titre "Gestion financiere"
+- [x] Stats, graphiques Recharts, export CSV, filtres temps reel
+
+### Stripe Subscriptions - Paiements mensuels automatiques (nouveau)
+- [x] Cloud Function createSubscription : Cree abonnement Stripe recurrent
+- [x] stripeWebhook : 3 nouveaux events (invoice.payment_succeeded, customer.subscription.deleted, customer.subscription.updated)
+- [x] cancelSubscription : Annule abonnement Stripe (cancel_at_period_end: true)
+- [x] stripe.ts : makeSubscription() pour flux Payment Sheet avec subscription
+- [x] firebase.ts : stripeSubscriptionId dans AddPaymentParams + addPayment
+- [x] MemberScreen.tsx : makeSubscription() pour mensuel, makePayment() pour annuel
+- [x] Parametres.jsx : Note mise a jour "recurrent automatiquement via Stripe"
+
+### Deployements
+- [x] Cloud Functions : 22 fonctions deployees (createSubscription nouvelle)
+- [x] Backoffice : Deploy hosting https://el-mouhssinine.web.app
+
+### Action requise
+- [ ] Stripe Dashboard : Ajouter events webhook (invoice.payment_succeeded, customer.subscription.deleted, customer.subscription.updated)
+
+## Corrige (17 Fev 2026 - Build 228)
+
+### Audit V2 : 15 bugs critiques corriges (sur 20 identifies)
+
+#### ARGENT (5 bugs)
+- [x] Bug 1 : Webhook donation { merge: true } — preserve donorType/donorInfo pour CERFA
+- [x] Bug 2 : Webhook payment doc(paymentIntentId) — evite doublon app+webhook
+- [x] Bug 3 : invoice.payment_succeeded idempotence — check processed_payments + docId invoice.id
+- [x] Bug 5 : Date expiration setDate(0) — fix debordement mois (31 jan → 28 fev, pas 3 mars)
+- [x] Bug 6 : cancelSubscription && → || — condition logique corrigee
+
+#### SECURITE (3 bugs)
+- [x] Bug 8 : Banner mode demo backoffice — bandeau rouge visible si Firebase echoue en dev
+- [x] Bug 10 : Firestore Rules payments create — validation metadata.memberId == auth.uid
+- [x] Bug 11 : Firestore Rules IBAN protege — settings/association lecture authentifiee uniquement
+
+#### CRASH (3 bugs)
+- [x] Bug 12 : cleanupOldNotifications batch chunks 500 — evite crash si >500 docs
+- [x] Bug 14 : App.tsx prepare() try/catch — evite splash infinie si FCM/Location echoue
+- [x] Bug 16 : escapeHtml emails — injection HTML dans listes et paragraphes corrigee
+
+#### UX (2 bugs)
+- [x] Bug 17 : Mock janaza supprime + sections vides masquees (annonces, evenements, janaza)
+- [x] Bug 19 : Alert email verification apres inscription + bouton Renvoyer
+
+#### PERFORMANCE (2 bugs)
+- [x] Bug 13 : Recus fiscaux paralleles — batch de 3 avec Promise.allSettled (3x plus rapide)
+- [x] Bug 15 : Memory leak onSnapshot — listener imbrique supprime (callback direct)
+
+### Fichiers modifies
+- functions/index.js : Bugs 1, 2, 3, 5, 6, 12, 13, 16
+- functions/package-lock.json : npm audit fix (3 CVE corrigees)
+- firestore.rules : Bugs 10, 11
+- ElMouhssinine/src/services/firebase.ts : Bugs 5, 15
+- ElMouhssinine/App.tsx : Bug 14
+- ElMouhssinine/src/screens/HomeScreen.tsx : Bug 17
+- ElMouhssinine/src/screens/MemberScreen.tsx : Bug 19
+- el-mouhssinine-backoffice/src/services/firebase.js : Bug 8
+
+### Bugs non corriges (par choix)
+- Bug 4 : Race condition refund (probabilite <0.1%, refacto complexe)
+- Bug 7 : firebase-admin@12 (breaking changes, risque trop eleve)
+- Bug 9 : Email SPF/DKIM (config DNS, pas du code)
+- Bug 20 : Limites backoffice (a evaluer page par page)
+
+### Deployements
+- [x] Cloud Functions : 32 fonctions deployees
+- [x] Firestore Rules : compilees + releasees
+- [x] Backoffice : Deploy hosting https://el-mouhssinine.web.app
+- [x] App iOS : Build 228 TestFlight
+
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
-- Mock data present dans les screens (fallback si Firebase vide)
-- Cloud Functions bien structurees, 21 fonctions deployees
-- Score audit securite : 8/10
+- Mock data janaza supprime (donnees sensibles)
+- Sections vides masquees sur HomeScreen (annonces, evenements, janaza)
+- Cloud Functions bien structurees, 32 fonctions deployees
+- Score audit securite : 9/10 (apres corrections Build 228)
 - Score audit i18n : 9/10 (apres corrections Build 98)

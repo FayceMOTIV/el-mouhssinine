@@ -190,7 +190,7 @@ export const setupForegroundHandler = () => {
     const { notification, data } = remoteMessage;
 
     if (notification) {
-      const title = notification.title || 'El Mouhssinine';
+      const title = notification.title || 'El Mohsinine';
       const body = notification.body || '';
 
       // Déterminer le channel basé sur le type

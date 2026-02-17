@@ -63,8 +63,8 @@ export const useQuranPlayer = ({
   const isLoadingTrackRef = useRef(false);
   // Flag pour bloquer les appels re-entrants à handleTrackEnd
   const isHandlingEndRef = useRef(false);
-  // Dernier ID de piste joué (pour éviter les doublons)
-  const lastPlayedVerseRef = useRef<number | null>(null);
+  // Dernier verset dont la fin a été traitée (empêche double-avancement)
+  const lastHandledEndForVerseRef = useRef<number>(-1);
 
   // Sync refs
   useEffect(() => {
@@ -153,7 +153,8 @@ export const useQuranPlayer = ({
             setVerseProgress(position / duration);
 
             // Backup: détecter fin si event listener n'a pas capté
-            if (position >= duration - 0.15 && duration > 1) {
+            // Seuil 0.5s pour éviter les faux positifs sur versets courts
+            if (position >= duration - 0.5 && duration > 2) {
               await handleTrackEnd();
             }
           }
@@ -189,28 +190,17 @@ export const useQuranPlayer = ({
       const max = maxRepeatRef.current;
       const versesArray = versesRef.current;
 
-      // handleTrackEnd idx mode
-
-      // Éviter de rejouer le même verset si déjà en cours
-      if (lastPlayedVerseRef.current === idx && mode !== 'verse') {
-        // On a déjà joué ce verset, passer au suivant
-        if (idx < versesArray.length - 1) {
-          await loadAndPlayVerse(idx + 1);
-        } else {
-          // Fin de sourate
-          if (mode === 'surah') {
-            await loadAndPlayVerse(0);
-          } else {
-            setIsPlaying(false);
-            await saveProgress();
-          }
-        }
-        return;
+      // Empêcher le double-traitement de la fin du même verset
+      // (3 sources d'événements : PlaybackActiveTrackChanged, PlaybackState.Ended, polling)
+      if (lastHandledEndForVerseRef.current === idx && mode !== 'verse') {
+        return; // Déjà traité, ne pas avancer une 2ème fois
       }
+      lastHandledEndForVerseRef.current = idx;
 
       // Mode répétition verset
-      if (mode === 'verse' && count < max - 1) {
+      if (mode === 'verse' && count < max) {
         setRepeatCount(count + 1);
+        lastHandledEndForVerseRef.current = -1; // Reset pour permettre re-lecture
         await loadAndPlayVerse(idx);
         return;
       }
@@ -237,7 +227,6 @@ export const useQuranPlayer = ({
         if (mode === 'surah') {
           await loadAndPlayVerse(0);
         } else {
-          console.log('[QuranPlayer] Fin de sourate');
           setIsPlaying(false);
           await saveProgress();
         }
@@ -298,8 +287,8 @@ export const useQuranPlayer = ({
       // Lancer la lecture
       await TrackPlayer.play();
 
-      // Mettre à jour l'état
-      lastPlayedVerseRef.current = index;
+      // Mettre à jour l'état — reset le dedup pour ce nouveau verset
+      lastHandledEndForVerseRef.current = -1;
       setCurrentVerseIndex(index);
       setIsPlaying(true);
       setIsLoading(false);
@@ -410,7 +399,7 @@ export const useQuranPlayer = ({
       await TrackPlayer.reset();
     } catch {}
     isLoadingTrackRef.current = false;
-    lastPlayedVerseRef.current = null;
+    lastHandledEndForVerseRef.current = -1;
     setIsPlaying(false);
     setIsLoading(false);
     setCurrentVerseIndex(0);

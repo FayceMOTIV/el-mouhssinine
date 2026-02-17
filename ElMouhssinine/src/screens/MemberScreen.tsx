@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  FlatList,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -20,7 +21,8 @@ import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, platformSh
 import {
   subscribeToCotisationPrices,
   CotisationPrices,
-  addPayment,
+  addCotisation,
+  addDonation,
   getMosqueeInfo,
   MosqueeInfo,
   createMember,
@@ -31,15 +33,17 @@ import {
   subscribeToReglement,
   ReglementData,
   requestRecuFiscal,
+  cancelSubscription,
 } from '../services/firebase';
 import { AuthService, MemberProfile } from '../services/auth';
-import { makePayment, showPaymentError, showPaymentSuccess } from '../services/stripe';
+import { makePayment, makeSubscription, showPaymentError, showPaymentSuccess } from '../services/stripe';
 import { subscribeToMembersTopic, saveFCMTokenToFirestore } from '../services/notifications';
 import { useLanguage } from '../context/LanguageContext';
 import MemberCard from '../components/MemberCard';
 import MemberCardFullScreen from '../components/MemberCardFullScreen';
 import { logger } from '../utils';
 import { BackgroundPattern } from '../components/BackgroundPattern';
+import firestore from '@react-native-firebase/firestore';
 
 // ============================================================
 // MEMBER SCREEN - Refonte UX épurée
@@ -57,6 +61,8 @@ const MemberScreen = () => {
   const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(null);
   const [isPaid, setIsPaid] = useState(false);
   const [inscribedMembers, setInscribedMembers] = useState<InscribedMember[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   // 3 pages : 'sympathisant' | 'devenir_adherent' | 'membre_actif'
   const [memberPage, setMemberPage] = useState<'sympathisant' | 'devenir_adherent' | 'membre_actif'>('sympathisant');
   const [isExpired, setIsExpired] = useState(false);
@@ -98,6 +104,7 @@ const MemberScreen = () => {
   // Paiement
   const [selectedFormule, setSelectedFormule] = useState<'mensuel' | 'annuel'>('annuel');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const isProcessingRef = useRef(false); // BUG 7 FIX: Verrou synchrone anti-double tap
   const [customAmount, setCustomAmount] = useState<string>('');
 
   // Reçu fiscal
@@ -221,6 +228,9 @@ const MemberScreen = () => {
         setIsLoggedIn(false);
         setMemberProfile(null);
         setIsPaid(false);
+        setIsExpired(false);
+        setInscribedMembers([]);
+        setMemberPage('sympathisant');
         setIsLoading(false);
       }
     });
@@ -259,7 +269,7 @@ const MemberScreen = () => {
           await AsyncStorage.setItem('memberScreenVisited', 'true');
         }
       } catch (error) {
-        console.log('Error checking first visit:', error);
+        if (__DEV__) console.log('Error checking first visit:', error);
       }
     };
     if (!isLoading) {
@@ -286,6 +296,27 @@ const MemberScreen = () => {
         // Récupérer les membres inscrits
         const inscribed = await getMembersInscribedBy(uid);
         setInscribedMembers(inscribed);
+
+        // Charger l'historique des paiements
+        setLoadingHistory(true);
+        try {
+          const paymentsSnapshot = await firestore()
+            .collection('payments')
+            .where('metadata.memberId', '==', uid)
+            .orderBy('createdAt', 'desc')
+            .limit(20)
+            .get();
+
+          const payments = paymentsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setPaymentHistory(payments);
+        } catch (historyError) {
+          if (__DEV__) console.error('Error loading payment history:', historyError);
+        } finally {
+          setLoadingHistory(false);
+        }
       } else if (retryCount < MAX_RETRIES) {
         // Race condition: le document Firestore n'est peut-être pas encore créé
         // Attendre et réessayer
@@ -297,7 +328,7 @@ const MemberScreen = () => {
         await new Promise<void>(resolve => setTimeout(() => resolve(), RETRY_DELAY));
         return loadMemberData(uid, retryCount + 1);
       }
-      console.error('Error loading member data:', error);
+      if (__DEV__) console.error('Error loading member data:', error);
     }
   };
 
@@ -431,12 +462,23 @@ const MemberScreen = () => {
         // Charger le profil membre
         loadMemberData(result.user.uid);
 
-        // Popup de bienvenue après inscription
-        Alert.alert(
-          'Merci pour votre inscription !',
-          'Vous allez recevoir un email de bienvenue et d\'explications.\n\n(Pensez à vérifier vos spams)',
-          [{ text: 'OK', style: 'default' }]
-        );
+        // Bug 19 Fix: Popup bienvenue + vérification email
+        if (!result.user.emailVerified) {
+          Alert.alert(
+            'Merci pour votre inscription !',
+            'Vous allez recevoir un email de bienvenue et d\'explications.\n\nUn email de vérification a également été envoyé. Veuillez le confirmer.\n\n(Pensez à vérifier vos spams)',
+            [
+              { text: 'OK', style: 'default' },
+              { text: 'Renvoyer l\'email', onPress: () => result.user?.sendEmailVerification() },
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Merci pour votre inscription !',
+            'Vous allez recevoir un email de bienvenue et d\'explications.\n\n(Pensez à vérifier vos spams)',
+            [{ text: 'OK', style: 'default' }]
+          );
+        }
       } else if (!result.success) {
         Alert.alert('Erreur', result.error || 'Échec de la création du compte');
       }
@@ -546,7 +588,8 @@ const MemberScreen = () => {
   // ============================================================
 
   const handlePayment = async (method: 'card' | 'apple' | 'virement') => {
-    if (isProcessingPayment || !memberProfile) return;
+    if (isProcessingRef.current || isProcessingPayment || !memberProfile) return;
+    isProcessingRef.current = true; // BUG 7 FIX: Verrou synchrone immédiat
 
     const totalAmount = getCurrentAmount();
     const breakdown = getPaymentBreakdown(selectedFormule, totalAmount);
@@ -570,7 +613,7 @@ const MemberScreen = () => {
         // Continuer quand même pour afficher l'alerte
       }
 
-      let message = `IBAN: ${mosqueeInfo?.iban || 'FR76 XXXX XXXX XXXX'}\nBIC: ${mosqueeInfo?.bic || 'XXXXXXXX'}\n\nCotisation: ${breakdown.cotisation}€`;
+      let message = `IBAN: ${mosqueeInfo?.iban || 'IBAN indisponible'}\nBIC: ${mosqueeInfo?.bic || 'BIC indisponible'}\n\nCotisation: ${breakdown.cotisation}€`;
       if (breakdown.don > 0) {
         message += `\nDon: ${breakdown.don}€`;
       }
@@ -582,53 +625,86 @@ const MemberScreen = () => {
       // Recharger les données pour refléter le changement de status
       const user = AuthService.getCurrentUser();
       if (user) await loadMemberData(user.uid);
+      isProcessingRef.current = false; // BUG 7 FIX: Reset verrou sur virement
       return;
     }
 
     setIsProcessingPayment(true);
     try {
-      const paymentResult = await makePayment({
-        amount: breakdown.total,
-        description: breakdown.don > 0
-          ? `Cotisation ${selectedFormule} (${breakdown.cotisation}€) + Don (${breakdown.don}€) - El Mouhssinine`
-          : `Cotisation ${selectedFormule} - El Mouhssinine`,
-        type: 'cotisation',
-        metadata: {
-          memberId: memberProfile.uid, // UID Firebase (doc ID) - PAS le format ELM-XXXX
-          memberIdDisplay: memberProfile.memberId || '', // Format ELM-XXXX pour affichage uniquement
-          memberName: memberProfile.name,
-          email: memberProfile.email, // Email pour sendRecuFiscal
-          period: selectedFormule,
-          montantCotisation: breakdown.cotisation,
-          montantDon: breakdown.don,
-        },
-      });
+      // IMPORTANT: Utiliser makeSubscription pour les cotisations mensuelles (paiement récurrent)
+      // et makePayment pour les cotisations annuelles (paiement unique)
+      const isMensuel = selectedFormule === 'mensuel';
+
+      let paymentResult: any;
+      let subscriptionId: string | undefined;
+
+      if (isMensuel) {
+        // Abonnement récurrent mensuel via Stripe Subscriptions
+        const subscriptionResult = await makeSubscription({
+          amount: breakdown.total,
+          description: breakdown.don > 0
+            ? `Cotisation ${selectedFormule} (${breakdown.cotisation}€) + Don (${breakdown.don}€) - El Mohsinine`
+            : `Cotisation ${selectedFormule} - El Mohsinine`,
+          type: 'cotisation',
+          metadata: {
+            memberId: memberProfile.uid,
+            memberIdDisplay: memberProfile.memberId || '',
+            memberName: memberProfile.name,
+            email: memberProfile.email,
+            period: selectedFormule,
+            montantCotisation: breakdown.cotisation,
+            montantDon: breakdown.don,
+          },
+        });
+
+        paymentResult = subscriptionResult;
+        subscriptionId = subscriptionResult.subscriptionId;
+      } else {
+        // Paiement unique annuel
+        paymentResult = await makePayment({
+          amount: breakdown.total,
+          description: breakdown.don > 0
+            ? `Cotisation ${selectedFormule} (${breakdown.cotisation}€) + Don (${breakdown.don}€) - El Mohsinine`
+            : `Cotisation ${selectedFormule} - El Mohsinine`,
+          type: 'cotisation',
+          metadata: {
+            memberId: memberProfile.uid,
+            memberIdDisplay: memberProfile.memberId || '',
+            memberName: memberProfile.name,
+            email: memberProfile.email,
+            period: selectedFormule,
+            montantCotisation: breakdown.cotisation,
+            montantDon: breakdown.don,
+          },
+        });
+      }
 
       if (paymentResult.success && paymentResult.paymentIntentId) {
-        // Enregistrer le paiement de cotisation
-        await addPayment({
+        // Enregistrer la cotisation
+        await addCotisation({
           memberId: memberProfile.memberId || '',
-          memberUid: memberProfile.uid, // UID Firebase pour la mise à jour du document
+          memberUid: memberProfile.uid,
           memberName: memberProfile.name,
-          memberEmail: memberProfile.email, // Email pour les emails de confirmation
+          memberEmail: memberProfile.email,
           amount: breakdown.cotisation,
           stripePaymentIntentId: paymentResult.paymentIntentId,
           paymentMethod: method === 'apple' ? 'Apple Pay' : 'CB',
           period: selectedFormule,
+          stripeSubscriptionId: subscriptionId, // Ajouté pour abonnements mensuels
         });
 
-        // Si don > 0, enregistrer le don séparément
+        // Si don > 0, enregistrer le don dans la collection DONATIONS (pas payments)
         if (breakdown.don > 0) {
-          await addPayment({
-            memberId: memberProfile.memberId || '',
-            memberUid: memberProfile.uid,
-            memberName: memberProfile.name,
-            memberEmail: memberProfile.email,
+          await addDonation({
+            projectId: '',
+            projectName: 'Don libre (adhésion)',
             amount: breakdown.don,
             stripePaymentIntentId: paymentResult.paymentIntentId + '_don',
             paymentMethod: method === 'apple' ? 'Apple Pay' : 'CB',
-            period: selectedFormule,
-            type: 'don',
+            isAnonymous: false,
+            donorEmail: memberProfile.email,
+            donorName: memberProfile.name,
+            donorType: 'particulier',
           });
         }
 
@@ -636,9 +712,13 @@ const MemberScreen = () => {
         setCustomAmount('');
 
         // Popup de confirmation adhesion
+        const message = isMensuel
+          ? 'Votre abonnement mensuel est activé ! Vous serez prélevé automatiquement chaque mois. Vous allez recevoir toutes les infos par email.'
+          : 'Vous allez recevoir toutes les infos par email.';
+
         Alert.alert(
           'Merci pour votre adhésion !',
-          'Vous allez recevoir toutes les infos par email.',
+          message,
           [{ text: 'OK', style: 'default' }]
         );
 
@@ -656,6 +736,7 @@ const MemberScreen = () => {
       showPaymentError(err?.message || 'Une erreur est survenue');
     } finally {
       setIsProcessingPayment(false);
+      isProcessingRef.current = false; // BUG 7 FIX: Reset verrou
     }
   };
 
@@ -687,7 +768,8 @@ const MemberScreen = () => {
   };
 
   const handlePayFamily = async (method: 'card' | 'apple' | 'virement') => {
-    if (isProcessingPayment || !memberProfile || familyMembers.length === 0) return;
+    if (isProcessingRef.current || isProcessingPayment || !memberProfile || familyMembers.length === 0) return;
+    isProcessingRef.current = true; // BUG 7 FIX: Verrou synchrone immédiat
 
     // Validation
     for (const member of familyMembers) {
@@ -747,7 +829,7 @@ const MemberScreen = () => {
 
       Alert.alert(
         '🏦 Virement bancaire',
-        `Montant total: ${totalAmount}€ (${familyMembers.length} membre${familyMembers.length > 1 ? 's' : ''} - ${familyFormule})\n\nIBAN: ${mosqueeInfo?.iban || 'FR76 XXXX XXXX XXXX'}\nRéférence: ${reference}`,
+        `Montant total: ${totalAmount}€ (${familyMembers.length} membre${familyMembers.length > 1 ? 's' : ''} - ${familyFormule})\n\nIBAN: ${mosqueeInfo?.iban || 'IBAN indisponible'}\nRéférence: ${reference}`,
         [{ text: 'Compris' }]
       );
 
@@ -756,6 +838,7 @@ const MemberScreen = () => {
 
       const user = AuthService.getCurrentUser();
       if (user) await loadMemberData(user.uid);
+      isProcessingRef.current = false; // BUG 7 FIX: Reset verrou sur virement famille
       return;
     }
 
@@ -763,7 +846,7 @@ const MemberScreen = () => {
     try {
       const paymentResult = await makePayment({
         amount: totalAmount,
-        description: `Cotisation famille ${familyFormule} (${familyMembers.length}) - El Mouhssinine`,
+        description: `Cotisation famille ${familyFormule} (${familyMembers.length}) - El Mohsinine`,
         type: 'cotisation',
         metadata: {
           memberId: memberProfile.uid, // UID Firebase (doc ID) - PAS le format ELM-XXXX
@@ -777,6 +860,8 @@ const MemberScreen = () => {
 
       if (paymentResult.success && paymentResult.paymentIntentId) {
         const timestamp = new Date();
+        // FIX B3: Pour les membres famille, pas de dateFin existante à prolonger
+        // (ce sont de nouveaux membres), donc on utilise now comme base
         const getDateFin = () => {
           const d = new Date();
           if (familyFormule === 'mensuel') d.setMonth(d.getMonth() + 1);
@@ -827,6 +912,7 @@ const MemberScreen = () => {
       showPaymentError(err?.message || 'Une erreur est survenue');
     } finally {
       setIsProcessingPayment(false);
+      isProcessingRef.current = false; // BUG 7 FIX: Reset verrou
     }
   };
 
@@ -891,7 +977,7 @@ const MemberScreen = () => {
             <View style={styles.welcomeModalContent}>
               <Text style={styles.welcomeEmoji}>🕌</Text>
               <Text style={[styles.welcomeTitle, isRTL && styles.rtlText]}>
-                Bienvenue à la mosquée El Mouhssinine !
+                Bienvenue à la mosquée El Mohsinine !
               </Text>
               <Text style={[styles.welcomeText, isRTL && styles.rtlText]}>
                 Rejoignez notre communauté en devenant membre de l'association. En tant que membre, vous bénéficiez de nombreux avantages :
@@ -1004,11 +1090,12 @@ const MemberScreen = () => {
             {/* Titre page */}
             <View style={styles.pageTitleContainer}>
               <Text style={styles.pageTitle}>MEMBRE SYMPATHISANT</Text>
+              <Text style={styles.pageMosqueIcon}>🕌</Text>
             </View>
 
             <View style={styles.card}>
               <Text style={[styles.cardSubtitle, isRTL && styles.rtlText, { fontSize: 16, lineHeight: 24 }]}>
-                Bienvenu {memberProfile?.name?.split(' ')[0] || ''},
+                Bienvenue {memberProfile?.name?.split(' ')[0] || ''},
                 {'\n\n'}Te voilà membre sympathisant, tu as accès à toutes les fonctionnalités de l'application, tu seras informé des événements de la mosquée.
                 {'\n\n'}Si tu veux aller plus loin et devenir membre actif (adhérent de l'association Centre Culturel Islamique de Bourg-en-Bresse) clique ici :
               </Text>
@@ -1036,6 +1123,7 @@ const MemberScreen = () => {
             {/* Titre page */}
             <View style={styles.pageTitleContainer}>
               <Text style={styles.pageTitle}>ESPACE ADHÉRENT</Text>
+              <Text style={styles.pageMosqueIcon}>🕌</Text>
               <Text style={[styles.pageSubtitle]}>Pour devenir membre actif</Text>
             </View>
 
@@ -1114,7 +1202,7 @@ const MemberScreen = () => {
                       {formulePrices.annuel}€/an
                     </Text>
                     <Text style={[styles.formuleDesc, selectedFormule === 'annuel' && styles.formuleDescSelected]}>
-                      Paiement unique - ÉCONOMISEZ
+                      Paiement unique
                     </Text>
                     {formulePrices.annuel < formulePrices.mensuel * 12 && (
                       <View style={styles.economyBadge}>
@@ -1162,6 +1250,7 @@ const MemberScreen = () => {
             {/* Titre page */}
             <View style={styles.pageTitleContainer}>
               <Text style={styles.pageTitle}>MEMBRE ACTIF</Text>
+              <Text style={styles.pageMosqueIcon}>🕌</Text>
             </View>
 
             {/* Bouton voir ma carte de membre */}
@@ -1199,7 +1288,7 @@ const MemberScreen = () => {
             {/* Logo mosquée placeholder */}
             <View style={[styles.card, { alignItems: 'center', paddingVertical: 24 }]}>
               <Text style={{ fontSize: 48 }}>🕌</Text>
-              <Text style={[styles.cardSubtitle, { marginTop: 8, fontWeight: '600', color: colors.accent }]}>El Mouhssinine</Text>
+              <Text style={[styles.cardSubtitle, { marginTop: 8, fontWeight: '600', color: colors.accent }]}>El Mohsinine</Text>
             </View>
 
             {/* Bouton voir mes adhésions */}
@@ -1227,14 +1316,50 @@ const MemberScreen = () => {
                 style={[styles.card, { flexDirection: 'row', alignItems: 'center', borderColor: '#ef4444', borderWidth: 1 }]}
                 onPress={() => {
                   Alert.alert(
-                    'Annuler mon abonnement',
-                    'Êtes-vous sûr ? Cela arrêtera le prélèvement automatique.',
+                    language === 'ar' ? 'إلغاء الاشتراك' : 'Annuler mon abonnement',
+                    language === 'ar'
+                      ? 'هل أنت متأكد؟ سيتم إيقاف الخصم التلقائي. ستبقى متعاطفاً مع المسجد.'
+                      : 'Êtes-vous sûr ? Cela arrêtera le prélèvement automatique. Vous resterez sympathisant de la mosquée.',
                     [
-                      { text: 'Non', style: 'cancel' },
+                      { text: language === 'ar' ? 'لا' : 'Non', style: 'cancel' },
                       {
-                        text: 'Oui, annuler',
+                        text: language === 'ar' ? 'نعم، إلغاء' : 'Oui, annuler',
                         style: 'destructive',
-                        onPress: () => navigation.navigate('Messages'),
+                        onPress: async () => {
+                          try {
+                            const result = await cancelSubscription();
+                            if (result.success) {
+                              // Mise à jour immédiate du state local (pas d'attente Firestore)
+                              setMemberProfile((prev: any) => prev ? ({
+                                ...prev,
+                                status: 'sympathisant',
+                                statut: 'sympathisant',
+                                cotisationType: null,
+                              }) : null);
+                              setIsPaid(false);
+                              setMemberPage('sympathisant');
+
+                              Alert.alert(
+                                language === 'ar' ? 'تم الإلغاء' : 'Abonnement annulé',
+                                result.message
+                              );
+
+                              // Recharger aussi depuis Firestore en arrière-plan
+                              const user = AuthService.getCurrentUser();
+                              if (user) loadMemberData(user.uid);
+                            } else {
+                              Alert.alert(
+                                language === 'ar' ? 'خطأ' : 'Erreur',
+                                result.message
+                              );
+                            }
+                          } catch (err: any) {
+                            Alert.alert(
+                              language === 'ar' ? 'خطأ' : 'Erreur',
+                              err?.message || (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue')
+                            );
+                          }
+                        },
                       },
                     ]
                   );
@@ -1242,8 +1367,12 @@ const MemberScreen = () => {
               >
                 <Text style={{ fontSize: 20, marginRight: 12 }}>❌</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.cardTitle, { color: '#ef4444', fontSize: 15 }]}>Annuler mon abonnement mensuel</Text>
-                  <Text style={[styles.cardSubtitle, { fontSize: 12 }]}>Arrêter le prélèvement automatique</Text>
+                  <Text style={[styles.cardTitle, { color: '#ef4444', fontSize: 15 }]}>
+                    {language === 'ar' ? 'إلغاء اشتراكي الشهري' : 'Annuler mon abonnement mensuel'}
+                  </Text>
+                  <Text style={[styles.cardSubtitle, { fontSize: 12 }]}>
+                    {language === 'ar' ? 'إيقاف الخصم التلقائي' : 'Arrêter le prélèvement automatique'}
+                  </Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -1271,66 +1400,70 @@ const MemberScreen = () => {
               return null;
             })()}
 
-            {/* Reçus Fiscaux */}
-            <View style={styles.recuFiscalSection}>
-              <Text style={[styles.recuFiscalTitle, isRTL && styles.rtlText]}>
-                📄 {language === 'ar' ? 'إيصالاتي الضريبية' : 'Mes reçus fiscaux'}
+            {/* Historique des paiements */}
+            <View style={styles.card}>
+              <Text style={[styles.cardTitle, { marginBottom: 16 }]}>
+                💳 Historique des paiements
               </Text>
-              <View style={styles.recuFiscalCard}>
-                <Text style={[styles.recuFiscalInfo, isRTL && styles.rtlText]}>
-                  {language === 'ar'
-                    ? 'لديك الحق في خصم 66% من تبرعاتك من الضرائب (المادة 200 من القانون العام للضرائب). تتوفر الإيصالات في بداية يناير عن السنة المنقضية.'
-                    : 'Vous avez droit à 66% de réduction d\'impôt pour vos dons (article 200 CGI). Les reçus sont disponibles début janvier pour l\'année écoulée.'}
-                </Text>
 
-                {/* Liste des 3 dernières années */}
-                {(() => {
-                  const currentYear = new Date().getFullYear();
-                  const years = [currentYear - 1, currentYear - 2, currentYear - 3];
-                  return years.map((year) => {
-                    const available = currentYear > year;
+              {loadingHistory ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : paymentHistory.length === 0 ? (
+                <Text style={[styles.cardSubtitle, { textAlign: 'center', paddingVertical: 16 }]}>
+                  Aucun paiement
+                </Text>
+              ) : (
+                <View>
+                  {paymentHistory.map((payment, index) => {
+                    // Format date
+                    const date = payment.createdAt?.toDate?.() || new Date(payment.createdAt);
+                    const dateStr = date.toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric'
+                    });
+
+                    // Determine payment type
+                    const type = payment.metadata?.period === 'mensuel' ? 'Mensuel' : 'Annuel';
+
+                    // Determine status
+                    let status = 'payé';
+                    let statusColor = colors.accent;
+                    if (payment.status === 'refunded') {
+                      status = 'remboursé';
+                      statusColor = '#f97316';
+                    } else if (payment.status === 'failed') {
+                      status = 'échoué';
+                      statusColor = '#ef4444';
+                    }
+
                     return (
-                      <View key={year} style={styles.recuYearRow}>
+                      <View
+                        key={payment.id}
+                        style={[
+                          styles.paymentHistoryItem,
+                          index !== paymentHistory.length - 1 && styles.paymentHistoryItemBorder
+                        ]}
+                      >
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
-                            {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
-                          </Text>
+                          <Text style={styles.paymentHistoryDate}>{dateStr}</Text>
+                          <Text style={styles.paymentHistoryType}>{type}</Text>
                         </View>
-                        {available ? (
-                          <TouchableOpacity
-                            style={[
-                              styles.recuFiscalButton,
-                              sendingRecuFiscal && selectedYear === year && styles.recuFiscalButtonDisabled,
-                            ]}
-                            onPress={() => {
-                              setSelectedYear(year);
-                              handleRequestRecuFiscal(year);
-                            }}
-                            disabled={sendingRecuFiscal}
-                          >
-                            {sendingRecuFiscal && selectedYear === year ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <>
-                                <Text style={styles.recuFiscalButtonIcon}>📧</Text>
-                                <Text style={styles.recuFiscalButtonText}>
-                                  {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
-                                </Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        ) : (
-                          <Text style={styles.recuNotAvailable}>
-                            {language === 'ar'
-                              ? `متاح في 01/01/${year + 1}`
-                              : `Disponible le 01/01/${year + 1}`}
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.paymentHistoryAmount}>
+                            {(payment.amount || payment.montant || 0).toFixed(2)} €
                           </Text>
-                        )}
+                          <View style={[styles.paymentHistoryStatusBadge, { backgroundColor: statusColor + '20' }]}>
+                            <Text style={[styles.paymentHistoryStatusText, { color: statusColor }]}>
+                              {status}
+                            </Text>
+                          </View>
+                        </View>
                       </View>
                     );
-                  });
-                })()}
-              </View>
+                  })}
+                </View>
+              )}
             </View>
 
             {/* Déconnexion */}
@@ -1761,6 +1894,19 @@ const MemberScreen = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[styles.paymentMethod, styles.googlePayMethod]}
+              onPress={() => handlePayment('card')}
+              disabled={isProcessingPayment}
+            >
+              <Image source={require('../assets/google-logo.png')} style={styles.googleLogo} />
+              <View style={styles.paymentMethodContent}>
+                <Text style={styles.paymentMethodTitle}>Google Pay</Text>
+                <Text style={styles.paymentMethodSubtitle}>Paiement rapide</Text>
+              </View>
+              {isProcessingPayment ? <ActivityIndicator /> : <Text style={styles.paymentMethodArrow}>→</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.paymentMethod}
               onPress={() => handlePayment('virement')}
               disabled={isProcessingPayment}
@@ -1998,6 +2144,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.accent,
     letterSpacing: 1,
+    textAlign: 'center',
+  },
+  pageMosqueIcon: {
+    fontSize: 32,
+    marginTop: 8,
     textAlign: 'center',
   },
   pageSubtitle: {
@@ -2623,6 +2774,16 @@ const styles = StyleSheet.create({
   applePayMethod: {
     backgroundColor: '#000',
   },
+  googlePayMethod: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+  },
+  googleLogo: {
+    width: 22,
+    height: 22,
+    marginRight: spacing.md,
+  },
   paymentMethodIcon: {
     fontSize: 24,
     marginRight: spacing.md,
@@ -3017,6 +3178,43 @@ const styles = StyleSheet.create({
   welcomeLaterText: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
+  },
+
+  // Payment History
+  paymentHistoryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+  },
+  paymentHistoryItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  paymentHistoryDate: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  paymentHistoryType: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  paymentHistoryAmount: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  paymentHistoryStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  paymentHistoryStatusText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
 });
 

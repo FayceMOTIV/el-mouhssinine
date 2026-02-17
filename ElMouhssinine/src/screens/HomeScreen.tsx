@@ -52,6 +52,8 @@ import {
   PrayerBoostSettings,
   checkMosqueProximity,
   getMosqueProximitySettings,
+  getPrayedPrayersToday,
+  markPrayerAsPrayed,
 } from '../services/prayerNotifications';
 import { checkMosqueProximityForeground } from '../services/backgroundLocation';
 import Geolocation from '@react-native-community/geolocation';
@@ -84,31 +86,8 @@ const mockIslamicDate = {
   gregorian: '9 Janvier 2026'
 };
 
-// Mock data pour Salat Janaza
-const mockJanazaList = [
-  {
-    id: '1',
-    nom: 'BENALI',
-    prenom: 'Ahmed',
-    genre: 'homme',
-    date: '2026-01-12',
-    apresSalat: 'dhuhr',
-    lieu: 'Mosquée El Mouhssinine',
-    phraseAr: 'إنا لله وإنا إليه راجعون',
-    phraseFr: 'Nous appartenons à Allah et c\'est vers Lui que nous retournerons',
-  },
-  {
-    id: '2',
-    nom: 'SAID',
-    prenom: 'Fatima',
-    genre: 'femme',
-    date: '2026-01-13',
-    heure: '14:30',
-    lieu: 'Mosquée El Mouhssinine',
-    phraseAr: 'إنا لله وإنا إليه راجعون',
-    phraseFr: 'Nous appartenons à Allah et c\'est vers Lui que nous retournerons',
-  },
-];
+// Bug 17 Fix: Pas de mock data pour janaza - données sensibles (noms de défunts)
+// La section janaza ne s'affiche que si des données réelles existent dans Firestore
 
 const HomeScreen = () => {
   const navigation = useNavigation<any>();
@@ -388,15 +367,18 @@ const HomeScreen = () => {
 
     // Subscriptions aux popups Firebase - File d'attente multi-popups
     const unsubPopups = subscribeToPopups(async (popups) => {
+      logger.log(`[HomeScreen] Popups reçus: ${popups?.length || 0}`);
       if (popups && popups.length > 0) {
         // Construire la file d'attente des popups a afficher
         const queue: Popup[] = [];
         for (const popup of popups) {
           const shouldShow = await shouldShowPopup(popup);
+          logger.log(`[HomeScreen] Popup ${popup.id} (${popup.titre}): shouldShow=${shouldShow}, frequence=${popup.frequence}`);
           if (shouldShow) {
             queue.push(popup);
           }
         }
+        logger.log(`[HomeScreen] Popup queue: ${queue.length} à afficher`);
         // Stocker la file et afficher la premiere
         if (queue.length > 0) {
           setPopupQueue(queue.slice(1)); // Reste de la file
@@ -466,7 +448,10 @@ const HomeScreen = () => {
             midTime: t('boostMidTime'),
             before15min: t('boostBefore15min'),
           };
-          await scheduleBoostNotifications(rawPrayerTimings, settings, translations);
+
+          // 3. Charger les prières déjà faites aujourd'hui pour ne pas re-scheduler leurs boost
+          const prayedToday = await getPrayedPrayersToday();
+          await scheduleBoostNotifications(rawPrayerTimings, settings, translations, prayedToday);
           logger.log('[HomeScreen] Boost notifications reprogrammées avec succès');
         } catch (error) {
           logger.warn('[HomeScreen] Erreur boost:', error);
@@ -482,18 +467,14 @@ const HomeScreen = () => {
     if (!rawPrayerTimings) return;
     const current = PrayerAPI.getCurrentPrayer(rawPrayerTimings);
 
-    // Charger l'état "J'ai prié" depuis AsyncStorage
+    // Charger l'état "J'ai prié" depuis AsyncStorage (avec date)
     const loadPrayedState = async () => {
       try {
-        const savedPrayer = await AsyncStorage.getItem('prayed_prayer_name');
-        if (current && savedPrayer === current.name) {
+        const prayedToday = await getPrayedPrayersToday();
+        if (current && prayedToday.has(current.name)) {
           setHasPrayedCurrentPrayer(true);
         } else {
           setHasPrayedCurrentPrayer(false);
-          // Nettoyer si la prière a changé
-          if (savedPrayer && savedPrayer !== current?.name) {
-            await AsyncStorage.removeItem('prayed_prayer_name');
-          }
         }
       } catch (error) {
         logger.warn('[HomeScreen] Erreur chargement état prié:', error);
@@ -507,12 +488,17 @@ const HomeScreen = () => {
     const interval = setInterval(async () => {
       const updated = PrayerAPI.getCurrentPrayer(rawPrayerTimings);
 
-      // Réinitialiser si la prière a changé
+      // Vérifier si la prière en cours a changé
       setCurrentPrayer(prev => {
         if (updated?.name !== prev?.name) {
-          setHasPrayedCurrentPrayer(false);
-          // Nettoyer AsyncStorage
-          AsyncStorage.removeItem('prayed_prayer_name').catch(() => {});
+          // Nouvelle prière : vérifier si elle a déjà été faite aujourd'hui
+          if (updated) {
+            getPrayedPrayersToday().then(prayedToday => {
+              setHasPrayedCurrentPrayer(prayedToday.has(updated.name));
+            }).catch(() => setHasPrayedCurrentPrayer(false));
+          } else {
+            setHasPrayedCurrentPrayer(false);
+          }
         }
         return updated;
       });
@@ -551,18 +537,43 @@ const HomeScreen = () => {
 
   // Souscrire aux messages de l'utilisateur pour le badge
   useEffect(() => {
-    const user = auth().currentUser;
-    if (!user) return;
-    const unsubscribe = subscribeToUserMessages(user.uid, (messages: UserMessage[]) => {
-      // Compter les messages avec une réponse de la mosquée non lue
-      const unread = messages.filter(m => {
-        if (!m.reponses || m.reponses.length === 0) return false;
-        const lastReply = m.reponses[m.reponses.length - 1];
-        return lastReply.createdBy === 'mosquee';
-      }).length;
-      setUnreadMsgCount(unread);
+    let unsubMessages: (() => void) | null = null;
+
+    const unsubAuth = auth().onAuthStateChanged((user) => {
+      // Nettoyer l'ancien listener
+      if (unsubMessages) {
+        unsubMessages();
+        unsubMessages = null;
+      }
+
+      if (!user) {
+        setUnreadMsgCount(0);
+        return;
+      }
+
+      unsubMessages = subscribeToUserMessages(user.uid, async (messages: UserMessage[]) => {
+        // Récupérer le timestamp de dernière lecture des messages
+        const lastReadStr = await AsyncStorage.getItem('messages_last_read_at');
+        const lastReadAt = lastReadStr ? new Date(lastReadStr).getTime() : 0;
+        // Compter les messages avec une réponse mosquée APRÈS la dernière lecture
+        const unread = messages.filter(m => {
+          if (!m.reponses || m.reponses.length === 0) return false;
+          const mosqueeReplies = m.reponses.filter(r => r.createdBy === 'mosquee');
+          if (mosqueeReplies.length === 0) return false;
+          const lastMosqueeReply = mosqueeReplies[mosqueeReplies.length - 1];
+          const replyTime = lastMosqueeReply.createdAt instanceof Date
+            ? lastMosqueeReply.createdAt.getTime()
+            : new Date(lastMosqueeReply.createdAt).getTime();
+          return replyTime > lastReadAt;
+        }).length;
+        setUnreadMsgCount(unread);
+      });
     });
-    return () => { if (unsubscribe) unsubscribe(); };
+
+    return () => {
+      unsubAuth();
+      if (unsubMessages) unsubMessages();
+    };
   }, []);
 
   // Ouvrir l'historique des notifications
@@ -590,13 +601,13 @@ const HomeScreen = () => {
       if (!isMounted) return;
 
       try {
-        console.log('[HomeScreen] Vérification proximité mosquée (foreground)...');
+        if (__DEV__) console.log('[HomeScreen] Vérification proximité mosquée (foreground)...');
         const sent = await checkMosqueProximityForeground(language === 'ar' ? 'ar' : 'fr');
         if (sent) {
-          console.log('[HomeScreen] Notification mode silencieux envoyée !');
+          if (__DEV__) console.log('[HomeScreen] Notification mode silencieux envoyée !');
         }
       } catch (error) {
-        console.warn('[HomeScreen] Erreur check proximité:', error);
+        if (__DEV__) console.warn('[HomeScreen] Erreur check proximité:', error);
       }
     };
 
@@ -606,7 +617,7 @@ const HomeScreen = () => {
     // Écouter les changements d'état de l'app (arrière-plan -> premier plan)
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
-        console.log('[HomeScreen] App au premier plan, vérification proximité...');
+        if (__DEV__) console.log('[HomeScreen] App au premier plan, vérification proximité...');
         checkProximity();
       }
     };
@@ -627,11 +638,9 @@ const HomeScreen = () => {
     try {
       // Marquer comme prié (masque le bouton jusqu'à la prochaine prière)
       setHasPrayedCurrentPrayer(true);
-      // Sauvegarder dans AsyncStorage pour persister entre les sessions
-      await AsyncStorage.setItem('prayed_prayer_name', currentPrayer.name);
-      // Annuler les notifications boost de cette prière UNIQUEMENT
-      // Les notifications des prières futures restent actives
-      await cancelBoostNotificationsForPrayer(currentPrayer.name);
+      // Sauvegarder dans AsyncStorage avec date + annuler les notifications boost
+      // markPrayerAsPrayed stocke la prière dans la liste du jour ET annule les boost
+      await markPrayerAsPrayed(currentPrayer.name);
       Vibration.vibrate(100); // Feedback haptique
     } catch (error) {
       logger.warn('[HomeScreen] Erreur annulation boost:', error);
@@ -656,9 +665,10 @@ const HomeScreen = () => {
     const frequence = popup.frequence || 'always';
     const storageKey = `popup_${popup.id}_shown`;
 
-    // Si c'est un popup de bienvenue (titre contient "bienvenue", "welcome", ou "مرحبا")
+    // Si c'est un popup de bienvenue (champ type OU titre contient "bienvenue", "welcome", "مرحبا")
     const titreNormalized = (popup.titre || '').toLowerCase();
-    const isWelcomePopup = titreNormalized.includes('bienvenue') ||
+    const isWelcomePopup = (popup as any).type === 'bienvenue' ||
+                           titreNormalized.includes('bienvenue') ||
                            titreNormalized.includes('welcome') ||
                            (popup.titre || '').includes('مرحبا');
 
@@ -1085,7 +1095,7 @@ const HomeScreen = () => {
             <Text style={[styles.title, isRTL && styles.rtlText]}>🕌 {t('mosqueName')}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <TouchableOpacity
-                onPress={() => { setUnreadMsgCount(0); navigation.navigate('Messages'); }}
+                onPress={async () => { await AsyncStorage.setItem('messages_last_read_at', new Date().toISOString()); setUnreadMsgCount(0); navigation.navigate('Messages'); }}
                 style={styles.bellButton}
                 accessibilityLabel="Messages"
                 accessibilityRole="button"
@@ -1266,17 +1276,15 @@ const HomeScreen = () => {
 
           {/* Calendrier Hégirien est maintenant dans une Modal (voir ci-dessous) */}
 
-          {/* Salat Janaza - Affiche uniquement les données Firebase */}
+          {/* Salat Janaza - Masqué si aucune donnée Firebase */}
+          {janazaList.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>⚰️ {t('janazaUpcoming')}</Text>
-            {janazaList.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={[styles.emptyText, isRTL && styles.rtlText]}>{t('noJanaza')}</Text>
-              </View>
-            ) : janazaList.map((janazaItem: any) => {
+            {janazaList.map((janazaItem: any) => {
                 // Normaliser les champs (Firebase vs Mock)
                 const dateValue = janazaItem.prayerDate || janazaItem.date;
-                const dateObj = dateValue instanceof Date ? dateValue : new Date(dateValue);
+                const dateObj = dateValue instanceof Date ? dateValue :
+                  (dateValue ? new Date(dateValue) : new Date());
                 const nom = janazaItem.deceasedName || `${janazaItem.prenom || ''} ${janazaItem.nom || ''}`.trim();
                 const lieu = janazaItem.location || janazaItem.lieu;
                 const heure = janazaItem.prayerTime || janazaItem.heure;
@@ -1331,6 +1339,7 @@ const HomeScreen = () => {
                 );
               })}
           </View>
+          )}
 
           {/* Section Ramadan */}
           {ramadanSettings?.enabled && ramadanDay && (
@@ -1397,75 +1406,67 @@ const HomeScreen = () => {
             </View>
           )}
 
-          {/* Annonces */}
+          {/* Annonces - Masqué si aucune donnée */}
+          {(announcements || []).length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📢 {t('announcements')}</Text>
-            {(announcements || []).length > 0 ? (
-              (announcements || []).map((announcement) => (
+            {announcements.map((announcement) => (
+              <TouchableOpacity
+                key={announcement.id}
+                style={styles.card}
+                onPress={() => Alert.alert(
+                  `📢 ${announcement.title}`,
+                  `${announcement.content}\n\n📅 ${t('publishedOn')} ${announcement.publishedAt?.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}`,
+                  [{ text: 'OK' }]
+                )}
+                activeOpacity={0.7}
+              >
+                <View style={styles.announcementHeader}>
+                  <Text style={[styles.announcementTitle, isRTL && styles.rtlText, { flex: 1 }]} numberOfLines={1}>{announcement.title}</Text>
+                  <Text style={styles.tapIndicator}>ℹ️</Text>
+                </View>
+                <Text style={[styles.announcementContent, isRTL && styles.rtlText]} numberOfLines={2}>{announcement.content}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          )}
+
+
+          {/* Événements - Masqué si aucune donnée */}
+          {(events || []).length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📅 {t('upcomingEvents')}</Text>
+            {events.map((event) => {
+              const { day, month } = formatDate(event.date);
+              return (
                 <TouchableOpacity
-                  key={announcement.id}
+                  key={event.id}
                   style={styles.card}
                   onPress={() => Alert.alert(
-                    `📢 ${announcement.title}`,
-                    `${announcement.content}\n\n📅 ${t('publishedOn')} ${announcement.publishedAt?.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}`,
+                    event.title,
+                    `📅 ${day} ${month}\n⏰ ${event.time}\n📍 ${event.location}${event.description ? `\n\n${event.description}` : ''}`,
                     [{ text: 'OK' }]
                   )}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.announcementHeader}>
-                    <Text style={[styles.announcementTitle, isRTL && styles.rtlText, { flex: 1 }]} numberOfLines={1}>{announcement.title}</Text>
+                  <View style={[styles.eventItem, isRTL && styles.eventItemRTL]}>
+                    <View style={styles.eventDateBox}>
+                      <Text style={styles.eventDay}>{day}</Text>
+                      <Text style={styles.eventMonth}>{month}</Text>
+                    </View>
+                    <View style={styles.eventDetails}>
+                      <Text style={[styles.eventTitle, isRTL && styles.rtlText]} numberOfLines={1}>{event.title}</Text>
+                      <Text style={[styles.eventSubtitle, isRTL && styles.rtlText]} numberOfLines={1}>
+                        {event.time} • {event.location}
+                      </Text>
+                    </View>
                     <Text style={styles.tapIndicator}>ℹ️</Text>
                   </View>
-                  <Text style={[styles.announcementContent, isRTL && styles.rtlText]} numberOfLines={2}>{announcement.content}</Text>
                 </TouchableOpacity>
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={[styles.emptyText, isRTL && styles.rtlText]}>{t('noAnnouncements')}</Text>
-              </View>
-            )}
+              );
+            })}
           </View>
-
-
-          {/* Événements - SANS limite, affiche tous les événements Firebase */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📅 {t('upcomingEvents')}</Text>
-            {(events || []).length > 0 ? (
-              (events || []).map((event) => {
-                const { day, month } = formatDate(event.date);
-                return (
-                  <TouchableOpacity
-                    key={event.id}
-                    style={styles.card}
-                    onPress={() => Alert.alert(
-                      event.title,
-                      `📅 ${day} ${month}\n⏰ ${event.time}\n📍 ${event.location}${event.description ? `\n\n${event.description}` : ''}`,
-                      [{ text: 'OK' }]
-                    )}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.eventItem, isRTL && styles.eventItemRTL]}>
-                      <View style={styles.eventDateBox}>
-                        <Text style={styles.eventDay}>{day}</Text>
-                        <Text style={styles.eventMonth}>{month}</Text>
-                      </View>
-                      <View style={styles.eventDetails}>
-                        <Text style={[styles.eventTitle, isRTL && styles.rtlText]} numberOfLines={1}>{event.title}</Text>
-                        <Text style={[styles.eventSubtitle, isRTL && styles.rtlText]} numberOfLines={1}>
-                          {event.time} • {event.location}
-                        </Text>
-                      </View>
-                      <Text style={styles.tapIndicator}>ℹ️</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={[styles.emptyText, isRTL && styles.rtlText]}>{t('noEvents')}</Text>
-              </View>
-            )}
-          </View>
+          )}
         </View>
       </ScrollView>
     </BackgroundPattern>

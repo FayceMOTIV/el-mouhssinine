@@ -1,6 +1,6 @@
 import { Platform, Dimensions, StatusBar } from 'react-native';
 
-// Couleurs du thème El Mouhssinine - Version Claire
+// Couleurs du thème El Mohsinine - Version Claire
 export const colors = {
   // Fonds
   background: '#F5F0E6',      // Beige clair principal

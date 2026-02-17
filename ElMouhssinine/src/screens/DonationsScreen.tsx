@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,13 +17,13 @@ import {
   Platform,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, MODAL_WIDTH } from '../theme/colors';
-import { subscribeToProjects, subscribeToMosqueeInfo, createDonation, addDonation } from '../services/firebase';
+import { subscribeToProjects, subscribeToMosqueeInfo, createDonation, addDonation, requestRecuFiscal } from '../services/firebase';
 import { Project, ProjectFile, MosqueeInfo } from '../types';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useLanguage } from '../context/LanguageContext';
 import { makePayment, showPaymentError, showPaymentSuccess } from '../services/stripe';
 import { EmptyProjects } from '../components';
-import { AuthService } from '../services/auth';
+import { AuthService, MemberProfile } from '../services/auth';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import { getGoldPricePerGram, calculateNisab, NISAB_INFO } from '../services/goldPrice';
 
@@ -46,6 +46,7 @@ const DonationsScreen = () => {
   const [showProjectDetailModal, setShowProjectDetailModal] = useState(false);
   const [detailProject, setDetailProject] = useState<Project | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const processingRef = useRef(false); // Guard supplémentaire contre double paiement
   const [refreshing, setRefreshing] = useState(false);
 
   // 3 pages : choix → formulaire identité → projets (existant)
@@ -65,27 +66,82 @@ const DonationsScreen = () => {
   const [acceptRecuFiscal, setAcceptRecuFiscal] = useState(true);
   const [donorFormFilled, setDonorFormFilled] = useState(false);
 
-  // Pré-remplir si user connecté
+  // Reçu fiscal
+  const [sendingRecuFiscal, setSendingRecuFiscal] = useState(false);
+  const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(null);
+
+  // Pré-remplir si user connecté + écouter changements de compte
   useEffect(() => {
-    const prefillDonorInfo = async () => {
-      const currentUser = AuthService.getCurrentUser();
-      if (currentUser) {
-        const profile = await AuthService.getMemberProfile(currentUser.uid);
+    const unsubAuth = AuthService.onAuthStateChanged(async (user) => {
+      if (user) {
+        const profile = await AuthService.getMemberProfile(user.uid);
         if (profile) {
           setDonorFirstName(profile.prenom || profile.name?.split(' ')[0] || '');
           setDonorLastName(profile.nom || profile.name?.split(' ').slice(1).join(' ') || '');
-          setDonorEmail(profile.email || currentUser.email || '');
+          setDonorEmail(profile.email || user.email || '');
           if (profile.adresse || profile.address) {
             setDonorAddress(profile.adresse || profile.address || '');
           }
           setDonorFormFilled(true);
+          setMemberProfile(profile);
         } else {
-          setDonorEmail(currentUser.email || '');
+          setDonorEmail(user.email || '');
+          setDonorFirstName('');
+          setDonorLastName('');
+          setDonorAddress('');
+          setDonorFormFilled(false);
+          setMemberProfile(null);
         }
+      } else {
+        // Reset all donor info on logout
+        setDonorFirstName('');
+        setDonorLastName('');
+        setDonorEmail('');
+        setDonorAddress('');
+        setDonorFormFilled(false);
+        setMemberProfile(null);
       }
-    };
-    prefillDonorInfo();
+    });
+    return () => unsubAuth();
   }, []);
+
+  // Demander l'envoi du reçu fiscal
+  const handleRequestRecuFiscal = async (year: number) => {
+    const email = memberProfile?.email || donorEmail;
+    if (!email) {
+      Alert.alert(
+        language === 'ar' ? 'خطأ' : 'Erreur',
+        language === 'ar' ? 'البريد الإلكتروني غير متوفر. يرجى تسجيل الدخول أولاً' : 'Email non disponible. Veuillez vous connecter d\'abord dans l\'onglet Adhérent.'
+      );
+      return;
+    }
+
+    setSendingRecuFiscal(true);
+    try {
+      const result = await requestRecuFiscal(email, year);
+      if (result.success) {
+        Alert.alert(
+          language === 'ar' ? 'تم الإرسال' : 'Envoyé !',
+          language === 'ar'
+            ? `تم إرسال إيصالك الضريبي بمبلغ ${result.montantTotal?.toFixed(2)}€ إلى ${email}`
+            : `Votre reçu fiscal de ${result.montantTotal?.toFixed(2)}€ a été envoyé à ${email}`
+        );
+      } else {
+        Alert.alert(
+          language === 'ar' ? 'خطأ' : 'Erreur',
+          result.message
+        );
+      }
+    } catch (error) {
+      const err = error as Error;
+      Alert.alert(
+        language === 'ar' ? 'خطأ' : 'Erreur',
+        err?.message || (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue')
+      );
+    } finally {
+      setSendingRecuFiscal(false);
+    }
+  };
 
   const validateSIRET = (siret: string): boolean => {
     const cleaned = siret.replace(/\s/g, '');
@@ -173,7 +229,7 @@ const DonationsScreen = () => {
         setNisab(calculateNisab(result.pricePerGram));
         setIsGoldPriceRealTime(result.isRealTime);
       } catch (error) {
-        console.log('Erreur récupération prix or, utilisation valeur par défaut');
+        if (__DEV__) console.log('Erreur récupération prix or, utilisation valeur par défaut');
         setIsGoldPriceRealTime(false);
       }
     };
@@ -221,11 +277,8 @@ const DonationsScreen = () => {
     },
   ];
 
-  const defaultExternalProjects: Project[] = [
-    { id: 'ext1', name: 'Mosquée de Gaza', description: 'Reconstruction après les bombardements', goal: 50000, raised: 32000, icon: '🇵🇸', lieu: 'Palestine', iban: 'PS92 PALS 0000 0400 0123 4567 890', isExternal: true, isActive: true },
-    { id: 'ext2', name: 'Mosquée Al-Nour Lyon', description: 'Achat de nouveaux locaux', goal: 100000, raised: 45000, icon: '🏗️', lieu: 'Lyon, France', iban: 'FR76 3000 4028 3700 0100 0000 123', isExternal: true, isActive: true },
-    { id: 'ext3', name: 'Puits au Sénégal', description: 'Construction de puits pour villages', goal: 8000, raised: 6500, icon: '💧', lieu: 'Sénégal', iban: 'SN08 S020 1101 0000 0012 3456 789', isExternal: true, isActive: true },
-  ];
+  // BUG 8 FIX: Pas de faux IBAN dans les projets par défaut - les vrais projets viennent de Firestore
+  const defaultExternalProjects: Project[] = [];
 
   useEffect(() => {
     const unsubProjects = subscribeToProjects((fetchedProjects) => {
@@ -312,9 +365,9 @@ const DonationsScreen = () => {
   };
 
   const handlePayment = async () => {
-    // PROTECTION DOUBLE PAIEMENT: Vérifier si déjà en cours
-    if (isProcessingPayment) {
-      console.log('Paiement déjà en cours, ignoré');
+    // PROTECTION DOUBLE PAIEMENT: Double vérification state + ref
+    if (isProcessingPayment || processingRef.current) {
+      if (__DEV__) console.log('Paiement déjà en cours, ignoré');
       return;
     }
 
@@ -378,12 +431,13 @@ const DonationsScreen = () => {
   // Fonction séparée pour le traitement du paiement
   const processPayment = async (amount: number, project: Project | undefined, isAnonymous: boolean) => {
     setIsProcessingPayment(true);
+    processingRef.current = true;
     const currentUser = AuthService.getCurrentUser();
 
     try {
       const result = await makePayment({
         amount,
-        description: `Don - ${project?.name || 'Mosquée El Mouhssinine'}`,
+        description: `Don - ${project?.name || 'Mosquée El Mohsinine'}`,
         type: 'donation',
         metadata: {
           projectId: selectedProject || undefined,
@@ -447,6 +501,7 @@ const DonationsScreen = () => {
       showPaymentError(err?.message || 'Une erreur est survenue');
     } finally {
       setIsProcessingPayment(false);
+      processingRef.current = false;
     }
   };
 
@@ -481,18 +536,6 @@ const DonationsScreen = () => {
           {/* ========== PAGE 1 : CHOIX TYPE DE DON ========== */}
           {donPage === 'choix' && (
             <>
-              {/* Texte legal recu fiscal */}
-              <View style={styles.legalBox}>
-                <Text style={[styles.legalTitle, isRTL && styles.rtlText]}>
-                  {language === 'ar' ? 'إيصال ضريبي' : 'Recu fiscal'}
-                </Text>
-                <Text style={[styles.legalText, isRTL && styles.rtlText]}>
-                  {language === 'ar'
-                    ? 'الأفراد: خصم 66% من المبلغ المتبرع به (المادة 200 من القانون العام للضرائب) - CERFA 11580*05\nالشركات: خصم 60% من المبلغ المتبرع به (المادة 238 مكرر من القانون العام للضرائب) - CERFA 16216*02\n\nستتلقون إيصالكم الضريبي في يناير من السنة التالية.'
-                    : 'Particuliers : deduction de 66% du montant (article 200 du CGI) - CERFA 11580*05\nEntreprises : deduction de 60% du montant (article 238 bis du CGI) - CERFA 16216*02\n\nVotre recu fiscal vous sera envoyé en janvier N+1.'}
-                </Text>
-              </View>
-
               {/* 3 gros boutons */}
               <TouchableOpacity
                 style={styles.donChoiceBtn}
@@ -504,7 +547,7 @@ const DonationsScreen = () => {
                     {language === 'ar' ? 'تبرع للمسجد' : 'Don a la mosquee'}
                   </Text>
                   <Text style={[styles.donChoiceDesc, isRTL && styles.rtlText]}>
-                    {language === 'ar' ? 'دعم عام لجمعية المحسنين' : 'Soutien general a l\'association El Mouhssinine'}
+                    {language === 'ar' ? 'دعم عام لجمعية المحسنين' : 'Soutien general a l\'association El Mohsinine'}
                   </Text>
                 </View>
                 <Text style={styles.donChoiceArrow}>{isRTL ? '←' : '→'}</Text>
@@ -569,6 +612,13 @@ const DonationsScreen = () => {
                     />
                     <Text style={styles.applePayText}>Pay</Text>
                   </View>
+                  <View style={styles.googlePayButton}>
+                    <Image
+                      source={require('../assets/google-logo.png')}
+                      style={styles.googleLogo}
+                    />
+                    <Text style={styles.googlePayText}>Pay</Text>
+                  </View>
                   <View style={styles.paymentItem}>
                     <Text style={styles.paymentItemIcon}>🏦</Text>
                     <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>
@@ -581,6 +631,124 @@ const DonationsScreen = () => {
               <Text style={[styles.disclaimer, isRTL && styles.rtlText]}>
                 {t('donationDisclaimer')}
               </Text>
+
+              {/* Reçus Fiscaux */}
+              <View style={styles.recuFiscalSection}>
+                <Text style={[styles.recuFiscalTitle, isRTL && styles.rtlText]}>
+                  📄 {language === 'ar' ? 'إيصالاتي الضريبية' : 'Mes reçus fiscaux'}
+                </Text>
+                <View style={styles.recuFiscalCard}>
+                  <Text style={[styles.recuFiscalInfo, isRTL && styles.rtlText]}>
+                    {language === 'ar'
+                      ? 'لديك الحق في خصم 66% من تبرعاتك من الضرائب (المادة 200 من القانون العام للضرائب). تتوفر الإيصالات في بداية يناير عن السنة المنقضية.'
+                      : 'Vous avez droit à 66% de réduction d\'impôt pour vos dons (article 200 CGI). Les reçus sont disponibles début janvier pour l\'année écoulée.'}
+                  </Text>
+
+                  {/* Year 2025 */}
+                  {(() => {
+                    const currentYear = new Date().getFullYear();
+                    const year = 2025;
+                    const available = currentYear > year;
+                    return (
+                      <View style={styles.recuYearRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
+                            {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
+                          </Text>
+                          <Text style={[styles.recuYearSubtext, isRTL && styles.rtlText]}>
+                            {language === 'ar' ? 'جميع التبرعات للسنة' : 'Tous les dons de l\'année'}
+                          </Text>
+                        </View>
+                        {available ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.recuFiscalButton,
+                              sendingRecuFiscal && styles.recuFiscalButtonDisabled,
+                            ]}
+                            onPress={() => handleRequestRecuFiscal(year)}
+                            disabled={sendingRecuFiscal}
+                          >
+                            {sendingRecuFiscal ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <>
+                                <Text style={styles.recuFiscalButtonIcon}>📧</Text>
+                                <Text style={styles.recuFiscalButtonText}>
+                                  {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={styles.recuNotAvailable}>
+                            {language === 'ar'
+                              ? `متاح في 01/01/${year + 1}`
+                              : `Disponible le 01/01/${year + 1}`}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })()}
+
+                  {/* Year 2026 */}
+                  {(() => {
+                    const currentYear = new Date().getFullYear();
+                    const year = 2026;
+                    const available = currentYear > year;
+                    return (
+                      <View style={styles.recuYearRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
+                            {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
+                          </Text>
+                          <Text style={[styles.recuYearSubtext, isRTL && styles.rtlText]}>
+                            {language === 'ar' ? 'جميع التبرعات للسنة' : 'Tous les dons de l\'année'}
+                          </Text>
+                        </View>
+                        {available ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.recuFiscalButton,
+                              sendingRecuFiscal && styles.recuFiscalButtonDisabled,
+                            ]}
+                            onPress={() => handleRequestRecuFiscal(year)}
+                            disabled={sendingRecuFiscal}
+                          >
+                            {sendingRecuFiscal ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <>
+                                <Text style={styles.recuFiscalButtonIcon}>📧</Text>
+                                <Text style={styles.recuFiscalButtonText}>
+                                  {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={styles.recuNotAvailable}>
+                            {language === 'ar'
+                              ? `متاح في 01/01/${year + 1}`
+                              : `Disponible le 01/01/${year + 1}`}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })()}
+                </View>
+              </View>
+
+              {/* Texte legal recu fiscal */}
+              <View style={styles.legalBox}>
+                <Text style={[styles.legalTitle, isRTL && styles.rtlText]}>
+                  {language === 'ar' ? 'إيصال ضريبي' : 'Recu fiscal'}
+                </Text>
+                <Text style={[styles.legalText, isRTL && styles.rtlText]}>
+                  {language === 'ar'
+                    ? 'الأفراد: خصم 66% من المبلغ المتبرع به (المادة 200 من القانون العام للضرائب) - CERFA 11580*05\nالشركات: خصم 60% من المبلغ المتبرع به (المادة 238 مكرر من القانون العام للضرائب) - CERFA 16216*02\n\nستتلقون إيصالكم الضريبي في يناير من السنة التالية.'
+                    : 'Particuliers : deduction de 66% du montant (article 200 du CGI) - CERFA 11580*05\nEntreprises : deduction de 60% du montant (article 238 bis du CGI) - CERFA 16216*02\n\nVotre recu fiscal vous sera envoyé en janvier N+1.'}
+                </Text>
+              </View>
             </>
           )}
 
@@ -1058,6 +1226,13 @@ const DonationsScreen = () => {
                         />
                         <Text style={styles.applePayText}>Pay</Text>
                       </View>
+                      <View style={styles.googlePayButton}>
+                        <Image
+                          source={require('../assets/google-logo.png')}
+                          style={styles.googleLogo}
+                        />
+                        <Text style={styles.googlePayText}>Pay</Text>
+                      </View>
                       <View style={styles.paymentItem}>
                         <Text style={styles.paymentItemIcon}>🏦</Text>
                         <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>
@@ -1141,7 +1316,7 @@ const DonationsScreen = () => {
                 <View style={styles.ribHeader}>
                   <Text style={styles.ribIcon}>🕌</Text>
                   <Text style={[styles.ribTitulaire, isRTL && styles.rtlText]}>
-                    {mosqueeInfo?.accountHolder || 'Association El Mouhssinine'}
+                    {mosqueeInfo?.accountHolder || 'Association El Mohsinine'}
                   </Text>
                   <Text style={[styles.ribBanque, isRTL && styles.rtlText]}>
                     {mosqueeInfo?.bankName || 'Crédit Agricole'}
@@ -1157,12 +1332,12 @@ const DonationsScreen = () => {
                       numberOfLines={1}
                       minimumFontScale={0.7}
                     >
-                      {mosqueeInfo?.iban || 'FR76 1234 5678 9012 3456 7890 123'}
+                      {mosqueeInfo?.iban || 'IBAN indisponible'}
                     </Text>
                   </View>
                   <TouchableOpacity
                     style={styles.copyBtn}
-                    onPress={() => copyToClipboard(mosqueeInfo?.iban || 'FR76123456789012345678901', 'iban')}
+                    onPress={() => mosqueeInfo?.iban ? copyToClipboard(mosqueeInfo.iban, 'iban') : null}
                     accessibilityLabel="Copier l'IBAN de la mosquée"
                     accessibilityRole="button"
                     accessibilityHint="Copie l'IBAN dans le presse-papier"
@@ -1206,9 +1381,6 @@ const DonationsScreen = () => {
               </View>
             )}
 
-            <Text style={[styles.modalDisclaimer, isRTL && styles.rtlText]}>
-              {t('taxReceiptNote')}
-            </Text>
           </View>
         </View>
       </Modal>
@@ -1279,9 +1451,13 @@ const DonationsScreen = () => {
                   style={[styles.paymentOption, paymentMethod === method && styles.paymentOptionSelected, isRTL && styles.paymentOptionRTL]}
                   onPress={() => setPaymentMethod(method)}
                 >
-                  <Text style={styles.paymentIcon}>
-                    {method === 'card' ? '💳' : method === 'apple' ? '🍎' : '🟢'}
-                  </Text>
+                  {method === 'card' ? (
+                    <Text style={styles.paymentIcon}>💳</Text>
+                  ) : method === 'apple' ? (
+                    <Image source={require('../assets/apple-logo.png')} style={styles.paymentLogoIcon} />
+                  ) : (
+                    <Image source={require('../assets/google-logo.png')} style={styles.paymentLogoIcon} />
+                  )}
                   <View style={styles.paymentInfo}>
                     <Text style={[styles.paymentTitle, isRTL && styles.rtlText]}>
                       {method === 'card' ? t('cardPayment') : method === 'apple' ? 'Apple Pay' : 'Google Pay'}
@@ -2185,6 +2361,73 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     color: colors.accent,
   },
+  // Reçu Fiscal
+  recuFiscalSection: {
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  recuFiscalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  recuFiscalCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+  },
+  recuFiscalInfo: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  recuYearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  recuYearText: {
+    fontSize: fontSize.md,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  recuYearSubtext: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  recuNotAvailable: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+  },
+  recuFiscalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.xs,
+  },
+  recuFiscalButtonDisabled: {
+    backgroundColor: 'rgba(201,162,39,0.4)',
+  },
+  recuFiscalButtonIcon: {
+    fontSize: 14,
+  },
+  recuFiscalButtonText: {
+    fontSize: fontSize.sm,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
   // RTL Styles
   rtlText: {
     textAlign: 'right',
@@ -2274,6 +2517,33 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '600',
     color: '#333333',
+  },
+  googlePayButton: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+  },
+  googlePayText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#3C4043',
+  },
+  googleLogo: {
+    width: 20,
+    height: 20,
+    marginRight: 8,
+  },
+  paymentLogoIcon: {
+    width: 24,
+    height: 24,
+    marginRight: spacing.md,
   },
   paymentNote: {
     fontSize: fontSize.xs,

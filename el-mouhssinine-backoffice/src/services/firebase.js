@@ -78,9 +78,16 @@ if (!FORCE_DEMO_MODE) {
       alert('⚠️ Impossible de se connecter à Firebase. Vérifiez votre connexion et rechargez la page.')
       throw new Error('Impossible de se connecter à Firebase. Contactez le support.')
     }
-    // En dev, accepter le mode démo
+    // En dev, mode démo avec avertissement visible
     isDemoMode = true
-    console.warn('[Firebase] Mode démo activé (erreur Firebase en dev)')
+    console.error('🚨 [Firebase] MODE DÉMO ACTIVÉ - Les données affichées sont FICTIVES')
+    // Bug 8 Fix: Banner persistant pour éviter confusion
+    setTimeout(() => {
+      const banner = document.createElement('div')
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ff5722;color:white;text-align:center;padding:8px;z-index:99999;font-weight:bold;font-size:14px;'
+      banner.textContent = '⚠️ MODE DÉMO — Données fictives — Firebase non connecté'
+      document.body.prepend(banner)
+    }, 100)
   }
 }
 
@@ -89,7 +96,7 @@ export { app, db, auth, storage, functions }
 // ==================== MOCK DATA FOR DEMO MODE ====================
 const mockData = {
   announcements: [
-    { id: '1', titre: 'Bienvenue', contenu: 'Bienvenue sur le backoffice El Mouhssinine', actif: true, createdAt: new Date() },
+    { id: '1', titre: 'Bienvenue', contenu: 'Bienvenue sur le backoffice El Mohsinine', actif: true, createdAt: new Date() },
     { id: '2', titre: 'Horaires Ramadan', contenu: 'Les horaires de Ramadan sont disponibles', actif: true, createdAt: new Date() }
   ],
   popups: [
@@ -107,7 +114,7 @@ const mockData = {
       date: new Date(Date.now() + 2*24*60*60*1000),
       heurePriere: '',
       salatApres: 'apres_dhuhr',
-      lieu: 'Mosquée El Mouhssinine',
+      lieu: 'Mosquée El Mohsinine',
       phraseAr: 'إنا لله وإنا إليه راجعون',
       phraseFr: 'Nous appartenons à Allah et c\'est vers Lui que nous retournerons',
       actif: true,
@@ -121,7 +128,7 @@ const mockData = {
       date: new Date(Date.now() + 3*24*60*60*1000),
       heurePriere: '14:30',
       salatApres: 'apres_asr',
-      lieu: 'Mosquée El Mouhssinine',
+      lieu: 'Mosquée El Mohsinine',
       phraseAr: 'إنا لله وإنا إليه راجعون',
       phraseFr: 'Nous appartenons à Allah et c\'est vers Lui que nous retournerons',
       actif: true,
@@ -147,7 +154,7 @@ const mockData = {
   settings: {
     prayerTimes: { times: { fajr: '05:30', dhuhr: '13:15', asr: '16:45', maghrib: '20:30', isha: '22:00' }, iqama: { fajr: '05:45', dhuhr: '13:30', asr: '17:00', maghrib: '20:35', isha: '22:15' }, jumua: { jumua1: '13:00', jumua2: '14:00' } },
     general: { notifications: { prayerReminders: true, eventReminders: true }, display: { showIqama: true, darkMode: true } },
-    mosqueeInfo: { nom: 'Mosquée El Mouhssinine', ville: 'Pantin', telephone: '01 23 45 67 89' }
+    mosqueeInfo: { nom: 'Mosquée El Mohsinine', ville: 'Pantin', telephone: '01 23 45 67 89' }
   }
 }
 
@@ -287,7 +294,7 @@ export const subscribeToDocument = (collectionName, docId, callback) => {
 
 // Horaires
 // Fetch prayer times from Aladhan API for Bourg-en-Bresse
-// Méthode 12 + tune pour correspondre aux horaires Mawaqit El Mouhssinine
+// Méthode 12 + tune pour correspondre aux horaires Mawaqit El Mohsinine
 // tune: Fajr -20min, Dhuhr +2min, Asr +4min, Maghrib +8min, Isha +27min
 export const getPrayerTimes = async () => {
   try {

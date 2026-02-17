@@ -1,4 +1,4 @@
-// Types pour l'application El Mouhssinine
+// Types pour l'application El Mohsinine
 
 export interface PrayerTime {
   name: string;

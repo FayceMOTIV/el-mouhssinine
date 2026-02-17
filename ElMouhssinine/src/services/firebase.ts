@@ -1,10 +1,11 @@
-// Firebase Service - Connecté au backoffice El Mouhssinine
+// Firebase Service - Connecté au backoffice El Mohsinine
 // Collections Firestore en FRANÇAIS (alignées sur le backoffice)
 // Fallback sur données mock si Firebase vide ou erreur
 
 import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { logger } from '../utils';
-import functions from '@react-native-firebase/functions';
+import { firebase } from '@react-native-firebase/functions';
 import {
   Project,
   Announcement,
@@ -509,7 +510,10 @@ export const createDonation = async (donation: Omit<Donation, 'id' | 'createdAt'
     return `mock-donation-${Date.now()}`;
   }
   try {
+    // BUG 2 FIX: userId obligatoire pour Firestore Rules
+    const currentUser = auth().currentUser;
     const docRef = await firestore().collection('donations').add({
+      userId: currentUser?.uid || '', // BUG 2 FIX: requis par Firestore Rules
       donateur: donation.memberEmail || 'Anonyme',
       montant: donation.amount,
       projetId: donation.projectId,
@@ -571,7 +575,10 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
     // TRANSACTION ATOMIQUE: donation + update projet
     await firestore().runTransaction(async (transaction) => {
       // 1. Créer le don
+      // BUG 2 FIX: userId obligatoire pour Firestore Rules
+      const currentUser = auth().currentUser;
       const donationData: Record<string, any> = {
+        userId: currentUser?.uid || '', // BUG 2 FIX: requis par Firestore Rules
         donateur: params.isAnonymous ? 'Anonyme' : (params.donorName || params.donorEmail || 'Anonyme'),
         donateurEmail: params.isAnonymous ? null : (params.donorEmail || null),
         montant: params.amount,
@@ -615,7 +622,7 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
 };
 
 // Ajouter un paiement de cotisation ou don avec Stripe
-export interface AddPaymentParams {
+export interface AddCotisationParams {
   memberId: string; // Format ELM-XXXX (pour affichage)
   memberUid?: string; // Firebase Auth UID (pour la mise à jour du document)
   memberName: string;
@@ -624,10 +631,13 @@ export interface AddPaymentParams {
   stripePaymentIntentId: string;
   paymentMethod: string;
   period?: string;
-  type?: 'cotisation' | 'don'; // cotisation = pas de reçu fiscal, don = reçu fiscal
+  stripeSubscriptionId?: string; // ID de l'abonnement Stripe si paiement récurrent
 }
 
-export const addPayment = async (params: AddPaymentParams): Promise<string> => {
+// Alias rétrocompatible
+export type AddPaymentParams = AddCotisationParams;
+
+export const addCotisation = async (params: AddCotisationParams): Promise<string> => {
   if (FORCE_DEMO_MODE) {
     return `mock-payment-${Date.now()}`;
   }
@@ -648,34 +658,59 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
 
     const now = new Date();
     // Calculer dateFin selon la période
+    // FIX B3: Si le membre a une dateFin dans le futur, on ajoute à partir de cette date
+    // pour ne pas perdre les mois restants lors d'un renouvellement anticipé
     let dateFin: Date;
+    let baseDate = now;
+    if (memberRef) {
+      try {
+        const currentMember = await memberRef.get();
+        if (currentMember.exists()) {
+          const currentData = currentMember.data();
+          const currentExpiry = currentData?.cotisation?.dateFin;
+          if (currentExpiry) {
+            const expiryDate = currentExpiry.toDate ? currentExpiry.toDate() : new Date(currentExpiry);
+            if (expiryDate > now) {
+              baseDate = expiryDate;
+            }
+          }
+        }
+      } catch (e) {
+        // En cas d'erreur, on utilise now comme base (comportement par défaut)
+      }
+    }
     if (params.period === 'mensuel') {
-      dateFin = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+      dateFin = new Date(baseDate);
+      dateFin.setMonth(dateFin.getMonth() + 1);
+      // Fix Bug 5: débordement mois (31 jan + 1 mois = 3 mars au lieu de 28 fév)
+      if (dateFin.getDate() !== baseDate.getDate()) {
+        dateFin.setDate(0); // Dernier jour du mois voulu
+      }
     } else {
       // annuel par défaut
-      dateFin = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+      dateFin = new Date(baseDate);
+      dateFin.setFullYear(dateFin.getFullYear() + 1);
+      if (dateFin.getDate() !== baseDate.getDate()) {
+        dateFin.setDate(0); // Fix Bug 5: 29 fév + 1 an
+      }
     }
 
-    const paymentType = params.type || 'cotisation';
-    const isDon = paymentType === 'don';
-
-    // TRANSACTION ATOMIQUE: paiement + update membre (sauf pour don)
+    // TRANSACTION ATOMIQUE: cotisation + update membre
     await firestore().runTransaction(async (transaction) => {
-      // 1. Créer le paiement
-      transaction.set(paymentRef, {
+      // 1. Créer la cotisation
+      const paymentData: any = {
         memberId: params.memberId,
         memberName: params.memberName,
         montant: params.amount,
         modePaiement: params.paymentMethod,
         stripePaymentIntentId: params.stripePaymentIntentId,
-        type: paymentType, // 'cotisation' ou 'don'
+        type: 'cotisation',
         statut: 'completed',
         source: 'app_mobile',
         period: params.period || 'annuel',
         date: firestore.FieldValue.serverTimestamp(),
         createdAt: firestore.FieldValue.serverTimestamp(),
-        // Pour les reçus fiscaux (uniquement pour les dons)
-        eligibleRecuFiscal: isDon,
+        eligibleRecuFiscal: false,
         // Metadata pour les triggers Cloud Functions (emails de confirmation)
         metadata: {
           memberId: params.memberUid || '', // UID Firebase pour lookup membre
@@ -684,13 +719,20 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
           email: params.memberEmail || '',
           period: params.period || 'annuel',
         },
-      });
+      };
 
-      // 2. Mettre à jour le statut du membre (uniquement pour cotisation, pas pour don)
-      if (memberRef && !isDon) {
+      // Ajouter stripeSubscriptionId si abonnement récurrent
+      if (params.stripeSubscriptionId) {
+        paymentData.stripeSubscriptionId = params.stripeSubscriptionId;
+      }
+
+      transaction.set(paymentRef, paymentData);
+
+      // 2. Mettre à jour le statut du membre
+      if (memberRef) {
         const memberDoc = await transaction.get(memberRef);
         if (memberDoc.exists()) {
-          transaction.update(memberRef, {
+          const memberUpdate: any = {
             statut: 'actif',
             status: 'actif',
             datePaiement: firestore.FieldValue.serverTimestamp(),
@@ -703,18 +745,29 @@ export const addPayment = async (params: AddPaymentParams): Promise<string> => {
               dateDebut: firestore.Timestamp.fromDate(now),
               dateFin: firestore.Timestamp.fromDate(dateFin),
             },
-          });
+          };
+
+          // Ajouter stripeSubscriptionId si abonnement récurrent
+          if (params.stripeSubscriptionId) {
+            memberUpdate.stripeSubscriptionId = params.stripeSubscriptionId;
+            memberUpdate.cotisationType = 'mensuel';
+          }
+
+          transaction.update(memberRef, memberUpdate);
         }
       }
     });
 
-    logger.firebase(' Paiement cotisation enregistré (transaction atomique):', docId);
+    logger.firebase(' Cotisation enregistrée (transaction atomique):', docId);
     return docId;
   } catch (error) {
-    logger.error('[Firebase] addPayment error:', error);
+    logger.error('[Firebase] addCotisation error:', error);
     throw error;
   }
 };
+
+// Alias rétrocompatible
+export const addPayment = addCotisation;
 
 // ==================== POPUPS ====================
 // Collection Firestore: "popups"
@@ -734,23 +787,40 @@ export const subscribeToPopups = (callback: (data: Popup[]) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          const data: Popup[] = snapshot.docs
-            .map(doc => ({
+          logger.log(`[Firebase] Popups snapshot: ${snapshot.docs.length} docs trouvés`);
+          const allPopups = snapshot.docs.map(doc => {
+            const d = doc.data();
+            logger.log(`[Firebase] Popup raw: id=${doc.id}, titre=${d.titre}, actif=${d.actif}, dateDebut=${d.dateDebut}, dateFin=${d.dateFin}, contenu=${d.contenu}, message=${d.message}, frequence=${d.frequence}`);
+            return {
               id: doc.id,
-              titre: doc.data().titre,
-              contenu: doc.data().contenu || doc.data().message,
-              actif: doc.data().actif,
-              dateDebut: doc.data().dateDebut,
-              dateFin: doc.data().dateFin,
-              priorite: doc.data().priorite || 0,
-            }))
+              titre: d.titre,
+              contenu: d.contenu || d.message,
+              actif: d.actif,
+              dateDebut: d.dateDebut,
+              dateFin: d.dateFin,
+              priorite: d.priorite || 0,
+              frequence: d.frequence,
+            };
+          });
+
+          const data: Popup[] = allPopups
             .filter(popup => {
               // Filtrer par date de validité
-              if (popup.dateDebut && popup.dateDebut > today) return false;
-              if (popup.dateFin && popup.dateFin < today) return false;
-              return true;
+              // Gérer string ISO ("2026-02-13" ou "2026-02-13T14:30") et Firestore Timestamp
+              const toDateStr = (val: any): string | null => {
+                if (!val) return null;
+                if (typeof val === 'string') return val.split('T')[0];
+                if (val.toDate) return val.toDate().toISOString().split('T')[0];
+                return null;
+              };
+              const startDate = toDateStr(popup.dateDebut);
+              const endDate = toDateStr(popup.dateFin);
+              const pass = !(startDate && startDate > today) && !(endDate && endDate < today);
+              logger.log(`[Firebase] Popup filter: id=${popup.id}, today=${today}, startDate=${startDate}, endDate=${endDate}, pass=${pass}`);
+              return pass;
             })
             .sort((a, b) => (b.priorite || 0) - (a.priorite || 0));
+          logger.log(`[Firebase] Popups après filtrage: ${data.length}`);
           callback(mergeWithMock(data, mockPopups as Popup[]));
         },
         error => {
@@ -1690,20 +1760,12 @@ export const subscribeToMemberProfile = (
             // Lier le UID au document si pas encore fait
             if (!data.uid) {
               await doc.ref.update({ uid });
+              // Après update, le listener parent (par UID) captera ce document automatiquement
             }
 
-            // Continuer avec un nouveau listener sur ce document
-            firestore()
-              .collection('members')
-              .doc(doc.id)
-              .onSnapshot(docSnap => {
-                const d = docSnap.data();
-                if (d) {
-                  callback(buildMemberProfile(docSnap.id, d));
-                } else {
-                  callback(null);
-                }
-              });
+            // Bug 15 Fix: Pas de onSnapshot imbriqué (memory leak)
+            // On envoie les données immédiatement, le listener parent se mettra à jour
+            callback(buildMemberProfile(doc.id, data));
             return;
           }
           callback(null);
@@ -1894,7 +1956,6 @@ export const sendMessage = async (
   }
 
   try {
-    const now = new Date();
     const docRef = await firestore().collection('messages').add({
       odUserId: userId,
       userName,
@@ -1902,8 +1963,8 @@ export const sendMessage = async (
       sujet,
       message: message.trim(),
       status: 'non_lu',
-      createdAt: now,
-      updatedAt: now,
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      updatedAt: firestore.FieldValue.serverTimestamp(),
       reponses: [],
     });
 
@@ -1923,7 +1984,7 @@ export const getUserMessages = async (userId: string): Promise<UserMessage[]> =>
     const snapshot = await firestore()
       .collection('messages')
       .where('odUserId', '==', userId)
-      .orderBy('createdAt', 'desc')
+      .orderBy('updatedAt', 'desc')
       .get();
 
     return snapshot.docs.map(doc => {
@@ -1966,7 +2027,7 @@ export const subscribeToUserMessages = (
     return firestore()
       .collection('messages')
       .where('odUserId', '==', userId)
-      .orderBy('createdAt', 'desc')
+      .orderBy('updatedAt', 'desc')
       .onSnapshot(
         snapshot => {
           const messages = snapshot.docs
@@ -2200,7 +2261,7 @@ export const requestRecuFiscal = async (
   }
 
   try {
-    const sendRecuFiscal = functions().httpsCallable('sendRecuFiscal');
+    const sendRecuFiscal = firebase.app().functions('europe-west1').httpsCallable('sendRecuFiscal');
     const result = await sendRecuFiscal({ email, annee });
     const data = result.data as any;
 
@@ -2243,7 +2304,7 @@ export const getDonsTotalByYear = async (
   }
 
   try {
-    const getDonsByYear = functions().httpsCallable('getDonsByYear');
+    const getDonsByYear = firebase.app().functions('europe-west1').httpsCallable('getDonsByYear');
     const result = await getDonsByYear({ email, annee });
     const data = result.data as any;
 
@@ -2254,6 +2315,19 @@ export const getDonsTotalByYear = async (
   } catch (error) {
     logger.error('[Firebase] getDonsTotalByYear error:', error);
     return null;
+  }
+};
+
+// ==================== CANCEL SUBSCRIPTION ====================
+export const cancelSubscription = async (reason?: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const cancelFn = firebase.app().functions('europe-west1').httpsCallable('cancelSubscription');
+    const result = await cancelFn({ reason: reason || 'Annulé par le membre' });
+    const data = result.data as any;
+    return { success: data.success, message: data.message };
+  } catch (error: any) {
+    logger.error('[Firebase] cancelSubscription error:', error);
+    return { success: false, message: error?.message || 'Erreur lors de l\'annulation' };
   }
 };
 

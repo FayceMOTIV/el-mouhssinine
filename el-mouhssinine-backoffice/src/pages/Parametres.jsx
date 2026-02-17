@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import {
   Settings, Save, Building2, MapPin, Phone, Mail, Globe, Clock,
-  Palette, Database, Landmark, Image, Upload, CreditCard, ScrollText, Trash2, Check, X
+  Palette, Database, Landmark, Image, Upload, CreditCard, ScrollText, Trash2, Check, X, Stamp
 } from 'lucide-react'
 import { Card, Button, Input, Textarea, Toggle, Loading } from '../components/common'
-import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo, storage, getCotisationPrices, updateCotisationPrices, getReglement, updateReglement } from '../services/firebase'
+import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo, storage, getCotisationPrices, updateCotisationPrices, getReglement, updateReglement, db } from '../services/firebase'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
 
 export default function Parametres() {
@@ -20,7 +21,7 @@ export default function Parametres() {
   const [pendingHeaderFile, setPendingHeaderFile] = useState(null) // Fichier original
 
   const [mosqueeInfo, setMosqueeInfo] = useState({
-    nom: 'Mosquée El Mouhssinine',
+    nom: 'Mosquée El Mohsinine',
     adresse: '',
     codePostal: '',
     ville: 'Bourg-en-Bresse',
@@ -75,6 +76,24 @@ export default function Parametres() {
     updatedAt: null
   })
 
+  // Association info
+  const [associationInfo, setAssociationInfo] = useState({
+    nom: '',
+    adresse: '',
+    codePostal: '',
+    ville: '',
+    siren: '',
+    statut: 'Association cultuelle loi 1905',
+    objet: 'Exercice du culte musulman',
+    signataire: 'Le Président',
+    nomSignataire: '',
+    signatureUrl: '',
+    cachetUrl: '',
+  })
+  const [signatureFile, setSignatureFile] = useState(null)
+  const [cachetFile, setCachetFile] = useState(null)
+  const [savingAssociation, setSavingAssociation] = useState(false)
+
   useEffect(() => {
     loadData()
   }, [])
@@ -105,11 +124,36 @@ export default function Parametres() {
       if (reglementData) {
         setReglement(prev => ({ ...prev, ...reglementData }))
       }
+
+      // Load association info
+      await loadAssociationInfo()
     } catch (err) {
       console.error('Error loading settings:', err)
       toast.error('Erreur lors du chargement')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadAssociationInfo = async () => {
+    try {
+      // Try loading from settings/association first
+      const associationDocRef = doc(db, 'settings', 'association')
+      const associationDoc = await getDoc(associationDocRef)
+
+      if (associationDoc.exists()) {
+        setAssociationInfo(prev => ({ ...prev, ...associationDoc.data() }))
+      } else {
+        // Fallback: load from settings/recusFiscaux for backward compatibility
+        const recusDocRef = doc(db, 'settings', 'recusFiscaux')
+        const recusDoc = await getDoc(recusDocRef)
+
+        if (recusDoc.exists()) {
+          setAssociationInfo(prev => ({ ...prev, ...recusDoc.data() }))
+        }
+      }
+    } catch (err) {
+      console.error('Error loading association info:', err)
     }
   }
 
@@ -162,6 +206,47 @@ export default function Parametres() {
       toast.error('Erreur lors de la sauvegarde')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveAssociation = async () => {
+    setSavingAssociation(true)
+    try {
+      let updatedInfo = { ...associationInfo }
+
+      // Upload signature if provided
+      if (signatureFile) {
+        const signatureRef = ref(storage, 'settings/signature-president.png')
+        await uploadBytes(signatureRef, signatureFile)
+        const signatureUrl = await getDownloadURL(signatureRef)
+        updatedInfo.signatureUrl = signatureUrl
+        setSignatureFile(null)
+      }
+
+      // Upload cachet if provided
+      if (cachetFile) {
+        const cachetRef = ref(storage, 'settings/cachet-association.png')
+        await uploadBytes(cachetRef, cachetFile)
+        const cachetUrl = await getDownloadURL(cachetRef)
+        updatedInfo.cachetUrl = cachetUrl
+        setCachetFile(null)
+      }
+
+      // Save to settings/association
+      const associationDocRef = doc(db, 'settings', 'association')
+      await setDoc(associationDocRef, updatedInfo, { merge: true })
+
+      // Also update settings/recusFiscaux for backward compatibility
+      const recusDocRef = doc(db, 'settings', 'recusFiscaux')
+      await setDoc(recusDocRef, updatedInfo, { merge: true })
+
+      setAssociationInfo(updatedInfo)
+      toast.success('Informations de l\'association enregistrées')
+    } catch (err) {
+      console.error('Error saving association info:', err)
+      toast.error('Erreur lors de la sauvegarde')
+    } finally {
+      setSavingAssociation(false)
     }
   }
 
@@ -266,6 +351,7 @@ export default function Parametres() {
 
   const tabs = [
     { id: 'mosquee', label: 'Mosquée', icon: Building2 },
+    { id: 'association', label: 'Association (CERFA)', icon: Stamp },
     { id: 'header', label: 'Image d\'en-tête', icon: Image },
     { id: 'banque', label: 'Coordonnées bancaires', icon: Landmark },
     { id: 'cotisation', label: 'Cotisations', icon: CreditCard },
@@ -310,7 +396,7 @@ export default function Parametres() {
               label="Nom de la mosquée"
               value={mosqueeInfo.nom}
               onChange={(e) => setMosqueeInfo({ ...mosqueeInfo, nom: e.target.value })}
-              placeholder="Mosquée El Mouhssinine"
+              placeholder="Mosquée El Mohsinine"
             />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
@@ -365,6 +451,158 @@ export default function Parametres() {
           </div>
           <div className="flex justify-end mt-6">
             <Button onClick={handleSaveMosquee} loading={saving}>
+              <Save className="w-4 h-4 mr-2" />
+              Enregistrer
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Association Tab */}
+      {activeTab === 'association' && (
+        <Card title="Informations de l'association (CERFA)" icon={Stamp}>
+          <p className="text-white/60 text-sm mb-6">
+            Ces informations seront utilisées pour générer automatiquement les reçus fiscaux (CERFA).
+            <br />
+            <span className="text-accent">Remplissez tous les champs pour des reçus conformes.</span>
+          </p>
+          <div className="space-y-4">
+            <Input
+              label="Nom de l'association"
+              value={associationInfo.nom}
+              onChange={(e) => setAssociationInfo({ ...associationInfo, nom: e.target.value })}
+              placeholder="Association El Mohsinine"
+            />
+            <Input
+              label="Adresse"
+              value={associationInfo.adresse}
+              onChange={(e) => setAssociationInfo({ ...associationInfo, adresse: e.target.value })}
+              placeholder="123 rue Example"
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Code postal"
+                value={associationInfo.codePostal}
+                onChange={(e) => setAssociationInfo({ ...associationInfo, codePostal: e.target.value })}
+                placeholder="01000"
+              />
+              <Input
+                label="Ville"
+                value={associationInfo.ville}
+                onChange={(e) => setAssociationInfo({ ...associationInfo, ville: e.target.value })}
+                placeholder="Bourg-en-Bresse"
+              />
+            </div>
+            <Input
+              label="N° SIREN ou RNA"
+              value={associationInfo.siren}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, '').slice(0, 14)
+                setAssociationInfo({ ...associationInfo, siren: value })
+              }}
+              placeholder="123456789 ou W012345678"
+              maxLength={14}
+            />
+            <Input
+              label="Statut juridique"
+              value={associationInfo.statut}
+              onChange={(e) => setAssociationInfo({ ...associationInfo, statut: e.target.value })}
+              placeholder="Association cultuelle loi 1905"
+            />
+            <Textarea
+              label="Objet de l'association"
+              value={associationInfo.objet}
+              onChange={(e) => setAssociationInfo({ ...associationInfo, objet: e.target.value })}
+              placeholder="Exercice du culte musulman"
+              rows={3}
+            />
+            <Input
+              label="Qualité du signataire"
+              value={associationInfo.signataire}
+              onChange={(e) => setAssociationInfo({ ...associationInfo, signataire: e.target.value })}
+              placeholder="Le Président"
+            />
+            <Input
+              label="Nom du signataire"
+              value={associationInfo.nomSignataire}
+              onChange={(e) => setAssociationInfo({ ...associationInfo, nomSignataire: e.target.value })}
+              placeholder="Mohamed BENALI"
+            />
+
+            {/* Signature upload */}
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-white">
+                Signature du président
+              </label>
+              <div className="border-2 border-dashed border-white/20 rounded-xl p-6 text-center hover:border-accent transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setSignatureFile(e.target.files[0])}
+                  className="hidden"
+                  id="signature-input"
+                />
+                <label
+                  htmlFor="signature-input"
+                  className="cursor-pointer"
+                >
+                  <Upload className="w-8 h-8 mx-auto mb-2 text-white/40" />
+                  <p className="text-white font-medium mb-1">
+                    {signatureFile ? signatureFile.name : 'Cliquez pour sélectionner une signature'}
+                  </p>
+                  <p className="text-white/50 text-sm">PNG, JPG jusqu'à 5MB</p>
+                </label>
+              </div>
+              {associationInfo.signatureUrl && !signatureFile && (
+                <div className="space-y-2">
+                  <p className="text-white/70 text-sm">Signature actuelle :</p>
+                  <img
+                    src={associationInfo.signatureUrl}
+                    alt="Signature"
+                    className="max-h-24 object-contain border border-white/10 rounded-lg p-2 bg-white"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Cachet upload */}
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-white">
+                Cachet de l'association
+              </label>
+              <div className="border-2 border-dashed border-white/20 rounded-xl p-6 text-center hover:border-accent transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setCachetFile(e.target.files[0])}
+                  className="hidden"
+                  id="cachet-input"
+                />
+                <label
+                  htmlFor="cachet-input"
+                  className="cursor-pointer"
+                >
+                  <Upload className="w-8 h-8 mx-auto mb-2 text-white/40" />
+                  <p className="text-white font-medium mb-1">
+                    {cachetFile ? cachetFile.name : 'Cliquez pour sélectionner un cachet'}
+                  </p>
+                  <p className="text-white/50 text-sm">PNG, JPG jusqu'à 5MB</p>
+                </label>
+              </div>
+              {associationInfo.cachetUrl && !cachetFile && (
+                <div className="space-y-2">
+                  <p className="text-white/70 text-sm">Cachet actuel :</p>
+                  <img
+                    src={associationInfo.cachetUrl}
+                    alt="Cachet"
+                    className="max-h-24 object-contain border border-white/10 rounded-lg p-2 bg-white"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end mt-6">
+            <Button onClick={handleSaveAssociation} loading={savingAssociation}>
               <Save className="w-4 h-4 mr-2" />
               Enregistrer
             </Button>
@@ -480,7 +718,7 @@ export default function Parametres() {
               label="Titulaire du compte"
               value={mosqueeInfo.accountHolder}
               onChange={(e) => setMosqueeInfo({ ...mosqueeInfo, accountHolder: e.target.value })}
-              placeholder="Association El Mouhssinine"
+              placeholder="Association El Mohsinine"
             />
             <Input
               label="Nom de la banque"
@@ -534,8 +772,8 @@ export default function Parametres() {
             />
             <div className="bg-white/5 rounded-lg p-4 mt-4">
               <p className="text-white/70 text-sm">
-                💡 <strong>Note :</strong> Le paiement mensuel n'est pas récurrent automatiquement.
-                Les membres devront renouveler manuellement chaque mois.
+                💡 <strong>Note :</strong> Le paiement mensuel est récurrent automatiquement via Stripe.
+                Les membres peuvent annuler leur abonnement depuis leur espace dans l'application.
               </p>
             </div>
           </div>
