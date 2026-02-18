@@ -1220,8 +1220,8 @@ const MOSQUE_COORDS = {
   longitude: 5.2477947,
 };
 
-// Rayon de détection en mètres (250m pour compenser l'imprécision GPS en background)
-const PROXIMITY_RADIUS_METERS = 250;
+// Rayon de détection en mètres
+const PROXIMITY_RADIUS_METERS = 100;
 
 // Intervalle minimum entre 2 notifications (30 minutes)
 const MIN_NOTIF_INTERVAL_MS = 30 * 60 * 1000;

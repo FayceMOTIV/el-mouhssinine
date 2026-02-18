@@ -13,6 +13,7 @@ import { arabicAlphabet } from '../data/alphabet';
 import { vowels } from '../data/vowels';
 import ProgressBar from '../components/ProgressBar';
 import ArabicLetterComponent from '../components/ArabicLetter';
+import { useLanguage } from '../context/LanguageContext';
 
 interface LessonScreenProps {
   route: any;
@@ -20,6 +21,7 @@ interface LessonScreenProps {
 }
 
 const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
+  const { t } = useLanguage();
   const { lesson } = route.params as { lesson: Lesson };
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -65,11 +67,11 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
     await completeLesson(lesson.id, lesson.xp, lettersLearned);
 
     Alert.alert(
-      'Lecon terminee !',
-      `Vous avez obtenu ${Math.round(score)}%\n+${lesson.xp} XP`,
+      t('lessonCompleted'),
+      `${t('yourScore')}: ${Math.round(score)}%\n+${lesson.xp} XP`,
       [
         {
-          text: 'Continuer',
+          text: t('continueButton'),
           onPress: () => navigation.goBack(),
         },
       ]
@@ -114,7 +116,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
             )}
             {vowel.example && (
               <View style={styles.examplesSection}>
-                <Text style={styles.examplesTitle}>Exemple</Text>
+                <Text style={styles.examplesTitle}>{t('exampleTitle')}</Text>
                 <View style={styles.examplesGrid}>
                   <View style={styles.exampleCard}>
                     <Text style={styles.exampleArabic}>{vowel.example}</Text>
@@ -136,7 +138,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
               {step.content.instruction}
             </Text>
             <Text style={styles.exerciseHint}>
-              Appuyez sur chaque carte pour verifier
+              {t('tapToCheck')}
             </Text>
             {step.content.items && (
               <View style={styles.exerciseItems}>
@@ -162,7 +164,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
                           {item.transliteration}
                         </Text>
                       ) : (
-                        <Text style={styles.exerciseItemTap}>Appuyez</Text>
+                        <Text style={styles.exerciseItemTap}>{t('tapToReveal')}</Text>
                       )}
                     </TouchableOpacity>
                   );
@@ -170,7 +172,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
               </View>
             )}
             {allRevealed && (
-              <Text style={styles.exerciseComplete}>Tout revele !</Text>
+              <Text style={styles.exerciseComplete}>{t('allRevealed')}</Text>
             )}
           </View>
         );
@@ -220,7 +222,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
                   isCorrect ? styles.resultCorrect : styles.resultWrong,
                 ]}
               >
-                <Text style={styles.resultIcon}>{isCorrect ? 'Correct !' : 'Incorrect'}</Text>
+                <Text style={styles.resultIcon}>{isCorrect ? t('correct') : t('incorrect')}</Text>
                 {!isCorrect && step.content.explanation && (
                   <Text style={styles.resultExplanation}>
                     {step.content.explanation}
@@ -261,24 +263,24 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
       <View style={styles.container}>
         <View style={styles.completedContainer}>
           <Text style={styles.completedIcon}>🎉</Text>
-          <Text style={styles.completedTitle}>Lecon terminee !</Text>
+          <Text style={styles.completedTitle}>{t('lessonCompleted')}</Text>
           <Text style={styles.completedSubtitle}>{lesson.title}</Text>
 
           <View style={styles.scoreCard}>
-            <Text style={styles.scoreLabel}>Votre score</Text>
+            <Text style={styles.scoreLabel}>{t('yourScore')}</Text>
             <Text style={styles.scoreValue}>{Math.round(score)}%</Text>
             <Text style={styles.scoreDetail}>
-              {correctAnswers}/{quizSteps} bonnes reponses
+              {correctAnswers}/{quizSteps} {t('correctAnswers')}
             </Text>
           </View>
 
           <View style={styles.xpEarned}>
-            <Text style={styles.xpEarnedLabel}>XP gagnes</Text>
+            <Text style={styles.xpEarnedLabel}>{t('xpEarned')}</Text>
             <Text style={styles.xpEarnedValue}>+{lesson.xp}</Text>
           </View>
 
           <TouchableOpacity style={styles.finishButton} onPress={handleFinish}>
-            <Text style={styles.finishButtonText}>Continuer</Text>
+            <Text style={styles.finishButtonText}>{t('continueButton')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -322,7 +324,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
                 setShowResult(false);
               }}
             >
-              <Text style={styles.prevButtonText}>← Précédent</Text>
+              <Text style={styles.prevButtonText}>{t('previousStep')}</Text>
             </TouchableOpacity>
           )}
           {currentStep.type === 'quiz' ? (
@@ -337,8 +339,8 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
             >
               <Text style={styles.nextButtonText}>
                 {currentStepIndex === lesson.steps.length - 1
-                  ? 'Terminer'
-                  : 'Suivant →'}
+                  ? t('finishLesson')
+                  : t('nextStep')}
               </Text>
             </TouchableOpacity>
           ) : (
@@ -348,8 +350,8 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
             >
               <Text style={styles.nextButtonText}>
                 {currentStepIndex === lesson.steps.length - 1
-                  ? 'Terminer'
-                  : 'Suivant →'}
+                  ? t('finishLesson')
+                  : t('nextStep')}
               </Text>
             </TouchableOpacity>
           )}

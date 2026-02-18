@@ -10,12 +10,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { lessons, levels, loadUserProgress, UserProgress, Lesson } from '../data/lessons';
 import ProgressBar from '../components/ProgressBar';
+import { useLanguage } from '../context/LanguageContext';
 
 interface LessonsListScreenProps {
   navigation: any;
 }
 
 const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => {
+  const { t, isRTL } = useLanguage();
   const [userProgress, setUserProgress] = useState<UserProgress>({
     currentLevel: 'debutant',
     totalXP: 0,
@@ -75,13 +77,13 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>{'<'} Retour</Text>
+            <Text style={styles.backButtonText}>{'<'} {t('back')}</Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
-            <Text style={styles.title}>Lecons</Text>
-            <Text style={styles.arabicTitle}>الدروس</Text>
+            <Text style={styles.title}>{t('lessons')}</Text>
+            <Text style={styles.arabicTitle}>{t('lessonsArabic')}</Text>
             <Text style={styles.subtitle}>
-              {lessons.length} lecons disponibles
+              {lessons.length} {t('lessonsAvailable')}
             </Text>
           </View>
         </View>
@@ -90,7 +92,7 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
           {/* Overall Progress */}
           <View style={styles.progressCard}>
             <View style={styles.progressHeader}>
-              <Text style={styles.progressTitle}>Progression globale</Text>
+              <Text style={styles.progressTitle}>{t('overallProgress')}</Text>
               <Text style={styles.progressCount}>
                 {completedCount}/{totalCount}
               </Text>
@@ -117,7 +119,7 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
                   !selectedLevel && styles.levelButtonTextActive,
                 ]}
               >
-                Toutes
+                {t('allLevels')}
               </Text>
             </TouchableOpacity>
             {levels.map((level) => (
@@ -211,12 +213,12 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
                   </Text>
                   {available && !completed && (
                     <View style={styles.startButton}>
-                      <Text style={styles.startButtonText}>Commencer</Text>
+                      <Text style={styles.startButtonText}>{t('startLesson')}</Text>
                     </View>
                   )}
                   {completed && (
                     <View style={styles.reviewButton}>
-                      <Text style={styles.reviewButtonText}>Reviser</Text>
+                      <Text style={styles.reviewButtonText}>{t('reviewLesson')}</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -228,11 +230,9 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
           <View style={styles.infoCard}>
             <Text style={styles.infoIcon}>📚</Text>
             <View style={styles.infoContent}>
-              <Text style={styles.infoTitle}>Progression</Text>
+              <Text style={styles.infoTitle}>{t('progressionInfo')}</Text>
               <Text style={styles.infoText}>
-                Completez chaque lecon pour debloquer la suivante. Les lecons
-                sont concues pour etre faites dans l'ordre pour un apprentissage
-                optimal.
+                {t('progressionInfoText')}
               </Text>
             </View>
           </View>

@@ -829,7 +829,7 @@ const styles = StyleSheet.create({
   },
   pageNumber: {
     fontSize: 12,
-    color: colors.textOnDarkMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   progressBar: {

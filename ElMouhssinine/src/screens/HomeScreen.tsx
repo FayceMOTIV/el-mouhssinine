@@ -1167,6 +1167,71 @@ const HomeScreen = () => {
             )}
           </View>
 
+          {/* Section Ramadan */}
+          {ramadanSettings?.enabled && ramadanDay && (
+            <View style={styles.ramadanSection}>
+              <LinearGradient
+                colors={['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.05)']}
+                style={styles.ramadanGradient}
+              >
+                <View style={styles.ramadanHeader}>
+                  <Text style={styles.ramadanMubarak} numberOfLines={2} adjustsFontSizeToFit>
+                    {language === 'ar' ? 'رمضان مبارك 🌙' : 'Ramadan Mubarak 🌙'}
+                  </Text>
+                  <Text style={styles.ramadanDay}>
+                    {language === 'ar' ? `اليوم ${ramadanDay}/30` : `Jour ${ramadanDay}/30`}
+                  </Text>
+                </View>
+
+                <View style={styles.ramadanTimesRow}>
+                  {/* Suhoor */}
+                  <View style={styles.ramadanTimeCard}>
+                    <Text style={styles.ramadanTimeLabel}>
+                      {language === 'ar' ? 'السحور' : 'Suhoor'}
+                    </Text>
+                    <Text style={styles.ramadanTimeIcon}>🌅</Text>
+                    <Text style={styles.ramadanTimeValue}>
+                      {prayerTimes.find(p => p.name === 'Fajr')?.time || '--:--'}
+                    </Text>
+                    <Text style={styles.ramadanTimeNote}>
+                      {language === 'ar' ? 'قبل الفجر' : 'Fin Suhoor'}
+                    </Text>
+                  </View>
+
+                  {/* Iftar */}
+                  <View style={styles.ramadanTimeCard}>
+                    <Text style={styles.ramadanTimeLabel}>
+                      {language === 'ar' ? 'الإفطار' : 'Iftar'}
+                    </Text>
+                    <Text style={styles.ramadanTimeIcon}>🌙</Text>
+                    <Text style={styles.ramadanTimeValue}>
+                      {prayerTimes.find(p => p.name === 'Maghrib')?.time || '--:--'}
+                    </Text>
+                    <Text style={styles.ramadanTimeNote}>
+                      {language === 'ar' ? 'وقت المغرب' : 'Au Maghrib'}
+                    </Text>
+                  </View>
+
+                  {/* Tarawih */}
+                  {ramadanSettings.tarawihTime && (
+                    <View style={styles.ramadanTimeCard}>
+                      <Text style={styles.ramadanTimeLabel}>
+                        {language === 'ar' ? 'التراويح' : 'Tarawih'}
+                      </Text>
+                      <Text style={styles.ramadanTimeIcon}>🕌</Text>
+                      <Text style={styles.ramadanTimeValue}>
+                        {ramadanSettings.tarawihTime}
+                      </Text>
+                      <Text style={styles.ramadanTimeNote}>
+                        {language === 'ar' ? 'بعد العشاء' : 'Après Isha'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </LinearGradient>
+            </View>
+          )}
+
           {/* Rappel du jour */}
           <View style={styles.rappelContainer}>
             <Text style={[styles.rappelTitle, isRTL && styles.rtlText]}>📿 {t('dailyReminder')}</Text>
@@ -1339,71 +1404,6 @@ const HomeScreen = () => {
                 );
               })}
           </View>
-          )}
-
-          {/* Section Ramadan */}
-          {ramadanSettings?.enabled && ramadanDay && (
-            <View style={styles.ramadanSection}>
-              <LinearGradient
-                colors={['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.05)']}
-                style={styles.ramadanGradient}
-              >
-                <View style={styles.ramadanHeader}>
-                  <Text style={styles.ramadanMubarak}>
-                    {language === 'ar' ? 'رمضان مبارك 🌙' : 'Ramadan Mubarak 🌙'}
-                  </Text>
-                  <Text style={styles.ramadanDay}>
-                    {language === 'ar' ? `اليوم ${ramadanDay}/30` : `Jour ${ramadanDay}/30`}
-                  </Text>
-                </View>
-
-                <View style={styles.ramadanTimesRow}>
-                  {/* Suhoor */}
-                  <View style={styles.ramadanTimeCard}>
-                    <Text style={styles.ramadanTimeLabel}>
-                      {language === 'ar' ? 'السحور' : 'Suhoor'}
-                    </Text>
-                    <Text style={styles.ramadanTimeIcon}>🌅</Text>
-                    <Text style={styles.ramadanTimeValue}>
-                      {prayerTimes.find(p => p.name === 'Fajr')?.time || '--:--'}
-                    </Text>
-                    <Text style={styles.ramadanTimeNote}>
-                      {language === 'ar' ? 'قبل الفجر' : 'Fin Suhoor'}
-                    </Text>
-                  </View>
-
-                  {/* Iftar */}
-                  <View style={styles.ramadanTimeCard}>
-                    <Text style={styles.ramadanTimeLabel}>
-                      {language === 'ar' ? 'الإفطار' : 'Iftar'}
-                    </Text>
-                    <Text style={styles.ramadanTimeIcon}>🌙</Text>
-                    <Text style={styles.ramadanTimeValue}>
-                      {prayerTimes.find(p => p.name === 'Maghrib')?.time || '--:--'}
-                    </Text>
-                    <Text style={styles.ramadanTimeNote}>
-                      {language === 'ar' ? 'وقت المغرب' : 'Au Maghrib'}
-                    </Text>
-                  </View>
-
-                  {/* Tarawih */}
-                  {ramadanSettings.tarawihTime && (
-                    <View style={styles.ramadanTimeCard}>
-                      <Text style={styles.ramadanTimeLabel}>
-                        {language === 'ar' ? 'التراويح' : 'Tarawih'}
-                      </Text>
-                      <Text style={styles.ramadanTimeIcon}>🕌</Text>
-                      <Text style={styles.ramadanTimeValue}>
-                        {ramadanSettings.tarawihTime}
-                      </Text>
-                      <Text style={styles.ramadanTimeNote}>
-                        {language === 'ar' ? 'بعد العشاء' : 'Après Isha'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </LinearGradient>
-            </View>
           )}
 
           {/* Annonces - Masqué si aucune donnée */}
@@ -2450,8 +2450,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    maxHeight: '80%',
-    minHeight: 300,
+    maxHeight: '85%',
+    minHeight: 400,
   },
   historyCloseBtn: {
     position: 'absolute',
@@ -2460,7 +2460,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
@@ -2507,7 +2507,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: 'rgba(0,0,0,0.08)',
   },
   historyItemLast: {
     borderBottomWidth: 0,
@@ -2594,6 +2594,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#8b5cf6',
     marginBottom: 4,
+    textAlign: 'center',
   },
   ramadanDay: {
     fontSize: fontSize.md,
@@ -2608,7 +2609,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: borderRadius.lg,
     padding: spacing.md,
-    minWidth: 90,
+    minWidth: 80,
+    flexShrink: 1,
   },
   ramadanTimeLabel: {
     fontSize: fontSize.sm,

@@ -9,6 +9,7 @@ import {
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { arabicAlphabet, letterGroups, specialLetters, ArabicLetter } from '../data/alphabet';
 import { speakArabic } from '../services/tts';
+import { useLanguage } from '../context/LanguageContext';
 
 interface AlphabetScreenProps {
   navigation: any;
@@ -17,6 +18,7 @@ interface AlphabetScreenProps {
 type ViewMode = 'grid' | 'list' | 'groups';
 
 const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
+  const { t, isRTL } = useLanguage();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showSpecial, setShowSpecial] = useState(false);
 
@@ -109,13 +111,13 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>{'<'} Retour</Text>
+            <Text style={styles.backButtonText}>{'<'} {t('back')}</Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
-            <Text style={styles.title}>Alphabet Arabe</Text>
-            <Text style={styles.arabicTitle}>الحروف العربية</Text>
+            <Text style={styles.title}>{t('alphabet')}</Text>
+            <Text style={styles.arabicTitle}>{t('alphabetArabic')}</Text>
             <Text style={styles.subtitle}>
-              {arabicAlphabet.length} lettres fondamentales
+              {arabicAlphabet.length} {t('fundamentalLetters')}
             </Text>
           </View>
         </View>
@@ -124,9 +126,9 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
           {/* View Mode Toggle */}
           <View style={styles.viewToggle}>
             {[
-              { id: 'grid', label: 'Grille' },
-              { id: 'list', label: 'Liste' },
-              { id: 'groups', label: 'Groupes' },
+              { id: 'grid', label: t('gridView') },
+              { id: 'list', label: t('listView') },
+              { id: 'groups', label: t('groupsView') },
             ].map((mode) => (
               <TouchableOpacity
                 key={mode.id}
@@ -159,7 +161,7 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
               style={styles.sectionHeader}
               onPress={() => setShowSpecial(!showSpecial)}
             >
-              <Text style={styles.sectionTitle}>Lettres speciales</Text>
+              <Text style={styles.sectionTitle}>{t('specialLettersTitle')}</Text>
               <Text style={styles.expandIcon}>{showSpecial ? '−' : '+'}</Text>
             </TouchableOpacity>
 
@@ -187,9 +189,9 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
           <View style={styles.tipsCard}>
             <Text style={styles.tipsIcon}>💡</Text>
             <View style={styles.tipsContent}>
-              <Text style={styles.tipsTitle}>Conseil</Text>
+              <Text style={styles.tipsTitle}>{t('dailyTip')}</Text>
               <Text style={styles.tipsText}>
-                L'arabe s'ecrit de droite a gauche. Chaque lettre peut avoir jusqu'a 4 formes selon sa position dans le mot : isolee, initiale, mediale et finale.
+                {t('alphabetTip')}
               </Text>
             </View>
           </View>
