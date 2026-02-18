@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 228
+- **Build actuel** : 229
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -544,6 +544,43 @@ useEffect(() => {
 - [x] Firestore Rules : compilees + releasees
 - [x] Backoffice : Deploy hosting https://el-mouhssinine.web.app
 - [x] App iOS : Build 228 TestFlight
+
+## Corrige (18 Fev 2026 - Build 229)
+
+### 6 Corrections UX
+
+#### Geolocalisation mosquee
+- [x] prayerNotifications.ts : Rayon detection 250m → 100m (precision amelioree)
+
+#### HomeScreen - Section Ramadan
+- [x] Section Ramadan deplacee en haut (avant Rappel du jour, au lieu d'apres Janaza)
+- [x] Texte "Ramadan Mubarak" : numberOfLines={2} + adjustsFontSizeToFit (plus de mots coupes)
+- [x] Style ramadanMubarak : textAlign center ajoute
+- [x] Style ramadanTimeCard : minWidth 90→80, flexShrink 1
+
+#### QuranReadScreen - Numero de page
+- [x] Couleur numero page : colors.textOnDarkMuted (blanc) → colors.textMuted (gris visible)
+
+#### HomeScreen - Modal historique notifications
+- [x] maxHeight 80%→85%, minHeight 300→400 (modal agrandie)
+- [x] Separateurs historyItem : rgba(255,255,255,0.06) → rgba(0,0,0,0.08) (visibles)
+- [x] Bouton fermer : rgba(255,255,255,0.1) → rgba(0,0,0,0.08) (visible)
+
+#### i18n - 3 ecrans Islam (27 nouvelles cles FR/AR)
+- [x] AlphabetScreen.tsx : 7 textes hardcodes → t() i18n
+- [x] LessonsListScreen.tsx : 7 textes hardcodes → t() i18n
+- [x] LessonScreen.tsx : 15 textes hardcodes → t() i18n
+- [x] i18n/index.ts : 27 cles ajoutees (gridView, listView, groupsView, startLesson, etc.)
+
+### Fichiers modifies
+- ElMouhssinine/src/services/prayerNotifications.ts
+- ElMouhssinine/src/screens/HomeScreen.tsx
+- ElMouhssinine/src/screens/QuranReadScreen.tsx
+- ElMouhssinine/src/screens/AlphabetScreen.tsx
+- ElMouhssinine/src/screens/LessonsListScreen.tsx
+- ElMouhssinine/src/screens/LessonScreen.tsx
+- ElMouhssinine/src/i18n/index.ts
+- ElMouhssinine/ios/ElMouhssinine/Info.plist
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
