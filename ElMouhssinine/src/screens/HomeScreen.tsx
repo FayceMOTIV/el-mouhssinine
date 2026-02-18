@@ -1193,7 +1193,7 @@ const HomeScreen = () => {
                     <Text style={styles.ramadanTimeValue} numberOfLines={1} adjustsFontSizeToFit>
                       {prayerTimes.find(p => p.name === 'Fajr')?.time || '--:--'}
                     </Text>
-                    <Text style={styles.ramadanTimeNote} numberOfLines={1} adjustsFontSizeToFit>
+                    <Text style={styles.ramadanTimeNote}>
                       {language === 'ar' ? 'قبل الفجر' : 'Fin Suhoor'}
                     </Text>
                   </View>
@@ -1207,7 +1207,7 @@ const HomeScreen = () => {
                     <Text style={styles.ramadanTimeValue} numberOfLines={1} adjustsFontSizeToFit>
                       {prayerTimes.find(p => p.name === 'Maghrib')?.time || '--:--'}
                     </Text>
-                    <Text style={styles.ramadanTimeNote} numberOfLines={1} adjustsFontSizeToFit>
+                    <Text style={styles.ramadanTimeNote}>
                       {language === 'ar' ? 'وقت المغرب' : 'Au Maghrib'}
                     </Text>
                   </View>
@@ -1222,7 +1222,7 @@ const HomeScreen = () => {
                       <Text style={styles.ramadanTimeValue} numberOfLines={1} adjustsFontSizeToFit>
                         {ramadanSettings.tarawihTime}
                       </Text>
-                      <Text style={styles.ramadanTimeNote} numberOfLines={1} adjustsFontSizeToFit>
+                      <Text style={styles.ramadanTimeNote}>
                         {language === 'ar' ? 'بعد العشاء' : 'Après Isha'}
                       </Text>
                     </View>
@@ -2610,7 +2610,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: borderRadius.lg,
-    padding: spacing.sm,
+    padding: spacing.md,
   },
   ramadanTimeLabel: {
     fontSize: fontSize.sm,
@@ -2631,6 +2631,7 @@ const styles = StyleSheet.create({
   ramadanTimeNote: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
+    textAlign: 'center',
   },
 });
 
