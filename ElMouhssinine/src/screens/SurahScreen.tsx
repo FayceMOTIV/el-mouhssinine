@@ -10,6 +10,7 @@ import {
   Alert,
   Dimensions,
   LayoutChangeEvent,
+  ScrollView,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -543,34 +544,36 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
               <Text style={styles.closeButtonText}>×</Text>
             </TouchableOpacity>
             <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>{t('chooseReciter')}</Text>
-            {reciters.map((reciter) => (
-              <TouchableOpacity
-                key={reciter.id}
-                style={[
-                  styles.reciterOption,
-                  selectedReciter.id === reciter.id && styles.reciterOptionSelected,
-                  isRTL && styles.reciterOptionRTL,
-                ]}
-                onPress={async () => {
-                  setSelectedReciter(reciter);
-                  setShowReciterModal(false);
-                  // Forcer la ref AVANT de relancer (évite la race condition du re-render)
-                  player.updateReciterCode(reciter.id);
-                  // Redémarrer avec le nouveau récitateur si en lecture
-                  if (player.isPlaying) {
-                    await player.playVerseAtIndex(player.currentVerseIndex);
-                  }
-                }}
-              >
-                <View style={styles.reciterInfo}>
-                  <Text style={[styles.reciterName, isRTL && styles.rtlText]}>{reciter.name}</Text>
-                  <Text style={[styles.reciterNameAr, isRTL && styles.rtlText]}>{reciter.nameAr}</Text>
-                </View>
-                {selectedReciter.id === reciter.id && (
-                  <Text style={styles.checkmark}>✓</Text>
-                )}
-              </TouchableOpacity>
-            ))}
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
+              {reciters.map((reciter) => (
+                <TouchableOpacity
+                  key={reciter.id}
+                  style={[
+                    styles.reciterOption,
+                    selectedReciter.id === reciter.id && styles.reciterOptionSelected,
+                    isRTL && styles.reciterOptionRTL,
+                  ]}
+                  onPress={async () => {
+                    setSelectedReciter(reciter);
+                    setShowReciterModal(false);
+                    // Forcer la ref AVANT de relancer (évite la race condition du re-render)
+                    player.updateReciterCode(reciter.id);
+                    // Redémarrer avec le nouveau récitateur si en lecture
+                    if (player.isPlaying) {
+                      await player.playVerseAtIndex(player.currentVerseIndex);
+                    }
+                  }}
+                >
+                  <View style={styles.reciterInfo}>
+                    <Text style={[styles.reciterName, isRTL && styles.rtlText]}>{reciter.name}</Text>
+                    <Text style={[styles.reciterNameAr, isRTL && styles.rtlText]}>{reciter.nameAr}</Text>
+                  </View>
+                  {selectedReciter.id === reciter.id && (
+                    <Text style={styles.checkmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>

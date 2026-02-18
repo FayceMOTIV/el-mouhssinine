@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { initPaymentSheet, presentPaymentSheet } from '@stripe/stripe-react-native';
 import { firebase } from '@react-native-firebase/functions';
 import { logger } from '../utils';
@@ -134,13 +134,17 @@ export const makePayment = async (params: PaymentParams): Promise<PaymentResult>
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: 'Mosquée El Mohsinine',
       style: 'automatic',
-      googlePay: {
-        merchantCountryCode: 'FR',
-        testEnv: false,
-      },
-      applePay: {
-        merchantCountryCode: 'FR',
-      },
+      ...(Platform.OS === 'android' ? {
+        googlePay: {
+          merchantCountryCode: 'FR',
+          testEnv: false,
+        },
+      } : {}),
+      ...(Platform.OS === 'ios' ? {
+        applePay: {
+          merchantCountryCode: 'FR',
+        },
+      } : {}),
       defaultBillingDetails: {
         address: {
           country: 'FR',
@@ -280,13 +284,17 @@ export const makeSubscription = async (params: PaymentParams): Promise<Subscript
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: 'Mosquée El Mohsinine',
       style: 'automatic',
-      googlePay: {
-        merchantCountryCode: 'FR',
-        testEnv: false,
-      },
-      applePay: {
-        merchantCountryCode: 'FR',
-      },
+      ...(Platform.OS === 'android' ? {
+        googlePay: {
+          merchantCountryCode: 'FR',
+          testEnv: false,
+        },
+      } : {}),
+      ...(Platform.OS === 'ios' ? {
+        applePay: {
+          merchantCountryCode: 'FR',
+        },
+      } : {}),
       defaultBillingDetails: {
         address: {
           country: 'FR',

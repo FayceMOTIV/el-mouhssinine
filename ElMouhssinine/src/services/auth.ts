@@ -23,6 +23,8 @@ export interface MemberProfile {
   address?: string;
   telephone?: string; // Alias français pour phone
   adresse?: string;   // Alias français pour address
+  codePostal?: string;
+  ville?: string;
   createdAt: Date;
   lastLoginAt?: Date;
 }
@@ -476,6 +478,8 @@ function mapFirestoreToProfile(uid: string, data: any): MemberProfile {
     address: data.adresse || '',
     telephone: data.telephone || '', // Alias français
     adresse: data.adresse || '',     // Alias français
+    codePostal: data.codePostal || '',
+    ville: data.ville || '',
     createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
     lastLoginAt: data.lastLoginAt?.toDate ? data.lastLoginAt.toDate() : undefined,
   };

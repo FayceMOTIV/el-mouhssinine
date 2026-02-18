@@ -510,10 +510,13 @@ export const createDonation = async (donation: Omit<Donation, 'id' | 'createdAt'
     return `mock-donation-${Date.now()}`;
   }
   try {
-    // BUG 2 FIX: userId obligatoire pour Firestore Rules
+    // BUG 7 FIX: userId garanti non-vide (évite permission-denied)
     const currentUser = auth().currentUser;
+    if (!currentUser) {
+      throw new Error('Utilisateur non connecté');
+    }
     const docRef = await firestore().collection('donations').add({
-      userId: currentUser?.uid || '', // BUG 2 FIX: requis par Firestore Rules
+      userId: currentUser.uid,
       donateur: donation.memberEmail || 'Anonyme',
       montant: donation.amount,
       projetId: donation.projectId,
@@ -575,10 +578,13 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
     // TRANSACTION ATOMIQUE: donation + update projet
     await firestore().runTransaction(async (transaction) => {
       // 1. Créer le don
-      // BUG 2 FIX: userId obligatoire pour Firestore Rules
+      // BUG 7 FIX: userId garanti non-vide (évite permission-denied)
       const currentUser = auth().currentUser;
+      if (!currentUser) {
+        throw new Error('Utilisateur non connecté');
+      }
       const donationData: Record<string, any> = {
-        userId: currentUser?.uid || '', // BUG 2 FIX: requis par Firestore Rules
+        userId: currentUser.uid,
         donateur: params.isAnonymous ? 'Anonyme' : (params.donorName || params.donorEmail || 'Anonyme'),
         donateurEmail: params.isAnonymous ? null : (params.donorEmail || null),
         montant: params.amount,

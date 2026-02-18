@@ -297,9 +297,10 @@ const MemberScreen = () => {
         const inscribed = await getMembersInscribedBy(uid);
         setInscribedMembers(inscribed);
 
-        // Charger l'historique des paiements
+        // Charger l'historique des paiements + dons
         setLoadingHistory(true);
         try {
+          // Cotisations
           const paymentsSnapshot = await firestore()
             .collection('payments')
             .where('metadata.memberId', '==', uid)
@@ -309,9 +310,32 @@ const MemberScreen = () => {
 
           const payments = paymentsSnapshot.docs.map(doc => ({
             id: doc.id,
+            _type: 'cotisation',
             ...doc.data()
           }));
-          setPaymentHistory(payments);
+
+          // Dons
+          const donationsSnapshot = await firestore()
+            .collection('donations')
+            .where('userId', '==', uid)
+            .orderBy('createdAt', 'desc')
+            .limit(20)
+            .get();
+
+          const donations = donationsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            _type: 'donation',
+            ...doc.data()
+          }));
+
+          // Merger et trier par date desc
+          const allHistory = [...payments, ...donations].sort((a: any, b: any) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+            return dateB.getTime() - dateA.getTime();
+          }).slice(0, 20);
+
+          setPaymentHistory(allHistory);
         } catch (historyError) {
           if (__DEV__) console.error('Error loading payment history:', historyError);
         } finally {
@@ -1403,7 +1427,7 @@ const MemberScreen = () => {
             {/* Historique des paiements */}
             <View style={styles.card}>
               <Text style={[styles.cardTitle, { marginBottom: 16 }]}>
-                💳 Historique des paiements
+                💳 Historique des paiements et dons
               </Text>
 
               {loadingHistory ? (
@@ -1424,15 +1448,18 @@ const MemberScreen = () => {
                     });
 
                     // Determine payment type
-                    const type = payment.metadata?.period === 'mensuel' ? 'Mensuel' : 'Annuel';
+                    const type = payment._type === 'donation'
+                      ? '🎁 Don'
+                      : payment.metadata?.period === 'mensuel' ? 'Mensuel' : 'Annuel';
 
                     // Determine status
+                    const rawStatus = payment.status || payment.statut || 'completed';
                     let status = 'payé';
                     let statusColor = colors.accent;
-                    if (payment.status === 'refunded') {
+                    if (rawStatus === 'refunded') {
                       status = 'remboursé';
                       statusColor = '#f97316';
-                    } else if (payment.status === 'failed') {
+                    } else if (rawStatus === 'failed') {
                       status = 'échoué';
                       statusColor = '#ef4444';
                     }
@@ -1880,31 +1907,35 @@ const MemberScreen = () => {
               {isProcessingPayment ? <ActivityIndicator /> : <Text style={styles.paymentMethodArrow}>→</Text>}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.paymentMethod, styles.applePayMethod]}
-              onPress={() => handlePayment('apple')}
-              disabled={isProcessingPayment}
-            >
-              <Image source={require('../assets/apple-logo.png')} style={styles.appleLogo} />
-              <View style={styles.paymentMethodContent}>
-                <Text style={[styles.paymentMethodTitle, styles.applePayText]}>Apple Pay</Text>
-                <Text style={[styles.paymentMethodSubtitle, styles.applePaySubtext]}>Paiement rapide</Text>
-              </View>
-              {isProcessingPayment ? <ActivityIndicator /> : <Text style={[styles.paymentMethodArrow, styles.applePayText]}>→</Text>}
-            </TouchableOpacity>
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={[styles.paymentMethod, styles.applePayMethod]}
+                onPress={() => handlePayment('apple')}
+                disabled={isProcessingPayment}
+              >
+                <Image source={require('../assets/apple-logo.png')} style={styles.appleLogo} />
+                <View style={styles.paymentMethodContent}>
+                  <Text style={[styles.paymentMethodTitle, styles.applePayText]}>Apple Pay</Text>
+                  <Text style={[styles.paymentMethodSubtitle, styles.applePaySubtext]}>Paiement rapide</Text>
+                </View>
+                {isProcessingPayment ? <ActivityIndicator /> : <Text style={[styles.paymentMethodArrow, styles.applePayText]}>→</Text>}
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity
-              style={[styles.paymentMethod, styles.googlePayMethod]}
-              onPress={() => handlePayment('card')}
-              disabled={isProcessingPayment}
-            >
-              <Image source={require('../assets/google-logo.png')} style={styles.googleLogo} />
-              <View style={styles.paymentMethodContent}>
-                <Text style={styles.paymentMethodTitle}>Google Pay</Text>
-                <Text style={styles.paymentMethodSubtitle}>Paiement rapide</Text>
-              </View>
-              {isProcessingPayment ? <ActivityIndicator /> : <Text style={styles.paymentMethodArrow}>→</Text>}
-            </TouchableOpacity>
+            {Platform.OS === 'android' && (
+              <TouchableOpacity
+                style={[styles.paymentMethod, styles.googlePayMethod]}
+                onPress={() => handlePayment('card')}
+                disabled={isProcessingPayment}
+              >
+                <Image source={require('../assets/google-logo.png')} style={styles.googleLogo} />
+                <View style={styles.paymentMethodContent}>
+                  <Text style={styles.paymentMethodTitle}>Google Pay</Text>
+                  <Text style={styles.paymentMethodSubtitle}>Paiement rapide</Text>
+                </View>
+                {isProcessingPayment ? <ActivityIndicator /> : <Text style={styles.paymentMethodArrow}>→</Text>}
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.paymentMethod}

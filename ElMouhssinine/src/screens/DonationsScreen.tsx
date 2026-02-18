@@ -82,6 +82,12 @@ const DonationsScreen = () => {
           if (profile.adresse || profile.address) {
             setDonorAddress(profile.adresse || profile.address || '');
           }
+          if (profile.codePostal) {
+            setDonorPostalCode(profile.codePostal);
+          }
+          if (profile.ville) {
+            setDonorCity(profile.ville);
+          }
           setDonorFormFilled(true);
           setMemberProfile(profile);
         } else {
@@ -89,6 +95,8 @@ const DonationsScreen = () => {
           setDonorFirstName('');
           setDonorLastName('');
           setDonorAddress('');
+          setDonorPostalCode('');
+          setDonorCity('');
           setDonorFormFilled(false);
           setMemberProfile(null);
         }
@@ -98,6 +106,8 @@ const DonationsScreen = () => {
         setDonorLastName('');
         setDonorEmail('');
         setDonorAddress('');
+        setDonorPostalCode('');
+        setDonorCity('');
         setDonorFormFilled(false);
         setMemberProfile(null);
       }
@@ -605,20 +615,24 @@ const DonationsScreen = () => {
                       {t('creditCard')}
                     </Text>
                   </View>
-                  <View style={styles.applePayButton}>
-                    <Image
-                      source={require('../assets/apple-logo.png')}
-                      style={styles.appleLogo}
-                    />
-                    <Text style={styles.applePayText}>Pay</Text>
-                  </View>
-                  <View style={styles.googlePayButton}>
-                    <Image
-                      source={require('../assets/google-logo.png')}
-                      style={styles.googleLogo}
-                    />
-                    <Text style={styles.googlePayText}>Pay</Text>
-                  </View>
+                  {Platform.OS === 'ios' && (
+                    <View style={styles.applePayButton}>
+                      <Image
+                        source={require('../assets/apple-logo.png')}
+                        style={styles.appleLogo}
+                      />
+                      <Text style={styles.applePayText}>Pay</Text>
+                    </View>
+                  )}
+                  {Platform.OS === 'android' && (
+                    <View style={styles.googlePayButton}>
+                      <Image
+                        source={require('../assets/google-logo.png')}
+                        style={styles.googleLogo}
+                      />
+                      <Text style={styles.googlePayText}>Pay</Text>
+                    </View>
+                  )}
                   <View style={styles.paymentItem}>
                     <Text style={styles.paymentItemIcon}>🏦</Text>
                     <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>
@@ -643,52 +657,6 @@ const DonationsScreen = () => {
                       ? 'لديك الحق في خصم 66% من تبرعاتك من الضرائب (المادة 200 من القانون العام للضرائب). تتوفر الإيصالات في بداية يناير عن السنة المنقضية.'
                       : 'Vous avez droit à 66% de réduction d\'impôt pour vos dons (article 200 CGI). Les reçus sont disponibles début janvier pour l\'année écoulée.'}
                   </Text>
-
-                  {/* Year 2025 */}
-                  {(() => {
-                    const currentYear = new Date().getFullYear();
-                    const year = 2025;
-                    const available = currentYear > year;
-                    return (
-                      <View style={styles.recuYearRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
-                            {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
-                          </Text>
-                          <Text style={[styles.recuYearSubtext, isRTL && styles.rtlText]}>
-                            {language === 'ar' ? 'جميع التبرعات للسنة' : 'Tous les dons de l\'année'}
-                          </Text>
-                        </View>
-                        {available ? (
-                          <TouchableOpacity
-                            style={[
-                              styles.recuFiscalButton,
-                              sendingRecuFiscal && styles.recuFiscalButtonDisabled,
-                            ]}
-                            onPress={() => handleRequestRecuFiscal(year)}
-                            disabled={sendingRecuFiscal}
-                          >
-                            {sendingRecuFiscal ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <>
-                                <Text style={styles.recuFiscalButtonIcon}>📧</Text>
-                                <Text style={styles.recuFiscalButtonText}>
-                                  {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
-                                </Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        ) : (
-                          <Text style={styles.recuNotAvailable}>
-                            {language === 'ar'
-                              ? `متاح في 01/01/${year + 1}`
-                              : `Disponible le 01/01/${year + 1}`}
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })()}
 
                   {/* Year 2026 */}
                   {(() => {
@@ -1219,20 +1187,24 @@ const DonationsScreen = () => {
                           {t('creditCard')}
                         </Text>
                       </View>
-                      <View style={styles.applePayButton}>
-                        <Image
-                          source={require('../assets/apple-logo.png')}
-                          style={styles.appleLogo}
-                        />
-                        <Text style={styles.applePayText}>Pay</Text>
-                      </View>
-                      <View style={styles.googlePayButton}>
-                        <Image
-                          source={require('../assets/google-logo.png')}
-                          style={styles.googleLogo}
-                        />
-                        <Text style={styles.googlePayText}>Pay</Text>
-                      </View>
+                      {Platform.OS === 'ios' && (
+                        <View style={styles.applePayButton}>
+                          <Image
+                            source={require('../assets/apple-logo.png')}
+                            style={styles.appleLogo}
+                          />
+                          <Text style={styles.applePayText}>Pay</Text>
+                        </View>
+                      )}
+                      {Platform.OS === 'android' && (
+                        <View style={styles.googlePayButton}>
+                          <Image
+                            source={require('../assets/google-logo.png')}
+                            style={styles.googleLogo}
+                          />
+                          <Text style={styles.googlePayText}>Pay</Text>
+                        </View>
+                      )}
                       <View style={styles.paymentItem}>
                         <Text style={styles.paymentItemIcon}>🏦</Text>
                         <Text style={[styles.paymentItemText, isRTL && styles.rtlText]}>
