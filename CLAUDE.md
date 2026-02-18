@@ -13,7 +13,7 @@
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 229
+- **Build actuel** : 231
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 
 ## Backoffice
@@ -584,7 +584,7 @@ useEffect(() => {
 - ElMouhssinine/ios/ElMouhssinine/Info.plist
 
 ### Deployement
-- [x] App iOS : Build 229 TestFlight (upload via xcodebuild -exportArchive + ExportOptions.plist)
+- [x] App iOS : Build 231 TestFlight (clean rebuild avec --reset-cache + bundle JS frais)
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
