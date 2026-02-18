@@ -2584,6 +2584,7 @@ const styles = StyleSheet.create({
   },
   ramadanGradient: {
     padding: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   ramadanHeader: {
     alignItems: 'center',
@@ -2632,6 +2633,8 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.textMuted,
     textAlign: 'center',
+    marginTop: 2,
+    paddingBottom: 2,
   },
 });
 
