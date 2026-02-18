@@ -1186,28 +1186,28 @@ const HomeScreen = () => {
                 <View style={styles.ramadanTimesRow}>
                   {/* Suhoor */}
                   <View style={styles.ramadanTimeCard}>
-                    <Text style={styles.ramadanTimeLabel}>
+                    <Text style={styles.ramadanTimeLabel} numberOfLines={1} adjustsFontSizeToFit>
                       {language === 'ar' ? 'السحور' : 'Suhoor'}
                     </Text>
                     <Text style={styles.ramadanTimeIcon}>🌅</Text>
-                    <Text style={styles.ramadanTimeValue}>
+                    <Text style={styles.ramadanTimeValue} numberOfLines={1} adjustsFontSizeToFit>
                       {prayerTimes.find(p => p.name === 'Fajr')?.time || '--:--'}
                     </Text>
-                    <Text style={styles.ramadanTimeNote}>
+                    <Text style={styles.ramadanTimeNote} numberOfLines={1} adjustsFontSizeToFit>
                       {language === 'ar' ? 'قبل الفجر' : 'Fin Suhoor'}
                     </Text>
                   </View>
 
                   {/* Iftar */}
                   <View style={styles.ramadanTimeCard}>
-                    <Text style={styles.ramadanTimeLabel}>
+                    <Text style={styles.ramadanTimeLabel} numberOfLines={1} adjustsFontSizeToFit>
                       {language === 'ar' ? 'الإفطار' : 'Iftar'}
                     </Text>
                     <Text style={styles.ramadanTimeIcon}>🌙</Text>
-                    <Text style={styles.ramadanTimeValue}>
+                    <Text style={styles.ramadanTimeValue} numberOfLines={1} adjustsFontSizeToFit>
                       {prayerTimes.find(p => p.name === 'Maghrib')?.time || '--:--'}
                     </Text>
-                    <Text style={styles.ramadanTimeNote}>
+                    <Text style={styles.ramadanTimeNote} numberOfLines={1} adjustsFontSizeToFit>
                       {language === 'ar' ? 'وقت المغرب' : 'Au Maghrib'}
                     </Text>
                   </View>
@@ -1215,14 +1215,14 @@ const HomeScreen = () => {
                   {/* Tarawih */}
                   {ramadanSettings.tarawihTime && (
                     <View style={styles.ramadanTimeCard}>
-                      <Text style={styles.ramadanTimeLabel}>
+                      <Text style={styles.ramadanTimeLabel} numberOfLines={1} adjustsFontSizeToFit>
                         {language === 'ar' ? 'التراويح' : 'Tarawih'}
                       </Text>
                       <Text style={styles.ramadanTimeIcon}>🕌</Text>
-                      <Text style={styles.ramadanTimeValue}>
+                      <Text style={styles.ramadanTimeValue} numberOfLines={1} adjustsFontSizeToFit>
                         {ramadanSettings.tarawihTime}
                       </Text>
-                      <Text style={styles.ramadanTimeNote}>
+                      <Text style={styles.ramadanTimeNote} numberOfLines={1} adjustsFontSizeToFit>
                         {language === 'ar' ? 'بعد العشاء' : 'Après Isha'}
                       </Text>
                     </View>
@@ -2603,14 +2603,14 @@ const styles = StyleSheet.create({
   ramadanTimesRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    gap: spacing.sm,
   },
   ramadanTimeCard: {
+    flex: 1,
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    minWidth: 80,
-    flexShrink: 1,
+    padding: spacing.sm,
   },
   ramadanTimeLabel: {
     fontSize: fontSize.sm,
