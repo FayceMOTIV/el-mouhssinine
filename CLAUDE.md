@@ -135,11 +135,12 @@ cd ElMouhssinine/ios && pod install
 xcodebuild archive -workspace ElMouhssinine.xcworkspace -scheme ElMouhssinine -configuration Release -destination 'generic/platform=iOS' -archivePath ./build/ElMouhssinine.xcarchive
 ```
 
-### Export et Upload TestFlight
+### Export et Upload TestFlight (une seule commande)
 ```bash
-xcodebuild -exportArchive -archivePath ./build/ElMouhssinine.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath ./build/export
-xcrun altool --upload-app -f ./build/export/ElMouhssinine.ipa -t ios -u EMAIL -p APP_SPECIFIC_PASSWORD
+xcodebuild -exportArchive -archivePath ./build/ElMouhssinine.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath ./build/upload -allowProvisioningUpdates
 ```
+Note : `ExportOptions.plist` contient `destination: upload` → exporte ET uploade sur TestFlight en une seule commande.
+Pour exporter l'IPA sans upload : utiliser `ExportOptionsNoUpload.plist` avec `-exportPath ./build/export`.
 
 ### Backoffice
 ```bash
@@ -581,6 +582,9 @@ useEffect(() => {
 - ElMouhssinine/src/screens/LessonScreen.tsx
 - ElMouhssinine/src/i18n/index.ts
 - ElMouhssinine/ios/ElMouhssinine/Info.plist
+
+### Deployement
+- [x] App iOS : Build 229 TestFlight (upload via xcodebuild -exportArchive + ExportOptions.plist)
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
