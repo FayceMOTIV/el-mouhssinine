@@ -138,6 +138,7 @@ export const translations = {
     goldSilverValue: '(Valeur de 85g d\'or)', // Affiché inline maintenant
     savingsLabel: 'Épargne (comptes bancaires)',
     goldValueLabel: 'Valeur de l\'or possédé',
+    investmentsLabel: 'Investissements (actions, SCPI, parts)',
     cashValueLabel: 'Argent liquide (espèces)',
     totalAssets: 'Total des biens',
     zakatEligible: 'Vous êtes redevable de la Zakat',
@@ -457,7 +458,7 @@ export const translations = {
     acceptedPayments: 'Moyens de paiement acceptés',
     externalTransferOnly: 'Projets externes : virement bancaire uniquement',
     useProjectIban: 'Utilisez l\'IBAN du projet',
-    onlinePaymentSoon: 'Les paiements en ligne seront bientôt disponibles',
+    onlinePaymentSoon: 'Paiements sécurisés via Stripe',
     creditCard: 'CB',
     externalProjectNote: 'Ce projet est externe à notre mosquée. Effectuez votre don directement via virement.',
     transferReference: 'Référence à indiquer',
@@ -680,6 +681,7 @@ export const translations = {
     goldSilverValue: '(قيمة 85 غرام ذهب)', // Affiché inline maintenant
     savingsLabel: 'المدخرات (الحسابات البنكية)',
     goldValueLabel: 'قيمة الذهب المملوك',
+    investmentsLabel: 'الاستثمارات (أسهم، عقارات، حصص)',
     cashValueLabel: 'النقد (الأموال السائلة)',
     totalAssets: 'إجمالي الأصول',
     zakatEligible: 'الزكاة واجبة عليك',
@@ -1007,7 +1009,7 @@ export const translations = {
     acceptedPayments: 'طرق الدفع المقبولة',
     externalTransferOnly: 'المشاريع الخارجية: تحويل بنكي فقط',
     useProjectIban: 'استخدم IBAN المشروع',
-    onlinePaymentSoon: 'الدفع الإلكتروني سيكون متاحاً قريباً',
+    onlinePaymentSoon: 'دفع آمن عبر Stripe',
     creditCard: 'بطاقة ائتمان',
     externalProjectNote: 'هذا المشروع خارجي عن مسجدنا. قم بالتبرع مباشرة عبر التحويل البنكي.',
     transferReference: 'المرجع المطلوب',

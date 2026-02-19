@@ -1,5 +1,11 @@
 import { Alert, Platform } from 'react-native';
-import { initPaymentSheet, presentPaymentSheet } from '@stripe/stripe-react-native';
+import {
+  initPaymentSheet,
+  presentPaymentSheet,
+  isPlatformPaySupported,
+  confirmPlatformPayPayment,
+  PlatformPay,
+} from '@stripe/stripe-react-native';
 import { firebase } from '@react-native-firebase/functions';
 import { logger } from '../utils';
 
@@ -92,59 +98,43 @@ const createSubscription = async (
 const MIN_AMOUNT = 1;
 const MAX_AMOUNT = 10000;
 
-// Initialiser et présenter le Payment Sheet
+// Validation commune
+const validateAmount = (amount: number): PaymentResult | null => {
+  if (typeof amount !== 'number' || isNaN(amount)) {
+    return { success: false, error: 'Montant invalide' };
+  }
+  if (amount < MIN_AMOUNT) {
+    return { success: false, error: `Le montant minimum est de ${MIN_AMOUNT}€` };
+  }
+  if (amount > MAX_AMOUNT) {
+    return { success: false, error: `Le montant maximum est de ${MAX_AMOUNT}€` };
+  }
+  return null;
+};
+
+// ============================================================
+// PAIEMENT CB UNIQUEMENT (PaymentSheet sans Apple Pay / Google Pay)
+// ============================================================
 export const makePayment = async (params: PaymentParams): Promise<PaymentResult> => {
   const { amount, description, type, metadata = {} } = params;
 
-  // Validation du montant
-  if (typeof amount !== 'number' || isNaN(amount)) {
-    return {
-      success: false,
-      error: 'Montant invalide',
-    };
-  }
-
-  if (amount < MIN_AMOUNT) {
-    return {
-      success: false,
-      error: `Le montant minimum est de ${MIN_AMOUNT}€`,
-    };
-  }
-
-  if (amount > MAX_AMOUNT) {
-    return {
-      success: false,
-      error: `Le montant maximum est de ${MAX_AMOUNT}€`,
-    };
-  }
+  const validationError = validateAmount(amount);
+  if (validationError) return validationError;
 
   try {
     // 1. Créer le PaymentIntent via Cloud Function
     const { clientSecret, paymentIntentId } = await createPaymentIntent(
       amount,
       description,
-      {
-        type,
-        ...metadata,
-      }
+      { type, ...metadata }
     );
 
-    // 2. Initialiser le Payment Sheet
+    // 2. Initialiser le Payment Sheet — CB UNIQUEMENT (pas d'Apple Pay, pas de Google Pay)
     const { error: initError } = await initPaymentSheet({
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: 'Mosquée El Mohsinine',
       style: 'automatic',
-      ...(Platform.OS === 'android' ? {
-        googlePay: {
-          merchantCountryCode: 'FR',
-          testEnv: false,
-        },
-      } : {}),
-      ...(Platform.OS === 'ios' ? {
-        applePay: {
-          merchantCountryCode: 'FR',
-        },
-      } : {}),
+      // Pas de applePay ni googlePay → force le formulaire CB
       defaultBillingDetails: {
         address: {
           country: 'FR',
@@ -154,42 +144,81 @@ export const makePayment = async (params: PaymentParams): Promise<PaymentResult>
 
     if (initError) {
       logger.error('Erreur init Payment Sheet:', initError);
-      return {
-        success: false,
-        error: initError.message,
-      };
+      return { success: false, error: initError.message };
     }
 
-    // 3. Présenter le Payment Sheet
+    // 3. Présenter le Payment Sheet (CB uniquement)
     const { error: presentError } = await presentPaymentSheet();
 
     if (presentError) {
-      // L'utilisateur a annulé ou erreur
       if (presentError.code === 'Canceled') {
-        return {
-          success: false,
-          error: 'Paiement annulé',
-        };
+        return { success: false, error: 'Paiement annulé' };
       }
       logger.error('Erreur présentation Payment Sheet:', presentError);
-      return {
-        success: false,
-        error: presentError.message,
-      };
+      return { success: false, error: presentError.message };
     }
 
     // 4. Paiement réussi
-    return {
-      success: true,
-      paymentIntentId,
-    };
+    return { success: true, paymentIntentId };
   } catch (error) {
     const err = error as Error;
-    logger.error('Erreur paiement:', err);
-    return {
-      success: false,
-      error: err?.message || 'Une erreur est survenue',
-    };
+    logger.error('Erreur paiement CB:', err);
+    return { success: false, error: err?.message || 'Une erreur est survenue' };
+  }
+};
+
+// ============================================================
+// PAIEMENT APPLE PAY NATIF DIRECT (confirmPlatformPayPayment)
+// ============================================================
+export const makeApplePayPayment = async (params: PaymentParams): Promise<PaymentResult> => {
+  const { amount, description, type, metadata = {} } = params;
+
+  const validationError = validateAmount(amount);
+  if (validationError) return validationError;
+
+  try {
+    // 1. Vérifier qu'Apple Pay est disponible
+    const supported = await isPlatformPaySupported();
+    if (!supported) {
+      return { success: false, error: 'Apple Pay n\'est pas disponible sur cet appareil' };
+    }
+
+    // 2. Créer le PaymentIntent via Cloud Function
+    const { clientSecret, paymentIntentId } = await createPaymentIntent(
+      amount,
+      description,
+      { type, ...metadata }
+    );
+
+    // 3. Lancer Apple Pay directement
+    const { error } = await confirmPlatformPayPayment(clientSecret, {
+      applePay: {
+        cartItems: [
+          {
+            label: description,
+            amount: amount.toFixed(2),
+            paymentType: PlatformPay.PaymentType.Immediate,
+          },
+        ],
+        merchantCountryCode: 'FR',
+        currencyCode: 'EUR',
+      },
+    });
+
+    if (error) {
+      if (error.code === 'Canceled') {
+        return { success: false, error: 'Paiement annulé' };
+      }
+      logger.error('Erreur Apple Pay:', error);
+      return { success: false, error: error.message };
+    }
+
+    // 4. Paiement réussi
+    return { success: true, paymentIntentId };
+  } catch (error) {
+    const err = error as Error;
+    logger.error('Erreur Apple Pay:', err);
+    return { success: false, error: err?.message || 'Une erreur est survenue' };
   }
 };
 
@@ -242,59 +271,29 @@ export const cotisationPrices = {
 // Montants suggérés pour les dons
 export const suggestedDonations = [10, 20, 50, 100, 200];
 
-// Créer un abonnement récurrent pour les cotisations mensuelles
+// ============================================================
+// ABONNEMENT MENSUEL (PaymentSheet CB uniquement)
+// ============================================================
 export const makeSubscription = async (params: PaymentParams): Promise<SubscriptionResult> => {
   const { amount, description, type, metadata = {} } = params;
 
-  // Validation du montant
-  if (typeof amount !== 'number' || isNaN(amount)) {
-    return {
-      success: false,
-      error: 'Montant invalide',
-    };
-  }
-
-  if (amount < MIN_AMOUNT) {
-    return {
-      success: false,
-      error: `Le montant minimum est de ${MIN_AMOUNT}€`,
-    };
-  }
-
-  if (amount > MAX_AMOUNT) {
-    return {
-      success: false,
-      error: `Le montant maximum est de ${MAX_AMOUNT}€`,
-    };
-  }
+  const validationError = validateAmount(amount);
+  if (validationError) return { ...validationError, subscriptionId: undefined };
 
   try {
     // 1. Créer la Subscription via Cloud Function
     const { clientSecret, subscriptionId, paymentIntentId } = await createSubscription(
       amount,
       description,
-      {
-        type,
-        ...metadata,
-      }
+      { type, ...metadata }
     );
 
-    // 2. Initialiser le Payment Sheet (même flow que makePayment)
+    // 2. Initialiser le Payment Sheet — CB UNIQUEMENT pour abonnements
     const { error: initError } = await initPaymentSheet({
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: 'Mosquée El Mohsinine',
       style: 'automatic',
-      ...(Platform.OS === 'android' ? {
-        googlePay: {
-          merchantCountryCode: 'FR',
-          testEnv: false,
-        },
-      } : {}),
-      ...(Platform.OS === 'ios' ? {
-        applePay: {
-          merchantCountryCode: 'FR',
-        },
-      } : {}),
+      // Pas de applePay ni googlePay pour les abonnements
       defaultBillingDetails: {
         address: {
           country: 'FR',
@@ -304,10 +303,7 @@ export const makeSubscription = async (params: PaymentParams): Promise<Subscript
 
     if (initError) {
       logger.error('Erreur init Payment Sheet:', initError);
-      return {
-        success: false,
-        error: initError.message,
-      };
+      return { success: false, error: initError.message };
     }
 
     // 3. Présenter le Payment Sheet
@@ -315,30 +311,70 @@ export const makeSubscription = async (params: PaymentParams): Promise<Subscript
 
     if (presentError) {
       if (presentError.code === 'Canceled') {
-        return {
-          success: false,
-          error: 'Paiement annulé',
-        };
+        return { success: false, error: 'Paiement annulé' };
       }
       logger.error('Erreur présentation Payment Sheet:', presentError);
-      return {
-        success: false,
-        error: presentError.message,
-      };
+      return { success: false, error: presentError.message };
     }
 
     // 4. Paiement réussi - abonnement créé
-    return {
-      success: true,
-      subscriptionId,
-      paymentIntentId,
-    };
+    return { success: true, subscriptionId, paymentIntentId };
   } catch (error) {
     const err = error as Error;
     logger.error('Erreur abonnement:', err);
-    return {
-      success: false,
-      error: err?.message || 'Une erreur est survenue',
-    };
+    return { success: false, error: err?.message || 'Une erreur est survenue' };
+  }
+};
+
+// ============================================================
+// ABONNEMENT MENSUEL via APPLE PAY DIRECT
+// ============================================================
+export const makeApplePaySubscription = async (params: PaymentParams): Promise<SubscriptionResult> => {
+  const { amount, description, type, metadata = {} } = params;
+
+  const validationError = validateAmount(amount);
+  if (validationError) return { ...validationError, subscriptionId: undefined };
+
+  try {
+    const supported = await isPlatformPaySupported();
+    if (!supported) {
+      return { success: false, error: 'Apple Pay n\'est pas disponible sur cet appareil' };
+    }
+
+    // 1. Créer la Subscription via Cloud Function
+    const { clientSecret, subscriptionId, paymentIntentId } = await createSubscription(
+      amount,
+      description,
+      { type, ...metadata }
+    );
+
+    // 2. Lancer Apple Pay directement
+    const { error } = await confirmPlatformPayPayment(clientSecret, {
+      applePay: {
+        cartItems: [
+          {
+            label: description,
+            amount: amount.toFixed(2),
+            paymentType: PlatformPay.PaymentType.Immediate,
+          },
+        ],
+        merchantCountryCode: 'FR',
+        currencyCode: 'EUR',
+      },
+    });
+
+    if (error) {
+      if (error.code === 'Canceled') {
+        return { success: false, error: 'Paiement annulé' };
+      }
+      logger.error('Erreur Apple Pay Subscription:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, subscriptionId, paymentIntentId };
+  } catch (error) {
+    const err = error as Error;
+    logger.error('Erreur Apple Pay abonnement:', err);
+    return { success: false, error: err?.message || 'Une erreur est survenue' };
   }
 };

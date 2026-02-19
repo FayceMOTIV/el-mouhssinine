@@ -2583,12 +2583,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(139,92,246,0.3)',
   },
   ramadanGradient: {
-    padding: spacing.lg,
+    paddingVertical: spacing.lg,
     paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
   },
   ramadanHeader: {
     alignItems: 'center',
     marginBottom: spacing.lg,
+    width: '100%',
   },
   ramadanMubarak: {
     fontSize: 24,
@@ -2603,21 +2606,27 @@ const styles = StyleSheet.create({
   },
   ramadanTimesRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    alignItems: 'stretch',
     gap: spacing.sm,
+    width: '100%',
   },
   ramadanTimeCard: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
   },
   ramadanTimeLabel: {
     fontSize: fontSize.sm,
     color: '#8b5cf6',
     fontWeight: '600',
     marginBottom: 4,
+    textAlign: 'center',
   },
   ramadanTimeIcon: {
     fontSize: 24,
@@ -2628,13 +2637,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 2,
+    textAlign: 'center',
   },
   ramadanTimeNote: {
     fontSize: fontSize.xs,
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: 2,
-    paddingBottom: 2,
   },
 });
 

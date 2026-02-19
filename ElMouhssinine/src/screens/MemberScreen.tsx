@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, platformShadow, isSmallScreen } from '../theme/colors';
+import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, platformShadow, isSmallScreen, isTablet, moderateScale } from '../theme/colors';
 import {
   subscribeToCotisationPrices,
   CotisationPrices,
@@ -36,7 +36,7 @@ import {
   cancelSubscription,
 } from '../services/firebase';
 import { AuthService, MemberProfile } from '../services/auth';
-import { makePayment, makeSubscription, showPaymentError, showPaymentSuccess } from '../services/stripe';
+import { makePayment, makeApplePayPayment, makeSubscription, makeApplePaySubscription, showPaymentError, showPaymentSuccess } from '../services/stripe';
 import { subscribeToMembersTopic, saveFCMTokenToFirestore } from '../services/notifications';
 import { useLanguage } from '../context/LanguageContext';
 import MemberCard from '../components/MemberCard';
@@ -108,8 +108,12 @@ const MemberScreen = () => {
   const [customAmount, setCustomAmount] = useState<string>('');
 
   // Reçu fiscal
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear() - 1);
+  const [selectedRecuYear, setSelectedRecuYear] = useState(new Date().getFullYear() - 1);
   const [sendingRecuFiscal, setSendingRecuFiscal] = useState(false);
+
+  // Historique par année
+  const [historyYear, setHistoryYear] = useState(new Date().getFullYear());
+  const [availableYears, setAvailableYears] = useState<number[]>([2026]);
 
   // Calculer cotisation (fixe) et don (surplus)
   // Utilise les prix de Firebase (formulePrices) pour respecter les prix configurés dans le backoffice
@@ -140,6 +144,7 @@ const MemberScreen = () => {
 
   // Listener pour profil membre en temps réel
   const [memberProfileUnsubscribe, setMemberProfileUnsubscribe] = useState<(() => void) | null>(null);
+  const [paymentHistoryUnsubscribe, setPaymentHistoryUnsubscribe] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     const unsubscribe = AuthService.onAuthStateChanged(async (user) => {
@@ -150,10 +155,14 @@ const MemberScreen = () => {
 
       setIsLoading(true);
 
-      // Nettoyer l'ancien listener si existant
+      // Nettoyer les anciens listeners si existants
       if (memberProfileUnsubscribe) {
         memberProfileUnsubscribe();
         setMemberProfileUnsubscribe(null);
+      }
+      if (paymentHistoryUnsubscribe) {
+        paymentHistoryUnsubscribe();
+        setPaymentHistoryUnsubscribe(null);
       }
 
       if (user) {
@@ -216,20 +225,56 @@ const MemberScreen = () => {
 
         setMemberProfileUnsubscribe(() => unsubMember);
 
+        // Historique des paiements en temps réel (onSnapshot)
+        setLoadingHistory(true);
+        const unsubHistory = firestore()
+          .collection('payments')
+          .where('metadata.memberId', '==', user.uid)
+          .orderBy('createdAt', 'desc')
+          .onSnapshot(
+            (snapshot) => {
+              const payments = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              }));
+              setPaymentHistory(payments);
+              // Calculer les années disponibles dynamiquement
+              const yearsSet = new Set<number>([2026]);
+              payments.forEach((p: any) => {
+                const d = p.createdAt?.toDate?.() || new Date(p.createdAt);
+                if (d && !isNaN(d.getTime())) yearsSet.add(d.getFullYear());
+              });
+              setAvailableYears(Array.from(yearsSet).sort((a, b) => b - a));
+              setLoadingHistory(false);
+            },
+            (error) => {
+              if (__DEV__) console.error('Error loading payment history:', error);
+              setLoadingHistory(false);
+            }
+          );
+        setPaymentHistoryUnsubscribe(() => unsubHistory);
+
         // S'abonner aux notifications et sauvegarder le token
         await subscribeToMembersTopic();
         await saveFCMTokenToFirestore(user.uid);
       } else {
-        // Cleanup du listener lors de la déconnexion
+        // Cleanup des listeners lors de la déconnexion
         if (memberProfileUnsubscribe) {
           memberProfileUnsubscribe();
           setMemberProfileUnsubscribe(null);
+        }
+        if (paymentHistoryUnsubscribe) {
+          paymentHistoryUnsubscribe();
+          setPaymentHistoryUnsubscribe(null);
         }
         setIsLoggedIn(false);
         setMemberProfile(null);
         setIsPaid(false);
         setIsExpired(false);
         setInscribedMembers([]);
+        setPaymentHistory([]);
+        setAvailableYears([2026]);
+        setHistoryYear(new Date().getFullYear());
         setMemberPage('sympathisant');
         setIsLoading(false);
       }
@@ -239,6 +284,9 @@ const MemberScreen = () => {
       unsubscribe();
       if (memberProfileUnsubscribe) {
         memberProfileUnsubscribe();
+      }
+      if (paymentHistoryUnsubscribe) {
+        paymentHistoryUnsubscribe();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Runs once on mount, cleanup handled internally
@@ -297,50 +345,7 @@ const MemberScreen = () => {
         const inscribed = await getMembersInscribedBy(uid);
         setInscribedMembers(inscribed);
 
-        // Charger l'historique des paiements + dons
-        setLoadingHistory(true);
-        try {
-          // Cotisations
-          const paymentsSnapshot = await firestore()
-            .collection('payments')
-            .where('metadata.memberId', '==', uid)
-            .orderBy('createdAt', 'desc')
-            .limit(20)
-            .get();
-
-          const payments = paymentsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            _type: 'cotisation',
-            ...doc.data()
-          }));
-
-          // Dons
-          const donationsSnapshot = await firestore()
-            .collection('donations')
-            .where('userId', '==', uid)
-            .orderBy('createdAt', 'desc')
-            .limit(20)
-            .get();
-
-          const donations = donationsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            _type: 'donation',
-            ...doc.data()
-          }));
-
-          // Merger et trier par date desc
-          const allHistory = [...payments, ...donations].sort((a: any, b: any) => {
-            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
-            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
-            return dateB.getTime() - dateA.getTime();
-          }).slice(0, 20);
-
-          setPaymentHistory(allHistory);
-        } catch (historyError) {
-          if (__DEV__) console.error('Error loading payment history:', historyError);
-        } finally {
-          setLoadingHistory(false);
-        }
+        // L'historique est chargé en temps réel via onSnapshot dans l'effet auth principal
       } else if (retryCount < MAX_RETRIES) {
         // Race condition: le document Firestore n'est peut-être pas encore créé
         // Attendre et réessayer
@@ -558,7 +563,7 @@ const MemberScreen = () => {
 
   // Demander l'envoi du reçu fiscal
   const handleRequestRecuFiscal = async (yearParam?: number) => {
-    const year = yearParam ?? selectedYear;
+    const year = yearParam ?? selectedRecuYear;
     if (!memberProfile?.email) {
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
@@ -657,49 +662,47 @@ const MemberScreen = () => {
     try {
       // IMPORTANT: Utiliser makeSubscription pour les cotisations mensuelles (paiement récurrent)
       // et makePayment pour les cotisations annuelles (paiement unique)
+      // Apple Pay → flux natif direct / CB → PaymentSheet CB uniquement
       const isMensuel = selectedFormule === 'mensuel';
+      const isApplePay = method === 'apple';
 
       let paymentResult: any;
       let subscriptionId: string | undefined;
 
+      const paymentDescription = breakdown.don > 0
+        ? `Cotisation ${selectedFormule} (${breakdown.cotisation}€) + Don (${breakdown.don}€) - El Mohsinine`
+        : `Cotisation ${selectedFormule} - El Mohsinine`;
+
+      const paymentMeta = {
+        memberId: memberProfile.uid,
+        memberIdDisplay: memberProfile.memberId || '',
+        memberName: memberProfile.name,
+        email: memberProfile.email,
+        period: selectedFormule,
+        montantCotisation: breakdown.cotisation,
+        montantDon: breakdown.don,
+      };
+
       if (isMensuel) {
         // Abonnement récurrent mensuel via Stripe Subscriptions
-        const subscriptionResult = await makeSubscription({
+        const subscriptionFn = isApplePay ? makeApplePaySubscription : makeSubscription;
+        const subscriptionResult = await subscriptionFn({
           amount: breakdown.total,
-          description: breakdown.don > 0
-            ? `Cotisation ${selectedFormule} (${breakdown.cotisation}€) + Don (${breakdown.don}€) - El Mohsinine`
-            : `Cotisation ${selectedFormule} - El Mohsinine`,
+          description: paymentDescription,
           type: 'cotisation',
-          metadata: {
-            memberId: memberProfile.uid,
-            memberIdDisplay: memberProfile.memberId || '',
-            memberName: memberProfile.name,
-            email: memberProfile.email,
-            period: selectedFormule,
-            montantCotisation: breakdown.cotisation,
-            montantDon: breakdown.don,
-          },
+          metadata: paymentMeta,
         });
 
         paymentResult = subscriptionResult;
         subscriptionId = subscriptionResult.subscriptionId;
       } else {
         // Paiement unique annuel
-        paymentResult = await makePayment({
+        const paymentFn = isApplePay ? makeApplePayPayment : makePayment;
+        paymentResult = await paymentFn({
           amount: breakdown.total,
-          description: breakdown.don > 0
-            ? `Cotisation ${selectedFormule} (${breakdown.cotisation}€) + Don (${breakdown.don}€) - El Mohsinine`
-            : `Cotisation ${selectedFormule} - El Mohsinine`,
+          description: paymentDescription,
           type: 'cotisation',
-          metadata: {
-            memberId: memberProfile.uid,
-            memberIdDisplay: memberProfile.memberId || '',
-            memberName: memberProfile.name,
-            email: memberProfile.email,
-            period: selectedFormule,
-            montantCotisation: breakdown.cotisation,
-            montantDon: breakdown.don,
-          },
+          metadata: paymentMeta,
         });
       }
 
@@ -868,7 +871,8 @@ const MemberScreen = () => {
 
     setIsProcessingPayment(true);
     try {
-      const paymentResult = await makePayment({
+      const familyPayFn = method === 'apple' ? makeApplePayPayment : makePayment;
+      const paymentResult = await familyPayFn({
         amount: totalAmount,
         description: `Cotisation famille ${familyFormule} (${familyMembers.length}) - El Mohsinine`,
         type: 'cotisation',
@@ -1114,7 +1118,6 @@ const MemberScreen = () => {
             {/* Titre page */}
             <View style={styles.pageTitleContainer}>
               <Text style={styles.pageTitle}>MEMBRE SYMPATHISANT</Text>
-              <Text style={styles.pageMosqueIcon}>🕌</Text>
             </View>
 
             <View style={styles.card}>
@@ -1147,7 +1150,6 @@ const MemberScreen = () => {
             {/* Titre page */}
             <View style={styles.pageTitleContainer}>
               <Text style={styles.pageTitle}>ESPACE ADHÉRENT</Text>
-              <Text style={styles.pageMosqueIcon}>🕌</Text>
               <Text style={[styles.pageSubtitle]}>Pour devenir membre actif</Text>
             </View>
 
@@ -1274,7 +1276,6 @@ const MemberScreen = () => {
             {/* Titre page */}
             <View style={styles.pageTitleContainer}>
               <Text style={styles.pageTitle}>MEMBRE ACTIF</Text>
-              <Text style={styles.pageMosqueIcon}>🕌</Text>
             </View>
 
             {/* Bouton voir ma carte de membre */}
@@ -1308,12 +1309,6 @@ const MemberScreen = () => {
               </View>
               <Text style={styles.familyButtonArrow}>→</Text>
             </TouchableOpacity>
-
-            {/* Logo mosquée placeholder */}
-            <View style={[styles.card, { alignItems: 'center', paddingVertical: 24 }]}>
-              <Text style={{ fontSize: 48 }}>🕌</Text>
-              <Text style={[styles.cardSubtitle, { marginTop: 8, fontWeight: '600', color: colors.accent }]}>El Mohsinine</Text>
-            </View>
 
             {/* Bouton voir mes adhésions */}
             <TouchableOpacity
@@ -1424,73 +1419,104 @@ const MemberScreen = () => {
               return null;
             })()}
 
-            {/* Historique des paiements */}
+            {/* Historique des paiements par année */}
             <View style={styles.card}>
               <Text style={[styles.cardTitle, { marginBottom: 16 }]}>
-                💳 Historique des paiements et dons
+                💳 Historique des paiements
               </Text>
+
+              {/* Boutons années */}
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={availableYears}
+                keyExtractor={(item) => item.toString()}
+                style={{ marginBottom: 16 }}
+                contentContainerStyle={isTablet ? { alignItems: 'center', width: '100%', justifyContent: 'center' } : undefined}
+                renderItem={({ item: year }) => (
+                  <TouchableOpacity
+                    onPress={() => setHistoryYear(year)}
+                    style={[
+                      styles.yearButton,
+                      historyYear === year ? styles.yearButtonActive : styles.yearButtonInactive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.yearButtonText,
+                        historyYear === year ? styles.yearButtonTextActive : styles.yearButtonTextInactive,
+                      ]}
+                    >
+                      {year}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
 
               {loadingHistory ? (
                 <ActivityIndicator size="small" color={colors.accent} />
-              ) : paymentHistory.length === 0 ? (
-                <Text style={[styles.cardSubtitle, { textAlign: 'center', paddingVertical: 16 }]}>
-                  Aucun paiement
-                </Text>
-              ) : (
-                <View>
-                  {paymentHistory.map((payment, index) => {
-                    // Format date
-                    const date = payment.createdAt?.toDate?.() || new Date(payment.createdAt);
-                    const dateStr = date.toLocaleDateString('fr-FR', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric'
-                    });
+              ) : (() => {
+                const filteredHistory = paymentHistory.filter((payment: any) => {
+                  const date = payment.createdAt?.toDate?.() || new Date(payment.createdAt);
+                  return date && !isNaN(date.getTime()) && date.getFullYear() === historyYear;
+                });
+                if (filteredHistory.length === 0) {
+                  return (
+                    <Text style={[styles.cardSubtitle, { textAlign: 'center', paddingVertical: 16 }]}>
+                      Aucun paiement en {historyYear}
+                    </Text>
+                  );
+                }
+                return (
+                  <View style={isTablet ? { maxWidth: 700, alignSelf: 'center', width: '100%' } : undefined}>
+                    {filteredHistory.map((payment: any, index: number) => {
+                      const date = payment.createdAt?.toDate?.() || new Date(payment.createdAt);
+                      const dateStr = date.toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric'
+                      });
 
-                    // Determine payment type
-                    const type = payment._type === 'donation'
-                      ? '🎁 Don'
-                      : payment.metadata?.period === 'mensuel' ? 'Mensuel' : 'Annuel';
+                      const type = payment.metadata?.period === 'mensuel' ? 'Mensuel' : 'Annuel';
 
-                    // Determine status
-                    const rawStatus = payment.status || payment.statut || 'completed';
-                    let status = 'payé';
-                    let statusColor = colors.accent;
-                    if (rawStatus === 'refunded') {
-                      status = 'remboursé';
-                      statusColor = '#f97316';
-                    } else if (rawStatus === 'failed') {
-                      status = 'échoué';
-                      statusColor = '#ef4444';
-                    }
+                      let status = 'payé';
+                      let statusColor = colors.accent;
+                      if (payment.status === 'refunded') {
+                        status = 'remboursé';
+                        statusColor = '#f97316';
+                      } else if (payment.status === 'failed') {
+                        status = 'échoué';
+                        statusColor = '#ef4444';
+                      }
 
-                    return (
-                      <View
-                        key={payment.id}
-                        style={[
-                          styles.paymentHistoryItem,
-                          index !== paymentHistory.length - 1 && styles.paymentHistoryItemBorder
-                        ]}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.paymentHistoryDate}>{dateStr}</Text>
-                          <Text style={styles.paymentHistoryType}>{type}</Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={styles.paymentHistoryAmount}>
-                            {(payment.amount || payment.montant || 0).toFixed(2)} €
-                          </Text>
-                          <View style={[styles.paymentHistoryStatusBadge, { backgroundColor: statusColor + '20' }]}>
-                            <Text style={[styles.paymentHistoryStatusText, { color: statusColor }]}>
-                              {status}
+                      return (
+                        <View
+                          key={payment.id}
+                          style={[
+                            styles.paymentHistoryItem,
+                            index !== filteredHistory.length - 1 && styles.paymentHistoryItemBorder
+                          ]}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.paymentHistoryDate}>{dateStr}</Text>
+                            <Text style={styles.paymentHistoryType}>{type}</Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.paymentHistoryAmount}>
+                              {(payment.amount || payment.montant || 0).toFixed(2)} €
                             </Text>
+                            <View style={[styles.paymentHistoryStatusBadge, { backgroundColor: statusColor + '20' }]}>
+                              <Text style={[styles.paymentHistoryStatusText, { color: statusColor }]}>
+                                {status}
+                              </Text>
+                            </View>
                           </View>
                         </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
+                      );
+                    })}
+                  </View>
+                );
+              })()}
             </View>
 
             {/* Déconnexion */}
@@ -1922,7 +1948,7 @@ const MemberScreen = () => {
               </TouchableOpacity>
             )}
 
-            {Platform.OS === 'android' && (
+            {Platform.OS !== 'ios' && (
               <TouchableOpacity
                 style={[styles.paymentMethod, styles.googlePayMethod]}
                 onPress={() => handlePayment('card')}
@@ -2175,11 +2201,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.accent,
     letterSpacing: 1,
-    textAlign: 'center',
-  },
-  pageMosqueIcon: {
-    fontSize: 32,
-    marginTop: 8,
     textAlign: 'center',
   },
   pageSubtitle: {
@@ -3211,28 +3232,55 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
+  // Year Filter Buttons
+  yearButton: {
+    paddingHorizontal: isSmallScreen ? 12 : 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  yearButtonActive: {
+    backgroundColor: '#C9A227',
+  },
+  yearButtonInactive: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#8B7355',
+  },
+  yearButtonText: {
+    fontSize: isTablet ? moderateScale(16) : isSmallScreen ? moderateScale(12) : moderateScale(14),
+    fontWeight: '600' as const,
+  },
+  yearButtonTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700' as const,
+  },
+  yearButtonTextInactive: {
+    color: '#8B7355',
+  },
+
   // Payment History
   paymentHistoryItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: spacing.md,
+    paddingVertical: isSmallScreen ? spacing.sm : spacing.md,
   },
   paymentHistoryItemBorder: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   paymentHistoryDate: {
-    fontSize: fontSize.md,
+    fontSize: isSmallScreen ? fontSize.sm : fontSize.md,
     fontWeight: '600',
     color: colors.text,
     marginBottom: 4,
   },
   paymentHistoryType: {
-    fontSize: fontSize.sm,
+    fontSize: isSmallScreen ? fontSize.xs : fontSize.sm,
     color: colors.textSecondary,
   },
   paymentHistoryAmount: {
-    fontSize: fontSize.lg,
+    fontSize: isSmallScreen ? fontSize.md : fontSize.lg,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 4,

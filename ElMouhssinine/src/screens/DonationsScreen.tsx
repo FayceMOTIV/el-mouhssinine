@@ -16,12 +16,12 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, MODAL_WIDTH } from '../theme/colors';
+import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, MODAL_WIDTH, isSmallScreen, isTablet, moderateScale } from '../theme/colors';
 import { subscribeToProjects, subscribeToMosqueeInfo, createDonation, addDonation, requestRecuFiscal } from '../services/firebase';
 import { Project, ProjectFile, MosqueeInfo } from '../types';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useLanguage } from '../context/LanguageContext';
-import { makePayment, showPaymentError, showPaymentSuccess } from '../services/stripe';
+import { makePayment, makeApplePayPayment, showPaymentError, showPaymentSuccess } from '../services/stripe';
 import { EmptyProjects } from '../components';
 import { AuthService, MemberProfile } from '../services/auth';
 import { BackgroundPattern } from '../components/BackgroundPattern';
@@ -222,6 +222,7 @@ const DonationsScreen = () => {
   const [zakatEpargne, setZakatEpargne] = useState('');
   const [zakatOr, setZakatOr] = useState('');
   const [zakatCash, setZakatCash] = useState(''); // Argent liquide (cash)
+  const [zakatInvestissements, setZakatInvestissements] = useState(''); // Actions, SCPI, parts sociales
 
   // Nisab dynamique basé sur le cours de l'or
   const [nisab, setNisab] = useState(5950); // 85g × 70€ (valeur par défaut)
@@ -445,10 +446,10 @@ const DonationsScreen = () => {
     const currentUser = AuthService.getCurrentUser();
 
     try {
-      const result = await makePayment({
+      const paymentParams = {
         amount,
         description: `Don - ${project?.name || 'Mosquée El Mohsinine'}`,
-        type: 'donation',
+        type: 'donation' as const,
         metadata: {
           projectId: selectedProject || undefined,
           projectName: project?.name || '',
@@ -456,7 +457,12 @@ const DonationsScreen = () => {
           donorEmail: donorEmail || currentUser?.email?.toLowerCase() || '',
           donorUid: currentUser?.uid || '',
         },
-      });
+      };
+
+      // Apple Pay → flux natif direct / CB → PaymentSheet CB uniquement
+      const result = paymentMethod === 'apple'
+        ? await makeApplePayPayment(paymentParams)
+        : await makePayment(paymentParams);
 
       if (result.success && result.paymentIntentId) {
         // Enregistrer le don dans Firebase avec donorType + donorInfo
@@ -516,15 +522,20 @@ const DonationsScreen = () => {
   };
 
   // Calcul Zakat
-  // Total = Épargne + Or + Argent liquide (cash)
-  const totalWealth = (parseFloat(zakatEpargne) || 0) + (parseFloat(zakatOr) || 0) + (parseFloat(zakatCash) || 0);
+  // Total = Épargne + Or + Investissements + Argent liquide (cash)
+  const totalWealth = (parseFloat(zakatEpargne) || 0) + (parseFloat(zakatOr) || 0) + (parseFloat(zakatInvestissements) || 0) + (parseFloat(zakatCash) || 0);
   const zakatAmount = totalWealth >= nisab ? (totalWealth * NISAB_INFO.zakatRate) : 0;
   const isZakatEligible = totalWealth >= nisab;
 
   return (
     <BackgroundPattern>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -615,16 +626,14 @@ const DonationsScreen = () => {
                       {t('creditCard')}
                     </Text>
                   </View>
-                  {Platform.OS === 'ios' && (
-                    <View style={styles.applePayButton}>
-                      <Image
-                        source={require('../assets/apple-logo.png')}
-                        style={styles.appleLogo}
-                      />
-                      <Text style={styles.applePayText}>Pay</Text>
-                    </View>
-                  )}
-                  {Platform.OS === 'android' && (
+                  <View style={styles.applePayButton}>
+                    <Image
+                      source={require('../assets/apple-logo.png')}
+                      style={styles.appleLogo}
+                    />
+                    <Text style={styles.applePayText}>Pay</Text>
+                  </View>
+                  {Platform.OS !== 'ios' && (
                     <View style={styles.googlePayButton}>
                       <Image
                         source={require('../assets/google-logo.png')}
@@ -657,6 +666,52 @@ const DonationsScreen = () => {
                       ? 'لديك الحق في خصم 66% من تبرعاتك من الضرائب (المادة 200 من القانون العام للضرائب). تتوفر الإيصالات في بداية يناير عن السنة المنقضية.'
                       : 'Vous avez droit à 66% de réduction d\'impôt pour vos dons (article 200 CGI). Les reçus sont disponibles début janvier pour l\'année écoulée.'}
                   </Text>
+
+                  {/* Year 2025 */}
+                  {(() => {
+                    const currentYear = new Date().getFullYear();
+                    const year = 2025;
+                    const available = currentYear > year;
+                    return (
+                      <View style={styles.recuYearRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
+                            {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
+                          </Text>
+                          <Text style={[styles.recuYearSubtext, isRTL && styles.rtlText]}>
+                            {language === 'ar' ? 'جميع التبرعات للسنة' : 'Tous les dons de l\'année'}
+                          </Text>
+                        </View>
+                        {available ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.recuFiscalButton,
+                              sendingRecuFiscal && styles.recuFiscalButtonDisabled,
+                            ]}
+                            onPress={() => handleRequestRecuFiscal(year)}
+                            disabled={sendingRecuFiscal}
+                          >
+                            {sendingRecuFiscal ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <>
+                                <Text style={styles.recuFiscalButtonIcon}>📧</Text>
+                                <Text style={styles.recuFiscalButtonText}>
+                                  {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={styles.recuNotAvailable}>
+                            {language === 'ar'
+                              ? `متاح في 01/01/${year + 1}`
+                              : `Disponible le 01/01/${year + 1}`}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })()}
 
                   {/* Year 2026 */}
                   {(() => {
@@ -1187,16 +1242,14 @@ const DonationsScreen = () => {
                           {t('creditCard')}
                         </Text>
                       </View>
-                      {Platform.OS === 'ios' && (
-                        <View style={styles.applePayButton}>
-                          <Image
-                            source={require('../assets/apple-logo.png')}
-                            style={styles.appleLogo}
-                          />
-                          <Text style={styles.applePayText}>Pay</Text>
-                        </View>
-                      )}
-                      {Platform.OS === 'android' && (
+                      <View style={styles.applePayButton}>
+                        <Image
+                          source={require('../assets/apple-logo.png')}
+                          style={styles.appleLogo}
+                        />
+                        <Text style={styles.applePayText}>Pay</Text>
+                      </View>
+                      {Platform.OS !== 'ios' && (
                         <View style={styles.googlePayButton}>
                           <Image
                             source={require('../assets/google-logo.png')}
@@ -1226,6 +1279,7 @@ const DonationsScreen = () => {
           )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Modal RIB */}
       <Modal visible={showRIBModal} transparent animationType="fade">
@@ -1417,7 +1471,8 @@ const DonationsScreen = () => {
               }
 
               // Projets internes : tous les modes de paiement
-              return ['card', 'apple', 'google'].map((method) => (
+              const paymentMethods = Platform.OS === 'ios' ? ['card', 'apple'] : ['card', 'google'];
+              return paymentMethods.map((method) => (
                 <TouchableOpacity
                   key={method}
                   style={[styles.paymentOption, paymentMethod === method && styles.paymentOptionSelected, isRTL && styles.paymentOptionRTL]}
@@ -1570,6 +1625,15 @@ const DonationsScreen = () => {
                 keyboardType="numeric"
                 value={zakatOr}
                 onChangeText={setZakatOr}
+              />
+
+              <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>📈 {t('investmentsLabel')}</Text>
+              <TextInput
+                style={[styles.zakatInput, isRTL && styles.rtlText]}
+                placeholder={language === 'ar' ? 'أسهم، عقارات...' : 'Actions, SCPI, parts...'}
+                keyboardType="numeric"
+                value={zakatInvestissements}
+                onChangeText={setZakatInvestissements}
               />
 
               <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>💵 {t('cashValueLabel')}</Text>
@@ -2231,7 +2295,7 @@ const styles = StyleSheet.create({
     color: '#E67E22',
   },
   inputLabel: {
-    fontSize: fontSize.sm,
+    fontSize: isSmallScreen ? moderateScale(13) : moderateScale(15),
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
@@ -2239,10 +2303,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f8fa',
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    fontSize: fontSize.lg,
+    fontSize: isSmallScreen ? fontSize.md : fontSize.lg,
     marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.06)',
+    width: '100%' as any,
   },
   zakatResult: {
     backgroundColor: '#f8f8fa',
