@@ -146,15 +146,26 @@ export default function Revenus() {
     })
 
     // 3. Cotisations membres (qui ont un paiement enregistré)
+    // Dedup renforcé : vérifier membreId, paiementId ET montant+date pour éviter le double comptage
     membres.forEach(m => {
       if (m.datePaiement && m.montant) {
         const date = m.datePaiement?.toDate?.() || new Date(m.datePaiement)
-        // Éviter les doublons
-        if (!revenues.find(r => r.raw?.membreId === m.id || r.raw?.paiementId === m.paiementId)) {
+        const montant = m.montant || m.cotisation?.montant || 0
+        // Éviter les doublons - vérifier par ID ou par montant+date similaire
+        const isDuplicate = revenues.find(r => {
+          if (r.raw?.membreId === m.id || r.raw?.paiementId === m.paiementId) return true
+          // Vérifier aussi par montant + date proche (même jour) pour les paiements sans membreId
+          if (r.type === 'cotisation' && r.montant === montant && r.date) {
+            const diff = Math.abs(r.date - date)
+            return diff < 86400000 // 24h
+          }
+          return false
+        })
+        if (!isDuplicate) {
           revenues.push({
             id: `membre-${m.id}`,
             type: 'cotisation',
-            montant: m.montant || m.cotisation?.montant || 0,
+            montant,
             date,
             source: m.modePaiement ? 'app' : 'manuel',
             modePaiement: m.modePaiement || 'autre',

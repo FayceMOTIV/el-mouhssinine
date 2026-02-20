@@ -6,11 +6,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { AdhkarCategory, Dhikr } from '../data/adhkar';
 import { useLanguage } from '../context/LanguageContext';
+import { speakArabic, stopSpeaking } from '../services/tts';
 
 interface AdhkarDetailScreenProps {
   route: any;
@@ -26,6 +28,7 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [repetitionCounts, setRepetitionCounts] = useState<Record<string, number>>({});
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
 
   // Clé de stockage unique par catégorie
   const storageKey = `adhkar_progress_${category.id}`;
@@ -88,7 +91,18 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
         message: `${dhikr.arabic}\n\n${dhikr.translation}\n\n(${dhikr.transliteration})\n\nSource: ${dhikr.source}`,
       });
     } catch (error) {
-      console.error('Error sharing:', error);
+      if (__DEV__) console.error('Error sharing:', error);
+    }
+  };
+
+  const handleListen = async (dhikr: Dhikr) => {
+    if (speakingId === dhikr.id) {
+      await stopSpeaking();
+      setSpeakingId(null);
+    } else {
+      setSpeakingId(dhikr.id);
+      await speakArabic(dhikr.arabic);
+      setSpeakingId(null);
     }
   };
 
@@ -233,6 +247,15 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
                           {isCompleted
                             ? t('finished')
                             : `${currentReps}/${dhikr.repetitions}`}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.listenButton, speakingId === dhikr.id && styles.listenButtonActive]}
+                        onPress={() => handleListen(dhikr)}
+                      >
+                        <Text style={styles.listenButtonIcon}>
+                          {speakingId === dhikr.id ? '⏹️' : '🔊'}
                         </Text>
                       </TouchableOpacity>
 
@@ -480,6 +503,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  listenButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(139,92,246,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.25)',
+  },
+  listenButtonActive: {
+    backgroundColor: 'rgba(139,92,246,0.25)',
+  },
+  listenButtonIcon: {
+    fontSize: 20,
   },
   shareButton: {
     flexDirection: 'row',

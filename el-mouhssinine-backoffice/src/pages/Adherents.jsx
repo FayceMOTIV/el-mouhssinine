@@ -573,14 +573,22 @@ export default function Adherents() {
     }
   }
 
+  const [deleting, setDeleting] = useState(false)
+
   const handleDelete = async () => {
     if (!deleteModal.membre) return
+    setDeleting(true)
     try {
-      await deleteDocument('members', deleteModal.membre.id)
-      toast.success('Membre supprimé')
+      const fn = getFunctions(undefined, 'europe-west1')
+      const deleteMemberFn = httpsCallable(fn, 'deleteMemberByAdmin')
+      const result = await deleteMemberFn({ memberId: deleteModal.membre.id })
+      toast.success(result.data.message || 'Membre supprimé avec toutes ses données')
       setDeleteModal({ open: false, membre: null })
     } catch (err) {
-      toast.error('Erreur lors de la suppression')
+      console.error('Error deleting member:', err)
+      toast.error(err.message || 'Erreur lors de la suppression')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1465,11 +1473,11 @@ export default function Adherents() {
       {/* Delete Confirmation */}
       <ConfirmModal
         isOpen={deleteModal.open}
-        onClose={() => setDeleteModal({ open: false, membre: null })}
+        onClose={() => !deleting && setDeleteModal({ open: false, membre: null })}
         onConfirm={handleDelete}
         title="Supprimer le membre"
-        message={`Êtes-vous sûr de vouloir supprimer ${deleteModal.membre?.prenom} ${deleteModal.membre?.nom} ?`}
-        confirmLabel="Supprimer"
+        message={`Êtes-vous sûr de vouloir supprimer ${deleteModal.membre?.prenom} ${deleteModal.membre?.nom} ?\n\nCette action va :\n• Supprimer son compte utilisateur et ses messages\n• Anonymiser ses donations, paiements et reçus fiscaux (les montants restent dans la comptabilité)\n• Annuler son abonnement Stripe (si actif)\n\nCette action est irréversible.`}
+        confirmLabel={deleting ? 'Suppression...' : 'Supprimer définitivement'}
         danger
       />
     </div>

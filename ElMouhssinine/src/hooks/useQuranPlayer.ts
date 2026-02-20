@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import TrackPlayer, { State, Event } from 'react-native-track-player';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupPlayer } from '../services/audioPlayer';
+import { getVerseAudioUrl } from '../services/quranApi';
 
 interface Verse {
   number: number;
@@ -259,7 +260,7 @@ export const useQuranPlayer = ({
     setVerseProgress(0);
 
     const verse = versesArray[index];
-    const audioUrl = `https://cdn.islamic.network/quran/audio/128/${reciterCodeRef.current}/${verse.number}.mp3`;
+    const audioUrl = getVerseAudioUrl(verse.number, reciterCodeRef.current);
 
     // Chargement verset
 

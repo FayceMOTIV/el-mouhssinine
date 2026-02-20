@@ -360,6 +360,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     marginRight: 4,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   secondaryButtonActive: {
     backgroundColor: 'rgba(201, 162, 39, 0.15)',

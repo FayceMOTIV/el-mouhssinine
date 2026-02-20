@@ -15,7 +15,7 @@ import {
 import Clipboard from '@react-native-clipboard/clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { QuranAPI, surahsInfo, reciters, SurahData } from '../services/quranApi';
+import { QuranAPI, surahsInfo, reciters, SurahData, Reciter } from '../services/quranApi';
 
 import { useLanguage } from '../context/LanguageContext';
 import { useQuranPlayer, RepeatMode, PlaybackSpeed } from '../hooks/useQuranPlayer';
@@ -534,45 +534,88 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
       )}
 
       {/* Modal Recitateur */}
-      <Modal visible={showReciterModal} transparent animationType="fade">
+      <Modal
+        visible={showReciterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReciterModal(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowReciterModal(false)}
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleContainer}>
+                <Text style={styles.modalTitleEmoji}>🎙️</Text>
+                <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>
+                  {t('chooseReciter')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowReciterModal(false)}
+                style={styles.closeButtonContainer}
+              >
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Liste des récitateurs */}
+            <ScrollView
+              style={styles.reciterList}
+              showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.closeButtonText}>×</Text>
-            </TouchableOpacity>
-            <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>{t('chooseReciter')}</Text>
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
-              {reciters.map((reciter) => (
-                <TouchableOpacity
-                  key={reciter.id}
-                  style={[
-                    styles.reciterOption,
-                    selectedReciter.id === reciter.id && styles.reciterOptionSelected,
-                    isRTL && styles.reciterOptionRTL,
-                  ]}
-                  onPress={async () => {
-                    setSelectedReciter(reciter);
-                    setShowReciterModal(false);
-                    // Forcer la ref AVANT de relancer (évite la race condition du re-render)
-                    player.updateReciterCode(reciter.id);
-                    // Redémarrer avec le nouveau récitateur si en lecture
-                    if (player.isPlaying) {
-                      await player.playVerseAtIndex(player.currentVerseIndex);
-                    }
-                  }}
-                >
-                  <View style={styles.reciterInfo}>
-                    <Text style={[styles.reciterName, isRTL && styles.rtlText]}>{reciter.name}</Text>
-                    <Text style={[styles.reciterNameAr, isRTL && styles.rtlText]}>{reciter.nameAr}</Text>
-                  </View>
-                  {selectedReciter.id === reciter.id && (
-                    <Text style={styles.checkmark}>✓</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
+              {reciters.map((reciter) => {
+                const isSelected = selectedReciter.id === reciter.id;
+
+                return (
+                  <TouchableOpacity
+                    key={reciter.id}
+                    style={[
+                      styles.reciterItem,
+                      isSelected && styles.reciterItemSelected,
+                    ]}
+                    onPress={async () => {
+                      setSelectedReciter(reciter);
+                      setShowReciterModal(false);
+                      player.updateReciterCode(reciter.id);
+                      if (player.isPlaying) {
+                        await player.playVerseAtIndex(player.currentVerseIndex);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    {/* Drapeau + Nom */}
+                    <View style={[styles.reciterMainInfo, isRTL && { flexDirection: 'row-reverse' }]}>
+                      <Text style={styles.reciterFlag}>{reciter.flag}</Text>
+                      <View style={styles.reciterNames}>
+                        <Text style={[
+                          styles.reciterName,
+                          isSelected && styles.reciterNameSelected,
+                          isRTL && styles.rtlText,
+                        ]}>
+                          {reciter.name}
+                        </Text>
+                        <Text style={[
+                          styles.reciterNameAr,
+                          isSelected && styles.reciterNameArSelected,
+                          isRTL && styles.rtlText,
+                        ]}>
+                          {reciter.nameAr}
+                        </Text>
+                        <Text style={[styles.reciterCountry, isRTL && styles.rtlText]}>
+                          {reciter.country}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Checkmark */}
+                    {isSelected && (
+                      <View style={styles.checkmarkContainer}>
+                        <Text style={styles.checkmark}>✓</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
         </View>
@@ -833,71 +876,135 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '500',
   },
+  // Modal Récitateur - Bottom Sheet
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end' as const,
   },
   modalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: SCREEN_HEIGHT * 0.7,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%' as any,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  closeButton: {
-    position: 'absolute',
-    top: spacing.lg,
-    right: spacing.lg,
-    zIndex: 10,
+  modalHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  closeButtonText: {
-    fontSize: 28,
-    color: colors.textMuted,
-    fontWeight: '300',
+  modalTitleContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+  },
+  modalTitleEmoji: {
+    fontSize: 24,
   },
   modalTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '600',
-    color: colors.accent,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
+    fontSize: 22,
+    fontWeight: '700' as const,
+    color: '#1A1A1A',
+    letterSpacing: -0.5,
   },
-  reciterOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
+  closeButtonContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  closeButton: {
+    fontSize: 20,
+    color: '#666666',
+    fontWeight: '600' as const,
+  },
+  reciterList: {
+    padding: 16,
+  },
+  reciterItem: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+    backgroundColor: '#F8F8F8',
     borderWidth: 2,
     borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  reciterOptionSelected: {
-    borderColor: colors.accent,
-    backgroundColor: 'rgba(201,162,39,0.08)',
+  reciterItemSelected: {
+    backgroundColor: '#FFF9E6',
+    borderColor: '#C9A227',
+    shadowColor: '#C9A227',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  reciterInfo: {
+  reciterMainInfo: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    flex: 1,
+    gap: 16,
+  },
+  reciterFlag: {
+    fontSize: 32,
+  },
+  reciterNames: {
     flex: 1,
   },
   reciterName: {
-    fontSize: fontSize.md,
-    fontWeight: '500',
-    color: colors.text,
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: '#1A1A1A',
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  reciterNameSelected: {
+    color: '#000000',
+    fontWeight: '700' as const,
   },
   reciterNameAr: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
+    fontSize: 16,
+    color: '#666666',
+    marginBottom: 2,
+  },
+  reciterNameArSelected: {
+    color: '#333333',
+    fontWeight: '600' as const,
+  },
+  reciterCountry: {
+    fontSize: 13,
+    color: '#999999',
     marginTop: 2,
   },
+  checkmarkContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#C9A227',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
   checkmark: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.accent,
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: 'bold' as const,
   },
   // RTL Styles
   rtlText: {
@@ -917,9 +1024,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
   },
   navigationContainerRTL: {
-    flexDirection: 'row-reverse',
-  },
-  reciterOptionRTL: {
     flexDirection: 'row-reverse',
   },
 });

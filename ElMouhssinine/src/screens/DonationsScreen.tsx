@@ -1172,6 +1172,18 @@ const DonationsScreen = () => {
                 </View>
               )}
 
+              {/* Message sélection projet */}
+              {!selectedProject && (
+                <View style={styles.selectProjectHint}>
+                  <Text style={styles.selectProjectHintIcon}>☝️</Text>
+                  <Text style={[styles.selectProjectHintText, isRTL && styles.rtlText]}>
+                    {isRTL
+                      ? 'يرجى اختيار مشروع قبل متابعة الدفع'
+                      : 'Veuillez sélectionner un projet avant de poursuivre le paiement'}
+                  </Text>
+                </View>
+              )}
+
               {/* Boutons - Differents selon le type de projet */}
               {projectType === 'interne' ? (
                 <>
@@ -2715,6 +2727,26 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   // External project message (in main page)
+  selectProjectHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139,92,246,0.10)',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.25)',
+  },
+  selectProjectHintIcon: {
+    fontSize: 18,
+    marginRight: spacing.sm,
+  },
+  selectProjectHintText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
   externalProjectMessage: {
     backgroundColor: 'rgba(201,162,39,0.15)',
     borderRadius: borderRadius.lg,

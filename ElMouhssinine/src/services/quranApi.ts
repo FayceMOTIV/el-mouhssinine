@@ -262,21 +262,33 @@ export const getAudioUrl = (surahNumber: number, reciter: string = 'ar.alafasy')
 };
 
 // Liste des recitateurs disponibles
-// Note: Les IDs sont pour l'API audio verset par verset (cdn.islamic.network/quran/audio/128/{id}/{verseNumber}.mp3)
-export const reciters = [
-  { id: 'ar.alafasy', name: 'Mishary Rashid Alafasy', nameAr: 'مشاري العفاسي' },
-  { id: 'ar.abdulbasitmurattal', name: 'Abdul Basit Abdul Samad', nameAr: 'عبد الباسط عبد الصمد' },
-  { id: 'ar.abdurrahmanalsudais', name: 'Abdurrahman As-Sudais', nameAr: 'عبدالرحمن السديس' },
-  { id: 'ar.hudhaify', name: 'Ali Al-Hudhaify', nameAr: 'علي الحذيفي' },
-  { id: 'ar.minshawi', name: 'Mohamed Siddiq Al-Minshawi', nameAr: 'محمد صديق المنشاوي' },
-  { id: 'ar.shuraim', name: 'Saud Al-Shuraim', nameAr: 'سعود الشريم' },
-  { id: 'ar.husary', name: 'Mahmoud Khalil Al-Husary', nameAr: 'محمود خليل الحصري' },
-  { id: 'ar.mahermuaiqly', name: 'Maher Al-Muaiqly', nameAr: 'ماهر المعيقلي' },
+// Note: Les IDs et bitrates sont vérifiés via l'API alquran.cloud (chaque récitateur a son propre bitrate CDN)
+export interface Reciter {
+  id: string;
+  name: string;
+  nameAr: string;
+  country: string;
+  flag: string;
+  bitrate: number;
+}
+
+export const reciters: Reciter[] = [
+  { id: 'ar.alafasy', name: 'Mishary Rashid Alafasy', nameAr: 'مشاري العفاسي', country: 'Koweit', flag: '🇰🇼', bitrate: 128 },
+  { id: 'ar.abdulbasitmurattal', name: 'Abdul Basit Abdul Samad', nameAr: 'عبد الباسط عبد الصمد', country: 'Egypte', flag: '🇪🇬', bitrate: 192 },
+  { id: 'ar.abdurrahmaansudais', name: 'Abdurrahman As-Sudais', nameAr: 'عبدالرحمن السديس', country: 'Arabie Saoudite', flag: '🇸🇦', bitrate: 192 },
+  { id: 'ar.hudhaify', name: 'Ali Al-Hudhaify', nameAr: 'علي الحذيفي', country: 'Arabie Saoudite', flag: '🇸🇦', bitrate: 128 },
+  { id: 'ar.minshawi', name: 'Mohamed Siddiq Al-Minshawi', nameAr: 'محمد صديق المنشاوي', country: 'Egypte', flag: '🇪🇬', bitrate: 128 },
+  { id: 'ar.saoodshuraym', name: 'Saud Al-Shuraim', nameAr: 'سعود الشريم', country: 'Arabie Saoudite', flag: '🇸🇦', bitrate: 64 },
+  { id: 'ar.husary', name: 'Mahmoud Khalil Al-Husary', nameAr: 'محمود خليل الحصري', country: 'Egypte', flag: '🇪🇬', bitrate: 128 },
+  { id: 'ar.mahermuaiqly', name: 'Maher Al-Muaiqly', nameAr: 'ماهر المعيقلي', country: 'Arabie Saoudite', flag: '🇸🇦', bitrate: 128 },
 ];
 
 // URL audio d'un verset specifique (mode karaoke)
-export const getVerseAudioUrl = (globalVerseNumber: number, reciter: string = 'ar.alafasy'): string => {
-  return `https://cdn.islamic.network/quran/audio/128/${reciter}/${globalVerseNumber}.mp3`;
+// Utilise le bitrate correct par récitateur
+export const getVerseAudioUrl = (globalVerseNumber: number, reciterId: string = 'ar.alafasy'): string => {
+  const reciter = reciters.find(r => r.id === reciterId);
+  const bitrate = reciter?.bitrate || 128;
+  return `https://cdn.islamic.network/quran/audio/${bitrate}/${reciterId}/${globalVerseNumber}.mp3`;
 };
 
 // Donnees statiques des sourates (pour usage hors-ligne)

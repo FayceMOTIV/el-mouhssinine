@@ -3677,9 +3677,11 @@ exports.validateMembership = functions
       if (action === 'reject') {
         const montant = member.cotisation?.montant || 0;
 
-        // 1. Créer un don à partir du paiement
+        // 1+2. Créer don + mettre à jour membre en batch atomique
+        const batch = admin.firestore().batch();
         if (montant > 0) {
-          await admin.firestore().collection('donations').add({
+          const donRef = admin.firestore().collection('donations').doc();
+          batch.set(donRef, {
             donateur: `${prenom} ${nom}`,
             email: email || '',
             telephone: member.telephone || '',
@@ -3694,9 +3696,7 @@ exports.validateMembership = functions
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
         }
-
-        // 2. Mettre à jour le membre en sympathisant
-        await memberRef.update({
+        batch.update(memberRef, {
           status: 'sympathisant',
           adhesionRefuseeAt: admin.firestore.FieldValue.serverTimestamp(),
           adhesionRefuseeRaison: message || 'Décision du bureau',
@@ -3708,6 +3708,7 @@ exports.validateMembership = functions
           aPaye: false,
           datePaiement: null,
         });
+        await batch.commit();
 
         // 3. Envoyer email d'information
         if (transporter && email) {
@@ -5165,6 +5166,10 @@ exports.createAdmin = functions
     if (!callerDoc.exists) {
       throw new functions.https.HttpsError('permission-denied', 'Seuls les administrateurs peuvent créer des admins');
     }
+    const callerRole = callerDoc.data().role;
+    if (callerRole !== 'super_admin') {
+      throw new functions.https.HttpsError('permission-denied', 'Seul un super_admin peut créer des admins');
+    }
 
     const { email, password, nom, role, permissions, actif } = data;
 
@@ -5513,5 +5518,289 @@ exports.reconcileStripePayments = functions
     }
 
     return null;
+  });
+
+// ========================================================================
+// DELETE MEMBER BY ADMIN - Suppression membre (RGPD)
+// - Données financières (donations, payments, recus_fiscaux) : ANONYMISÉES (comptabilité préservée)
+// - Données personnelles (messages, member doc, Auth) : SUPPRIMÉES
+// - Stripe : abonnement annulé
+// ========================================================================
+exports.deleteMemberByAdmin = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    // 1. Vérifier authentification + admin
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+
+    const adminUid = context.auth.uid;
+    const adminCheck = await isAdmin(adminUid);
+    if (!adminCheck) {
+      throw new functions.https.HttpsError('permission-denied', 'Réservé aux administrateurs');
+    }
+
+    const { memberId } = data;
+    if (!memberId || typeof memberId !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'memberId requis');
+    }
+
+    console.log(`=== SUPPRESSION MEMBRE ${memberId} par admin ${adminUid} ===`);
+
+    const db = admin.firestore();
+    const log = {
+      memberId,
+      adminUid,
+      deletedAt: new Date().toISOString(),
+      steps: [],
+    };
+
+    try {
+      // 2. Récupérer le document membre
+      const memberRef = db.collection('members').doc(memberId);
+      const memberDoc = await memberRef.get();
+
+      if (!memberDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Membre non trouvé');
+      }
+
+      const memberData = memberDoc.data();
+      log.memberName = `${memberData.prenom || ''} ${memberData.nom || ''}`.trim();
+      log.memberEmail = memberData.email || '';
+      const memberUid = memberData.uid || memberId;
+
+      // 3. Annuler l'abonnement Stripe si actif
+      const stripeSubscriptionId = memberData.stripeSubscriptionId;
+      if (stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(stripeSubscriptionId);
+          log.steps.push({ action: 'stripe_subscription_cancelled', id: stripeSubscriptionId });
+          console.log(`Abonnement Stripe annulé: ${stripeSubscriptionId}`);
+        } catch (stripeErr) {
+          log.steps.push({ action: 'stripe_subscription_cancel_skipped', reason: stripeErr.message });
+          console.warn(`Abonnement Stripe déjà annulé ou erreur: ${stripeErr.message}`);
+        }
+      } else {
+        log.steps.push({ action: 'stripe_subscription_none' });
+      }
+
+      // 4. ANONYMISER les données financières (préserve les montants pour la comptabilité)
+      const anonymizeLabel = 'Membre supprimé';
+
+      // 4a. Anonymiser donations (garder montant, date, projet — effacer identité)
+      try {
+        const donSnap = await db.collection('donations')
+          .where('userId', '==', memberUid)
+          .get();
+
+        if (!donSnap.empty) {
+          const chunks = [];
+          let batch = db.batch();
+          let count = 0;
+
+          donSnap.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+              donateur: anonymizeLabel,
+              email: '',
+              telephone: '',
+              donateurEmail: '',
+              userId: 'deleted',
+              anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+            if (count % 500 === 0) {
+              chunks.push(batch);
+              batch = db.batch();
+            }
+          });
+          chunks.push(batch);
+
+          for (const b of chunks) {
+            await b.commit();
+          }
+
+          log.steps.push({ action: 'anonymized_donations', count: donSnap.size });
+          console.log(`${donSnap.size} donation(s) anonymisée(s)`);
+        } else {
+          log.steps.push({ action: 'anonymized_donations', count: 0 });
+        }
+      } catch (err) {
+        log.steps.push({ action: 'error_donations', error: err.message });
+        console.error('Erreur anonymisation donations:', err.message);
+      }
+
+      // 4b. Anonymiser payments (garder montant, date, type — effacer identité)
+      try {
+        const paySnap = await db.collection('payments')
+          .where('metadata.memberId', '==', memberUid)
+          .get();
+
+        if (!paySnap.empty) {
+          const chunks = [];
+          let batch = db.batch();
+          let count = 0;
+
+          paySnap.docs.forEach((doc) => {
+            const docData = doc.data();
+            batch.update(doc.ref, {
+              membreNom: anonymizeLabel,
+              email: '',
+              userId: 'deleted',
+              metadata: {
+                ...docData.metadata,
+                memberId: 'deleted',
+                memberName: anonymizeLabel,
+                memberEmail: '',
+              },
+              anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+            if (count % 500 === 0) {
+              chunks.push(batch);
+              batch = db.batch();
+            }
+          });
+          chunks.push(batch);
+
+          for (const b of chunks) {
+            await b.commit();
+          }
+
+          log.steps.push({ action: 'anonymized_payments', count: paySnap.size });
+          console.log(`${paySnap.size} paiement(s) anonymisé(s)`);
+        } else {
+          log.steps.push({ action: 'anonymized_payments', count: 0 });
+        }
+      } catch (err) {
+        log.steps.push({ action: 'error_payments', error: err.message });
+        console.error('Erreur anonymisation payments:', err.message);
+      }
+
+      // 4c. Anonymiser reçus fiscaux (garder montant, année — effacer identité)
+      try {
+        const recuSnap = await db.collection('recus_fiscaux')
+          .where('userId', '==', memberUid)
+          .get();
+
+        if (!recuSnap.empty) {
+          const chunks = [];
+          let batch = db.batch();
+          let count = 0;
+
+          recuSnap.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+              nom: anonymizeLabel,
+              prenom: '',
+              email: '',
+              adresse: '',
+              userId: 'deleted',
+              anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+            if (count % 500 === 0) {
+              chunks.push(batch);
+              batch = db.batch();
+            }
+          });
+          chunks.push(batch);
+
+          for (const b of chunks) {
+            await b.commit();
+          }
+
+          log.steps.push({ action: 'anonymized_recus_fiscaux', count: recuSnap.size });
+          console.log(`${recuSnap.size} reçu(s) fiscal(aux) anonymisé(s)`);
+        } else {
+          log.steps.push({ action: 'anonymized_recus_fiscaux', count: 0 });
+        }
+      } catch (err) {
+        log.steps.push({ action: 'error_recus_fiscaux', error: err.message });
+        console.error('Erreur anonymisation recus_fiscaux:', err.message);
+      }
+
+      // 5. SUPPRIMER les messages (pas de valeur comptable)
+      try {
+        const msgSnap = await db.collection('messages')
+          .where('odUserId', '==', memberUid)
+          .get();
+
+        if (!msgSnap.empty) {
+          const chunks = [];
+          let batch = db.batch();
+          let count = 0;
+
+          msgSnap.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+            count++;
+            if (count % 500 === 0) {
+              chunks.push(batch);
+              batch = db.batch();
+            }
+          });
+          chunks.push(batch);
+
+          for (const b of chunks) {
+            await b.commit();
+          }
+
+          log.steps.push({ action: 'deleted_messages', count: msgSnap.size });
+          console.log(`${msgSnap.size} message(s) supprimé(s)`);
+        } else {
+          log.steps.push({ action: 'deleted_messages', count: 0 });
+        }
+      } catch (err) {
+        log.steps.push({ action: 'error_messages', error: err.message });
+        console.error('Erreur suppression messages:', err.message);
+      }
+
+      // 6. Supprimer le document membre
+      await memberRef.delete();
+      log.steps.push({ action: 'member_doc_deleted' });
+      console.log('Document membre supprimé');
+
+      // 7. Supprimer l'utilisateur Firebase Auth
+      if (memberUid) {
+        try {
+          await admin.auth().deleteUser(memberUid);
+          log.steps.push({ action: 'auth_user_deleted', uid: memberUid });
+          console.log(`Utilisateur Auth supprimé: ${memberUid}`);
+        } catch (authErr) {
+          log.steps.push({ action: 'auth_user_delete_skipped', reason: authErr.message });
+          console.warn(`Auth user non trouvé ou erreur: ${authErr.message}`);
+        }
+      }
+
+      // 8. Log RGPD — Enregistrer la trace de suppression
+      await db.collection('deletion_logs').add({
+        ...log,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log('Log RGPD enregistré');
+
+      console.log(`=== SUPPRESSION MEMBRE ${memberId} TERMINÉE ===`);
+
+      return {
+        success: true,
+        message: `Membre ${log.memberName} supprimé. Données financières anonymisées (comptabilité préservée).`,
+        details: log.steps,
+      };
+    } catch (error) {
+      console.error('❌ Erreur deleteMemberByAdmin:', error);
+
+      log.steps.push({ action: 'FAILED', error: error.message });
+      try {
+        await db.collection('deletion_logs').add({
+          ...log,
+          failed: true,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (logErr) {
+        console.error('Erreur log RGPD:', logErr);
+      }
+
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', error.message);
+    }
   });
 

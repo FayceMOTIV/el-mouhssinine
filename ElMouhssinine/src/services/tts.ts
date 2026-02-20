@@ -3,6 +3,7 @@ import Tts from 'react-native-tts';
 import { logger } from '../utils';
 
 let ttsInitialized = false;
+let ttsInitFailed = false;
 
 // Initialize TTS - exported for App.tsx
 export const initTTS = async (): Promise<boolean> => {
@@ -24,11 +25,14 @@ export const initTTS = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     logger.error('[TTS] Initialization error:', error);
+    ttsInitFailed = true;
     return false;
   }
 };
 
 export const speakArabic = async (text: string): Promise<void> => {
+  if (ttsInitFailed) return;
+
   try {
     // Initialize on first use
     await initTTS();

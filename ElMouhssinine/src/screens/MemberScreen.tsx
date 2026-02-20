@@ -838,7 +838,7 @@ const MemberScreen = () => {
 
       for (const member of familyMembers) {
         await createMember({
-          email: `${member.prenom.toLowerCase()}.${member.nom.toLowerCase()}@inscrit-par-${memberProfile.email}`,
+          email: '',
           nom: member.nom,
           prenom: member.prenom,
           telephone: member.telephone,
@@ -903,7 +903,7 @@ const MemberScreen = () => {
 
         for (const member of familyMembers) {
           await createMember({
-            email: `${member.prenom.toLowerCase()}.${member.nom.toLowerCase()}@inscrit-par-${memberProfile.email}`,
+            email: '',
             nom: member.nom,
             prenom: member.prenom,
             telephone: member.telephone,
