@@ -54,6 +54,8 @@ import {
   getMosqueProximitySettings,
   getPrayedPrayersToday,
   markPrayerAsPrayed,
+  getRamadanNotificationSettings,
+  scheduleRamadanNotifications,
 } from '../services/prayerNotifications';
 import { checkMosqueProximityForeground } from '../services/backgroundLocation';
 import Geolocation from '@react-native-community/geolocation';
@@ -460,6 +462,34 @@ const HomeScreen = () => {
 
       loadAndScheduleBoost();
     }, [rawPrayerTimings, t])
+  );
+
+  // Auto-scheduler les notifications Ramadan à chaque focus si Ramadan est actif
+  useFocusEffect(
+    useCallback(() => {
+      const scheduleRamadan = async () => {
+        if (!rawPrayerTimings || !ramadanSettings?.enabled) return;
+        try {
+          const settings = await getRamadanNotificationSettings();
+          const anyEnabled = settings.suhoor.enabled || settings.iftar.enabled || settings.tarawih.enabled;
+          if (!anyEnabled) return;
+
+          const translations = {
+            suhoorTitle: language === 'ar' ? '🌙 السحور' : '🌙 Suhoor',
+            suhoorBody: language === 'ar' ? 'بقي {minutes} دقيقة على الفجر - استعد للصيام' : 'Plus que {minutes} min avant Fajr - Préparez-vous',
+            iftarTitle: language === 'ar' ? '🌅 الإفطار' : '🌅 Iftar',
+            iftarBody: language === 'ar' ? 'وقت الإفطار في {minutes} دقيقة' : 'Iftar dans {minutes} min',
+            tarawihTitle: language === 'ar' ? '🕌 التراويح' : '🕌 Tarawih',
+            tarawihBody: language === 'ar' ? 'صلاة التراويح في {minutes} دقيقة' : 'Prière Tarawih dans {minutes} min',
+          };
+          await scheduleRamadanNotifications(rawPrayerTimings, ramadanSettings.tarawihTime, settings, translations);
+          logger.log('[HomeScreen] Ramadan notifications auto-schedulées');
+        } catch (error) {
+          logger.warn('[HomeScreen] Erreur auto-scheduling Ramadan:', error);
+        }
+      };
+      scheduleRamadan();
+    }, [rawPrayerTimings, ramadanSettings, language])
   );
 
   // Mettre à jour la prière en cours quand les horaires changent
