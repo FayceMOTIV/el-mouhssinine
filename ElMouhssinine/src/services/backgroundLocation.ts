@@ -12,6 +12,14 @@ import {
   getMosqueProximitySettings,
 } from './prayerNotifications';
 
+// Configurer Geolocation pour demander "Always" sur iOS (nécessaire pour background)
+Geolocation.setRNConfiguration({
+  skipPermissionRequests: false,
+  authorizationLevel: 'always',
+  enableBackgroundLocationUpdates: true,
+  locationProvider: 'auto',
+});
+
 // Translations pour la notification de proximité
 const PROXIMITY_TRANSLATIONS = {
   fr: {
@@ -29,31 +37,38 @@ const PROXIMITY_TRANSLATIONS = {
  */
 const getCurrentPosition = (): Promise<{ latitude: number; longitude: number } | null> => {
   return new Promise((resolve) => {
-    // Demander la permission iOS si nécessaire
+    const getPosition = () => {
+      Geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          if (__DEV__) console.log('[BackgroundLocation] Erreur géolocalisation:', error.message);
+          resolve(null);
+        },
+        {
+          enableHighAccuracy: false, // Low power mode pour background
+          timeout: 15000,
+          maximumAge: 60000, // Position peut avoir jusqu'à 1 minute
+        }
+      );
+    };
+
+    // Demander la permission iOS si nécessaire, puis obtenir la position
     if (Platform.OS === 'ios') {
       Geolocation.requestAuthorization(
-        () => {}, // success callback
-        (err) => { if (__DEV__) console.log('[BackgroundLocation] Auth error:', err); }
+        () => getPosition(), // Obtenir la position après autorisation
+        (err) => {
+          if (__DEV__) console.log('[BackgroundLocation] Auth error:', err);
+          resolve(null);
+        }
       );
+    } else {
+      getPosition();
     }
-
-    Geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-      },
-      (error) => {
-        if (__DEV__) console.log('[BackgroundLocation] Erreur géolocalisation:', error.message);
-        resolve(null);
-      },
-      {
-        enableHighAccuracy: false, // Low power mode pour background
-        timeout: 15000,
-        maximumAge: 60000, // Position peut avoir jusqu'à 1 minute
-      }
-    );
   });
 };
 
@@ -172,30 +187,37 @@ export const checkMosqueProximityForeground = async (language: 'fr' | 'ar' = 'fr
 
     // Obtenir la position avec haute précision (on est au premier plan)
     const position = await new Promise<{ latitude: number; longitude: number } | null>((resolve) => {
+      const getPos = () => {
+        Geolocation.getCurrentPosition(
+          (pos) => {
+            resolve({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            });
+          },
+          (error) => {
+            console.log('[BackgroundLocation] Foreground geoloc error:', error.message);
+            resolve(null);
+          },
+          {
+            enableHighAccuracy: true, // Haute précision au premier plan
+            timeout: 10000,
+            maximumAge: 30000, // Position plus fraîche
+          }
+        );
+      };
+
       if (Platform.OS === 'ios') {
         Geolocation.requestAuthorization(
-          () => {},
-          (err) => { if (__DEV__) console.log('[BackgroundLocation] Foreground auth error:', err); }
+          () => getPos(),
+          (err) => {
+            if (__DEV__) console.log('[BackgroundLocation] Foreground auth error:', err);
+            resolve(null);
+          }
         );
+      } else {
+        getPos();
       }
-
-      Geolocation.getCurrentPosition(
-        (pos) => {
-          resolve({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          });
-        },
-        (error) => {
-          console.log('[BackgroundLocation] Foreground geoloc error:', error.message);
-          resolve(null);
-        },
-        {
-          enableHighAccuracy: true, // Haute précision au premier plan
-          timeout: 10000,
-          maximumAge: 30000, // Position plus fraîche
-        }
-      );
     });
 
     if (!position) {

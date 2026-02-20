@@ -397,11 +397,15 @@ export const schedulePrayerNotifications = async (
         }
 
         // ========== NOTIFICATION 2 : À L'HEURE (pile à l'heure) ==========
+        // Pour Jumu'a : notification à 13h30 (début sermon) au lieu de l'heure Dhuhr
+        const isFridayNow = baseDate.getDay() === 5;
+        const isJumuaNow = isFridayNow && prayerKey === 'dhuhr';
+        const effectiveNowTime = isJumuaNow ? parsePrayerTime('13:30', baseDate) : prayerTime;
         const nowId = `prayer-${prayerKey}-now-${daySuffix}`;
-        const nowTimestamp = prayerTime.getTime();
+        const nowTimestamp = effectiveNowTime.getTime();
 
         // Ne scheduler que si pas encore passé
-        if (prayerTime > now) {
+        if (effectiveNowTime > now) {
           validNotificationIds.add(nowId);
 
           // Vérifier si déjà schedulée avec le bon timestamp
@@ -419,11 +423,8 @@ export const schedulePrayerNotifications = async (
               timestamp: nowTimestamp,
             };
 
-            // Vendredi + Dhuhr = Jumu'a
-            const isFriday = baseDate.getDay() === 5;
-            const isJumua = isFriday && prayerKey === 'dhuhr';
-            const nowTitle = isJumua ? "🕌 Jumu'a maintenant" : `${prayerName} maintenant`;
-            const nowBody = isJumua
+            const nowTitle = isJumuaNow ? "🕌 Jumu'a maintenant" : `${prayerName} maintenant`;
+            const nowBody = isJumuaNow
               ? 'Sermon en cours - Prière collective ~14h'
               : `Prière ${prayerName} maintenant`;
 
@@ -444,7 +445,7 @@ export const schedulePrayerNotifications = async (
               exactTrigger
             );
 
-            logger.log(`[PrayerNotif] ✅ Scheduled NOW for ${prayerKey} (${daySuffix}) at ${prayerTime.toLocaleString('fr-FR')}${isJumua ? ' [JUMUA]' : ''}`);
+            logger.log(`[PrayerNotif] ✅ Scheduled NOW for ${prayerKey} (${daySuffix}) at ${effectiveNowTime.toLocaleString('fr-FR')}${isJumuaNow ? ' [JUMUA]' : ''}`);
           } else {
             logger.log(`[PrayerNotif] ⏭️ NOW already scheduled for ${prayerKey} (${daySuffix})`);
           }
