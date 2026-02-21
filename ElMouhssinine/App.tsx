@@ -82,10 +82,8 @@ const App: React.FC = () => {
       // Initialiser Sentry pour le monitoring des erreurs (production uniquement)
       initSentry();
 
-      // Initialiser TTS au démarrage
-      initTTS();
-
       // Bug 14 Fix: try/catch individuel pour éviter splash infinie si un service échoue
+      try { await initTTS(); } catch (e) { console.warn('[App] TTS init failed:', e); }
       try { await initializeFCM(); } catch (e) { console.warn('[App] FCM init failed:', e); }
       try { await initBackgroundLocation(); } catch (e) { console.warn('[App] BackgroundLocation init failed:', e); }
       try { await clearBadgeCount(); } catch (e) { console.warn('[App] clearBadge failed:', e); }
