@@ -46,6 +46,10 @@ import ConversationScreen from '../screens/ConversationScreen';
 
 // Membership Screen
 import MyMembershipsScreen from '../screens/MyMembershipsScreen';
+import ProfileEditScreen from '../screens/ProfileEditScreen';
+
+// Privacy Policy Screen
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -271,6 +275,8 @@ const AppNavigator = () => {
         <RootStack.Screen name="Messages" component={MessagesScreen} />
         <RootStack.Screen name="Conversation" component={ConversationScreen} />
         <RootStack.Screen name="MyMemberships" component={MyMembershipsScreen} />
+        <RootStack.Screen name="ProfileEdit" component={ProfileEditScreen} options={{ title: 'Modifier mon profil' }} />
+        <RootStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       </RootStack.Navigator>
     </NavigationContainer>
   );

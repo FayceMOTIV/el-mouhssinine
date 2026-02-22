@@ -14,6 +14,7 @@ import {
   Alert,
   AppState,
   AppStateStatus,
+  Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
@@ -799,8 +800,13 @@ const HomeScreen = () => {
       >
         <View style={styles.popupOverlay}>
           <View style={styles.popupContainer}>
-            <Text style={styles.popupTitle}>{activePopup?.titre || ''}</Text>
-            <Text style={styles.popupContent}>{activePopup?.contenu || ''}</Text>
+            <ScrollView
+              style={{ maxHeight: Dimensions.get('window').height * 0.5 }}
+              showsVerticalScrollIndicator={true}
+            >
+              <Text style={styles.popupTitle}>{activePopup?.titre || ''}</Text>
+              <Text style={styles.popupContent}>{activePopup?.contenu || ''}</Text>
+            </ScrollView>
             <TouchableOpacity
               style={styles.popupButton}
               onPress={closePopup}

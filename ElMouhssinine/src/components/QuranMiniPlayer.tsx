@@ -12,6 +12,7 @@ import { colors } from '../theme/colors';
 import { RepeatMode, PlaybackSpeed } from '../hooks/useQuranPlayer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const isSmallScreen = SCREEN_WIDTH < 375;
 
 interface QuranMiniPlayerProps {
   surahName: string;
@@ -356,11 +357,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryButton: {
-    paddingHorizontal: 8,
+    paddingHorizontal: isSmallScreen ? 4 : 8,
     paddingVertical: 4,
     borderRadius: 8,
-    marginRight: 4,
-    minHeight: 44,
+    marginRight: isSmallScreen ? 2 : 4,
+    minHeight: isSmallScreen ? 32 : 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -368,12 +369,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(201, 162, 39, 0.15)',
   },
   speedText: {
-    fontSize: 11,
+    fontSize: isSmallScreen ? 10 : 11,
     fontWeight: '700',
     color: colors.textSecondary,
   },
   repeatIcon: {
-    fontSize: 14,
+    fontSize: isSmallScreen ? 12 : 14,
   },
   repeatIconActive: {
     // Active state
@@ -389,19 +390,19 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   controlIcon: {
-    fontSize: 18,
+    fontSize: isSmallScreen ? 16 : 18,
   },
   controlIconDisabled: {
     opacity: 0.3,
   },
   playButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: isSmallScreen ? 44 : 52,
+    height: isSmallScreen ? 44 : 52,
+    borderRadius: isSmallScreen ? 22 : 26,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 6,
+    marginHorizontal: isSmallScreen ? 3 : 6,
     shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -409,20 +410,20 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   playIcon: {
-    fontSize: 22,
+    fontSize: isSmallScreen ? 18 : 22,
     color: '#fff',
   },
   stopButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: isSmallScreen ? 32 : 36,
+    height: isSmallScreen ? 32 : 36,
+    borderRadius: isSmallScreen ? 16 : 18,
     backgroundColor: 'rgba(231, 76, 60, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 4,
+    marginLeft: isSmallScreen ? 2 : 4,
   },
   stopIcon: {
-    fontSize: 16,
+    fontSize: isSmallScreen ? 14 : 16,
     color: '#e74c3c',
   },
   closeButton: {

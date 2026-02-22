@@ -5148,54 +5148,78 @@ exports.refundDonation = functions
     }
 
     try {
-      const donRef = admin.firestore().collection('donations').doc(donationId);
-      const donDoc = await donRef.get();
+      const db = admin.firestore();
+      const donRef = db.collection('donations').doc(donationId);
 
-      if (!donDoc.exists) {
-        throw new functions.https.HttpsError('not-found', 'Don introuvable');
-      }
+      // ÉTAPE 1 : Lock atomique via transaction Firestore
+      let paymentIntentId;
+      let donationData;
+      await db.runTransaction(async (transaction) => {
+        const donDoc = await transaction.get(donRef);
+        if (!donDoc.exists) {
+          throw new functions.https.HttpsError('not-found', 'Don introuvable');
+        }
+        donationData = donDoc.data();
+        paymentIntentId = donationData.stripePaymentIntentId || donationData.paymentIntentId;
 
-      const donation = donDoc.data();
-      const paymentIntentId = donation.stripePaymentIntentId || donation.paymentIntentId;
+        if (!paymentIntentId) {
+          throw new functions.https.HttpsError('failed-precondition', 'Pas de paiement Stripe associé à ce don');
+        }
 
-      if (!paymentIntentId) {
-        throw new functions.https.HttpsError('failed-precondition', 'Pas de paiement Stripe associé à ce don');
-      }
+        if (donationData.statut === 'remboursé' || donationData.status === 'refunded') {
+          throw new functions.https.HttpsError(
+            'already-exists',
+            'Ce don a déjà été remboursé'
+          );
+        }
+        if (donationData.refundProcessing === true) {
+          throw new functions.https.HttpsError(
+            'already-exists',
+            'Un remboursement est déjà en cours pour ce don'
+          );
+        }
+        // Poser le lock immédiatement
+        transaction.update(donRef, { refundProcessing: true });
+      });
 
-      // Créer le remboursement Stripe
-      const refundParams = { payment_intent: paymentIntentId };
-      if (amount && amount > 0) {
-        refundParams.amount = Math.round(amount * 100); // remboursement partiel
-      }
-
-      let refundResult;
+      // ÉTAPE 2 : Call Stripe HORS transaction (évite double call si retry)
+      let refundResult = null;
       try {
+        const refundParams = { payment_intent: paymentIntentId };
+        if (amount && amount > 0) {
+          refundParams.amount = Math.round(amount * 100); // remboursement partiel
+        }
         refundResult = await stripe.refunds.create(refundParams);
         console.log(`💰 Remboursement don Stripe effectué: ${refundResult.id} pour ${refundResult.amount / 100}€`);
       } catch (stripeError) {
         console.error('⚠️ Erreur remboursement Stripe:', stripeError.message);
+        // Annuler le lock si Stripe échoue
+        await donRef.update({ refundProcessing: false });
         throw new functions.https.HttpsError('internal', `Erreur Stripe: ${stripeError.message}`);
       }
 
+      // ÉTAPE 3 : Confirmer le remboursement dans Firestore
       const refundedAmount = refundResult.amount / 100;
-      const donationTotal = donation.amount || donation.montant || 0;
-      const isPartial = amount && amount < donationTotal;
+      const donationTotal = donationData.amount || donationData.montant || 0;
+      const isPartial = amount && amount > 0 && amount < donationTotal;
 
-      // Mettre à jour le don
-      await donRef.update({
+      const donationUpdate = {
+        refundProcessing: false,
         statut: isPartial ? 'partiellement_remboursé' : 'remboursé',
         status: isPartial ? 'partially_refunded' : 'refunded',
         refundId: refundResult.id,
         refundAmount: refundedAmount,
         refundedAt: admin.firestore.FieldValue.serverTimestamp(),
         refundedBy: context.auth.uid,
-      });
+      };
+
+      await donRef.update(donationUpdate);
 
       // Si don affecté à un projet, décrémenter montantActuel
-      const projectId = donation.projectId || donation.projetId;
+      const projectId = donationData.projectId || donationData.projetId;
       if (projectId) {
         try {
-          const projectRef = admin.firestore().collection('projects').doc(projectId);
+          const projectRef = db.collection('projects').doc(projectId);
           const projectDoc = await projectRef.get();
           if (projectDoc.exists) {
             await projectRef.update({
@@ -5207,12 +5231,13 @@ exports.refundDonation = functions
         }
       }
 
-      console.log(`✅ Don ${donationId} remboursé: ${refundedAmount}€`);
+      console.log(`✅ Don ${donationId} remboursé: ${refundedAmount}€ (${isPartial ? 'partiel' : 'total'})`);
       return {
         success: true,
         refundId: refundResult.id,
         refundedAmount: refundedAmount,
-        message: `Don remboursé: ${refundedAmount}€`,
+        isPartial: isPartial,
+        message: `Don remboursé${isPartial ? ' partiellement' : ''}: ${refundedAmount}€`,
       };
     } catch (error) {
       console.error('❌ Erreur refundDonation:', error);
@@ -5298,12 +5323,13 @@ exports.checkExpiringCotisations = functions
   .pubsub.schedule('0 8 * * *')
   .timeZone('Europe/Paris')
   .onRun(async (context) => {
-    console.log('=== Vérification des cotisations expirantes ===');
+    try {
+      console.log('=== Vérification des cotisations expirantes ===');
 
-    const brevoUser = BREVO_SMTP_USER.value();
-    const brevoPass = BREVO_SMTP_PASS.value();
-    const fromEmail = BREVO_FROM_EMAIL.value();
-    const fromName = BREVO_FROM_NAME.value();
+      const brevoUser = BREVO_SMTP_USER.value();
+      const brevoPass = BREVO_SMTP_PASS.value();
+      const fromEmail = BREVO_FROM_EMAIL.value();
+      const fromName = BREVO_FROM_NAME.value();
 
     if (!brevoUser || !brevoPass || !fromEmail) {
       console.error('[EMAIL ERROR] Config Brevo manquante. Email de rappel cotisation non envoyé');
@@ -5444,6 +5470,10 @@ exports.checkExpiringCotisations = functions
 
     console.log(`=== Résultat: 30j=${emailsSent.remind30}, 7j=${emailsSent.remind7}, expirés=${emailsSent.expired} ===`);
     return null;
+    } catch (globalError) {
+      console.error('[CRON ERROR] checkExpiringCotisations échoué:', globalError.message || globalError);
+      return null;
+    }
   });
 
 // ==================== RÉCONCILIATION STRIPE/FIRESTORE ====================
@@ -5467,7 +5497,7 @@ exports.reconcileStripePayments = functions
       let startingAfterPI = undefined;
       let totalPICount = 0;
 
-      while (hasMorePI && (Date.now() - startTime < 300000)) {
+      while (hasMorePI && (Date.now() - startTime < 100000)) {
         const paymentIntents = await stripe.paymentIntents.list({
           created: { gte: sevenDaysAgo },
           limit: 100,
@@ -5514,7 +5544,7 @@ exports.reconcileStripePayments = functions
       let startingAfterInv = undefined;
       let totalInvCount = 0;
 
-      while (hasMoreInv && (Date.now() - startTime < 300000)) {
+      while (hasMoreInv && (Date.now() - startTime < 100000)) {
         const invoices = await stripe.invoices.list({
           created: { gte: sevenDaysAgo },
           status: 'paid',
@@ -6081,5 +6111,47 @@ exports.deleteMyAccount = functions
       if (error instanceof functions.https.HttpsError) throw error;
       throw new functions.https.HttpsError('internal', error.message);
     }
+  });
+
+// ==================== RGPD — Export données utilisateur ====================
+exports.exportMyData = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Connexion requise');
+    }
+    const uid = context.auth.uid;
+    const db = admin.firestore();
+
+    const [memberDoc, donationsSnap, paymentsSnap, messagesSnap] = await Promise.all([
+      db.collection('members').doc(uid).get(),
+      db.collection('donations').where('userId', '==', uid).get(),
+      db.collection('payments').where('metadata.memberId', '==', uid).get(),
+      db.collection('messages').where('odUserId', '==', uid).get(),
+    ]);
+
+    const sanitizeTimestamp = (val) => {
+      if (!val) return null;
+      if (val.toDate) return val.toDate().toISOString();
+      return val;
+    };
+
+    const sanitizeDoc = (doc) => {
+      const d = doc.data();
+      const result = { id: doc.id };
+      for (const [key, val] of Object.entries(d)) {
+        result[key] = sanitizeTimestamp(val);
+      }
+      return result;
+    };
+
+    return {
+      exportedAt: new Date().toISOString(),
+      profil: memberDoc.exists ? sanitizeDoc(memberDoc) : {},
+      donations: donationsSnap.docs.map(sanitizeDoc),
+      paiements: paymentsSnap.docs.map(sanitizeDoc),
+      messages: messagesSnap.docs.map(sanitizeDoc),
+    };
   });
 

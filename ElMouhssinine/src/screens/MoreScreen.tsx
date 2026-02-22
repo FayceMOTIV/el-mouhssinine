@@ -19,6 +19,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, platformShadow, isSmallScreen } from '../theme/colors';
 import { subscribeToMosqueeInfo, subscribeToRamadanSettings, RamadanSettings, deleteMyAccount } from '../services/firebase';
 import { AuthService } from '../services/auth';
+import functions from '@react-native-firebase/functions';
 import { MosqueeInfo } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -1208,6 +1209,51 @@ const MoreScreen = () => {
             </View>
           </View>
 
+
+          {/* Politique de confidentialité (RGPD) */}
+          <TouchableOpacity
+            style={[styles.logoutButton, { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.2)', marginBottom: spacing.sm }]}
+            onPress={() => navigation.navigate('PrivacyPolicy')}
+          >
+            <View style={[styles.settingRow, { justifyContent: 'center' }]}>
+              <Text style={{ fontSize: 18, marginRight: spacing.sm }}>🔒</Text>
+              <Text style={[styles.settingLabel, { color: '#3b82f6' }]}>
+                {language === 'ar' ? 'سياسة الخصوصية' : 'Politique de confidentialité'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Exporter mes données (RGPD Article 20) */}
+          {userEmail && (
+            <TouchableOpacity
+              style={[styles.logoutButton, { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: 'rgba(34, 197, 94, 0.2)', marginBottom: spacing.sm }]}
+              onPress={async () => {
+                try {
+                  const exportMyData = functions().httpsCallable('exportMyData');
+                  const result = await exportMyData();
+                  const data = result.data as any;
+                  Alert.alert(
+                    language === 'ar' ? 'تصدير البيانات' : 'Export de données',
+                    language === 'ar'
+                      ? `تم تصدير بياناتك بنجاح:\n\n• ${data.donations?.length || 0} تبرعات\n• ${data.paiements?.length || 0} مدفوعات\n• ${data.messages?.length || 0} رسائل\n\nتاريخ التصدير: ${new Date(data.exportedAt).toLocaleDateString('ar')}`
+                      : `Vos données ont été exportées avec succès:\n\n• ${data.donations?.length || 0} donations\n• ${data.paiements?.length || 0} paiements\n• ${data.messages?.length || 0} messages\n\nExporté le: ${new Date(data.exportedAt).toLocaleDateString('fr-FR')}`
+                  );
+                } catch (error) {
+                  Alert.alert(
+                    language === 'ar' ? 'خطأ' : 'Erreur',
+                    language === 'ar' ? 'فشل تصدير البيانات' : 'Impossible d\'exporter les données'
+                  );
+                }
+              }}
+            >
+              <View style={[styles.settingRow, { justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>📥</Text>
+                <Text style={[styles.settingLabel, { color: '#22c55e' }]}>
+                  {language === 'ar' ? 'تصدير بياناتي' : 'Exporter mes données'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* Supprimer mon compte (RGPD) */}
           {userEmail && (

@@ -4,6 +4,7 @@
  */
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
+import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils';
 
@@ -196,6 +197,39 @@ export const AuthService = {
    */
   signOut: async (): Promise<void> => {
     try {
+      // 1. Annuler toutes les notifications locales programmées
+      try {
+        const notifee = (await import('@notifee/react-native')).default;
+        await notifee.cancelAllNotifications();
+      } catch (e) {
+        // Non bloquant
+      }
+
+      // 2. Désouscrire de tous les topics FCM
+      const fcmTopics = [
+        'general', 'announcements', 'events', 'janaza',
+        'jumua', 'fajr_reminders', 'members'
+      ];
+      for (const topic of fcmTopics) {
+        try {
+          await messaging().unsubscribeFromTopic(topic);
+        } catch (e) {
+          // Non bloquant - log silencieux
+        }
+      }
+
+      // 3. Supprimer le token FCM de Firestore
+      try {
+        const uid = auth().currentUser?.uid;
+        if (uid) {
+          await firestore().collection('members').doc(uid).update({
+            fcmToken: firestore.FieldValue.delete()
+          });
+        }
+      } catch (e) {
+        // Non bloquant
+      }
+
       await auth().signOut();
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
       logger.log('[Auth] Déconnexion réussie');

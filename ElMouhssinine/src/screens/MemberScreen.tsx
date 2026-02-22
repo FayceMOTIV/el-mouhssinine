@@ -1331,6 +1331,32 @@ const MemberScreen = () => {
               <Text style={styles.membershipsButtonArrow}>→</Text>
             </TouchableOpacity>
 
+            {/* Bouton modifier mon profil */}
+            {memberProfile && (
+              <TouchableOpacity
+                style={styles.membershipsButton}
+                onPress={() => navigation.navigate('ProfileEdit', {
+                  uid: memberProfile.uid,
+                  nom: memberProfile.nom || '',
+                  prenom: memberProfile.prenom || '',
+                  telephone: memberProfile.telephone || '',
+                  adresse: memberProfile.adresse || '',
+                  email: memberProfile.email || '',
+                })}
+              >
+                <Text style={styles.membershipsButtonIcon}>✏️</Text>
+                <View style={styles.membershipsButtonContent}>
+                  <Text style={[styles.membershipsButtonText, isRTL && styles.rtlText]}>
+                    Modifier mon profil
+                  </Text>
+                  <Text style={[styles.membershipsButtonSubtext, isRTL && styles.rtlText]}>
+                    Nom, téléphone, adresse
+                  </Text>
+                </View>
+                <Text style={styles.membershipsButtonArrow}>→</Text>
+              </TouchableOpacity>
+            )}
+
             {/* Bouton annuler abonnement mensuel */}
             {memberProfile?.cotisationType === 'mensuel' && isPaid && (
               <TouchableOpacity

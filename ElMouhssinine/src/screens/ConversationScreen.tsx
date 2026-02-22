@@ -46,16 +46,20 @@ const ConversationScreen = () => {
       return;
     }
 
+    let timeoutId: ReturnType<typeof setTimeout>;
     const unsubscribe = subscribeToMessage(messageId, (msg) => {
       setMessage(msg);
       setLoading(false);
       // Scroll to bottom when new messages arrive
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, [messageId]);
 
   // Envoyer une réponse
