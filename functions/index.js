@@ -269,236 +269,44 @@ const textToEmailHtml = (body, options = {}) => {
 // ==================== NOTIFICATION ANNONCE ====================
 // Trigger : quand une nouvelle annonce est créée
 
+// NOTE: Pas d'envoi push auto ici — l'admin envoie manuellement via le bouton backoffice
+// (évite les notifications en double : onCreate auto + bouton manuel)
 exports.onNewAnnouncement = functions
   .region('europe-west1')
   .firestore
   .document('announcements/{announcementId}')
   .onCreate(async (snap, context) => {
     const announcement = snap.data();
-
-    // Ne pas notifier si l'annonce n'est pas active
-    if (!announcement.actif) {
-      console.log('Annonce inactive, pas de notification');
-      return null;
-    }
-
-    // Ne pas envoyer en double si déjà envoyé
-    if (announcement.notificationSent) {
-      console.log('Notification déjà envoyée pour cette annonce');
-      return null;
-    }
-
-    const message = {
-      notification: {
-        title: '📢 ' + (announcement.titre || 'Nouvelle annonce'),
-        body: truncate(announcement.contenu, 150),
-      },
-      data: {
-        type: 'announcement',
-        id: context.params.announcementId,
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-          },
-        },
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          channelId: 'announcements',
-        },
-      },
-      topic: 'announcements',
-    };
-
-    try {
-      const response = await admin.messaging().send(message);
-      console.log('Notification annonce envoyée:', response);
-
-      await snap.ref.update({
-        notificationSent: true,
-        notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      // Enregistrer dans l'historique
-      await admin.firestore().collection('notifications_history').add({
-        titre: message.notification.title,
-        message: message.notification.body,
-        topic: 'announcements',
-        type: 'auto_announcement',
-        envoyeePar: 'system',
-        envoyeeA: new Date(),
-        messageId: response,
-      });
-
-      return { success: true, messageId: response };
-    } catch (error) {
-      console.error('Erreur notification annonce:', error);
-      return { error: error.message };
-    }
+    console.log('Nouvelle annonce créée:', context.params.announcementId, '- actif:', announcement.actif);
+    return null;
   });
 
 // ==================== NOTIFICATION ÉVÉNEMENT ====================
 // Trigger : quand un nouvel événement est créé
 
+// NOTE: Pas d'envoi push auto — l'admin envoie via le bouton backoffice
 exports.onNewEvent = functions
   .region('europe-west1')
   .firestore
   .document('events/{eventId}')
   .onCreate(async (snap, context) => {
     const event = snap.data();
-
-    if (!event.actif) {
-      console.log('Événement inactif, pas de notification');
-      return null;
-    }
-
-    if (event.notificationSent) {
-      console.log('Notification déjà envoyée pour cet événement');
-      return null;
-    }
-
-    const dateFormatted = formatDateFr(event.date);
-    const body = `${dateFormatted} à ${event.heure || ''} - ${event.lieu || 'Mosquée'}`;
-
-    const message = {
-      notification: {
-        title: '📅 ' + (event.titre || 'Nouvel événement'),
-        body: truncate(body, 150),
-      },
-      data: {
-        type: 'event',
-        id: context.params.eventId,
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-          },
-        },
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          channelId: 'events',
-        },
-      },
-      topic: 'events',
-    };
-
-    try {
-      const response = await admin.messaging().send(message);
-      console.log('Notification événement envoyée:', response);
-
-      await snap.ref.update({
-        notificationSent: true,
-        notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      await admin.firestore().collection('notifications_history').add({
-        titre: message.notification.title,
-        message: message.notification.body,
-        topic: 'events',
-        type: 'auto_event',
-        envoyeePar: 'system',
-        envoyeeA: new Date(),
-        messageId: response,
-      });
-
-      return { success: true, messageId: response };
-    } catch (error) {
-      console.error('Erreur notification événement:', error);
-      return { error: error.message };
-    }
+    console.log('Nouvel événement créé:', context.params.eventId, '- actif:', event.actif);
+    return null;
   });
 
 // ==================== NOTIFICATION JANAZA ====================
 // Trigger : quand une nouvelle Salat Janaza est créée (URGENT)
 
+// NOTE: Pas d'envoi push auto — l'admin envoie via le bouton backoffice
 exports.onNewJanaza = functions
   .region('europe-west1')
   .firestore
   .document('janaza/{janazaId}')
   .onCreate(async (snap, context) => {
     const janaza = snap.data();
-
-    if (!janaza.actif) {
-      console.log('Janaza inactive, pas de notification');
-      return null;
-    }
-
-    if (janaza.notificationSent) {
-      console.log('Notification déjà envoyée pour cette janaza');
-      return null;
-    }
-
-    const dateFormatted = formatDateFr(janaza.date);
-    let body = `Prière pour ${janaza.nomDefunt || 'un défunt'}`;
-    if (janaza.heurePriere) {
-      body += ` - ${janaza.heurePriere}`;
-    } else if (janaza.salatApres) {
-      body += ` - Après ${janaza.salatApres}`;
-    }
-    if (janaza.lieu) {
-      body += ` à ${janaza.lieu}`;
-    }
-
-    const message = {
-      notification: {
-        title: '⚰️ Salat Janaza',
-        body: truncate(body, 150),
-      },
-      data: {
-        type: 'janaza',
-        id: context.params.janazaId,
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          channelId: 'janaza_channel',
-          priority: 'max',
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-            'interruption-level': 'time-sensitive',
-          },
-        },
-      },
-      topic: 'janaza',
-    };
-
-    try {
-      const response = await admin.messaging().send(message);
-      console.log('Notification Janaza envoyée:', response);
-
-      await snap.ref.update({
-        notificationSent: true,
-        notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      await admin.firestore().collection('notifications_history').add({
-        titre: message.notification.title,
-        message: message.notification.body,
-        topic: 'janaza',
-        type: 'auto_janaza',
-        envoyeePar: 'system',
-        envoyeeA: new Date(),
-        messageId: response,
-      });
-
-      return { success: true, messageId: response };
-    } catch (error) {
-      console.error('Erreur notification Janaza:', error);
-      return { error: error.message };
-    }
+    console.log('Nouvelle janaza créée:', context.params.janazaId, '- actif:', janaza.actif);
+    return null;
   });
 
 // ==================== NOTIFICATION POPUP ====================

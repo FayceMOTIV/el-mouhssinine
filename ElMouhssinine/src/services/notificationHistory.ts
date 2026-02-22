@@ -59,6 +59,7 @@ export const getNotificationHistory = async (): Promise<StoredNotification[]> =>
 
 /**
  * Ajoute une notification à l'historique
+ * Déduplication : ignore les doublons (même titre+body) reçus dans les 2 dernières minutes
  */
 export const addNotificationToHistory = async (
   title: string,
@@ -68,12 +69,24 @@ export const addNotificationToHistory = async (
   try {
     const history = await getNotificationHistory();
 
+    // Déduplication : vérifier si une notif identique existe dans les 2 dernières minutes
+    const DEDUP_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
+    const now = Date.now();
+    const isDuplicate = history.some(
+      n => n.title === title && n.body === body && (now - n.timestamp) < DEDUP_WINDOW_MS
+    );
+
+    if (isDuplicate) {
+      logger.log('[NotifHistory] Doublon ignoré:', title);
+      return;
+    }
+
     // Créer la nouvelle notification
     const newNotif: StoredNotification = {
       id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       title,
       body,
-      timestamp: Date.now(),
+      timestamp: now,
       type,
       read: false,
     };
