@@ -51,6 +51,9 @@ import ProfileEditScreen from '../screens/ProfileEditScreen';
 // Privacy Policy Screen
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 
+// Prayer Calendar Screen
+import PrayerCalendarScreen from '../screens/PrayerCalendarScreen';
+
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
@@ -277,6 +280,7 @@ const AppNavigator = () => {
         <RootStack.Screen name="MyMemberships" component={MyMembershipsScreen} />
         <RootStack.Screen name="ProfileEdit" component={ProfileEditScreen} options={{ title: 'Modifier mon profil' }} />
         <RootStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+        <RootStack.Screen name="PrayerCalendar" component={PrayerCalendarScreen} />
       </RootStack.Navigator>
     </NavigationContainer>
   );

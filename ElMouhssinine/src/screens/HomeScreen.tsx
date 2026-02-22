@@ -242,13 +242,15 @@ const HomeScreen = () => {
       const todayParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
       const months = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin',
                       'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
-      setIslamicDate({
-        day: hijri.day,
-        month: hijri.month.en,
-        monthAr: hijri.month.ar,
-        year: hijri.year,
-        gregorian: `${todayParis.getDate()} ${months[todayParis.getMonth()]} ${todayParis.getFullYear()}`
-      });
+      if (hijri && hijri.day && hijri.month && hijri.year) {
+        setIslamicDate({
+          day: hijri.day,
+          month: hijri.month.en,
+          monthAr: hijri.month.ar,
+          year: hijri.year,
+          gregorian: `${todayParis.getDate()} ${months[todayParis.getMonth()]} ${todayParis.getFullYear()}`
+        });
+      }
       setPrayerDataWarning(false);
     } catch (error) {
       if (__DEV__) console.warn('API error, using mock data:', error);

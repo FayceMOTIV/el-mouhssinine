@@ -299,6 +299,8 @@ export const translations = {
     // More Screen
     settings: 'Paramètres',
     qiblaDirection: 'Direction Qibla',
+    prayerCalendar: 'Calendrier des Prières',
+    prayerTimesFor: 'Horaires du',
     mosqueBankInfo: 'RIB Mosquée',
     mosqueInfo: 'Infos mosquée',
     notifications: 'Notifications',
@@ -842,6 +844,8 @@ export const translations = {
     // More Screen
     settings: 'الإعدادات',
     qiblaDirection: 'اتجاه القبلة',
+    prayerCalendar: 'تقويم الصلاة',
+    prayerTimesFor: 'مواقيت يوم',
     mosqueBankInfo: 'معلومات البنك',
     mosqueInfo: 'معلومات المسجد',
     notifications: 'الإشعارات',

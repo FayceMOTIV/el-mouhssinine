@@ -560,6 +560,24 @@ const MoreScreen = () => {
             </View>
           </View>
 
+          {/* Calendrier des prières */}
+          <TouchableOpacity
+            style={[styles.card, { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', padding: spacing.lg }]}
+            onPress={() => navigation.navigate('PrayerCalendar' as never)}
+            activeOpacity={0.7}
+          >
+            <Text style={{ fontSize: 28, marginRight: isRTL ? 0 : spacing.md, marginLeft: isRTL ? spacing.md : 0 }}>📅</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[{ fontSize: fontSize.lg, fontWeight: '700', color: colors.text }, isRTL && styles.textRTL]}>
+                {t('prayerCalendar')}
+              </Text>
+              <Text style={[{ fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 }, isRTL && styles.textRTL]}>
+                {language === 'ar' ? 'اطلع على مواقيت الصلاة لأي يوم' : 'Consultez les horaires pour n\'importe quel jour'}
+              </Text>
+            </View>
+            <Text style={{ fontSize: fontSize.lg, color: colors.textMuted }}>{isRTL ? '◀' : '▶'}</Text>
+          </TouchableOpacity>
+
           {/* RIB Mosquée */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>🏦 {t('bankDetails')}</Text>

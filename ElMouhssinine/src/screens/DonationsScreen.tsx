@@ -635,7 +635,6 @@ const DonationsScreen = () => {
                     const currentYear = new Date().getFullYear();
                     const years = [currentYear - 1, currentYear];
                     return years.map((year) => {
-                      const available = currentYear > year;
                       return (
                         <View key={year} style={styles.recuYearRow}>
                           <View style={{ flex: 1 }}>
@@ -646,31 +645,17 @@ const DonationsScreen = () => {
                               {language === 'ar' ? 'جميع التبرعات للسنة' : 'Tous les dons de l\'année'}
                             </Text>
                           </View>
-                          {available ? (
-                            <TouchableOpacity
-                              style={[
-                                styles.recuFiscalButton,
-                                sendingRecuFiscal && styles.recuFiscalButtonDisabled,
-                              ]}
-                              onPress={() => handleRequestRecuFiscal(year)}
-                              disabled={sendingRecuFiscal}
-                            >
-                              {sendingRecuFiscal ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                              ) : (
-                                <>
-                                  <Text style={styles.recuFiscalButtonIcon}>📧</Text>
-                                  <Text style={styles.recuFiscalButtonText}>
-                                    {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
-                                  </Text>
-                                </>
-                              )}
-                            </TouchableOpacity>
-                          ) : (
+                          {year === currentYear ? (
                             <Text style={styles.recuNotAvailable}>
                               {language === 'ar'
                                 ? `متاح في 01/01/${year + 1}`
                                 : `Disponible le 01/01/${year + 1}`}
+                            </Text>
+                          ) : (
+                            <Text style={[styles.recuNotAvailable, { fontSize: 12 }]}>
+                              {language === 'ar'
+                                ? `📋 تواصلوا مع المسجد لإيصال ${year}`
+                                : `📋 Contactez la mosquée pour votre reçu ${year}`}
                             </Text>
                           )}
                         </View>

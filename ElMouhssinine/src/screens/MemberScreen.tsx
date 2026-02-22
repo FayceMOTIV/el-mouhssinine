@@ -113,7 +113,7 @@ const MemberScreen = () => {
 
   // Historique par année
   const [historyYear, setHistoryYear] = useState(new Date().getFullYear());
-  const [availableYears, setAvailableYears] = useState<number[]>([2026]);
+  const [availableYears, setAvailableYears] = useState<number[]>([new Date().getFullYear()]);
 
   // Calculer cotisation (fixe) et don (surplus)
   // Utilise les prix de Firebase (formulePrices) pour respecter les prix configurés dans le backoffice
@@ -241,7 +241,7 @@ const MemberScreen = () => {
               }));
               setPaymentHistory(payments);
               // Calculer les années disponibles dynamiquement
-              const yearsSet = new Set<number>([2026]);
+              const yearsSet = new Set<number>([new Date().getFullYear()]);
               payments.forEach((p: any) => {
                 const d = p.createdAt?.toDate?.() || new Date(p.createdAt);
                 if (d && !isNaN(d.getTime())) yearsSet.add(d.getFullYear());
@@ -275,7 +275,7 @@ const MemberScreen = () => {
         setIsExpired(false);
         setInscribedMembers([]);
         setPaymentHistory([]);
-        setAvailableYears([2026]);
+        setAvailableYears([new Date().getFullYear()]);
         setHistoryYear(new Date().getFullYear());
         setMemberPage('sympathisant');
         setIsLoading(false);
@@ -804,14 +804,17 @@ const MemberScreen = () => {
     for (const member of familyMembers) {
       if (!member.nom.trim() || !member.prenom.trim() || !member.telephone.trim() || !member.adresse.trim()) {
         Alert.alert('Erreur', 'Veuillez remplir tous les champs pour chaque membre');
+        isProcessingRef.current = false;
         return;
       }
       if (!member.genre) {
         Alert.alert('Erreur', `Veuillez sélectionner le genre pour ${member.prenom || 'ce membre'}`);
+        isProcessingRef.current = false;
         return;
       }
       if (!member.dateNaissance.trim()) {
         Alert.alert('Erreur', `Veuillez entrer la date de naissance pour ${member.prenom || 'ce membre'}`);
+        isProcessingRef.current = false;
         return;
       }
       if (!isAdult(member.dateNaissance)) {
@@ -819,10 +822,12 @@ const MemberScreen = () => {
           'Adhésion impossible',
           `${member.prenom || 'Ce membre'} doit avoir au moins 16 ans pour devenir adhérent de l'association.`
         );
+        isProcessingRef.current = false;
         return;
       }
       if (!member.accepte) {
         Alert.alert('Erreur', `${member.prenom} doit accepter le règlement intérieur`);
+        isProcessingRef.current = false;
         return;
       }
     }
