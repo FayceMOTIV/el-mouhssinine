@@ -1606,34 +1606,46 @@ exports.stripeWebhook = functions
           }
 
           // ATOMICITÉ + IDEMPOTENCE: Tout dans une seule transaction
+          // IMPORTANT: Firestore exige que TOUS les reads soient AVANT tous les writes
           await admin.firestore().runTransaction(async (transaction) => {
-            // 1. Vérification idempotence DANS la transaction
+            // ========== PHASE 1: TOUS LES READS ==========
             const processedRef = admin.firestore().collection('processed_payments').doc(paymentIntentId);
             const existingPayment = await transaction.get(processedRef);
 
             if (existingPayment.exists) {
               console.log('Paiement déjà traité (idempotence in-transaction):', paymentIntentId);
-              // Throw pour sortir de la transaction sans erreur
               throw { alreadyProcessed: true };
             }
 
-            // 2. Marquer comme traité (pour idempotence)
+            // Pré-lire le membre (cotisation) ou le projet (donation) AVANT les writes
+            let memberDoc = null;
+            let memberRef = null;
+            let projectDoc = null;
+            let projectRef = null;
+
+            if (metadata.type === 'cotisation' && metadata.memberId) {
+              memberRef = admin.firestore().collection('members').doc(metadata.memberId);
+              memberDoc = await transaction.get(memberRef);
+            }
+
+            if (metadata.type !== 'cotisation' && metadata.projectId) {
+              projectRef = admin.firestore().collection('projects').doc(metadata.projectId);
+              projectDoc = await transaction.get(projectRef);
+            }
+
+            // ========== PHASE 2: TOUS LES WRITES ==========
+            // Marquer comme traité (idempotence)
             transaction.set(processedRef, {
               processedAt: admin.firestore.FieldValue.serverTimestamp(),
               type: metadata.type || 'donation',
               amount: amountEuros,
             });
 
-            // 3. Enregistrer le paiement selon le type
             if (metadata.type === 'cotisation') {
-              // SÉCURITÉ: Utiliser le montant Stripe réel, pas les metadata client
-              // Les metadata servent seulement à connaître la répartition cotisation/don
               const declaredCotisation = parseFloat(metadata.montantCotisation) || amountEuros;
               const declaredDon = parseFloat(metadata.montantDon) || 0;
               const declaredTotal = declaredCotisation + declaredDon;
 
-              // Si les montants déclarés correspondent au total Stripe, on les utilise
-              // Sinon, on considère tout comme cotisation (sécurité)
               let montantCotisation, montantDon;
               if (Math.abs(declaredTotal - amountEuros) <= 0.01) {
                 montantCotisation = declaredCotisation;
@@ -1644,13 +1656,11 @@ exports.stripeWebhook = functions
                 montantDon = 0;
               }
 
-              // Créer le document payment (cotisation)
-              // Bug 2 Fix: utiliser paymentIntentId comme docId (idempotence, évite doublon avec l'app)
               const paymentRef = admin.firestore().collection('payments').doc(paymentIntentId);
               transaction.set(paymentRef, {
                 stripePaymentIntentId: paymentIntentId,
                 amount: montantCotisation,
-                montant: montantCotisation, // Compatibilité: écrire les deux champs
+                montant: montantCotisation,
                 currency: paymentIntent.currency,
                 status: metadata._montantSuspect ? 'montant_suspect' : 'succeeded',
                 type: 'cotisation',
@@ -1659,8 +1669,6 @@ exports.stripeWebhook = functions
                 webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
               }, { merge: true });
 
-              // Si don supplémentaire inclus, créer aussi un document donation
-              // ID déterministe pour idempotence (évite doublons si webhook retry)
               if (montantDon > 0) {
                 console.log('Don supplémentaire détecté:', montantDon, 'EUR');
                 const donationRef = admin.firestore().collection('donations').doc(paymentIntentId + '-extra');
@@ -1677,7 +1685,6 @@ exports.stripeWebhook = functions
                     ...metadata,
                     linkedToCotisation: true,
                   },
-                  // Champs donateur (nécessaires backoffice + reçu fiscal)
                   donateur: metadata.memberName || metadata.donorName || metadata.donorEmail || 'Anonyme',
                   donateurEmail: (metadata.email || metadata.donorEmail || '').toLowerCase() || null,
                   userId: metadata.memberId || metadata.userId || '',
@@ -1698,34 +1705,27 @@ exports.stripeWebhook = functions
                 }, { merge: true });
               }
 
-              // Mettre à jour le membre si memberId fourni
-              if (metadata.memberId) {
-                const memberRef = admin.firestore().collection('members').doc(metadata.memberId);
-                // SÉCURITÉ: Vérifier que le membre existe avant update
-                const memberDoc = await transaction.get(memberRef);
-                if (memberDoc.exists) {
-                  transaction.update(memberRef, {
-                    statut: 'active',
-                    status: 'active', // FIX A: TOUT paiement de cotisation (mensuel OU annuel) → 'active' (Page 3 - Membre Actif)
-                    datePaiement: admin.firestore.FieldValue.serverTimestamp(),
-                    montantPaye: montantCotisation, // Seulement le montant de la cotisation
-                    stripePaymentId: paymentIntentId,
-                  });
-                } else {
-                  console.warn('Membre non trouvé pour update:', metadata.memberId);
-                }
+              // Mettre à jour le membre (déjà lu en phase 1)
+              if (memberRef && memberDoc && memberDoc.exists) {
+                transaction.update(memberRef, {
+                  statut: 'active',
+                  status: 'active',
+                  datePaiement: admin.firestore.FieldValue.serverTimestamp(),
+                  montantPaye: montantCotisation,
+                  stripePaymentId: paymentIntentId,
+                });
+              } else if (metadata.memberId) {
+                console.warn('Membre non trouvé pour update:', metadata.memberId);
               }
             } else {
-              // Don - Créer/merger le document donation (docId = paymentIntentId pour idempotence anti-doublon avec l'app)
-              // Bug 1 Fix: { merge: true } pour ne pas écraser donorType/donorInfo créés par l'app (nécessaires CERFA)
               const donationRef = admin.firestore().collection('donations').doc(paymentIntentId);
               transaction.set(donationRef, {
                 stripePaymentIntentId: paymentIntentId,
                 amount: amountEuros,
-                montant: amountEuros, // Compatibilité: écrire les deux champs
+                montant: amountEuros,
                 currency: paymentIntent.currency,
                 status: 'succeeded',
-                statut: 'completed', // Compatibilité avec l'app
+                statut: 'completed',
                 type: 'donation',
                 description: paymentIntent.description,
                 metadata: metadata,
@@ -1742,18 +1742,13 @@ exports.stripeWebhook = functions
                 webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
               }, { merge: true });
 
-              // Mettre à jour le montant collecté du projet
-              if (metadata.projectId) {
-                const projectRef = admin.firestore().collection('projects').doc(metadata.projectId);
-                // SÉCURITÉ: Vérifier que le projet existe avant update
-                const projectDoc = await transaction.get(projectRef);
-                if (projectDoc.exists) {
-                  transaction.update(projectRef, {
-                    montantActuel: admin.firestore.FieldValue.increment(amountEuros),
-                  });
-                } else {
-                  console.warn('Projet non trouvé pour update:', metadata.projectId);
-                }
+              // Mettre à jour le projet (déjà lu en phase 1)
+              if (projectRef && projectDoc && projectDoc.exists) {
+                transaction.update(projectRef, {
+                  montantActuel: admin.firestore.FieldValue.increment(amountEuros),
+                });
+              } else if (metadata.projectId) {
+                console.warn('Projet non trouvé pour update:', metadata.projectId);
               }
             }
           });
