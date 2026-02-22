@@ -3916,8 +3916,8 @@ exports.cachePrayerTimesDaily = functions
       // Récupérer les horaires depuis Aladhan API
       const timings = await fetchPrayerTimes();
 
-      // Récupérer la date hégirien
-      const today = new Date();
+      // Récupérer la date hégirien (en heure Paris pour cohérence avec le client)
+      const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
       const dateKey = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
       const hijriResponse = await fetch(`https://api.aladhan.com/v1/gToH/${dateKey}?adjustment=-1`);
       const hijriData = await hijriResponse.json();
@@ -3935,8 +3935,8 @@ exports.cachePrayerTimesDaily = functions
         };
       }
 
-      // Sauvegarder dans Firestore
-      const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      // Sauvegarder dans Firestore (clé = date Paris YYYY-MM-DD)
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       await admin.firestore()
         .collection('cached_prayer_times')
         .doc(todayStr)
@@ -3995,7 +3995,7 @@ exports.forceCachePrayerTimes = functions
     try {
       const timings = await fetchPrayerTimes();
 
-      const today = new Date();
+      const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
       const dateKey = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
       const hijriResponse = await fetch(`https://api.aladhan.com/v1/gToH/${dateKey}?adjustment=-1`);
       const hijriData = await hijriResponse.json();
@@ -4013,7 +4013,7 @@ exports.forceCachePrayerTimes = functions
         };
       }
 
-      const todayStr = today.toISOString().split('T')[0];
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       await admin.firestore()
         .collection('cached_prayer_times')
         .doc(todayStr)

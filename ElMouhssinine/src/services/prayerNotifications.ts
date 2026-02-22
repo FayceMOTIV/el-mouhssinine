@@ -548,6 +548,12 @@ const PRAYER_ORDER = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
 const BOOST_SETTINGS_KEY = 'prayer_boost_settings';
 const PRAYED_PRAYERS_KEY = 'prayed_prayers_today';
 
+// Date du jour en timezone Paris (cohérent avec le cache Firestore)
+const getParisDateStr = (): string => {
+  const paris = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+  return `${paris.getFullYear()}-${String(paris.getMonth() + 1).padStart(2, '0')}-${String(paris.getDate()).padStart(2, '0')}`;
+};
+
 /**
  * Récupérer les prières faites aujourd'hui (avec vérification de date)
  */
@@ -556,7 +562,7 @@ export const getPrayedPrayersToday = async (): Promise<Set<string>> => {
     const stored = await AsyncStorage.getItem(PRAYED_PRAYERS_KEY);
     if (!stored) return new Set();
     const data = JSON.parse(stored);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getParisDateStr();
     if (data.date !== today) {
       // Nouveau jour, on reset
       await AsyncStorage.removeItem(PRAYED_PRAYERS_KEY);
@@ -575,7 +581,7 @@ export const markPrayerAsPrayed = async (prayerName: string): Promise<void> => {
   try {
     const prayedSet = await getPrayedPrayersToday();
     prayedSet.add(prayerName);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getParisDateStr();
     await AsyncStorage.setItem(PRAYED_PRAYERS_KEY, JSON.stringify({
       date: today,
       prayers: Array.from(prayedSet),
