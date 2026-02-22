@@ -263,30 +263,43 @@ const HomeScreen = () => {
   // Calculer le countdown vers la prochaine priere
   // Forcer Europe/Paris pour que le diff soit cohérent avec les horaires Mawaqit
   const calculateCountdown = useCallback(() => {
-    const nowReal = new Date();
-    const parisStr = nowReal.toLocaleString('en-US', { timeZone: 'Europe/Paris' });
-    const now = new Date(parisStr);
+    const now = new Date();
+    // Heure actuelle en Paris
+    const parisNow = new Date(
+      now.toLocaleString('en-US', { timeZone: 'Europe/Paris' })
+    );
 
     const [hours, minutes] = nextPrayer.time.split(':').map(Number);
-    const prayerDate = new Date(now);
-    prayerDate.setHours(hours, minutes, 0, 0);
-
-    // Si la priere est passee, ajouter un jour
-    if (prayerDate <= now) {
-      prayerDate.setDate(prayerDate.getDate() + 1);
+    if (isNaN(hours) || isNaN(minutes)) {
+      setCountdown('00:00:00');
+      return;
     }
 
-    const diff = prayerDate.getTime() - now.getTime();
-    const h = Math.floor(diff / (1000 * 60 * 60));
-    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const s = Math.floor((diff % (1000 * 60)) / 1000);
+    const target = new Date(parisNow);
+    target.setHours(hours, minutes, 0, 0);
 
-    const newCountdown = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    if (target <= parisNow) {
+      target.setDate(target.getDate() + 1);
+    }
+
+    const diff = target.getTime() - parisNow.getTime();
+    if (diff < 0 || isNaN(diff)) {
+      setCountdown('00:00:00');
+      return;
+    }
+
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+
+    const newCountdown = [h, m, s]
+      .map(v => String(v).padStart(2, '0'))
+      .join(':');
 
     setCountdown(newCountdown);
 
-    // Mettre à jour l'heure de Paris (utiliser nowReal car toLocaleTimeString gère le TZ)
-    const parisTimeStr = nowReal.toLocaleTimeString('fr-FR', {
+    // Mettre à jour l'heure de Paris
+    const parisTimeStr = now.toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit',
       timeZone: 'Europe/Paris'

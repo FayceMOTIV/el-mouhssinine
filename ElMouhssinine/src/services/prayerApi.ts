@@ -44,10 +44,25 @@ const MOSQUE_UUID = '357233ff-e025-42f2-abf9-b23adb23ed52';
 
 // Forcer la timezone Europe/Paris pour tous les calculs de jour/heure.
 // Corrige le bug où un device en UTC ou autre TZ voit les horaires du mauvais jour.
+// Utilise les composants Intl pour éviter new Date(string) qui peut retourner Invalid Date.
 const getParisDate = (): Date => {
   const now = new Date();
-  const parisStr = now.toLocaleString('en-US', { timeZone: 'Europe/Paris' });
-  return new Date(parisStr);
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(now);
+    const get = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
+    return new Date(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  } catch {
+    // Fallback: toLocaleString parse (peut échouer sur certains devices)
+    const parisStr = now.toLocaleString('en-US', { timeZone: 'Europe/Paris' });
+    const parsed = new Date(parisStr);
+    return isNaN(parsed.getTime()) ? now : parsed;
+  }
 };
 
 // Fallback Aladhan pour la date Hijri (Mawaqit ne la fournit pas)
@@ -559,17 +574,45 @@ export const PrayerAPI = {
       throw new Error('Aladhan API error');
     } catch (error) {
       logger.error('[PrayerAPI] Erreur Hijri:', error);
-      // Retourner une date par défaut
-      return {
-        date: '',
-        format: '',
-        day: '1',
-        weekday: { en: '', ar: '' },
-        month: { number: 1, en: 'Muharram', ar: 'محرم' },
-        year: '1446',
-        designation: { abbreviated: 'AH', expanded: 'Anno Hegirae' },
-        holidays: [],
-      };
+      // Fallback: calculer la date hijri via Intl (pas de hardcode)
+      try {
+        const now = new Date();
+        const hijriFmt = new Intl.DateTimeFormat('en-US-u-ca-islamic', {
+          day: 'numeric', month: 'long', year: 'numeric',
+          timeZone: 'Europe/Paris',
+        });
+        const parts = hijriFmt.formatToParts(now);
+        const day = parts.find(p => p.type === 'day')?.value || '1';
+        const monthEn = parts.find(p => p.type === 'month')?.value || '';
+        const year = parts.find(p => p.type === 'year')?.value || '';
+        // Aussi obtenir le mois en arabe
+        const hijriFmtAr = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+          month: 'long', timeZone: 'Europe/Paris',
+        });
+        const monthAr = hijriFmtAr.format(now);
+        // Mapper le numéro de mois
+        const monthNames = ['Muharram','Safar','Rabi al-Awwal','Rabi al-Thani','Jumada al-Ula','Jumada al-Akhirah','Rajab','Shaban','Ramadan','Shawwal','Dhul-Qadah','Dhul-Hijjah'];
+        const monthNum = monthNames.findIndex(m => monthEn.toLowerCase().includes(m.toLowerCase().substring(0, 4))) + 1;
+        return {
+          date: '',
+          format: '',
+          day,
+          weekday: { en: '', ar: '' },
+          month: { number: monthNum || 1, en: monthEn, ar: monthAr },
+          year,
+          designation: { abbreviated: 'AH', expanded: 'Anno Hegirae' },
+          holidays: [],
+        };
+      } catch {
+        return {
+          date: '', format: '', day: '1',
+          weekday: { en: '', ar: '' },
+          month: { number: 1, en: '', ar: '' },
+          year: '',
+          designation: { abbreviated: 'AH', expanded: 'Anno Hegirae' },
+          holidays: [],
+        };
+      }
     }
   },
 
