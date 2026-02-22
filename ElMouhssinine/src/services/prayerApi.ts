@@ -45,7 +45,7 @@ const MOSQUE_UUID = '357233ff-e025-42f2-abf9-b23adb23ed52';
 // Forcer la timezone Europe/Paris pour tous les calculs de jour/heure.
 // Corrige le bug où un device en UTC ou autre TZ voit les horaires du mauvais jour.
 // Utilise les composants Intl pour éviter new Date(string) qui peut retourner Invalid Date.
-const getParisDate = (): Date => {
+export const getParisDate = (): Date => {
   const now = new Date();
   try {
     const fmt = new Intl.DateTimeFormat('en-US', {

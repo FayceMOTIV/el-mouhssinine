@@ -9,6 +9,7 @@ import messaging from '@react-native-firebase/messaging';
 import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils';
+import { getParisDate } from './prayerApi';
 import {
   addNotificationToHistory,
   detectNotificationType,
@@ -334,21 +335,40 @@ export const scheduleJumuaReminder = async (language: 'fr' | 'ar' = 'fr') => {
     sound: 'default',
   });
 
-  // Trouver le prochain vendredi à 12h30
+  // Trouver le prochain vendredi à 12h30 (timezone Europe/Paris)
   const now = new Date();
-  const nextFriday = new Date();
-  const daysUntilFriday = (5 - now.getDay() + 7) % 7 || 7; // 5 = vendredi
-  nextFriday.setDate(now.getDate() + daysUntilFriday);
-  nextFriday.setHours(12, 30, 0, 0);
+  const parisNow = getParisDate();
+  const daysUntilFriday = (5 - parisNow.getDay() + 7) % 7 || 7; // 5 = vendredi
+  const fridayParis = new Date(parisNow);
+  fridayParis.setDate(parisNow.getDate() + daysUntilFriday);
+  fridayParis.setHours(12, 30, 0, 0);
 
-  // Si on est vendredi et qu'il est avant 12h30, c'est aujourd'hui
-  if (now.getDay() === 5 && now.getHours() < 12) {
-    nextFriday.setDate(now.getDate());
+  // Si on est vendredi et qu'il est avant 12h30 à Paris, c'est aujourd'hui
+  if (parisNow.getDay() === 5 && parisNow.getHours() < 12) {
+    fridayParis.setDate(parisNow.getDate());
+    fridayParis.setHours(12, 30, 0, 0);
   }
+
+  // Convertir l'heure Paris en vrai timestamp UTC
+  // fridayParis représente (année, mois, jour, 12, 30) en heure Paris
+  const y = fridayParis.getFullYear();
+  const mo = fridayParis.getMonth();
+  const d = fridayParis.getDate();
+  const utcTimestamp = Date.UTC(y, mo, d, 12, 30, 0, 0);
+  // Vérifier quel offset Paris a à ce moment
+  const testParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit', minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(utcTimestamp));
+  const testH = parseInt(testParts.find(p => p.type === 'hour')?.value || '0', 10);
+  const testM = parseInt(testParts.find(p => p.type === 'minute')?.value || '0', 10);
+  const diffMin = (testH * 60 + testM) - (12 * 60 + 30);
+  const nextFriday = new Date(utcTimestamp - diffMin * 60000);
 
   // Si c'est passé, prendre le vendredi suivant
   if (nextFriday <= now) {
-    nextFriday.setDate(nextFriday.getDate() + 7);
+    nextFriday.setTime(nextFriday.getTime() + 7 * 24 * 60 * 60 * 1000);
   }
 
   const messages = {

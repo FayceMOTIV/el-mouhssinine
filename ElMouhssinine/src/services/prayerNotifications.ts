@@ -10,7 +10,7 @@ import notifee, {
   AuthorizationStatus,
 } from '@notifee/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PrayerTimings } from './prayerApi';
+import { PrayerTimings, getParisDate } from './prayerApi';
 import { logger } from '../utils';
 import { addNotificationToHistory } from './notificationHistory';
 
@@ -157,12 +157,29 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 
 /**
  * Parser une heure "HH:MM" en Date pour un jour donné
+ * IMPORTANT: Les horaires de prière sont en timezone Europe/Paris.
+ * On calcule le timestamp UTC qui correspond à hours:minutes à Paris
+ * pour le jour donné par baseDate (dont year/month/day sont en TZ Paris).
  */
-const parsePrayerTime = (timeStr: string, baseDate: Date = new Date()): Date => {
+const parsePrayerTime = (timeStr: string, baseDate?: Date): Date => {
+  const base = baseDate || getParisDate();
   const [hours, minutes] = timeStr.split(':').map(Number);
-  const date = new Date(baseDate);
-  date.setHours(hours, minutes, 0, 0);
-  return date;
+  const y = base.getFullYear();
+  const mo = base.getMonth();
+  const d = base.getDate();
+  // Commencer par un timestamp UTC brut avec les composants voulus
+  const utcGuess = Date.UTC(y, mo, d, hours, minutes, 0, 0);
+  // Vérifier quelle heure Paris affiche à cet instant UTC
+  const parisParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit', minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(utcGuess));
+  const parisH = parseInt(parisParts.find(p => p.type === 'hour')?.value || '0', 10);
+  const parisM = parseInt(parisParts.find(p => p.type === 'minute')?.value || '0', 10);
+  // Correction : décaler pour que Paris affiche exactement hours:minutes
+  const diffMs = ((parisH - hours) * 60 + (parisM - minutes)) * 60000;
+  return new Date(utcGuess - diffMs);
 };
 
 /**
@@ -294,7 +311,7 @@ export const schedulePrayerNotifications = async (
     logger.log(`[PrayerNotif] Existing notifications: ${existingNotifs.size}`);
 
     const now = new Date();
-    const today = new Date();
+    const today = getParisDate();
 
     logger.log('[PrayerNotif] Current time:', now.toLocaleString('fr-FR'));
     const scheduledPrayers: string[] = [];
@@ -459,8 +476,9 @@ export const schedulePrayerNotifications = async (
     // Rappel à l'avant-dernier jour planifié pour que l'utilisateur ouvre l'app
     // et re-planifie les notifications pour les jours suivants
     // Si boost activé: jour 2 | Si boost désactivé: jour 5
-    const reminderDate = addDays(today, MAX_DAYS - 1);
-    reminderDate.setHours(12, 0, 0, 0); // À midi
+    const reminderBaseDate = addDays(today, MAX_DAYS - 1);
+    // Midi à Paris pour le jour du rappel
+    const reminderDate = parsePrayerTime('12:00', reminderBaseDate);
     const appReminderId = 'prayer-app-reminder';
 
     if (reminderDate > now) {
@@ -550,7 +568,7 @@ const PRAYED_PRAYERS_KEY = 'prayed_prayers_today';
 
 // Date du jour en timezone Paris (cohérent avec le cache Firestore)
 const getParisDateStr = (): string => {
-  const paris = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+  const paris = getParisDate();
   return `${paris.getFullYear()}-${String(paris.getMonth() + 1).padStart(2, '0')}-${String(paris.getDate()).padStart(2, '0')}`;
 };
 
@@ -869,10 +887,11 @@ export const scheduleBoostNotifications = async (
     const now = new Date();
     let scheduledCount = 0;
 
-    // Scheduler pour aujourd'hui et demain
+    // Scheduler pour aujourd'hui et demain (dates en timezone Paris)
+    const parisToday = getParisDate();
     const daysToSchedule = [
-      { date: new Date(), suffix: 'today' },
-      { date: addDays(new Date(), 1), suffix: 'tomorrow' },
+      { date: parisToday, suffix: 'today' },
+      { date: addDays(parisToday, 1), suffix: 'tomorrow' },
     ];
 
     for (const { date: baseDate, suffix: daySuffix } of daysToSchedule) {
@@ -903,9 +922,8 @@ export const scheduleBoostNotifications = async (
         const reminders = calculateBoostReminders(prayer.key, cleanStartTime, cleanEndTime, settings);
 
         for (const reminder of reminders) {
-          const [h, m] = reminder.time.split(':').map(Number);
-          const notifDate = new Date(baseDate);
-          notifDate.setHours(h, m, 0, 0);
+          // Utiliser parsePrayerTime pour convertir correctement en timezone Paris
+          const notifDate = parsePrayerTime(reminder.time, baseDate);
 
           // Si l'heure est passée pour aujourd'hui, skip
           if (notifDate <= now) {
@@ -1131,19 +1149,19 @@ export const scheduleQuranReminders = async (
     await cancelQuranReminders();
 
     const now = new Date();
+    const parisToday = getParisDate();
     let scheduledCount = 0;
 
-    // Scheduler pour les 7 prochains jours
+    // Scheduler pour les 7 prochains jours (timezone Paris)
     for (let i = 0; i < 7; i++) {
-      const notifDate = new Date();
-      notifDate.setDate(notifDate.getDate() + i);
-      notifDate.setHours(settings.hour, 0, 0, 0);
+      const baseDay = addDays(parisToday, i);
+      const notifDate = parsePrayerTime(`${String(settings.hour).padStart(2, '0')}:00`, baseDay);
 
       // Skip si déjà passé
       if (notifDate <= now) continue;
 
-      // Si frequency = friday, vérifier que c'est un vendredi
-      if (settings.frequency === 'friday' && notifDate.getDay() !== 5) {
+      // Si frequency = friday, vérifier que c'est un vendredi (en timezone Paris)
+      if (settings.frequency === 'friday' && baseDay.getDay() !== 5) {
         continue;
       }
 
@@ -1482,11 +1500,12 @@ export const scheduleRamadanNotifications = async (
 
     const timings = prayerTimes as Record<string, string>;
     const now = new Date();
+    const parisToday = getParisDate();
     let scheduledCount = 0;
 
-    // Scheduler pour les 7 prochains jours
+    // Scheduler pour les 7 prochains jours (dates en timezone Paris)
     for (let i = 0; i < 7; i++) {
-      const baseDate = addDays(new Date(), i);
+      const baseDate = addDays(parisToday, i);
       const daySuffix = `day${i}`;
 
       // ========== SUHOOR (avant Fajr) ==========
