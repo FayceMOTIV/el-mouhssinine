@@ -4,7 +4,7 @@ import {
   FileText, Save, Building2, MapPin, User, Send, Download,
   Calendar, Euro, Search, RefreshCw, CheckCircle, AlertCircle
 } from 'lucide-react'
-import { Card, Button, Input, Loading } from '../components/common'
+import { Card, Button, Input, Loading, ConfirmModal } from '../components/common'
 import { db } from '../services/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
@@ -17,6 +17,7 @@ export default function RecusFiscaux() {
 
   const [forceYear, setForceYear] = useState(new Date().getFullYear() - 1)
   const [forceGenerating, setForceGenerating] = useState(false)
+  const [forceGenerateModal, setForceGenerateModal] = useState({ open: false, year: null })
 
   // Paramètres de l'association
   const [associationInfo, setAssociationInfo] = useState({
@@ -93,6 +94,25 @@ export default function RecusFiscaux() {
       toast.error('Erreur lors de la sauvegarde')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleConfirmForceGenerate = async () => {
+    const year = forceGenerateModal.year
+    setForceGenerateModal({ open: false, year: null })
+    setForceGenerating(true)
+    try {
+      const fn = getFunctions(undefined, 'europe-west1')
+      const forceGenerate = httpsCallable(fn, 'forceGenerateRecusFiscaux')
+      const result = await forceGenerate({ year })
+      const data = result.data
+      toast.success(`Terminé ! ${data.successCount} reçu(s) envoyé(s)${data.errorCount > 0 ? `, ${data.errorCount} erreur(s)` : ''}`)
+      await loadRecusEnvoyes()
+    } catch (err) {
+      console.error('Erreur génération forcée:', err)
+      toast.error(err.message || 'Erreur lors de la génération')
+    } finally {
+      setForceGenerating(false)
     }
   }
 
@@ -404,27 +424,13 @@ export default function RecusFiscaux() {
                 </select>
               </div>
               <Button
-                onClick={async () => {
+                onClick={() => {
                   if (!associationInfo.nom || !associationInfo.siren) {
                     toast.error('Veuillez d\'abord configurer les paramètres de l\'association (nom et SIREN)')
                     setActiveTab('parametres')
                     return
                   }
-                  if (!window.confirm(`Générer tous les reçus fiscaux pour ${forceYear} ? Cette action enverra un email à chaque donateur.`)) return
-                  setForceGenerating(true)
-                  try {
-                    const fn = getFunctions(undefined, 'europe-west1')
-                    const forceGenerate = httpsCallable(fn, 'forceGenerateRecusFiscaux')
-                    const result = await forceGenerate({ year: forceYear })
-                    const data = result.data
-                    toast.success(`Terminé ! ${data.successCount} reçu(s) envoyé(s)${data.errorCount > 0 ? `, ${data.errorCount} erreur(s)` : ''}`)
-                    await loadRecusEnvoyes()
-                  } catch (err) {
-                    console.error('Erreur génération forcée:', err)
-                    toast.error(err.message || 'Erreur lors de la génération')
-                  } finally {
-                    setForceGenerating(false)
-                  }
+                  setForceGenerateModal({ open: true, year: forceYear })
                 }}
                 disabled={forceGenerating}
                 loading={forceGenerating}
@@ -529,6 +535,17 @@ export default function RecusFiscaux() {
         </Card>
         </>
       )}
+
+      {/* Force Generate Confirmation Modal */}
+      <ConfirmModal
+        isOpen={forceGenerateModal.open}
+        onClose={() => setForceGenerateModal({ open: false, year: null })}
+        onConfirm={handleConfirmForceGenerate}
+        title="Générer les reçus fiscaux"
+        message={`Générer tous les reçus fiscaux pour ${forceGenerateModal.year} ? Cette action enverra un email à chaque donateur.`}
+        confirmLabel="Générer"
+        danger
+      />
     </div>
   )
 }

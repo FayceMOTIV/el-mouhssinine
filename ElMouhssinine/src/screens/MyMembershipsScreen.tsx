@@ -162,7 +162,7 @@ const MyMembershipsScreen = () => {
         { text: language === 'ar' ? 'إلغاء' : 'Annuler', style: 'cancel' },
         {
           text: language === 'ar' ? 'إرسال رسالة' : 'Envoyer un message',
-          onPress: () => navigation.navigate('Messages'),
+          onPress: () => navigation.navigate('Member'),
         },
       ]
     );
@@ -718,7 +718,7 @@ const styles = StyleSheet.create({
   },
   inscritParText: {
     fontSize: fontSize.sm,
-    color: colors.accent,
+    color: colors.accentText,
   },
   noMembershipCard: {
     backgroundColor: colors.card,

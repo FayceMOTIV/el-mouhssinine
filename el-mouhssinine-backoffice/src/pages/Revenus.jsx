@@ -129,13 +129,14 @@ export default function Revenus() {
 
     // 2. Dons existants (collection donations)
     dons.forEach(d => {
-      const date = d.date?.toDate?.() || new Date(d.date)
+      const rawDate = d.date || d.createdAt || d.webhookProcessedAt
+      const date = rawDate?.toDate?.() || new Date(rawDate || Date.now())
       // Éviter les doublons si déjà dans payments
       if (!revenues.find(r => r.raw?.donId === d.id)) {
         revenues.push({
           id: `don-${d.id}`,
           type: 'don',
-          montant: d.montant || 0,
+          montant: d.montant || d.amount || 0,
           date,
           source: d.modePaiement?.toLowerCase().includes('app') ? 'app' : 'manuel',
           modePaiement: d.modePaiement || 'autre',
@@ -255,9 +256,11 @@ export default function Revenus() {
   // Filtrer les dons pour l'onglet Dons
   const filteredDons = useMemo(() => {
     return dons.filter(d => {
-      // Filtrer par période
-      const date = d.date?.toDate?.() || new Date(d.date)
-      if (!isWithinInterval(date, { start: dateRange.start, end: dateRange.end })) return false
+      // Filtrer par période (fallback sur createdAt si date absent — dons webhook)
+      const rawDate = d.date || d.createdAt || d.webhookProcessedAt
+      if (!rawDate) return false
+      const date = rawDate?.toDate?.() || new Date(rawDate)
+      if (isNaN(date.getTime()) || !isWithinInterval(date, { start: dateRange.start, end: dateRange.end })) return false
 
       // Filtrer par recherche
       if (donSearchQuery) {
@@ -352,7 +355,7 @@ export default function Revenus() {
       `dons_${format(dateRange.start, 'yyyy-MM-dd')}_${format(dateRange.end, 'yyyy-MM-dd')}.csv`,
       headers,
       d => [
-        format(d.date?.toDate?.() || new Date(d.date), 'dd/MM/yyyy HH:mm'),
+        format((d.date || d.createdAt || d.webhookProcessedAt)?.toDate?.() || new Date(d.date || d.createdAt || Date.now()), 'dd/MM/yyyy HH:mm'),
         d.donateur || 'Anonyme',
         d.donorInfo?.email || '-',
         d.montant || 0,
@@ -759,7 +762,7 @@ export default function Revenus() {
                     {filteredDons.map(d => (
                       <tr key={d.id} className="border-b border-white/5 hover:bg-white/5">
                         <td className="py-3 px-4 text-white/70">
-                          {format(d.date?.toDate?.() || new Date(d.date), 'dd/MM/yyyy', { locale: fr })}
+                          {format((d.date || d.createdAt || d.webhookProcessedAt)?.toDate?.() || new Date(d.date || d.createdAt || Date.now()), 'dd/MM/yyyy', { locale: fr })}
                         </td>
                         <td className="py-3 px-4 text-white">
                           {d.donateur || 'Anonyme'}
@@ -996,7 +999,7 @@ export default function Revenus() {
               </div>
               <div>
                 <p className="text-white/50 text-sm">Date</p>
-                <p className="text-white">{format(selectedDon.date?.toDate?.() || new Date(selectedDon.date), 'dd/MM/yyyy HH:mm', { locale: fr })}</p>
+                <p className="text-white">{format((selectedDon.date || selectedDon.createdAt || selectedDon.webhookProcessedAt)?.toDate?.() || new Date(selectedDon.date || selectedDon.createdAt || Date.now()), 'dd/MM/yyyy HH:mm', { locale: fr })}</p>
               </div>
               {selectedDon.donorInfo?.email && (
                 <div>

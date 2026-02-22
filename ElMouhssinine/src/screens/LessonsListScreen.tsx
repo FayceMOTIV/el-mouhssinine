@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
   },
   lessonTitleAr: {
     fontSize: fontSize.md,
-    color: colors.accent,
+    color: colors.accentText,
     marginTop: 2,
   },
   lessonMeta: {
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
   },
   levelBadgeText: {
     fontSize: fontSize.xs,
-    color: colors.accent,
+    color: colors.accentText,
   },
   lessonDuration: {
     fontSize: fontSize.xs,

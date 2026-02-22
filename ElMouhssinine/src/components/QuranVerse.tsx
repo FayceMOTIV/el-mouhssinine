@@ -35,9 +35,12 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
   onPress,
   onLayout,
 }) => {
+  // Animations TRANSFORM (scale) - useNativeDriver: true
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  // Animations COULEUR (backgroundColor, borderColor, shadowOpacity) - useNativeDriver: false
   const bgAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  // Animations TRANSFORM (height) - useNativeDriver: true
   const soundBarAnims = useRef([
     new Animated.Value(0.4),
     new Animated.Value(0.7),
@@ -47,36 +50,36 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
 
   useEffect(() => {
     if (isActive && isPlaying) {
-      // Animation de pulsation douce (useNativeDriver: false car mixé avec backgroundColor/shadowOpacity JS)
+      // Animation de pulsation douce - TRANSFORM uniquement - useNativeDriver: true
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1.01,
             duration: 800,
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
             duration: 800,
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
         ])
       ).start();
 
-      // Animation du fond
+      // Animation du fond - backgroundColor uniquement - useNativeDriver: false requis
       Animated.timing(bgAnim, {
         toValue: 1,
         duration: 300,
-        useNativeDriver: false,
+        useNativeDriver: false, // backgroundColor non supporté par native driver
       }).start();
 
-      // Animation de lueur
+      // Animation de lueur - shadowOpacity uniquement - useNativeDriver: false requis
       Animated.loop(
         Animated.sequence([
           Animated.timing(glowAnim, {
             toValue: 1,
             duration: 1500,
-            useNativeDriver: false,
+            useNativeDriver: false, // shadowOpacity non supporté par native driver
           }),
           Animated.timing(glowAnim, {
             toValue: 0.5,
@@ -86,19 +89,19 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
         ])
       ).start();
 
-      // Animation des barres de son
+      // Animation des barres de son - height/transform - useNativeDriver: true
       soundBarAnims.forEach((anim, i) => {
         Animated.loop(
           Animated.sequence([
             Animated.timing(anim, {
               toValue: Math.random() * 0.5 + 0.5,
               duration: 200 + i * 50,
-              useNativeDriver: false,
+              useNativeDriver: true,
             }),
             Animated.timing(anim, {
               toValue: Math.random() * 0.3 + 0.2,
               duration: 200 + i * 50,
-              useNativeDriver: false,
+              useNativeDriver: true,
             }),
           ])
         ).start();
@@ -111,7 +114,7 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
       Animated.timing(bgAnim, {
         toValue: 0.7,
         duration: 200,
-        useNativeDriver: false,
+        useNativeDriver: false, // backgroundColor
       }).start();
 
       glowAnim.stopAnimation();
@@ -129,7 +132,7 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
       Animated.timing(bgAnim, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: false,
+        useNativeDriver: false, // backgroundColor
       }).start();
 
       glowAnim.stopAnimation();
@@ -200,10 +203,12 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
                   style={[
                     styles.soundBar,
                     {
-                      height: anim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [4, 16],
-                      }),
+                      transform: [{
+                        scaleY: anim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.25, 1],
+                        }),
+                      }],
                     },
                   ]}
                 />
@@ -279,6 +284,7 @@ const styles = StyleSheet.create({
   },
   soundBar: {
     width: 3,
+    height: 16,
     backgroundColor: colors.accent,
     marginHorizontal: 1,
     borderRadius: 2,

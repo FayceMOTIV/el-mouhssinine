@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   },
   buttonTitleAr: {
     fontSize: isSmallScreen ? 13 : 16,
-    color: colors.accent,
+    color: colors.accentText,
     marginTop: 2,
   },
   buttonSubtitle: {

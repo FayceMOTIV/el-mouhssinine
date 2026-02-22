@@ -262,7 +262,8 @@ const cleanupObsoleteNotifications = async (validIds: Set<string>): Promise<void
  */
 export const schedulePrayerNotifications = async (
   prayerTimes: PrayerTimings,
-  settings: PrayerNotificationSettings
+  settings: PrayerNotificationSettings,
+  jumuaSermonTimeStr: string = '13:30'
 ): Promise<void> => {
   try {
     // DEBUG: Afficher les settings reçus
@@ -340,7 +341,7 @@ export const schedulePrayerNotifications = async (
 
           // Pour Jumua : notification 30 min avant le sermon (13h30)
           // Pour les autres prières : notification X min avant l'adhan
-          const jumuaSermonTime = parsePrayerTime('13:30', baseDate);
+          const jumuaSermonTime = parsePrayerTime(jumuaSermonTimeStr, baseDate);
           const reminderTime = isJumua
             ? subMinutes(jumuaSermonTime, 30) // 13:00
             : subMinutes(prayerTime, settings.minutesBefore);
@@ -368,7 +369,7 @@ export const schedulePrayerNotifications = async (
 
               const notifTitle = isJumua ? "🕌 Jumu'a" : prayerName;
               const notifBody = isJumua
-                ? 'Le sermon commence à 13h30'
+                ? `Le sermon commence à ${jumuaSermonTimeStr.replace(':', 'h')}`
                 : `${prayerName} dans ${settings.minutesBefore} mn`;
 
               await notifee.createTriggerNotification(
@@ -400,7 +401,7 @@ export const schedulePrayerNotifications = async (
         // Pour Jumu'a : notification à 13h30 (début sermon) au lieu de l'heure Dhuhr
         const isFridayNow = baseDate.getDay() === 5;
         const isJumuaNow = isFridayNow && prayerKey === 'dhuhr';
-        const effectiveNowTime = isJumuaNow ? parsePrayerTime('13:30', baseDate) : prayerTime;
+        const effectiveNowTime = isJumuaNow ? parsePrayerTime(jumuaSermonTimeStr, baseDate) : prayerTime;
         const nowId = `prayer-${prayerKey}-now-${daySuffix}`;
         const nowTimestamp = effectiveNowTime.getTime();
 

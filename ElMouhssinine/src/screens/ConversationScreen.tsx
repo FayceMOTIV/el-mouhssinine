@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
   },
   senderLabelAdmin: {
     textAlign: 'left',
-    color: colors.accent,
+    color: colors.accentText,
   },
   resolvedNotice: {
     flexDirection: 'row',

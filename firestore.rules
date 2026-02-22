@@ -118,15 +118,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // BUG 1+2 FIX: Dons - Lecture restreinte (RGPD), userId obligatoire
+    // Dons - Lecture restreinte (RGPD), écriture par propriétaire ou admin
     match /donations/{docId} {
-      // BUG 1 FIX: Lecture restreinte - admin OU propriétaire du don uniquement (RGPD)
+      // Lecture: admin OU propriétaire du don uniquement (RGPD)
       allow read: if isAdmin() ||
         (isAuthenticated() &&
           (resource.data.userId == request.auth.uid ||
            resource.data.donateurEmail == request.auth.token.email));
-      // Création avec validation du montant (min 1€, max 100000€) via champ montant OU amount
-      // BUG 2 FIX: userId OBLIGATOIRE et doit correspondre à l'utilisateur authentifié
+      // Création: user authentifié avec validation montant + userId obligatoire
       allow create: if isAuthenticated() &&
         (
           (request.resource.data.montant is number &&
@@ -137,8 +136,13 @@ service cloud.firestore {
            request.resource.data.amount <= 100000)
         ) &&
         request.resource.data.userId == request.auth.uid;
-      // SÉCURITÉ: Seuls les admins peuvent modifier/supprimer, les Cloud Functions (admin SDK) bypassent
-      allow update, delete: if isAdmin();
+      // Update: admin OU propriétaire du don (nécessaire pour set+merge quand webhook a créé en premier)
+      // Le Cloud Functions admin SDK bypasse ces rules de toute façon
+      allow update: if isAdmin() ||
+        (isAuthenticated() &&
+          request.resource.data.userId == request.auth.uid);
+      // Suppression: admin uniquement
+      allow delete: if isAdmin();
     }
 
     // Admins - Lecture admin uniquement, écriture super_admin uniquement

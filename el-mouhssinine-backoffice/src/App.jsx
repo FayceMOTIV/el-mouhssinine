@@ -24,6 +24,7 @@ import RecusFiscaux from './pages/RecusFiscaux'
 import Notifications from './pages/Notifications'
 import Ramadan from './pages/Ramadan'
 import EmailTemplates from './pages/EmailTemplates'
+import AuditLogs from './pages/AuditLogs'
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -41,6 +42,8 @@ function ProtectedRoute({ children }) {
 }
 
 // Admin Route Component
+// ⚠️ Vérification UX uniquement — la vraie sécurité est dans les
+// Cloud Functions (isAdmin()) et les Firestore Security Rules.
 function AdminRoute({ children }) {
   const { isSuperAdmin, loading, authChecked } = useAuth()
 
@@ -93,6 +96,14 @@ function AppRoutes() {
         <Route path="notifications" element={<Notifications />} />
         <Route path="ramadan" element={<Ramadan />} />
         <Route path="emails" element={<EmailTemplates />} />
+        <Route
+          path="audit-logs"
+          element={
+            <AdminRoute>
+              <AuditLogs />
+            </AdminRoute>
+          }
+        />
         <Route
           path="admins"
           element={

@@ -4,15 +4,8 @@ import { rolePermissions, AdminRole } from '../types'
 
 const AuthContext = createContext(null)
 
-// Demo admin for when Firebase is not available
-const DEMO_ADMIN = {
-  id: 'demo-admin',
-  nom: 'Admin Demo',
-  email: 'admin@demo.local',
-  role: AdminRole.SUPER_ADMIN,
-  permissions: rolePermissions[AdminRole.SUPER_ADMIN],
-  actif: true
-}
+// ⚠️ DEMO_ADMIN supprimé pour la sécurité en production
+// Tous les admins doivent passer par Firebase Auth + document Firestore 'admins'
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
@@ -35,14 +28,8 @@ export const AuthProvider = ({ children }) => {
   const adminFetched = useRef(false)
 
   useEffect(() => {
-    if (isDemoMode) {
-      setDemoMode(true)
-      setUser({ uid: 'demo-user', email: 'admin@demo.local' })
-      setAdmin(DEMO_ADMIN)
-      setLoading(false)
-      setAuthChecked(true)
-      return
-    }
+    // ⚠️ Mode démo désactivé en production
+    // if (isDemoMode) { ... } supprimé pour forcer l'authentification Firebase réelle
 
     let unsubscribe = () => {}
 
@@ -98,14 +85,8 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const login = async (email, password) => {
-    // Demo mode login
-    if (demoMode || isDemoMode) {
-      setUser({ uid: 'demo-user', email })
-      setAdmin(DEMO_ADMIN)
-      currentUid.current = 'demo-user'
-      adminFetched.current = true
-      return { user: { uid: 'demo-user', email } }
-    }
+    // ⚠️ Mode démo désactivé : authentification Firebase obligatoire
+    // Le bloc demo mode a été supprimé pour la sécurité
 
     isLoggingIn.current = true
     setLoading(true)
@@ -148,9 +129,9 @@ export const AuthProvider = ({ children }) => {
     currentUid.current = null
     adminFetched.current = false
 
-    if (!demoMode && !isDemoMode) {
-      await logoutUser()
-    }
+    // Déconnexion Firebase obligatoire (plus de mode démo)
+    await logoutUser()
+
     setUser(null)
     setAdmin(null)
   }

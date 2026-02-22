@@ -208,7 +208,9 @@ const MemberScreen = () => {
                 'Cotisation expirée',
                 'Votre adhésion a expiré. Renouvelez-la pour rester membre actif.'
               );
-            } else if (profile.cotisation.status === 'sympathisant' || profile.cotisation.status === 'none') {
+            } else if (profile.cotisation.status === 'cancelled' || profile.cotisation.status === 'expired') {
+              setMemberPage('devenir_adherent');
+            } else if (!profile.cotisation.status || profile.cotisation.status === 'sympathisant' || profile.cotisation.status === 'none') {
               setMemberPage('sympathisant');
             } else {
               setMemberPage('devenir_adherent');

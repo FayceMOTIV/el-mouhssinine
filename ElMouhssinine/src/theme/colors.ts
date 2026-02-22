@@ -9,7 +9,8 @@ export const colors = {
   card: '#ffffff',
 
   // Accents
-  accent: '#C9A227',          // Or (conservé)
+  accent: '#C9A227',          // Or (conservé) - Gros titres/icônes décoratifs (>= 18px bold)
+  accentText: '#8B7355',      // Bronze foncé - Texte informatif sur fond beige (WCAG AA 4.5:1)
   accentDark: '#8B7355',      // Bronze
   accentLight: '#E8D5A3',     // Or pâle
 

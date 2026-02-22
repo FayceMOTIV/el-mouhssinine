@@ -147,8 +147,12 @@ export const makePayment = async (params: PaymentParams): Promise<PaymentResult>
       return { success: false, error: initError.message };
     }
 
-    // 3. Présenter le Payment Sheet (CB uniquement)
-    const { error: presentError } = await presentPaymentSheet();
+    // 3. Présenter le Payment Sheet (CB uniquement) avec timeout 60s
+    const paymentPromise = presentPaymentSheet();
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Le paiement a expiré. Veuillez réessayer.')), 60000)
+    );
+    const { error: presentError } = await Promise.race([paymentPromise, timeoutPromise]) as Awaited<ReturnType<typeof presentPaymentSheet>>;
 
     if (presentError) {
       if (presentError.code === 'Canceled') {
@@ -306,8 +310,12 @@ export const makeSubscription = async (params: PaymentParams): Promise<Subscript
       return { success: false, error: initError.message };
     }
 
-    // 3. Présenter le Payment Sheet
-    const { error: presentError } = await presentPaymentSheet();
+    // 3. Présenter le Payment Sheet avec timeout 60s
+    const paymentPromise2 = presentPaymentSheet();
+    const timeoutPromise2 = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Le paiement a expiré. Veuillez réessayer.')), 60000)
+    );
+    const { error: presentError } = await Promise.race([paymentPromise2, timeoutPromise2]) as Awaited<ReturnType<typeof presentPaymentSheet>>;
 
     if (presentError) {
       if (presentError.code === 'Canceled') {

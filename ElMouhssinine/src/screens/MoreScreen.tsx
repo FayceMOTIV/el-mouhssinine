@@ -17,7 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import CompassHeading from 'react-native-compass-heading';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, platformShadow, isSmallScreen } from '../theme/colors';
-import { subscribeToMosqueeInfo, subscribeToRamadanSettings, RamadanSettings } from '../services/firebase';
+import { subscribeToMosqueeInfo, subscribeToRamadanSettings, RamadanSettings, deleteMyAccount } from '../services/firebase';
 import { AuthService } from '../services/auth';
 import { MosqueeInfo } from '../types';
 import { useLanguage } from '../context/LanguageContext';
@@ -581,6 +581,8 @@ const MoreScreen = () => {
                 <TouchableOpacity
                   style={styles.copyBtn}
                   onPress={() => copyToClipboard(mosqueeInfo.iban, 'iban')}
+                  accessibilityLabel="Copier l'IBAN"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.copyBtnText}>{copied === 'iban' ? '✓' : '📋'}</Text>
                 </TouchableOpacity>
@@ -594,6 +596,8 @@ const MoreScreen = () => {
                 <TouchableOpacity
                   style={styles.copyBtn}
                   onPress={() => copyToClipboard(mosqueeInfo.bic, 'bic')}
+                  accessibilityLabel="Copier le BIC"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.copyBtnText}>{copied === 'bic' ? '✓' : '📋'}</Text>
                 </TouchableOpacity>
@@ -622,6 +626,8 @@ const MoreScreen = () => {
                     `${mosqueeInfo.address}, ${mosqueeInfo.postalCode} ${mosqueeInfo.city}`,
                     'adresse'
                   )}
+                  accessibilityLabel="Copier l'adresse"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.copyBtnSmallText}>{copied === 'adresse' ? '✓' : '📋'}</Text>
                 </TouchableOpacity>
@@ -1202,6 +1208,70 @@ const MoreScreen = () => {
             </View>
           </View>
 
+
+          {/* Supprimer mon compte (RGPD) */}
+          {userEmail && (
+            <TouchableOpacity
+              style={[styles.logoutButton, { marginBottom: spacing.sm }]}
+              onPress={() => {
+                Alert.alert(
+                  language === 'ar' ? 'حذف الحساب' : 'Supprimer mon compte',
+                  language === 'ar'
+                    ? 'هل أنت متأكد؟ سيتم حذف جميع بياناتك نهائيًا. لا يمكن التراجع عن هذا الإجراء.'
+                    : 'Êtes-vous sûr ? Toutes vos données seront supprimées définitivement. Cette action est irréversible.',
+                  [
+                    { text: language === 'ar' ? 'إلغاء' : 'Annuler', style: 'cancel' },
+                    {
+                      text: language === 'ar' ? 'حذف' : 'Supprimer',
+                      style: 'destructive',
+                      onPress: () => {
+                        Alert.alert(
+                          language === 'ar' ? 'تأكيد نهائي' : 'Confirmation finale',
+                          language === 'ar' ? 'هذا الإجراء نهائي ولا رجعة فيه.' : 'Cette action est définitive et irréversible.',
+                          [
+                            { text: language === 'ar' ? 'إلغاء' : 'Annuler', style: 'cancel' },
+                            {
+                              text: language === 'ar' ? 'نعم، حذف حسابي' : 'Oui, supprimer mon compte',
+                              style: 'destructive',
+                              onPress: async () => {
+                                try {
+                                  const result = await deleteMyAccount();
+                                  if (result.success) {
+                                    Alert.alert(
+                                      language === 'ar' ? 'تم الحذف' : 'Compte supprimé',
+                                      language === 'ar' ? 'تم حذف حسابك بنجاح.' : result.message,
+                                    );
+                                    await AuthService.signOut();
+                                  } else {
+                                    Alert.alert(
+                                      language === 'ar' ? 'خطأ' : 'Erreur',
+                                      result.message,
+                                    );
+                                  }
+                                } catch (error) {
+                                  Alert.alert(
+                                    language === 'ar' ? 'خطأ' : 'Erreur',
+                                    language === 'ar' ? 'فشل حذف الحساب' : 'Impossible de supprimer le compte',
+                                  );
+                                }
+                              },
+                            },
+                          ]
+                        );
+                      },
+                    },
+                  ]
+                );
+              }}
+            >
+              <View style={[styles.settingRow, { justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>🗑️</Text>
+                <Text style={[styles.settingLabel, { color: '#ef4444' }]}>
+                  {language === 'ar' ? 'حذف حسابي' : 'Supprimer mon compte'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* Déconnexion */}
           {userEmail && (

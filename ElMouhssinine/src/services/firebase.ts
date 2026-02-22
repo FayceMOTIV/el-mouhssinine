@@ -568,16 +568,11 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
     const donationRef = firestore().collection('donations').doc(docId);
     const projectRef = params.projectId ? firestore().collection('projects').doc(params.projectId) : null;
 
-    // Vérifier si donation existe déjà (idempotence)
-    const existingDoc = await donationRef.get();
-    if (existingDoc.exists()) {
-      logger.firebase(' Don déjà existant (idempotent):', docId);
-      return docId;
-    }
-
     // TRANSACTION ATOMIQUE: donation + update projet
+    // merge: true permet de ne pas écraser les champs déjà écrits par le webhook Stripe
+    // et garantit que donorInfo/donorType sont toujours sauvés même si le webhook est arrivé avant
     await firestore().runTransaction(async (transaction) => {
-      // 1. Créer le don
+      // 1. Créer/merger le don
       // BUG 7 FIX: userId garanti non-vide (évite permission-denied)
       const currentUser = auth().currentUser;
       if (!currentUser) {
@@ -606,7 +601,7 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
       if (params.donorInfo) {
         donationData.donorInfo = params.donorInfo;
       }
-      transaction.set(donationRef, donationData);
+      transaction.set(donationRef, donationData, { merge: true });
 
       // 2. Mettre à jour le montant collecté du projet (dans la même transaction)
       if (projectRef) {
@@ -2034,6 +2029,7 @@ export const subscribeToUserMessages = (
       .collection('messages')
       .where('odUserId', '==', userId)
       .orderBy('updatedAt', 'desc')
+      .limit(50)
       .onSnapshot(
         snapshot => {
           const messages = snapshot.docs
@@ -2334,6 +2330,19 @@ export const cancelSubscription = async (reason?: string): Promise<{ success: bo
   } catch (error: any) {
     logger.error('[Firebase] cancelSubscription error:', error);
     return { success: false, message: error?.message || 'Erreur lors de l\'annulation' };
+  }
+};
+
+// ==================== DELETE MY ACCOUNT (SELF-SERVICE RGPD) ====================
+export const deleteMyAccount = async (): Promise<{ success: boolean; message: string }> => {
+  try {
+    const deleteFn = firebase.app().functions('europe-west1').httpsCallable('deleteMyAccount');
+    const result = await deleteFn({});
+    const data = result.data as any;
+    return { success: data.success, message: data.message };
+  } catch (error: any) {
+    logger.error('[Firebase] deleteMyAccount error:', error);
+    return { success: false, message: error?.message || 'Erreur lors de la suppression du compte' };
   }
 };
 

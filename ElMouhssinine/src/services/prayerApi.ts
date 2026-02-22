@@ -42,13 +42,22 @@ const delayToOffset = (delay: number | string): string => {
 const MAWAQIT_API = 'https://mawaqit.net/api/2.0';
 const MOSQUE_UUID = '357233ff-e025-42f2-abf9-b23adb23ed52';
 
+// Forcer la timezone Europe/Paris pour tous les calculs de jour/heure.
+// Corrige le bug où un device en UTC ou autre TZ voit les horaires du mauvais jour.
+const getParisDate = (): Date => {
+  const now = new Date();
+  const parisStr = now.toLocaleString('en-US', { timeZone: 'Europe/Paris' });
+  return new Date(parisStr);
+};
+
 // Fallback Aladhan pour la date Hijri (Mawaqit ne la fournit pas)
 const ALADHAN_API = 'https://api.aladhan.com/v1';
 
 // Essayer de lire le cache Firestore d'abord (rempli par Cloud Function)
 const getCachedFromFirestore = async (): Promise<{ timings?: any; hijri?: any } | null> => {
   try {
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const paris = getParisDate();
+    const today = `${paris.getFullYear()}-${String(paris.getMonth() + 1).padStart(2, '0')}-${String(paris.getDate()).padStart(2, '0')}`;
     const doc = await firestore()
       .collection('cached_prayer_times')
       .doc(today)
@@ -183,10 +192,11 @@ export const PrayerAPI = {
     city: string = 'Bourg-en-Bresse',
     country: string = 'France'
   ): Promise<PrayerTimings> => {
-    // Cache key basé sur date/heure pour gérer le basculement après Isha
-    const now = new Date();
+    // Cache key basé sur date/heure Paris pour gérer le basculement après Isha
+    const now = getParisDate();
     const hourBlock = now.getHours() >= 20 ? 'night' : 'day'; // Après ~Isha
-    const cacheKey = `mawaqit-times-${now.toISOString().split('T')[0]}-${hourBlock}`;
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const cacheKey = `mawaqit-times-${dateStr}-${hourBlock}`;
     const cached = getCached<PrayerTimings>(cacheKey);
     if (cached) return cached;
 
@@ -199,8 +209,8 @@ export const PrayerAPI = {
 
       const data = await response.json();
 
-      // Récupérer la date du jour
-      const today = new Date();
+      // Récupérer la date du jour en timezone Paris
+      const today = getParisDate();
       let month = today.getMonth(); // 0-indexed
       let day = today.getDate();
       const currentHour = today.getHours();
@@ -278,7 +288,7 @@ export const PrayerAPI = {
     } catch (error) {
       logger.error('[PrayerAPI] Erreur Mawaqit:', error);
       // Fallback: utiliser les horaires du jour depuis le calendrier local
-      const today = new Date();
+      const today = getParisDate();
       const currentHour = today.getHours();
       const currentMinutes = today.getMinutes();
       const currentTimeInMinutes = currentHour * 60 + currentMinutes;
@@ -505,7 +515,7 @@ export const PrayerAPI = {
   // Date Hijri depuis Firestore (cache serveur) puis Aladhan (fallback)
   // Utilise adjustment=-1 pour s'aligner sur le calendrier de la Grande Mosquée de Paris / Mawaqit
   getHijriDate: async (): Promise<HijriDate> => {
-    const today = new Date();
+    const today = getParisDate();
     const dateKey = `${today.getDate()}-${today.getMonth() + 1}-${today.getFullYear()}`;
     const cacheKey = `hijri-${dateKey}-v2`; // v2 pour forcer refresh du cache
     const cached = getCached<HijriDate>(cacheKey);
@@ -591,20 +601,20 @@ export const PrayerAPI = {
   ): Promise<DayData> => {
     const timings = await PrayerAPI.getTimesByCity(city, country);
     const hijri = await PrayerAPI.getHijriDate();
-    const today = new Date();
+    const today = getParisDate();
 
     return {
       timings,
       date: {
-        readable: today.toLocaleDateString('fr-FR'),
+        readable: today.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }),
         timestamp: today.getTime().toString(),
         hijri,
         gregorian: {
-          date: today.toISOString().split('T')[0],
+          date: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
           format: 'DD-MM-YYYY',
           day: today.getDate().toString(),
-          weekday: { en: today.toLocaleDateString('en', { weekday: 'long' }) },
-          month: { number: today.getMonth() + 1, en: today.toLocaleDateString('en', { month: 'long' }) },
+          weekday: { en: today.toLocaleDateString('en', { weekday: 'long', timeZone: 'Europe/Paris' }) },
+          month: { number: today.getMonth() + 1, en: today.toLocaleDateString('en', { month: 'long', timeZone: 'Europe/Paris' }) },
           year: today.getFullYear().toString(),
         },
       },
@@ -619,7 +629,7 @@ export const PrayerAPI = {
 
   // Calculer la prochaine prière
   getNextPrayer: (timings: PrayerTimings): { name: string; time: string; nameAr: string } | null => {
-    const now = new Date();
+    const now = getParisDate();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     const prayers = [
@@ -650,7 +660,7 @@ export const PrayerAPI = {
   // Maghrib: de Maghrib à Isha
   // Isha: de Isha à minuit
   getCurrentPrayer: (timings: PrayerTimings): { name: string; time: string; nameAr: string } | null => {
-    const now = new Date();
+    const now = getParisDate();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     const toMinutes = (time: string) => {

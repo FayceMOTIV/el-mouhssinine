@@ -102,20 +102,14 @@ export const useQuranPlayer = ({
     return () => { mounted = false; };
   }, []);
 
-  // === EVENT LISTENER pour fin de piste (plus fiable que polling seul) ===
+  // === EVENT LISTENER pour fin de piste ===
+  // Seul PlaybackState.Ended est utilisé pour avancer au verset suivant.
+  // PlaybackActiveTrackChanged est ignoré pour éviter les double-avancement.
   useEffect(() => {
     if (!isPlayerReady) return;
 
     const subs: { remove: () => void }[] = [];
     try {
-      subs.push(
-        TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (event) => {
-          // Quand la piste active change à null, c'est la fin
-          if (event.track == null && !isLoadingTrackRef.current && isPlayingRef.current) {
-            await handleTrackEnd();
-          }
-        })
-      );
       subs.push(
         TrackPlayer.addEventListener(Event.PlaybackState, async (event) => {
           if (event.state === State.Ended && !isLoadingTrackRef.current) {
@@ -152,12 +146,6 @@ export const useQuranPlayer = ({
 
           if (duration > 0) {
             setVerseProgress(position / duration);
-
-            // Backup: détecter fin si event listener n'a pas capté
-            // Seuil 0.5s pour éviter les faux positifs sur versets courts
-            if (position >= duration - 0.5 && duration > 2) {
-              await handleTrackEnd();
-            }
           }
         } else if (currentState === State.Paused) {
           if (isPlayingRef.current && !isLoadingTrackRef.current) {
@@ -192,7 +180,7 @@ export const useQuranPlayer = ({
       const versesArray = versesRef.current;
 
       // Empêcher le double-traitement de la fin du même verset
-      // (3 sources d'événements : PlaybackActiveTrackChanged, PlaybackState.Ended, polling)
+      // (guard supplémentaire au cas où PlaybackState.Ended fire 2 fois)
       if (lastHandledEndForVerseRef.current === idx && mode !== 'verse') {
         return; // Déjà traité, ne pas avancer une 2ème fois
       }
@@ -288,8 +276,11 @@ export const useQuranPlayer = ({
       // Lancer la lecture
       await TrackPlayer.play();
 
-      // Mettre à jour l'état — reset le dedup pour ce nouveau verset
-      lastHandledEndForVerseRef.current = -1;
+      // Mettre à jour l'état
+      // On ne reset PAS lastHandledEndForVerseRef à -1, on le met à l'index
+      // précédent pour que tout événement retardataire du verset précédent soit ignoré.
+      // Il sera autorisé à fire pour CE verset (index) quand il se terminera.
+      // Pas de reset nécessaire : la condition L:196 vérifie === idx, pas !== -1.
       setCurrentVerseIndex(index);
       setIsPlaying(true);
       setIsLoading(false);

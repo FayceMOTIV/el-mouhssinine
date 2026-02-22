@@ -663,6 +663,8 @@ const QuranReadScreen: React.FC = () => {
                     <TouchableOpacity
                       onPress={() => setBookmarks(bookmarks.filter(b => b !== item))}
                       style={styles.deleteBookmark}
+                      accessibilityLabel="Supprimer le marque-page"
+                      accessibilityRole="button"
                     >
                       <Text style={styles.deleteBookmarkText}>🗑️</Text>
                     </TouchableOpacity>
@@ -815,7 +817,7 @@ const styles = StyleSheet.create({
   },
   bookmarkLabel: {
     fontSize: 9,
-    color: colors.accent,
+    color: colors.accentText,
     marginTop: 2,
     fontWeight: '600',
   },
@@ -931,7 +933,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   backButtonText: {
-    color: colors.accent,
+    color: colors.accentText,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1056,7 +1058,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   activeTabText: {
-    color: colors.accent,
+    color: colors.accentText,
     fontWeight: 'bold',
   },
   list: {

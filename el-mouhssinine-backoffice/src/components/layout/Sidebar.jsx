@@ -19,7 +19,8 @@ import {
   FileText,
   Bell,
   Moon,
-  Mail
+  Mail,
+  ClipboardList
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { subscribeToUnreadMessagesCount } from '../../services/firebase'
@@ -40,6 +41,7 @@ const menuItems = [
   { path: '/notifications', icon: Bell, label: 'Notifications' },
   { path: '/ramadan', icon: Moon, label: 'Mode Ramadan' },
   { path: '/emails', icon: Mail, label: 'Emails envoyés' },
+  { path: '/audit-logs', icon: ClipboardList, label: 'Journal d\'audit', adminOnly: true },
   { path: '/admins', icon: Shield, label: 'Gestion Admins', adminOnly: true },
   { path: '/parametres', icon: Settings, label: 'Paramètres' }
 ]

@@ -53,6 +53,7 @@ if (import.meta.env.DEV && !import.meta.env.VITE_FIREBASE_API_KEY) {
 }
 
 // Force demo mode for development (set to true to use mock data)
+// ⚠️ PRODUCTION: FORCE_DEMO_MODE doit TOUJOURS être false
 const FORCE_DEMO_MODE = false
 
 // Demo mode flag
@@ -350,9 +351,11 @@ export const subscribeToJanazas = (cb) => subscribeToCollection('janaza', cb, [o
 export const getProjets = () => getCollection('projects', [orderBy('createdAt', 'desc')])
 export const subscribeToProjets = (cb) => subscribeToCollection('projects', cb, [orderBy('createdAt', 'desc')])
 
-// Dons
-export const getDons = () => getCollection('donations', [orderBy('date', 'desc')])
-export const subscribeToDons = (cb) => subscribeToCollection('donations', cb, [orderBy('date', 'desc')])
+// Dons — orderBy 'createdAt' (présent dans TOUS les documents: app ET webhook)
+// Note: le champ 'date' n'est écrit QUE par l'app mobile, pas par le webhook Stripe,
+// donc orderBy('date') excluait silencieusement les dons créés par le webhook seul.
+export const getDons = () => getCollection('donations', [orderBy('createdAt', 'desc')])
+export const subscribeToDons = (cb) => subscribeToCollection('donations', cb, [orderBy('createdAt', 'desc')])
 
 // Membres
 export const getMembres = () => getCollection('members', [orderBy('createdAt', 'desc')])

@@ -15,6 +15,7 @@ import {
   Vibration,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, MODAL_WIDTH, isSmallScreen, isTablet, moderateScale } from '../theme/colors';
 import { subscribeToProjects, subscribeToMosqueeInfo, createDonation, addDonation, requestRecuFiscal } from '../services/firebase';
@@ -256,46 +257,11 @@ const DonationsScreen = () => {
 
   const [transferReference] = useState(generateTransferReference());
 
-  // Données par défaut avec fichiers
-  const defaultInternalProjects: Project[] = [
-    {
-      id: '1',
-      name: 'Rénovation Salle de Prière',
-      description: 'Travaux de rénovation et isolation thermique',
-      goal: 15000,
-      raised: 8500,
-      icon: '🕌',
-      isExternal: false,
-      isActive: true,
-      fichiers: [
-        { id: 'f1', nom: 'Devis travaux.pdf', type: 'pdf', url: 'https://example.com/devis.pdf' },
-        { id: 'f2', nom: 'Plan salle.jpg', type: 'image', url: 'https://example.com/plan.jpg' },
-      ],
-    },
-    { id: '2', name: 'Aide aux Nécessiteux', description: 'Distribution alimentaire mensuelle', goal: 5000, raised: 3200, icon: '🤲', isExternal: false, isActive: true },
-    {
-      id: '3',
-      name: 'École du Dimanche',
-      description: 'Matériel pédagogique et fournitures',
-      goal: 3000,
-      raised: 1800,
-      icon: '📚',
-      isExternal: false,
-      isActive: true,
-      fichiers: [
-        { id: 'f3', nom: 'Programme 2026.pdf', type: 'pdf', url: 'https://example.com/programme.pdf' },
-      ],
-    },
-  ];
-
-  // BUG 8 FIX: Pas de faux IBAN dans les projets par défaut - les vrais projets viennent de Firestore
-  const defaultExternalProjects: Project[] = [];
+  // Pas de projets par défaut - tous les projets viennent de Firestore
 
   useEffect(() => {
     const unsubProjects = subscribeToProjects((fetchedProjects) => {
-      if (fetchedProjects.length > 0) {
-        setProjects(fetchedProjects);
-      }
+      setProjects(fetchedProjects);
     });
 
     // Subscription temps réel pour IBAN et infos mosquée
@@ -316,8 +282,8 @@ const DonationsScreen = () => {
   const isProjectExternal = (p: Project) => p.isExternal || (p as any).categorie === 'externe';
 
   const displayProjects = projectType === 'interne'
-    ? (projects.filter(p => !isProjectExternal(p)).length > 0 ? projects.filter(p => !isProjectExternal(p)) : defaultInternalProjects)
-    : (projects.filter(p => isProjectExternal(p)).length > 0 ? projects.filter(p => isProjectExternal(p)) : defaultExternalProjects);
+    ? projects.filter(p => !isProjectExternal(p))
+    : projects.filter(p => isProjectExternal(p));
 
   const getProgress = (raised: number, goal: number) => {
     if (!goal || goal <= 0) return 0;
@@ -332,18 +298,16 @@ const DonationsScreen = () => {
   };
 
   const getSelectedProjectData = () => {
-    return [...defaultInternalProjects, ...defaultExternalProjects, ...projects].find(p => p.id === selectedProject);
+    return projects.find(p => p.id === selectedProject);
   };
 
   const getProjectWithFiles = (projectId: string): Project | undefined => {
-    // Chercher d'abord dans les projets Firebase (prioritaire)
+    // Chercher dans les projets Firebase
     const firebaseProject = projects.find(p => p.id === projectId);
     if (firebaseProject && firebaseProject.fichiers && firebaseProject.fichiers.length > 0) {
       return firebaseProject;
     }
-    // Sinon chercher dans les projets par défaut
-    return defaultInternalProjects.find(p => p.id === projectId) ||
-           defaultExternalProjects.find(p => p.id === projectId);
+    return firebaseProject;
   };
 
   const handleViewProject = (projectId: string) => {
@@ -356,9 +320,8 @@ const DonationsScreen = () => {
   };
 
   const handleViewProjectDetails = (projectId: string) => {
-    // Chercher dans tous les projets (default + firebase)
-    const allProjects = [...defaultInternalProjects, ...defaultExternalProjects, ...projects];
-    const project = allProjects.find(p => p.id === projectId);
+    // Chercher dans les projets Firebase
+    const project = projects.find(p => p.id === projectId);
     if (project) {
       // Vérifier si c'est un projet interne avec fichiers
       const projectWithFiles = getProjectWithFiles(projectId);
@@ -1018,8 +981,8 @@ const DonationsScreen = () => {
                 onPress={() => {
                   if (getFinalAmount() <= 0) return;
                   if (!validateDonorForm()) return;
-                  // Selectionner le projet "mosquee" par defaut (premier projet interne)
-                  const defaultProject = projects.filter(p => !isProjectExternal(p))[0] || defaultInternalProjects[0];
+                  // Selectionner le premier projet interne disponible
+                  const defaultProject = projects.filter(p => !isProjectExternal(p))[0];
                   if (defaultProject) {
                     setSelectedProject(defaultProject.id);
                   }
@@ -1080,7 +1043,16 @@ const DonationsScreen = () => {
                 <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
                   {projectType === 'interne' ? t('chooseProject') : t('helpOtherCauses')}
                 </Text>
-                {displayProjects.map((project) => (
+                {displayProjects.length === 0 ? (
+                  <View style={{ padding: 24, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 16, color: '#666', textAlign: 'center' }}>
+                      {projectType === 'interne'
+                        ? 'Aucun projet interne disponible pour le moment'
+                        : 'Aucun projet externe disponible pour le moment'}
+                    </Text>
+                  </View>
+                ) : (
+                  displayProjects.map((project) => (
                   <TouchableOpacity
                     key={project.id}
                     style={[styles.projectCard, selectedProject === project.id && styles.projectCardSelected]}
@@ -1117,7 +1089,8 @@ const DonationsScreen = () => {
                       <Text style={[styles.voirProjetBtnText, isRTL && styles.rtlText]}>👁️ {t('viewDetails') || 'Voir details'}</Text>
                     </TouchableOpacity>
                   </TouchableOpacity>
-                ))}
+                ))
+                )}
               </View>
 
               {/* Montants - Uniquement pour projets internes */}
@@ -1595,8 +1568,14 @@ const DonationsScreen = () => {
           keyboardVerticalOffset={20}
         >
         <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
-            <View style={styles.modalContent}>
+          <View style={styles.zakatModalContainer}>
+          <ScrollView
+            style={{ flex: 1 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+            bounces={false}
+          >
+            <View style={styles.zakatModalContent}>
               <TouchableOpacity style={styles.closeBtn} onPress={() => setShowZakatModal(false)}>
                 <Text style={styles.closeBtnText}>×</Text>
               </TouchableOpacity>
@@ -1689,6 +1668,7 @@ const DonationsScreen = () => {
               </Text>
             </View>
           </ScrollView>
+          </View>
         </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -2264,12 +2244,26 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textMuted,
   },
+  // Zakat modal
+  zakatModalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: borderRadius.xl,
+    width: '100%',
+    maxWidth: 380,
+    maxHeight: Dimensions.get('window').height * 0.75,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  zakatModalContent: {
+    padding: spacing.lg,
+    paddingTop: spacing.xl,
+  },
   // Zakat
   nisabInfo: {
     backgroundColor: '#f8f8fa',
     borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.xl,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
   },
   nisabText: {
     fontSize: fontSize.sm,
@@ -2307,16 +2301,16 @@ const styles = StyleSheet.create({
     color: '#E67E22',
   },
   inputLabel: {
-    fontSize: isSmallScreen ? moderateScale(13) : moderateScale(15),
+    fontSize: isSmallScreen ? moderateScale(13) : moderateScale(14),
     color: colors.textSecondary,
-    marginBottom: spacing.sm,
+    marginBottom: 4,
   },
   zakatInput: {
     backgroundColor: '#f8f8fa',
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.sm,
     fontSize: isSmallScreen ? fontSize.md : fontSize.lg,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.06)',
     width: '100%' as any,
@@ -2324,9 +2318,9 @@ const styles = StyleSheet.create({
   zakatResult: {
     backgroundColor: '#f8f8fa',
     borderRadius: borderRadius.lg,
-    padding: spacing.xl,
+    padding: spacing.md,
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.06)',
   },

@@ -24,6 +24,9 @@ import { QuranMiniPlayer } from '../components/QuranMiniPlayer';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Cache en mémoire (reset à chaque session app)
+const surahCache = new Map<number, any>();
+
 interface SurahScreenProps {
   route: any;
   navigation: any;
@@ -391,11 +394,24 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   const loadSurah = async () => {
     try {
       setLoading(true);
+
+      // Vérifier le cache
+      if (surahCache.has(surahNumber)) {
+        setSurahData(surahCache.get(surahNumber));
+        setLoading(false);
+        return;
+      }
+
+      // Charger depuis l'API
       const data = await QuranAPI.getSurahFull(surahNumber);
-      setSurahData({
+      const surahFullData = {
         arabic: data.arabic,
         translation: data.translation,
-      });
+      };
+
+      // Mettre en cache
+      surahCache.set(surahNumber, surahFullData);
+      setSurahData(surahFullData);
     } catch (error) {
       if (__DEV__) console.error('Erreur chargement sourate:', error);
       Alert.alert(

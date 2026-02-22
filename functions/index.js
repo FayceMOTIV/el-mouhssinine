@@ -5,6 +5,7 @@
  */
 
 const functions = require('firebase-functions');
+const { defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
 const PDFDocument = require('pdfkit');
@@ -13,14 +14,31 @@ const https = require('https');
 
 admin.initializeApp();
 
-// Initialiser Stripe avec la clé secrète (à configurer via firebase functions:config:set)
-// Pour configurer: firebase functions:config:set stripe.secret_key="sk_live_xxx"
-const stripeSecretKey = functions.config().stripe?.secret_key;
-if (!stripeSecretKey) {
-  console.warn('⚠️ ATTENTION: stripe.secret_key non configuré - les paiements échoueront');
-}
-const stripe = new Stripe(stripeSecretKey || 'sk_test_not_configured', {
-  apiVersion: '2023-10-16',
+// ==================== PARAMÈTRES (migration functions.config → defineString) ====================
+const STRIPE_SECRET_KEY = defineString('STRIPE_SECRET_KEY');
+const STRIPE_WEBHOOK_SECRET = defineString('STRIPE_WEBHOOK_SECRET');
+const BREVO_SMTP_USER = defineString('BREVO_SMTP_USER');
+const BREVO_SMTP_PASS = defineString('BREVO_SMTP_PASS');
+const BREVO_FROM_EMAIL = defineString('BREVO_FROM_EMAIL');
+const BREVO_FROM_NAME = defineString('BREVO_FROM_NAME', { default: 'Mosquée El Mohsinine' });
+
+// Initialiser Stripe de manière lazy (évite le warning "value() invoked during deployment")
+let _stripe;
+const getStripe = () => {
+  if (!_stripe) {
+    _stripe = new Stripe(STRIPE_SECRET_KEY.value() || 'sk_test_not_configured', {
+      apiVersion: '2023-10-16',
+    });
+  }
+  return _stripe;
+};
+// Proxy: accès à stripe.* délègue à getStripe().* — aucun changement dans le code métier
+const stripe = new Proxy({}, {
+  get: (_, prop) => {
+    const instance = getStripe();
+    const val = instance[prop];
+    return typeof val === 'function' ? val.bind(instance) : val;
+  }
 });
 
 // ==================== HELPERS ====================
@@ -1073,14 +1091,14 @@ exports.onNewMessage = functions
 
     // === 2. Email aux admins ===
     try {
-      const brevoUser = functions.config().brevo?.smtp_user;
-      const brevoPass = functions.config().brevo?.smtp_pass;
-      const fromEmail = functions.config().brevo?.from_email;
-      const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+      const brevoUser = BREVO_SMTP_USER.value();
+      const brevoPass = BREVO_SMTP_PASS.value();
+      const fromEmail = BREVO_FROM_EMAIL.value();
+      const fromName = BREVO_FROM_NAME.value();
       const adminEmail = fromEmail || 'centreculturelislamique@orange.fr';
 
       if (!brevoUser || !brevoPass || !fromEmail) {
-        console.error('Configuration Brevo manquante, email non envoyé');
+        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${userEmail || 'inconnu'}`);
         return null;
       }
 
@@ -1293,10 +1311,10 @@ exports.onMessageReply = functions
           const prenom = memberData?.prenom || after.userName || 'Membre';
 
           if (userEmail) {
-            const brevoUser = functions.config().brevo?.smtp_user;
-            const brevoPass = functions.config().brevo?.smtp_pass;
-            const fromEmail = functions.config().brevo?.from_email;
-            const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+            const brevoUser = BREVO_SMTP_USER.value();
+            const brevoPass = BREVO_SMTP_PASS.value();
+            const fromEmail = BREVO_FROM_EMAIL.value();
+            const fromName = BREVO_FROM_NAME.value();
 
             if (brevoUser && brevoPass && fromEmail) {
               const transporter = nodemailer.createTransport({
@@ -1525,6 +1543,22 @@ exports.createPaymentIntent = functions
       );
     }
 
+    // Validation montant minimum cotisation (ne concerne pas les dons)
+    if (metadata && metadata.type === 'cotisation') {
+      if (metadata.period === 'mensuel' && amount < 1000) {
+        throw new functions.https.HttpsError(
+          'invalid-argument',
+          'Montant minimum : 10€ pour une cotisation mensuelle.'
+        );
+      }
+      if (metadata.period === 'annuel' && amount < 10000) {
+        throw new functions.https.HttpsError(
+          'invalid-argument',
+          'Montant minimum : 100€ pour une cotisation annuelle.'
+        );
+      }
+    }
+
     if (!currency) {
       throw new functions.https.HttpsError(
         'invalid-argument',
@@ -1709,7 +1743,7 @@ exports.stripeWebhook = functions
   .region('europe-west1')
   .https.onRequest(async (req, res) => {
     const sig = req.headers['stripe-signature'];
-    const endpointSecret = functions.config().stripe?.webhook_secret;
+    const endpointSecret = STRIPE_WEBHOOK_SECRET.value();
 
     // SÉCURITÉ: Vérifier que le secret webhook est configuré
     if (!endpointSecret) {
@@ -1818,26 +1852,42 @@ exports.stripeWebhook = functions
               }, { merge: true });
 
               // Si don supplémentaire inclus, créer aussi un document donation
+              // ID déterministe pour idempotence (évite doublons si webhook retry)
               if (montantDon > 0) {
                 console.log('Don supplémentaire détecté:', montantDon, 'EUR');
-                const donationRef = admin.firestore().collection('donations').doc();
+                const donationRef = admin.firestore().collection('donations').doc(paymentIntentId + '-extra');
                 transaction.set(donationRef, {
                   stripePaymentIntentId: paymentIntentId,
                   amount: montantDon,
                   montant: montantDon,
                   currency: paymentIntent.currency,
                   status: 'succeeded',
+                  statut: 'completed',
                   type: 'donation',
                   description: 'Don supplémentaire lors de cotisation',
                   metadata: {
                     ...metadata,
                     linkedToCotisation: true,
                   },
-                  projectId: null, // Don général à la mosquée
+                  // Champs donateur (nécessaires backoffice + reçu fiscal)
+                  donateur: metadata.memberName || metadata.donorName || metadata.donorEmail || 'Anonyme',
+                  donateurEmail: (metadata.email || metadata.donorEmail || '').toLowerCase() || null,
+                  userId: metadata.memberId || metadata.userId || '',
+                  donorType: metadata.donorType || 'particulier',
+                  donorInfo: metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null,
+                  projectId: null,
                   projectName: 'Don général',
+                  projetId: null,
+                  projetNom: 'Don général',
                   isAnonymous: false,
+                  source: 'webhook_stripe',
+                  date: admin.firestore.FieldValue.serverTimestamp(),
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
+                  webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+                  recuFiscalGenerated: false,
+                  recuFiscalYear: null,
+                  recuFiscalUrl: null,
+                }, { merge: true });
               }
 
               // Mettre à jour le membre si memberId fourni
@@ -1847,8 +1897,8 @@ exports.stripeWebhook = functions
                 const memberDoc = await transaction.get(memberRef);
                 if (memberDoc.exists) {
                   transaction.update(memberRef, {
-                    statut: 'actif',
-                    status: 'actif', // Compatibilité: écrire les deux champs
+                    statut: 'active',
+                    status: 'active', // FIX A: TOUT paiement de cotisation (mensuel OU annuel) → 'active' (Page 3 - Membre Actif)
                     datePaiement: admin.firestore.FieldValue.serverTimestamp(),
                     montantPaye: montantCotisation, // Seulement le montant de la cotisation
                     stripePaymentId: paymentIntentId,
@@ -1879,6 +1929,8 @@ exports.stripeWebhook = functions
                 projetNom: metadata.projectName || null,
                 isAnonymous: metadata.isAnonymous === 'true',
                 source: 'webhook_stripe',
+                date: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
               }, { merge: true });
 
@@ -2026,8 +2078,8 @@ exports.stripeWebhook = functions
 
           // Mettre à jour le membre
           await memberDoc.ref.update({
-            status: 'actif',
-            statut: 'actif',
+            status: 'active',
+            statut: 'active', // FIX A: Paiement récurrent mensuel réussi → 'active' (Page 3 - Membre Actif)
             datePaiement: admin.firestore.FieldValue.serverTimestamp(),
             montantPaye: amountEuros,
             stripePaymentId: invoice.payment_intent,
@@ -2092,9 +2144,9 @@ exports.stripeWebhook = functions
             };
 
             if (attemptCount >= 3) {
-              statusUpdate.status = 'sympathisant';
-              statusUpdate.statut = 'sympathisant';
-              console.log('3 tentatives échouées, membre passé en sympathisant');
+              statusUpdate.status = 'expired';
+              statusUpdate.statut = 'expired'; // FIX A: Échec paiement → 'expired' (Page 2 - Espace Adhérent pour renouveler, PAS sympathisant)
+              console.log('3 tentatives échouées, membre passé en expired pour renouvellement');
             }
 
             await failedMemberDoc.ref.update(statusUpdate);
@@ -2112,10 +2164,10 @@ exports.stripeWebhook = functions
           });
 
           if (failedEmail) {
-            const brevoUser = functions.config().brevo?.smtp_user;
-            const brevoPass = functions.config().brevo?.smtp_pass;
-            const fromEmail = functions.config().brevo?.from_email;
-            const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+            const brevoUser = BREVO_SMTP_USER.value();
+            const brevoPass = BREVO_SMTP_PASS.value();
+            const fromEmail = BREVO_FROM_EMAIL.value();
+            const fromName = BREVO_FROM_NAME.value();
 
             if (brevoUser && brevoPass && fromEmail) {
               const amountDue = ((failedInvoice.amount_due || 0) / 100).toFixed(2);
@@ -2215,23 +2267,23 @@ exports.stripeWebhook = functions
             const subMemberDoc = subMembersSnapshot.docs[0];
             const subMemberData = subMemberDoc.data();
             await subMemberDoc.ref.update({
-              status: 'sympathisant',
-              statut: 'sympathisant',
+              status: 'expired',
+              statut: 'expired', // FIX A: Annulation abonnement → 'expired' (Page 2 - Espace Adhérent pour renouveler, PAS sympathisant)
               cotisationType: null,
               stripeSubscriptionId: null,
               subscriptionCancelledAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-            console.log('Membre mis à jour en sympathisant suite à annulation abonnement');
+            console.log('Membre mis à jour en expired suite à annulation abonnement');
 
             // Envoyer email de confirmation d'annulation
             const cancelEmail = subMemberData.email;
             const cancelPrenom = subMemberData.prenom || subMemberData.nom || 'Membre';
             if (cancelEmail) {
               try {
-                const brevoUser = functions.config().brevo?.smtp_user;
-                const brevoPass = functions.config().brevo?.smtp_pass;
-                const fromEmail = functions.config().brevo?.from_email;
-                const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+                const brevoUser = BREVO_SMTP_USER.value();
+                const brevoPass = BREVO_SMTP_PASS.value();
+                const fromEmail = BREVO_FROM_EMAIL.value();
+                const fromName = BREVO_FROM_NAME.value();
 
                 if (brevoUser && brevoPass && fromEmail) {
                   // Charger les infos association
@@ -2322,11 +2374,11 @@ exports.stripeWebhook = functions
 
             // Mettre à jour le statut selon le statut Stripe
             if (updatedSubscription.status === 'active') {
-              updateData.status = 'actif';
-              updateData.statut = 'actif';
+              updateData.status = 'active';
+              updateData.statut = 'active'; // FIX A: Abonnement actif → 'active' (Page 3 - Membre Actif)
             } else if (updatedSubscription.status === 'canceled' || updatedSubscription.status === 'unpaid') {
-              updateData.status = 'sympathisant';
-              updateData.statut = 'sympathisant';
+              updateData.status = 'expired';
+              updateData.statut = 'expired'; // FIX A: Abonnement annulé/impayé → 'expired' (Page 2 - Espace Adhérent pour renouveler)
             }
 
             if (Object.keys(updateData).length > 0) {
@@ -2361,10 +2413,10 @@ exports.stripeWebhook = functions
           });
 
           // 2. Envoyer email alerte admin
-          const brevoUser = functions.config().brevo?.smtp_user;
-          const brevoPass = functions.config().brevo?.smtp_pass;
-          const fromEmail = functions.config().brevo?.from_email;
-          const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+          const brevoUser = BREVO_SMTP_USER.value();
+          const brevoPass = BREVO_SMTP_PASS.value();
+          const fromEmail = BREVO_FROM_EMAIL.value();
+          const fromName = BREVO_FROM_NAME.value();
 
           if (brevoUser && brevoPass && fromEmail) {
             const disputeTransporter = nodemailer.createTransport({
@@ -3176,10 +3228,10 @@ exports.sendRecuFiscal = functions
       });
 
       // 6. Envoyer par email via Brevo SMTP
-      const brevoUser = functions.config().brevo?.smtp_user;
-      const brevoPass = functions.config().brevo?.smtp_pass;
-      const fromEmail = functions.config().brevo?.from_email;
-      const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+      const brevoUser = BREVO_SMTP_USER.value();
+      const brevoPass = BREVO_SMTP_PASS.value();
+      const fromEmail = BREVO_FROM_EMAIL.value();
+      const fromName = BREVO_FROM_NAME.value();
 
       if (!brevoUser || !brevoPass || !fromEmail) {
         throw new functions.https.HttpsError(
@@ -3443,13 +3495,13 @@ exports.onNewSympathisant = functions
       const emailMosquee = mosquee.email || '';
 
       // Configuration email Brevo
-      const brevoUser = functions.config().brevo?.smtp_user;
-      const brevoPass = functions.config().brevo?.smtp_pass;
-      const fromEmail = functions.config().brevo?.from_email;
-      const fromName = functions.config().brevo?.from_name || nomMosquee;
+      const brevoUser = BREVO_SMTP_USER.value();
+      const brevoPass = BREVO_SMTP_PASS.value();
+      const fromEmail = BREVO_FROM_EMAIL.value();
+      const fromName = BREVO_FROM_NAME.value() || nomMosquee;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
-        console.error('Configuration Brevo manquante, email non envoyé');
+        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${email || 'inconnu'}`);
         return null;
       }
 
@@ -3580,10 +3632,10 @@ exports.validateMembership = functions
       const nomMosquee = mosquee.nom || 'Mosquée El Mohsinine';
 
       // Configuration email
-      const brevoUser = functions.config().brevo?.smtp_user;
-      const brevoPass = functions.config().brevo?.smtp_pass;
-      const fromEmail = functions.config().brevo?.from_email;
-      const fromName = functions.config().brevo?.from_name || nomMosquee;
+      const brevoUser = BREVO_SMTP_USER.value();
+      const brevoPass = BREVO_SMTP_PASS.value();
+      const fromEmail = BREVO_FROM_EMAIL.value();
+      const fromName = BREVO_FROM_NAME.value() || nomMosquee;
 
       let transporter = null;
       if (brevoUser && brevoPass && fromEmail) {
@@ -3627,12 +3679,16 @@ exports.validateMembership = functions
             validationHtml = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;"><h1 style="color: white; margin: 0;">✅ Adhésion Validée</h1></div><div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;"><p>Assalamu alaykum ${prenom},</p><p>Votre adhésion a été validée ! Vous êtes maintenant membre actif.</p><p>Fraternellement, Le Bureau de la ${nomMosquee}</p></div></div>`;
           }
 
-          await transporter.sendMail({
-            from: `"${fromName}" <${fromEmail}>`,
-            to: email,
-            subject: validationSubject,
-            html: validationHtml,
-          });
+          try {
+            await transporter.sendMail({
+              from: `"${fromName}" <${fromEmail}>`,
+              to: email,
+              subject: validationSubject,
+              html: validationHtml,
+            });
+          } catch (emailError) {
+            console.error('[EMAIL ERROR] validateMembership email échoué:', emailError.message);
+          }
         }
 
         // Envoyer notification push
@@ -3712,11 +3768,12 @@ exports.validateMembership = functions
 
         // 3. Envoyer email d'information
         if (transporter && email) {
-          await transporter.sendMail({
-            from: `"${fromName}" <${fromEmail}>`,
-            to: email,
-            subject: `Information concernant votre demande d'adhésion - ${nomMosquee}`,
-            html: `
+          try {
+            await transporter.sendMail({
+              from: `"${fromName}" <${fromEmail}>`,
+              to: email,
+              subject: `Information concernant votre demande d'adhésion - ${nomMosquee}`,
+              html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <div style="background: #f5f5f5; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                   <h1 style="color: #333; margin: 0;">Information</h1>
@@ -3757,7 +3814,10 @@ exports.validateMembership = functions
                 </div>
               </div>
             `,
-          });
+            });
+          } catch (emailError) {
+            console.error('[EMAIL ERROR] validateMembership email échoué:', emailError.message);
+          }
         }
 
         // 4. Envoyer notification push
@@ -4115,10 +4175,10 @@ const processAnnualRecusFiscaux = async (year) => {
   }
 
   // 4. Configuration email
-  const brevoUser = functions.config().brevo?.smtp_user;
-  const brevoPass = functions.config().brevo?.smtp_pass;
-  const fromEmail = functions.config().brevo?.from_email;
-  const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+  const brevoUser = BREVO_SMTP_USER.value();
+  const brevoPass = BREVO_SMTP_PASS.value();
+  const fromEmail = BREVO_FROM_EMAIL.value();
+  const fromName = BREVO_FROM_NAME.value();
 
   let transporter = null;
   if (brevoUser && brevoPass && fromEmail) {
@@ -4523,13 +4583,13 @@ exports.onDonationConfirmation = functions
       const telephoneMosquee = mosquee.telephone || '';
 
       // Config Brevo
-      const brevoUser = functions.config().brevo?.smtp_user;
-      const brevoPass = functions.config().brevo?.smtp_pass;
-      const fromEmail = functions.config().brevo?.from_email;
-      const fromName = functions.config().brevo?.from_name || nomAssociation;
+      const brevoUser = BREVO_SMTP_USER.value();
+      const brevoPass = BREVO_SMTP_PASS.value();
+      const fromEmail = BREVO_FROM_EMAIL.value();
+      const fromName = BREVO_FROM_NAME.value() || nomAssociation;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
-        console.error('Configuration Brevo manquante, email non envoyé');
+        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${email || 'inconnu'}`);
         return null;
       }
 
@@ -4721,13 +4781,13 @@ exports.onCotisationConfirmation = functions
       const telephoneMosquee = mosquee.telephone || '';
 
       // 7. Config Brevo
-      const brevoUser = functions.config().brevo?.smtp_user;
-      const brevoPass = functions.config().brevo?.smtp_pass;
-      const fromEmail = functions.config().brevo?.from_email;
-      const fromName = functions.config().brevo?.from_name || nomAssociation;
+      const brevoUser = BREVO_SMTP_USER.value();
+      const brevoPass = BREVO_SMTP_PASS.value();
+      const fromEmail = BREVO_FROM_EMAIL.value();
+      const fromName = BREVO_FROM_NAME.value() || nomAssociation;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
-        console.error('Configuration Brevo manquante, email non envoyé');
+        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${email || 'inconnu'}`);
         return null;
       }
 
@@ -4810,27 +4870,38 @@ exports.refundPayment = functions
     }
 
     try {
-      // Chercher le membre
-      const memberRef = admin.firestore().collection('members').doc(memberId);
-      const memberDoc = await memberRef.get();
-      if (!memberDoc.exists) {
-        throw new functions.https.HttpsError('not-found', 'Membre non trouvé');
-      }
+      const db = admin.firestore();
+      const memberRef = db.collection('members').doc(memberId);
 
-      const memberData = memberDoc.data();
-      const stripePaymentId = memberData.stripePaymentId;
+      // ÉTAPE 1 : Lock atomique via transaction Firestore
+      let stripePaymentId;
+      let memberData;
+      await db.runTransaction(async (transaction) => {
+        const memberDoc = await transaction.get(memberRef);
+        if (!memberDoc.exists) {
+          throw new functions.https.HttpsError('not-found', 'Membre non trouvé');
+        }
+        memberData = memberDoc.data();
+        stripePaymentId = memberData.stripePaymentId;
 
-      // BUG 4 FIX: Vérifier si déjà remboursé pour éviter double remboursement
-      if (memberData.refunded === true) {
-        throw new functions.https.HttpsError(
-          'already-exists',
-          'Ce paiement a déjà été remboursé'
-        );
-      }
+        if (memberData.refunded === true) {
+          throw new functions.https.HttpsError(
+            'already-exists',
+            'Ce paiement a déjà été remboursé'
+          );
+        }
+        if (memberData.refundProcessing === true) {
+          throw new functions.https.HttpsError(
+            'already-exists',
+            'Un remboursement est déjà en cours'
+          );
+        }
+        // Poser le lock immédiatement
+        transaction.update(memberRef, { refundProcessing: true });
+      });
 
+      // ÉTAPE 2 : Call Stripe HORS transaction (évite double call si retry)
       let refundResult = null;
-
-      // Si paiement Stripe, rembourser via Stripe
       if (stripePaymentId) {
         try {
           const refundParams = {
@@ -4845,19 +4916,21 @@ exports.refundPayment = functions
           console.log(`💰 Remboursement Stripe effectué: ${refundResult.id} pour ${refundResult.amount / 100}€`);
         } catch (stripeError) {
           console.error('⚠️ Erreur remboursement Stripe:', stripeError.message);
+          // Annuler le lock si Stripe échoue
+          await memberRef.update({ refundProcessing: false });
           if (stripeError.code !== 'charge_already_refunded') {
             throw new functions.https.HttpsError('internal', `Erreur Stripe: ${stripeError.message}`);
           }
         }
       }
 
-      // FIX D3: Déterminer si remboursement partiel ou total
+      // ÉTAPE 3 : Confirmer le remboursement dans Firestore
       const refundedAmount = refundResult ? refundResult.amount / 100 : 0;
       const paidAmount = memberData.montantPaye || 0;
       const isPartialRefund = amount && amount > 0 && amount < paidAmount;
 
-      // Mettre à jour le membre
       const memberUpdate = {
+        refundProcessing: false,
         refundedAt: admin.firestore.FieldValue.serverTimestamp(),
         refundedBy: context.auth.uid,
         refundReason: reason || 'Annulation admin',
@@ -4866,11 +4939,9 @@ exports.refundPayment = functions
       };
 
       if (isPartialRefund) {
-        // Remboursement partiel : garder le membre actif mais noter le remboursement
         memberUpdate.partialRefund = true;
       } else {
-        // Remboursement total : annuler le paiement
-        memberUpdate.refunded = true; // BUG 4 FIX: Flag anti-double remboursement
+        memberUpdate.refunded = true;
         memberUpdate.aPaye = false;
         memberUpdate.datePaiement = null;
         memberUpdate.stripePaymentId = null;
@@ -4882,7 +4953,7 @@ exports.refundPayment = functions
 
       // Marquer le paiement comme remboursé dans la collection payments
       if (stripePaymentId) {
-        const paymentQuery = await admin.firestore()
+        const paymentQuery = await db
           .collection('payments')
           .where('stripePaymentIntentId', '==', stripePaymentId)
           .limit(1)
@@ -5229,13 +5300,13 @@ exports.checkExpiringCotisations = functions
   .onRun(async (context) => {
     console.log('=== Vérification des cotisations expirantes ===');
 
-    const brevoUser = functions.config().brevo?.smtp_user;
-    const brevoPass = functions.config().brevo?.smtp_pass;
-    const fromEmail = functions.config().brevo?.from_email;
-    const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+    const brevoUser = BREVO_SMTP_USER.value();
+    const brevoPass = BREVO_SMTP_PASS.value();
+    const fromEmail = BREVO_FROM_EMAIL.value();
+    const fromName = BREVO_FROM_NAME.value();
 
     if (!brevoUser || !brevoPass || !fromEmail) {
-      console.error('Configuration Brevo manquante');
+      console.error('[EMAIL ERROR] Config Brevo manquante. Email de rappel cotisation non envoyé');
       return null;
     }
 
@@ -5388,82 +5459,110 @@ exports.reconcileStripePayments = functions
 
     try {
       const sevenDaysAgo = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
-
-      // 1. Lister tous les PaymentIntents succeeded des 7 derniers jours depuis Stripe
-      const paymentIntents = await stripe.paymentIntents.list({
-        created: { gte: sevenDaysAgo },
-        limit: 100,
-      });
-
+      const startTime = Date.now();
       const mismatches = [];
 
-      for (const pi of paymentIntents.data) {
-        if (pi.status !== 'succeeded') continue;
+      // FIX PAY3: Pagination PaymentIntents pour éviter limite 100 items
+      let hasMorePI = true;
+      let startingAfterPI = undefined;
+      let totalPICount = 0;
 
-        // 2. Vérifier si ce paiement existe dans Firestore (donations OU payments OU processed_payments)
-        const [donSnap, paySnap, processedSnap] = await Promise.all([
-          admin.firestore().collection('donations').where('stripePaymentIntentId', '==', pi.id).limit(1).get(),
-          admin.firestore().collection('payments').where('stripePaymentIntentId', '==', pi.id).limit(1).get(),
-          admin.firestore().collection('processed_payments').doc(pi.id).get(),
-        ]);
+      while (hasMorePI && (Date.now() - startTime < 300000)) {
+        const paymentIntents = await stripe.paymentIntents.list({
+          created: { gte: sevenDaysAgo },
+          limit: 100,
+          ...(startingAfterPI && { starting_after: startingAfterPI })
+        });
 
-        // Vérifier aussi par docId (donations/{paymentIntentId})
-        let donByDocId = { exists: false };
-        try {
-          donByDocId = await admin.firestore().collection('donations').doc(pi.id).get();
-        } catch (e) { /* ignore */ }
+        totalPICount += paymentIntents.data.length;
 
-        if (donSnap.empty && paySnap.empty && !processedSnap.exists && !donByDocId.exists) {
-          mismatches.push({
-            paymentIntentId: pi.id,
-            amount: pi.amount / 100,
-            currency: pi.currency,
-            created: new Date(pi.created * 1000).toLocaleDateString('fr-FR'),
-            metadata: pi.metadata,
-          });
-        }
-      }
+        for (const pi of paymentIntents.data) {
+          if (pi.status !== 'succeeded') continue;
 
-      // 3. Vérifier aussi les invoices (abonnements mensuels)
-      const invoices = await stripe.invoices.list({
-        created: { gte: sevenDaysAgo },
-        status: 'paid',
-        limit: 100,
-      });
+          // Vérifier si ce paiement existe dans Firestore (donations OU payments OU processed_payments)
+          const [donSnap, paySnap, processedSnap] = await Promise.all([
+            admin.firestore().collection('donations').where('stripePaymentIntentId', '==', pi.id).limit(1).get(),
+            admin.firestore().collection('payments').where('stripePaymentIntentId', '==', pi.id).limit(1).get(),
+            admin.firestore().collection('processed_payments').doc(pi.id).get(),
+          ]);
 
-      for (const inv of invoices.data) {
-        if (!inv.payment_intent) continue;
+          // Vérifier aussi par docId (donations/{paymentIntentId})
+          let donByDocId = { exists: false };
+          try {
+            donByDocId = await admin.firestore().collection('donations').doc(pi.id).get();
+          } catch (e) { /* ignore */ }
 
-        const [donSnap, paySnap] = await Promise.all([
-          admin.firestore().collection('donations').where('stripePaymentIntentId', '==', inv.payment_intent).limit(1).get(),
-          admin.firestore().collection('payments').where('stripePaymentIntentId', '==', inv.payment_intent).limit(1).get(),
-        ]);
-
-        if (donSnap.empty && paySnap.empty) {
-          // Vérifier que ce n'est pas déjà dans les mismatches
-          if (!mismatches.find(m => m.paymentIntentId === inv.payment_intent)) {
+          if (donSnap.empty && paySnap.empty && !processedSnap.exists && !donByDocId.exists) {
             mismatches.push({
-              paymentIntentId: inv.payment_intent,
-              invoiceId: inv.id,
-              amount: inv.amount_paid / 100,
-              currency: inv.currency,
-              created: new Date(inv.created * 1000).toLocaleDateString('fr-FR'),
-              metadata: inv.subscription ? { source: 'subscription', subscriptionId: inv.subscription } : {},
+              paymentIntentId: pi.id,
+              amount: pi.amount / 100,
+              currency: pi.currency,
+              created: new Date(pi.created * 1000).toLocaleDateString('fr-FR'),
+              metadata: pi.metadata,
             });
           }
         }
+
+        hasMorePI = paymentIntents.has_more;
+        if (paymentIntents.data.length > 0) {
+          startingAfterPI = paymentIntents.data[paymentIntents.data.length - 1].id;
+        }
       }
 
-      console.log(`Réconciliation terminée: ${paymentIntents.data.length} PI + ${invoices.data.length} invoices vérifiés, ${mismatches.length} décalages`);
+      // FIX PAY3: Pagination Invoices pour éviter limite 100 items
+      let hasMoreInv = true;
+      let startingAfterInv = undefined;
+      let totalInvCount = 0;
+
+      while (hasMoreInv && (Date.now() - startTime < 300000)) {
+        const invoices = await stripe.invoices.list({
+          created: { gte: sevenDaysAgo },
+          status: 'paid',
+          limit: 100,
+          ...(startingAfterInv && { starting_after: startingAfterInv })
+        });
+
+        totalInvCount += invoices.data.length;
+
+        for (const inv of invoices.data) {
+          if (!inv.payment_intent) continue;
+
+          const [donSnap, paySnap] = await Promise.all([
+            admin.firestore().collection('donations').where('stripePaymentIntentId', '==', inv.payment_intent).limit(1).get(),
+            admin.firestore().collection('payments').where('stripePaymentIntentId', '==', inv.payment_intent).limit(1).get(),
+          ]);
+
+          if (donSnap.empty && paySnap.empty) {
+            // Vérifier que ce n'est pas déjà dans les mismatches
+            if (!mismatches.find(m => m.paymentIntentId === inv.payment_intent)) {
+              mismatches.push({
+                paymentIntentId: inv.payment_intent,
+                invoiceId: inv.id,
+                amount: inv.amount_paid / 100,
+                currency: inv.currency,
+                created: new Date(inv.created * 1000).toLocaleDateString('fr-FR'),
+                metadata: inv.subscription ? { source: 'subscription', subscriptionId: inv.subscription } : {},
+              });
+            }
+          }
+        }
+
+        hasMoreInv = invoices.has_more;
+        if (invoices.data.length > 0) {
+          startingAfterInv = invoices.data[invoices.data.length - 1].id;
+        }
+      }
+
+      console.log(`Réconciliation terminée: ${totalPICount} PI + ${totalInvCount} invoices vérifiés, ${mismatches.length} décalages`);
 
       // 4. Si des décalages trouvés, envoyer email alerte admin
       if (mismatches.length > 0) {
         console.error('⚠️ RECONCILIATION MISMATCH:', JSON.stringify(mismatches));
 
-        const brevoUser = functions.config().brevo?.smtp_user;
-        const brevoPass = functions.config().brevo?.smtp_pass;
-        const fromEmail = functions.config().brevo?.from_email;
-        const fromName = functions.config().brevo?.from_name || 'Mosquée El Mohsinine';
+        const brevoUser = BREVO_SMTP_USER.value();
+        const brevoPass = BREVO_SMTP_PASS.value();
+        const fromEmail = BREVO_FROM_EMAIL.value();
+        const fromName = BREVO_FROM_NAME.value();
 
         if (brevoUser && brevoPass && fromEmail) {
           const reconTransporter = nodemailer.createTransport({
@@ -5799,6 +5898,186 @@ exports.deleteMemberByAdmin = functions
         console.error('Erreur log RGPD:', logErr);
       }
 
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ==================== DELETE MY ACCOUNT (SELF-SERVICE RGPD) ====================
+exports.deleteMyAccount = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    // 1. Auth obligatoire
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+    const uid = context.auth.uid;
+    console.log(`=== AUTO-SUPPRESSION COMPTE ${uid} ===`);
+
+    const db = admin.firestore();
+    const log = {
+      uid,
+      selfDeletion: true,
+      deletedAt: new Date().toISOString(),
+      steps: [],
+    };
+
+    try {
+      // 2. Trouver le document membre par uid
+      const memberSnap = await db.collection('members')
+        .where('uid', '==', uid).limit(1).get();
+
+      let memberRef = null;
+      let memberData = null;
+
+      if (!memberSnap.empty) {
+        memberRef = memberSnap.docs[0].ref;
+        memberData = memberSnap.docs[0].data();
+        log.memberName = `${memberData.prenom || ''} ${memberData.nom || ''}`.trim();
+      } else {
+        const directRef = db.collection('members').doc(uid);
+        const directDoc = await directRef.get();
+        if (directDoc.exists) {
+          memberRef = directRef;
+          memberData = directDoc.data();
+          log.memberName = `${memberData.prenom || ''} ${memberData.nom || ''}`.trim();
+        } else {
+          log.steps.push({ action: 'no_member_doc_found' });
+        }
+      }
+
+      // 3. Annuler abonnement Stripe si actif
+      if (memberData && memberData.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(memberData.stripeSubscriptionId);
+          log.steps.push({ action: 'stripe_subscription_cancelled', id: memberData.stripeSubscriptionId });
+        } catch (stripeErr) {
+          log.steps.push({ action: 'stripe_subscription_cancel_skipped', reason: stripeErr.message });
+        }
+      }
+
+      const anonymizeLabel = 'Membre supprimé';
+
+      // 4a. Anonymiser donations
+      try {
+        const donSnap = await db.collection('donations').where('userId', '==', uid).get();
+        if (!donSnap.empty) {
+          const chunks = [];
+          let batch = db.batch();
+          let count = 0;
+          donSnap.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+              donateur: anonymizeLabel, email: '', telephone: '', donateurEmail: '',
+              userId: 'deleted', anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+            if (count % 500 === 0) { chunks.push(batch); batch = db.batch(); }
+          });
+          chunks.push(batch);
+          for (const b of chunks) { await b.commit(); }
+          log.steps.push({ action: 'anonymized_donations', count: donSnap.size });
+        }
+      } catch (err) {
+        log.steps.push({ action: 'error_donations', error: err.message });
+      }
+
+      // 4b. Anonymiser payments
+      try {
+        const paySnap = await db.collection('payments').where('metadata.memberId', '==', uid).get();
+        if (!paySnap.empty) {
+          const chunks = [];
+          let batch = db.batch();
+          let count = 0;
+          paySnap.docs.forEach((doc) => {
+            const docData = doc.data();
+            batch.update(doc.ref, {
+              membreNom: anonymizeLabel, email: '', userId: 'deleted',
+              metadata: { ...docData.metadata, memberId: 'deleted', memberName: anonymizeLabel, memberEmail: '' },
+              anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+            if (count % 500 === 0) { chunks.push(batch); batch = db.batch(); }
+          });
+          chunks.push(batch);
+          for (const b of chunks) { await b.commit(); }
+          log.steps.push({ action: 'anonymized_payments', count: paySnap.size });
+        }
+      } catch (err) {
+        log.steps.push({ action: 'error_payments', error: err.message });
+      }
+
+      // 4c. Anonymiser messages (ne pas supprimer, anonymiser)
+      try {
+        const msgSnap = await db.collection('messages').where('userId', '==', uid).get();
+        if (!msgSnap.empty) {
+          const chunks = [];
+          let batch = db.batch();
+          let count = 0;
+          msgSnap.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+              senderName: anonymizeLabel, userId: 'deleted',
+              anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+            if (count % 500 === 0) { chunks.push(batch); batch = db.batch(); }
+          });
+          chunks.push(batch);
+          for (const b of chunks) { await b.commit(); }
+          log.steps.push({ action: 'anonymized_messages', count: msgSnap.size });
+        }
+      } catch (err) {
+        log.steps.push({ action: 'error_messages', error: err.message });
+      }
+
+      // 5. Supprimer photo de profil dans Storage
+      try {
+        const bucket = admin.storage().bucket();
+        const [files] = await bucket.getFiles({ prefix: `members/${uid}/` });
+        for (const file of files) {
+          await file.delete();
+        }
+        if (files.length > 0) {
+          log.steps.push({ action: 'storage_files_deleted', count: files.length });
+        }
+      } catch (err) {
+        log.steps.push({ action: 'error_storage', error: err.message });
+      }
+
+      // 6. Supprimer le document membre
+      if (memberRef) {
+        await memberRef.delete();
+        log.steps.push({ action: 'member_doc_deleted' });
+      }
+
+      // 7. Supprimer l'utilisateur Firebase Auth
+      try {
+        await admin.auth().deleteUser(uid);
+        log.steps.push({ action: 'auth_user_deleted' });
+      } catch (authErr) {
+        log.steps.push({ action: 'auth_user_delete_error', reason: authErr.message });
+      }
+
+      // 8. Log RGPD
+      await db.collection('deletion_logs').add({
+        ...log,
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`=== AUTO-SUPPRESSION ${uid} TERMINÉE ===`);
+      return { success: true, message: 'Votre compte a été supprimé avec succès.' };
+
+    } catch (error) {
+      console.error('❌ Erreur deleteMyAccount:', error);
+      log.steps.push({ action: 'FAILED', error: error.message });
+      try {
+        await db.collection('deletion_logs').add({
+          ...log, failed: true,
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (logErr) {
+        console.error('Erreur log RGPD (self):', logErr);
+      }
       if (error instanceof functions.https.HttpsError) throw error;
       throw new functions.https.HttpsError('internal', error.message);
     }

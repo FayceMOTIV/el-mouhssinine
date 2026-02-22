@@ -1,5 +1,7 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Text, I18nManager } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import OnboardingConsentScreen from '../screens/OnboardingConsentScreen';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -229,6 +231,18 @@ const TabNavigatorComponent = () => {
 
 const AppNavigator = () => {
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
+
+  // Vérifier le consentement RGPD au démarrage
+  useEffect(() => {
+    AsyncStorage.getItem('rgpd_accepted').then((value) => {
+      setConsentAccepted(!!value);
+      setConsentChecked(true);
+    }).catch(() => {
+      setConsentChecked(true);
+    });
+  }, []);
 
   // Gérer le clic sur les notifications pour naviguer vers le bon écran
   useEffect(() => {
@@ -239,6 +253,12 @@ const AppNavigator = () => {
       }
     });
   }, []);
+
+  if (!consentChecked) return null;
+
+  if (!consentAccepted) {
+    return <OnboardingConsentScreen onAccept={() => setConsentAccepted(true)} />;
+  }
 
   return (
     <NavigationContainer ref={navigationRef}>

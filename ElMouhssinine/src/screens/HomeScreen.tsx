@@ -18,7 +18,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, shadows, MIN_TOUCH_SIZE, moderateScale, isSmallScreen } from '../theme/colors';
+import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, shadows, MIN_TOUCH_SIZE, moderateScale, isSmallScreen, isTablet } from '../theme/colors';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import {
   subscribeToAnnouncements,
@@ -103,9 +103,8 @@ const HomeScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [prayerDataWarning, setPrayerDataWarning] = useState(false);
 
-  // Animation du countdown
-  const countdownOpacity = useRef(new Animated.Value(1)).current;
   const [islamicDate, setIslamicDate] = useState(mockIslamicDate);
   const [iqamaDelays, setIqamaDelays] = useState<IqamaDelays | null>(null);
   const [jumuaTimes, setJumuaTimes] = useState<JumuaTimes | null>(null);
@@ -239,7 +238,7 @@ const HomeScreen = () => {
 
       // Date hijri depuis l'API
       const hijri = await PrayerAPI.getHijriDate();
-      const today = new Date();
+      const todayParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
       const months = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin',
                       'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
       setIslamicDate({
@@ -247,22 +246,28 @@ const HomeScreen = () => {
         month: hijri.month.en,
         monthAr: hijri.month.ar,
         year: hijri.year,
-        gregorian: `${today.getDate()} ${months[today.getMonth()]} ${today.getFullYear()}`
+        gregorian: `${todayParis.getDate()} ${months[todayParis.getMonth()]} ${todayParis.getFullYear()}`
       });
+      setPrayerDataWarning(false);
     } catch (error) {
       if (__DEV__) console.warn('API error, using mock data:', error);
       setLoadError(t('loadingFailed') as string);
       // Garde les donnees mockees en fallback
+      setPrayerDataWarning(true);
     } finally {
       setLoading(false);
     }
   }, [t]);
 
   // Calculer le countdown vers la prochaine priere
+  // Forcer Europe/Paris pour que le diff soit cohérent avec les horaires Mawaqit
   const calculateCountdown = useCallback(() => {
-    const now = new Date();
+    const nowReal = new Date();
+    const parisStr = nowReal.toLocaleString('en-US', { timeZone: 'Europe/Paris' });
+    const now = new Date(parisStr);
+
     const [hours, minutes] = nextPrayer.time.split(':').map(Number);
-    const prayerDate = new Date();
+    const prayerDate = new Date(now);
     prayerDate.setHours(hours, minutes, 0, 0);
 
     // Si la priere est passee, ajouter un jour
@@ -277,22 +282,15 @@ const HomeScreen = () => {
 
     const newCountdown = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 
-    // Animation fade quand les secondes changent
-    Animated.sequence([
-      Animated.timing(countdownOpacity, { toValue: 0.5, duration: 100, useNativeDriver: true }),
-      Animated.timing(countdownOpacity, { toValue: 1, duration: 100, useNativeDriver: true }),
-    ]).start();
-
     setCountdown(newCountdown);
 
-    // Mettre à jour l'heure de Paris
-    const parisTimeStr = now.toLocaleTimeString('fr-FR', {
+    // Mettre à jour l'heure de Paris (utiliser nowReal car toLocaleTimeString gère le TZ)
+    const parisTimeStr = nowReal.toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit',
       timeZone: 'Europe/Paris'
     });
     setParisTime(parisTimeStr);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- countdownOpacity is stable Animated ref
   }, [nextPrayer.time]);
 
   useEffect(() => {
@@ -350,9 +348,9 @@ const HomeScreen = () => {
     // Subscription aux paramètres Ramadan
     const unsubRamadan = subscribeToRamadanSettings((settings) => {
       setRamadanSettings(settings);
-      // Calculer le jour actuel de Ramadan
+      // Calculer le jour actuel de Ramadan (timezone Paris)
       if (settings.enabled && settings.startDate && settings.endDate) {
-        const now = new Date();
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
         const start = new Date(settings.startDate);
         const end = new Date(settings.endDate);
         if (now >= start && now <= end) {
@@ -371,7 +369,7 @@ const HomeScreen = () => {
     const unsubPopups = subscribeToPopups(async (popups) => {
       logger.log(`[HomeScreen] Popups reçus: ${popups?.length || 0}`);
       if (popups && popups.length > 0) {
-        // Construire la file d'attente des popups a afficher
+        // Construire la file d'attente des popups a afficher (séquentiel)
         const queue: Popup[] = [];
         for (const popup of popups) {
           const shouldShow = await shouldShowPopup(popup);
@@ -419,7 +417,7 @@ const HomeScreen = () => {
         try {
           logger.log('[HomeScreen] Re-scheduling prayer notifications...');
           const settings = await getPrayerNotificationSettings();
-          await schedulePrayerNotifications(rawPrayerTimings, settings);
+          await schedulePrayerNotifications(rawPrayerTimings, settings, jumuaTimes?.jumua1);
         } catch (error) {
           logger.warn('[HomeScreen] Erreur scheduling notifications:', error);
         }
@@ -850,7 +848,7 @@ const HomeScreen = () => {
 
             {(islamicEvents || []).slice(0, 3).map((event, index) => {
               const eventDate = new Date(event.dateGregorien);
-              const today = new Date();
+              const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
               const daysLeft = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
               if (daysLeft < 0) return null;
               const formattedDate = eventDate.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -1166,6 +1164,15 @@ const HomeScreen = () => {
           </View>
         )}
 
+        {/* Prayer Data Warning Banner */}
+        {prayerDataWarning && (
+          <View style={styles.warningBanner}>
+            <Text style={styles.warningText}>
+              ⚠️ Horaires estimés — Vérifiez votre connexion
+            </Text>
+          </View>
+        )}
+
         <View style={styles.content}>
           {/* Prochaine prière */}
           <View style={styles.nextPrayerCard}>
@@ -1174,7 +1181,7 @@ const HomeScreen = () => {
             <Text style={[styles.nextPrayerLabel, isRTL && styles.rtlText]}>{t('nextPrayer')}</Text>
             <Text style={[styles.nextPrayerName, isRTL && styles.rtlText]}>{nextPrayer.icon} {getPrayerName(nextPrayer.name)}</Text>
             <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
-            <Animated.Text style={[styles.countdown, { opacity: countdownOpacity }]}>{countdown}</Animated.Text>
+            <Text style={styles.countdown}>{countdown}</Text>
             {/* Dates sous le countdown */}
             <Text style={styles.dateGregorian}>
               {new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Paris' })}
@@ -1206,7 +1213,7 @@ const HomeScreen = () => {
               >
                 {/* Header */}
                 <View style={styles.ramadanHeader}>
-                  <Text style={styles.ramadanMubarak}>
+                  <Text style={styles.ramadanMubarak} numberOfLines={1} adjustsFontSizeToFit>
                     {language === 'ar' ? 'رمضان مبارك 🌙' : 'Ramadan Mubarak 🌙'}
                   </Text>
                   <Text style={styles.ramadanDay}>
@@ -1226,7 +1233,7 @@ const HomeScreen = () => {
                     <Text style={styles.ramadanTimeValue}>
                       {prayerTimes.find(p => p.name === 'Fajr')?.time || '--:--'}
                     </Text>
-                    <Text style={styles.ramadanTimeSubLabel}>
+                    <Text style={styles.ramadanTimeSubLabel} numberOfLines={1} adjustsFontSizeToFit>
                       {language === 'ar' ? 'قبل الفجر' : 'Fin Suhoor'}
                     </Text>
                   </View>
@@ -1243,7 +1250,7 @@ const HomeScreen = () => {
                     <Text style={styles.ramadanTimeValue}>
                       {prayerTimes.find(p => p.name === 'Maghrib')?.time || '--:--'}
                     </Text>
-                    <Text style={styles.ramadanTimeSubLabel}>
+                    <Text style={styles.ramadanTimeSubLabel} numberOfLines={1} adjustsFontSizeToFit>
                       {language === 'ar' ? 'وقت المغرب' : 'Au Maghrib'}
                     </Text>
                   </View>
@@ -1260,7 +1267,7 @@ const HomeScreen = () => {
                     <Text style={styles.ramadanTimeValue}>
                       {ramadanSettings.tarawihTime || '--:--'}
                     </Text>
-                    <Text style={styles.ramadanTimeSubLabel}>
+                    <Text style={styles.ramadanTimeSubLabel} numberOfLines={1} adjustsFontSizeToFit>
                       {language === 'ar' ? 'بعد العشاء' : 'Après Isha'}
                     </Text>
                   </View>
@@ -1358,7 +1365,7 @@ const HomeScreen = () => {
           </View>
 
           {/* Horaire Jumu'a - Affiché si c'est vendredi ou jeudi */}
-          {jumuaTimes?.jumua1 && (new Date().getDay() === 5 || new Date().getDay() === 4) && (
+          {jumuaTimes?.jumua1 && (() => { const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' })); return d.getDay() === 5 || d.getDay() === 4; })() && (
             <View style={styles.jumuaSection}>
               <View style={styles.jumuaCard}>
                 <Text style={styles.jumuaIcon}>🕌</Text>
@@ -2477,6 +2484,20 @@ const styles = StyleSheet.create({
     color: '#e74c3c',
     textAlign: 'center',
   },
+  // Warning banner
+  warningBanner: {
+    backgroundColor: '#FF9500',
+    padding: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  warningText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   // Notification History Modal
   historyModalOverlay: {
     flex: 1,
@@ -2619,11 +2640,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(139,92,246,0.25)',
+    ...(isTablet ? { maxWidth: 600, alignSelf: 'center' as const } : {}),
   },
   ramadanGradient: {
     paddingTop: spacing.lg,
     paddingBottom: spacing.xl + 8,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: isSmallScreen ? spacing.sm : spacing.md,
   },
   ramadanHeader: {
     alignItems: 'center',
@@ -2647,10 +2669,11 @@ const styles = StyleSheet.create({
   },
   ramadanTimeCard: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
-    paddingHorizontal: 4,
+    paddingHorizontal: isSmallScreen ? 2 : 6,
   },
   ramadanDivider: {
     width: 1,

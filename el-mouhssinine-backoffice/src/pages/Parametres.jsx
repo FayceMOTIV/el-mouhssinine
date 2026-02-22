@@ -4,7 +4,7 @@ import {
   Settings, Save, Building2, MapPin, Phone, Mail, Globe, Clock,
   Palette, Database, Landmark, Image, Upload, CreditCard, ScrollText, Trash2, Check, X, Stamp
 } from 'lucide-react'
-import { Card, Button, Input, Textarea, Toggle, Loading } from '../components/common'
+import { Card, Button, Input, Textarea, Toggle, Loading, ConfirmModal } from '../components/common'
 import { getSettings, updateSettings, getMosqueeInfo, updateMosqueeInfo, storage, getCotisationPrices, updateCotisationPrices, getReglement, updateReglement, db } from '../services/firebase'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
@@ -19,6 +19,7 @@ export default function Parametres() {
   const [uploading, setUploading] = useState(false)
   const [pendingHeaderImage, setPendingHeaderImage] = useState(null) // URL pour preview
   const [pendingHeaderFile, setPendingHeaderFile] = useState(null) // Fichier original
+  const [deleteImageModal, setDeleteImageModal] = useState(false)
 
   const [mosqueeInfo, setMosqueeInfo] = useState({
     nom: 'Mosquée El Mohsinine',
@@ -314,13 +315,13 @@ export default function Parametres() {
     toast.info('Modification annulée')
   }
 
-  const handleDeleteHeaderImage = async () => {
+  const handleDeleteHeaderImage = () => {
     if (!mosqueeInfo.headerImageUrl) return
+    setDeleteImageModal(true)
+  }
 
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette image ?')) {
-      return
-    }
-
+  const handleConfirmDeleteImage = async () => {
+    setDeleteImageModal(false)
     setUploading(true)
     try {
       // Supprimer l'image de Firebase Storage
@@ -956,6 +957,17 @@ Pour devenir membre actif, il faut..."
           </Card>
         </div>
       )}
+
+      {/* Delete Image Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteImageModal}
+        onClose={() => setDeleteImageModal(false)}
+        onConfirm={handleConfirmDeleteImage}
+        title="Supprimer l'image"
+        message="Êtes-vous sûr de vouloir supprimer cette image ?"
+        confirmLabel="Supprimer"
+        danger
+      />
     </div>
   )
 }

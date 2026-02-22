@@ -207,22 +207,22 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Membres"
-          value={stats.membres}
+          value={stats?.membres ?? 0}
           icon={Users}
         />
         <StatCard
           title="Dons ce mois"
-          value={`${stats.donsMois.toLocaleString()} €`}
+          value={`${(stats?.donsMois ?? 0).toLocaleString()} €`}
           icon={Coins}
         />
         <StatCard
           title="Total Dons"
-          value={`${stats.donsTotal.toLocaleString()} €`}
+          value={`${(stats?.donsTotal ?? 0).toLocaleString()} €`}
           icon={TrendingUp}
         />
         <StatCard
           title="Événements à venir"
-          value={stats.evenements}
+          value={stats?.evenements ?? 0}
           icon={Calendar}
         />
       </div>
@@ -231,28 +231,28 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Membres actifs"
-          value={stats.membresActifs}
+          value={stats?.membresActifs ?? 0}
           icon={UserCheck}
           variant="success"
         />
         <StatCard
           title="En attente signature"
-          value={stats.membresEnAttente}
+          value={stats?.membresEnAttente ?? 0}
           icon={Hourglass}
           variant="warning"
         />
         <StatCard
           title="En attente paiement"
-          value={stats.membresEnAttentePaiement}
+          value={stats?.membresEnAttentePaiement ?? 0}
           icon={CreditCard}
           variant="info"
         />
         <Link to="/messages" className="block">
           <StatCard
             title="Messages non lus"
-            value={stats.messagesNonLus}
+            value={stats?.messagesNonLus ?? 0}
             icon={MessageCircle}
-            variant={stats.messagesNonLus > 0 ? 'danger' : 'default'}
+            variant={(stats?.messagesNonLus ?? 0) > 0 ? 'danger' : 'default'}
           />
         </Link>
       </div>
@@ -264,18 +264,18 @@ export default function Dashboard() {
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-white/5 rounded-lg p-4 text-center">
               <p className="text-xs text-white/50 mb-1">Aujourd'hui</p>
-              <p className="text-xl font-bold text-green-400">{paymentStats.cotisations.today.total.toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats.cotisations.today.count} paiement{paymentStats.cotisations.today.count > 1 ? 's' : ''}</p>
+              <p className="text-xl font-bold text-green-400">{(paymentStats?.cotisations?.today?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats?.cotisations?.today?.count ?? 0} paiement{(paymentStats?.cotisations?.today?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
             <div className="bg-white/5 rounded-lg p-4 text-center">
               <p className="text-xs text-white/50 mb-1">Ce mois</p>
-              <p className="text-xl font-bold text-blue-400">{paymentStats.cotisations.month.total.toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats.cotisations.month.count} paiement{paymentStats.cotisations.month.count > 1 ? 's' : ''}</p>
+              <p className="text-xl font-bold text-blue-400">{(paymentStats?.cotisations?.month?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats?.cotisations?.month?.count ?? 0} paiement{(paymentStats?.cotisations?.month?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
             <div className="bg-white/5 rounded-lg p-4 text-center">
               <p className="text-xs text-white/50 mb-1">Cette année</p>
-              <p className="text-xl font-bold text-secondary">{paymentStats.cotisations.year.total.toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats.cotisations.year.count} paiement{paymentStats.cotisations.year.count > 1 ? 's' : ''}</p>
+              <p className="text-xl font-bold text-secondary">{(paymentStats?.cotisations?.year?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats?.cotisations?.year?.count ?? 0} paiement{(paymentStats?.cotisations?.year?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
           </div>
         </Card>
@@ -285,18 +285,18 @@ export default function Dashboard() {
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-white/5 rounded-lg p-4 text-center">
               <p className="text-xs text-white/50 mb-1">Aujourd'hui</p>
-              <p className="text-xl font-bold text-green-400">{paymentStats.dons.today.total.toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats.dons.today.count} don{paymentStats.dons.today.count > 1 ? 's' : ''}</p>
+              <p className="text-xl font-bold text-green-400">{(paymentStats?.dons?.today?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats?.dons?.today?.count ?? 0} don{(paymentStats?.dons?.today?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
             <div className="bg-white/5 rounded-lg p-4 text-center">
               <p className="text-xs text-white/50 mb-1">Ce mois</p>
-              <p className="text-xl font-bold text-blue-400">{paymentStats.dons.month.total.toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats.dons.month.count} don{paymentStats.dons.month.count > 1 ? 's' : ''}</p>
+              <p className="text-xl font-bold text-blue-400">{(paymentStats?.dons?.month?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats?.dons?.month?.count ?? 0} don{(paymentStats?.dons?.month?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
             <div className="bg-white/5 rounded-lg p-4 text-center">
               <p className="text-xs text-white/50 mb-1">Cette année</p>
-              <p className="text-xl font-bold text-secondary">{paymentStats.dons.year.total.toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats.dons.year.count} don{paymentStats.dons.year.count > 1 ? 's' : ''}</p>
+              <p className="text-xl font-bold text-secondary">{(paymentStats?.dons?.year?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-xs text-white/40">{paymentStats?.dons?.year?.count ?? 0} don{(paymentStats?.dons?.year?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
           </div>
         </Card>

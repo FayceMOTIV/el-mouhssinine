@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
@@ -106,14 +106,15 @@ const EventsScreen: React.FC = () => {
         </Text>
       </View>
 
-      <ScrollView
+      <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.categoriesContainer}
-        contentContainerStyle={[styles.categoriesContent, isRTL && styles.categoriesContentRTL]}>
-        {eventCategories.map(category => (
+        contentContainerStyle={[styles.categoriesContent, isRTL && styles.categoriesContentRTL]}
+        data={eventCategories}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item: category }) => (
           <TouchableOpacity
-            key={category.id}
             style={[
               styles.categoryButton,
               selectedCategory === category.id && styles.categoryButtonSelected,
@@ -127,67 +128,69 @@ const EventsScreen: React.FC = () => {
               {language === 'ar' ? category.labelAr : category.label}
             </Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+        )}
+      />
 
-      <ScrollView
+      <FlatList
         style={styles.eventsList}
         contentContainerStyle={styles.eventsContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.accent}
-          />
-        }>
-        {filteredEvents.length === 0 ? (
+        data={filteredEvents}
+        keyExtractor={(item) => item.id}
+        ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📅</Text>
             <Text style={[styles.emptyText, isRTL && styles.rtlText]}>
               {language === 'ar' ? 'لا توجد أحداث قادمة' : 'Aucun événement à venir'}
             </Text>
           </View>
-        ) : (
-          filteredEvents.map(event => (
-            <TouchableOpacity key={event.id} style={styles.eventCard}>
-              <View style={styles.eventHeader}>
-                {event.category && (
-                  <View
-                    style={[
-                      styles.categoryBadge,
-                      { backgroundColor: getCategoryColor(event.category) },
-                    ]}>
-                    <Text style={styles.categoryBadgeText}>
-                      {getCategoryLabel(event.category)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.eventTitle, isRTL && styles.rtlText]}>{event.title}</Text>
-              <Text style={[styles.eventDescription, isRTL && styles.rtlText]}>
-                {event.description}
-              </Text>
-              <View style={styles.eventDetails}>
-                <View style={[styles.eventDetail, isRTL && styles.eventDetailRTL]}>
-                  <Text style={styles.detailIcon}>📅</Text>
-                  <Text style={[styles.detailText, isRTL && styles.rtlText]}>
-                    {formatDate(event.date)}
+        }
+        renderItem={({ item: event }) => (
+          <TouchableOpacity style={styles.eventCard}>
+            <View style={styles.eventHeader}>
+              {event.category && (
+                <View
+                  style={[
+                    styles.categoryBadge,
+                    { backgroundColor: getCategoryColor(event.category) },
+                  ]}>
+                  <Text style={styles.categoryBadgeText}>
+                    {getCategoryLabel(event.category)}
                   </Text>
                 </View>
-                <View style={[styles.eventDetail, isRTL && styles.eventDetailRTL]}>
-                  <Text style={styles.detailIcon}>🕐</Text>
-                  <Text style={[styles.detailText, isRTL && styles.rtlText]}>{event.time}</Text>
-                </View>
-                <View style={[styles.eventDetail, isRTL && styles.eventDetailRTL]}>
-                  <Text style={styles.detailIcon}>📍</Text>
-                  <Text style={[styles.detailText, isRTL && styles.rtlText]}>{event.location}</Text>
-                </View>
+              )}
+            </View>
+            <Text style={[styles.eventTitle, isRTL && styles.rtlText]}>{event.title}</Text>
+            <Text style={[styles.eventDescription, isRTL && styles.rtlText]}>
+              {event.description}
+            </Text>
+            <View style={styles.eventDetails}>
+              <View style={[styles.eventDetail, isRTL && styles.eventDetailRTL]}>
+                <Text style={styles.detailIcon}>📅</Text>
+                <Text style={[styles.detailText, isRTL && styles.rtlText]}>
+                  {formatDate(event.date)}
+                </Text>
               </View>
+              <View style={[styles.eventDetail, isRTL && styles.eventDetailRTL]}>
+                <Text style={styles.detailIcon}>🕐</Text>
+                <Text style={[styles.detailText, isRTL && styles.rtlText]}>{event.time}</Text>
+              </View>
+              <View style={[styles.eventDetail, isRTL && styles.eventDetailRTL]}>
+                <Text style={styles.detailIcon}>📍</Text>
+                <Text style={[styles.detailText, isRTL && styles.rtlText]}>{event.location}</Text>
+              </View>
+            </View>
 {/* Bouton inscription masqué - feature non implémentée */}
-            </TouchableOpacity>
-          ))
+          </TouchableOpacity>
         )}
-      </ScrollView>
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      />
     </BackgroundPattern>
   );
 };

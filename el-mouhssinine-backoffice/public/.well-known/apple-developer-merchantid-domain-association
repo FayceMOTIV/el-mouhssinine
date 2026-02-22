@@ -1,0 +1,5 @@
+// Ce fichier doit contenir le contenu téléchargé depuis Stripe Dashboard
+// → Settings → Payment Methods → Apple Pay → Download verification file
+// Puis firebase deploy --only hosting
+//
+// IMPORTANT: Remplacer ce commentaire par le vrai fichier de Stripe

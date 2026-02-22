@@ -25,6 +25,7 @@ import {
   PaymentType,
   subscribeToMessages
 } from '../services/firebase'
+import { useAuth } from '../context/AuthContext'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { CotisationType, CotisationStatut } from '../types'
 import { format, addMonths, addYears, isPast } from 'date-fns'
@@ -91,6 +92,7 @@ const cotisationOptions = [
 ]
 
 export default function Adherents() {
+  const { admin } = useAuth()
   const [membres, setMembres] = useState([])
   const [filteredMembres, setFilteredMembres] = useState([])
   const [loading, setLoading] = useState(true)
@@ -114,6 +116,9 @@ export default function Adherents() {
   const [refunding, setRefunding] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [refundAmount, setRefundAmount] = useState('')
+  const [refundConfirmModal, setRefundConfirmModal] = useState({ open: false, membre: null, message: '' })
+  const [cancelSubscriptionModal, setCancelSubscriptionModal] = useState({ open: false, membre: null })
+  const [rejectAdhesionModal, setRejectAdhesionModal] = useState({ open: false, membre: null })
 
   useEffect(() => {
     const unsubscribe = subscribeToMembres((data) => {
@@ -338,15 +343,21 @@ export default function Adherents() {
       ? `Rembourser ${membre.prenom} ${membre.nom} via Stripe ? Le paiement sera remboursé sur la carte bancaire.${amount ? ` Montant: ${amount}€` : ''}`
       : `Annuler le paiement de ${membre.prenom} ${membre.nom} ? (paiement manuel, pas de remboursement Stripe)`
 
-    if (!window.confirm(confirmText)) return
+    setRefundConfirmModal({ open: true, membre, message: confirmText })
+  }
 
+  const handleConfirmRefund = async () => {
+    const { membre } = refundConfirmModal
+    if (!membre) return
+
+    setRefundConfirmModal({ open: false, membre: null, message: '' })
     setRefunding(true)
     try {
       const fn = getFunctions(undefined, 'europe-west1')
       const refundFn = httpsCallable(fn, 'refundPayment')
       const payload = { memberId: membre.id, reason: 'Annulation depuis le backoffice' }
-      if (amount) {
-        payload.amount = parseFloat(amount)
+      if (refundAmount) {
+        payload.amount = parseFloat(refundAmount)
       }
       const result = await refundFn(payload)
       toast.success(result.data.message || 'Remboursement effectué')
@@ -363,9 +374,14 @@ export default function Adherents() {
   // ========== ANNULATION ABONNEMENT ==========
   const handleCancelSubscription = async (membre) => {
     if (!membre) return
+    setCancelSubscriptionModal({ open: true, membre })
+  }
 
-    if (!window.confirm(`Êtes-vous sûr de vouloir annuler l'abonnement de ${membre.prenom} ${membre.nom} ?`)) return
+  const handleConfirmCancelSubscription = async () => {
+    const { membre } = cancelSubscriptionModal
+    if (!membre) return
 
+    setCancelSubscriptionModal({ open: false, membre: null })
     setCancelling(true)
     try {
       const fn = getFunctions(undefined, 'europe-west1')
@@ -409,11 +425,14 @@ export default function Adherents() {
     const membre = cotisationModal.membre
     if (!membre) return
 
-    // Confirmation avant refus
-    if (!window.confirm(`Êtes-vous sûr de vouloir refuser l'adhésion de ${membre.prenom} ${membre.nom} ?\n\nSon paiement de ${membre.cotisation?.montant || 0}€ sera converti en don.`)) {
-      return
-    }
+    setRejectAdhesionModal({ open: true, membre })
+  }
 
+  const handleConfirmRejectAdhesion = async () => {
+    const membre = rejectAdhesionModal.membre
+    if (!membre) return
+
+    setRejectAdhesionModal({ open: false, membre: null })
     setSaving(true)
     try {
       // 1. Créer un don à partir du paiement
@@ -604,7 +623,7 @@ export default function Adherents() {
     }
   }
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
     const headers = ['Nom', 'Prénom', 'Email', 'Téléphone', 'Statut', 'Type cotisation', 'Montant', 'Date fin']
     const rows = membres.map(m => [
       m.nom, m.prenom, m.email, m.telephone,
@@ -620,6 +639,20 @@ export default function Adherents() {
     a.href = url
     a.download = `adherents_${format(new Date(), 'yyyy-MM-dd')}.csv`
     a.click()
+
+    // Audit log RGPD
+    try {
+      await addDocument('audit_logs', {
+        action: 'export_csv_adherents',
+        adminEmail: admin?.email || 'unknown',
+        adminUid: admin?.uid || '',
+        rowCount: membres.length,
+        timestamp: new Date().toISOString(),
+      })
+    } catch (e) {
+      console.error('Audit log failed:', e)
+    }
+
     toast.success('Export téléchargé')
   }
 
@@ -1478,6 +1511,39 @@ export default function Adherents() {
         title="Supprimer le membre"
         message={`Êtes-vous sûr de vouloir supprimer ${deleteModal.membre?.prenom} ${deleteModal.membre?.nom} ?\n\nCette action va :\n• Supprimer son compte utilisateur et ses messages\n• Anonymiser ses donations, paiements et reçus fiscaux (les montants restent dans la comptabilité)\n• Annuler son abonnement Stripe (si actif)\n\nCette action est irréversible.`}
         confirmLabel={deleting ? 'Suppression...' : 'Supprimer définitivement'}
+        danger
+      />
+
+      {/* Refund Confirmation */}
+      <ConfirmModal
+        isOpen={refundConfirmModal.open}
+        onClose={() => setRefundConfirmModal({ open: false, membre: null, message: '' })}
+        onConfirm={handleConfirmRefund}
+        title="Confirmer le remboursement"
+        message={refundConfirmModal.message}
+        confirmLabel="Rembourser"
+        danger
+      />
+
+      {/* Cancel Subscription Confirmation */}
+      <ConfirmModal
+        isOpen={cancelSubscriptionModal.open}
+        onClose={() => setCancelSubscriptionModal({ open: false, membre: null })}
+        onConfirm={handleConfirmCancelSubscription}
+        title="Annuler l'abonnement"
+        message={`Êtes-vous sûr de vouloir annuler l'abonnement de ${cancelSubscriptionModal.membre?.prenom} ${cancelSubscriptionModal.membre?.nom} ? Cette action est irréversible.`}
+        confirmLabel="Annuler l'abonnement"
+        danger
+      />
+
+      {/* Reject Adhesion Confirmation */}
+      <ConfirmModal
+        isOpen={rejectAdhesionModal.open}
+        onClose={() => setRejectAdhesionModal({ open: false, membre: null })}
+        onConfirm={handleConfirmRejectAdhesion}
+        title="Refuser l'adhésion"
+        message={`Êtes-vous sûr de vouloir refuser l'adhésion de ${rejectAdhesionModal.membre?.prenom} ${rejectAdhesionModal.membre?.nom} ?\n\nSon paiement de ${rejectAdhesionModal.membre?.cotisation?.montant || 0}€ sera converti en don.`}
+        confirmLabel="Refuser l'adhésion"
         danger
       />
     </div>

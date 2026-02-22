@@ -101,6 +101,7 @@ export default function Dons() {
   const DONS_PER_PAGE = 20
   const [refundingDon, setRefundingDon] = useState(null)
   const [refundAmount, setRefundAmount] = useState('')
+  const [refundDonationModal, setRefundDonationModal] = useState({ open: false, donationId: null, amount: null, totalAmount: 0 })
 
   // Filtrer les projets par recherche
   const filteredProjets = useMemo(() => {
@@ -287,12 +288,18 @@ export default function Dons() {
 
   const handleRefundDonation = async (donationId, amount, totalAmount) => {
     const refundAmountValue = parseFloat(amount) || totalAmount
+    setRefundDonationModal({
+      open: true,
+      donationId,
+      amount,
+      totalAmount,
+      message: `Confirmer le remboursement de ${refundAmountValue.toFixed(2)}€ sur un total de ${totalAmount.toFixed(2)}€ ?`
+    })
+  }
 
-    const confirmed = window.confirm(
-      `Confirmer le remboursement de ${refundAmountValue.toFixed(2)}€ sur un total de ${totalAmount.toFixed(2)}€ ?`
-    )
-
-    if (!confirmed) return
+  const handleConfirmRefundDonation = async () => {
+    const { donationId, amount } = refundDonationModal
+    setRefundDonationModal({ open: false, donationId: null, amount: null, totalAmount: 0 })
 
     try {
       const functions = getFunctions(undefined, 'europe-west1')
@@ -556,9 +563,10 @@ export default function Dons() {
       key: 'date',
       label: 'Date',
       render: (row) => {
-        if (!row.date) return <span className="text-white/50">-</span>
+        const rawDate = row.date || row.createdAt || row.webhookProcessedAt
+        if (!rawDate) return <span className="text-white/50">-</span>
         try {
-          const date = row.date?.toDate?.() || new Date(row.date)
+          const date = rawDate?.toDate?.() || new Date(rawDate)
           if (isNaN(date.getTime())) return <span className="text-white/50">-</span>
           return <span className="text-white/70">{format(date, 'dd/MM/yyyy', { locale: fr })}</span>
         } catch (e) {
@@ -678,10 +686,14 @@ export default function Dons() {
             <p className="text-white/50 text-sm">Dons ce mois</p>
             <p className="text-2xl font-bold text-green-400">
               {dons.filter(d => {
-                const date = d.date?.toDate?.() || new Date(d.date)
-                const now = new Date()
-                return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
-              }).reduce((sum, d) => sum + (d.montant || 0), 0).toLocaleString()} €
+                const rawDate = d.date || d.createdAt || d.webhookProcessedAt
+                if (!rawDate) return false
+                try {
+                  const date = rawDate?.toDate?.() || new Date(rawDate)
+                  const now = new Date()
+                  return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
+                } catch { return false }
+              }).reduce((sum, d) => sum + (d.montant || d.amount || 0), 0).toLocaleString()} €
             </p>
           </div>
         </Card>
@@ -1067,6 +1079,17 @@ export default function Dons() {
         title={`Supprimer le ${deleteModal.type}`}
         message={`Êtes-vous sûr de vouloir supprimer "${deleteModal.item?.titre || deleteModal.item?.donateur}" ?`}
         confirmLabel="Supprimer"
+        danger
+      />
+
+      {/* Refund Donation Confirmation */}
+      <ConfirmModal
+        isOpen={refundDonationModal.open}
+        onClose={() => setRefundDonationModal({ open: false, donationId: null, amount: null, totalAmount: 0 })}
+        onConfirm={handleConfirmRefundDonation}
+        title="Confirmer le remboursement"
+        message={refundDonationModal.message || 'Êtes-vous sûr de vouloir rembourser ce don ?'}
+        confirmLabel="Rembourser"
         danger
       />
     </div>

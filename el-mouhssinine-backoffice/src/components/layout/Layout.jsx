@@ -14,6 +14,7 @@ const pageTitles = {
   '/adherents': 'Membres',
   '/revenus': 'Gestion financière',
   '/notifications': 'Notifications',
+  '/audit-logs': 'Journal d\'audit',
   '/admins': 'Gestion Admins',
   '/parametres': 'Paramètres'
 }

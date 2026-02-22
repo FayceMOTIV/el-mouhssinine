@@ -156,8 +156,8 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Stats */}
-          <View style={styles.section}>
+          {/* Stats temporairement cachées - En attente de l'implémentation du système de tracking réel */}
+          {/* <View style={styles.section}>
             <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('yourProgress')}</Text>
             <View style={[styles.statsRow, isRTL && styles.statsRowRTL]}>
               <View style={styles.statCard}>
@@ -173,7 +173,7 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
                 <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('daysStreak')}</Text>
               </View>
             </View>
-          </View>
+          </View> */}
         </View>
       </ScrollView>
     </BackgroundPattern>
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   },
   seeAllText: {
     fontSize: fontSize.sm,
-    color: colors.accent,
+    color: colors.accentText,
     marginBottom: spacing.md,
   },
   moduleCard: {
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   },
   moduleTitleAr: {
     fontSize: fontSize.md,
-    color: colors.accent,
+    color: colors.accentText,
   },
   moduleDescription: {
     fontSize: fontSize.sm,
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   reminderTitle: {
     fontSize: fontSize.md,
     fontWeight: '600',
-    color: colors.accent,
+    color: colors.accentText,
     marginBottom: spacing.sm,
   },
   reminderText: {

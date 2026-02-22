@@ -72,7 +72,11 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
               textAlign={isRTL ? 'right' : 'left'}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                accessibilityLabel="Effacer la recherche"
+                accessibilityRole="button"
+              >
                 <Text style={styles.clearIcon}>✕</Text>
               </TouchableOpacity>
             )}
@@ -292,7 +296,7 @@ const styles = StyleSheet.create({
   },
   categoryNameAr: {
     fontSize: fontSize.md,
-    color: colors.accent,
+    color: colors.accentText,
   },
   categoryDescription: {
     fontSize: fontSize.sm,
@@ -326,7 +330,7 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: fontSize.md,
     fontWeight: '600',
-    color: colors.accent,
+    color: colors.accentText,
     marginBottom: spacing.sm,
   },
   infoText: {
