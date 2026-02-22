@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, HEADER_PADDING_TOP } from '../theme/colors';
 
 interface Props {
@@ -7,14 +8,22 @@ interface Props {
 }
 
 const PrivacyPolicyScreen: React.FC<Props> = ({ onBack }) => {
+  const navigation = useNavigation();
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        {onBack && (
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backText}>← Retour</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <Text style={styles.backText}>← Retour</Text>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Politique de confidentialité</Text>
       </View>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>

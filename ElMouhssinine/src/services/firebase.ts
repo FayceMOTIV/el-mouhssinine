@@ -572,12 +572,19 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
     // merge: true permet de ne pas écraser les champs déjà écrits par le webhook Stripe
     // et garantit que donorInfo/donorType sont toujours sauvés même si le webhook est arrivé avant
     await firestore().runTransaction(async (transaction) => {
-      // 1. Créer/merger le don
       // BUG 7 FIX: userId garanti non-vide (évite permission-denied)
       const currentUser = auth().currentUser;
       if (!currentUser) {
         throw new Error('Utilisateur non connecté');
       }
+
+      // ÉTAPE 1: TOUTES LES LECTURES D'ABORD (Firestore exige reads avant writes)
+      let projectDoc = null;
+      if (projectRef) {
+        projectDoc = await transaction.get(projectRef);
+      }
+
+      // ÉTAPE 2: TOUTES LES ÉCRITURES APRÈS
       const donationData: Record<string, any> = {
         userId: currentUser.uid,
         donateur: params.isAnonymous ? 'Anonyme' : (params.donorName || params.donorEmail || 'Anonyme'),
@@ -603,14 +610,11 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
       }
       transaction.set(donationRef, donationData, { merge: true });
 
-      // 2. Mettre à jour le montant collecté du projet (dans la même transaction)
-      if (projectRef) {
-        const projectDoc = await transaction.get(projectRef);
-        if (projectDoc.exists()) {
-          transaction.update(projectRef, {
-            montantActuel: firestore.FieldValue.increment(params.amount),
-          });
-        }
+      // Mettre à jour le montant collecté du projet
+      if (projectRef && projectDoc && projectDoc.exists()) {
+        transaction.update(projectRef, {
+          montantActuel: firestore.FieldValue.increment(params.amount),
+        });
       }
     });
 

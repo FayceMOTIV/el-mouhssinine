@@ -41,7 +41,7 @@ interface Verse {
 
 const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   const { t, isRTL } = useLanguage();
-  const { surahNumber } = route.params;
+  const surahNumber = route.params?.surahNumber;
   const [loading, setLoading] = useState(true);
   const [surahData, setSurahData] = useState<{
     arabic: SurahData;
@@ -483,6 +483,19 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
       });
     };
   }, [showMiniPlayer, navigation]);
+
+  if (!surahNumber) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Text style={{ color: colors.text, fontSize: fontSize.lg, marginBottom: spacing.md }}>
+          {t('error') || 'Erreur'}
+        </Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={{ color: colors.accent, fontSize: fontSize.md }}>← {t('back') || 'Retour'}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (loading) {
     return (

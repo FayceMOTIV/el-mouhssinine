@@ -96,6 +96,10 @@ export const useQuranPlayer = ({
         }
       } catch (error) {
         console.error('[QuranPlayer] Erreur init:', error);
+        // Player non initialisé — les opérations de lecture seront no-op
+        if (mounted) {
+          setIsPlayerReady(false);
+        }
       }
     };
     init();

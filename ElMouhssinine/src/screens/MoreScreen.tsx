@@ -19,7 +19,8 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, platformShadow, isSmallScreen } from '../theme/colors';
 import { subscribeToMosqueeInfo, subscribeToRamadanSettings, RamadanSettings, deleteMyAccount } from '../services/firebase';
 import { AuthService } from '../services/auth';
-import functions from '@react-native-firebase/functions';
+import firebase from '@react-native-firebase/app';
+import '@react-native-firebase/functions';
 import { MosqueeInfo } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -1229,7 +1230,7 @@ const MoreScreen = () => {
               style={[styles.logoutButton, { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: 'rgba(34, 197, 94, 0.2)', marginBottom: spacing.sm }]}
               onPress={async () => {
                 try {
-                  const exportMyData = functions().httpsCallable('exportMyData');
+                  const exportMyData = firebase.app().functions('europe-west1').httpsCallable('exportMyData');
                   const result = await exportMyData();
                   const data = result.data as any;
                   Alert.alert(

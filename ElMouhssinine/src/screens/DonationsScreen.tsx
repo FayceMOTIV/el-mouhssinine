@@ -630,96 +630,52 @@ const DonationsScreen = () => {
                       : 'Vous avez droit à 66% de réduction d\'impôt pour vos dons (article 200 CGI). Les reçus sont disponibles début janvier pour l\'année écoulée.'}
                   </Text>
 
-                  {/* Year 2025 */}
+                  {/* Années dynamiques : année précédente (disponible) + année en cours (pas encore) */}
                   {(() => {
                     const currentYear = new Date().getFullYear();
-                    const year = 2025;
-                    const available = currentYear > year;
-                    return (
-                      <View style={styles.recuYearRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
-                            {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
-                          </Text>
-                          <Text style={[styles.recuYearSubtext, isRTL && styles.rtlText]}>
-                            {language === 'ar' ? 'جميع التبرعات للسنة' : 'Tous les dons de l\'année'}
-                          </Text>
+                    const years = [currentYear - 1, currentYear];
+                    return years.map((year) => {
+                      const available = currentYear > year;
+                      return (
+                        <View key={year} style={styles.recuYearRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
+                              {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
+                            </Text>
+                            <Text style={[styles.recuYearSubtext, isRTL && styles.rtlText]}>
+                              {language === 'ar' ? 'جميع التبرعات للسنة' : 'Tous les dons de l\'année'}
+                            </Text>
+                          </View>
+                          {available ? (
+                            <TouchableOpacity
+                              style={[
+                                styles.recuFiscalButton,
+                                sendingRecuFiscal && styles.recuFiscalButtonDisabled,
+                              ]}
+                              onPress={() => handleRequestRecuFiscal(year)}
+                              disabled={sendingRecuFiscal}
+                            >
+                              {sendingRecuFiscal ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <>
+                                  <Text style={styles.recuFiscalButtonIcon}>📧</Text>
+                                  <Text style={styles.recuFiscalButtonText}>
+                                    {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
+                                  </Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          ) : (
+                            <Text style={styles.recuNotAvailable}>
+                              {language === 'ar'
+                                ? `متاح في 01/01/${year + 1}`
+                                : `Disponible le 01/01/${year + 1}`}
+                            </Text>
+                          )}
                         </View>
-                        {available ? (
-                          <TouchableOpacity
-                            style={[
-                              styles.recuFiscalButton,
-                              sendingRecuFiscal && styles.recuFiscalButtonDisabled,
-                            ]}
-                            onPress={() => handleRequestRecuFiscal(year)}
-                            disabled={sendingRecuFiscal}
-                          >
-                            {sendingRecuFiscal ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <>
-                                <Text style={styles.recuFiscalButtonIcon}>📧</Text>
-                                <Text style={styles.recuFiscalButtonText}>
-                                  {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
-                                </Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        ) : (
-                          <Text style={styles.recuNotAvailable}>
-                            {language === 'ar'
-                              ? `متاح في 01/01/${year + 1}`
-                              : `Disponible le 01/01/${year + 1}`}
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })()}
-
-                  {/* Year 2026 */}
-                  {(() => {
-                    const currentYear = new Date().getFullYear();
-                    const year = 2026;
-                    const available = currentYear > year;
-                    return (
-                      <View style={styles.recuYearRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
-                            {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
-                          </Text>
-                          <Text style={[styles.recuYearSubtext, isRTL && styles.rtlText]}>
-                            {language === 'ar' ? 'جميع التبرعات للسنة' : 'Tous les dons de l\'année'}
-                          </Text>
-                        </View>
-                        {available ? (
-                          <TouchableOpacity
-                            style={[
-                              styles.recuFiscalButton,
-                              sendingRecuFiscal && styles.recuFiscalButtonDisabled,
-                            ]}
-                            onPress={() => handleRequestRecuFiscal(year)}
-                            disabled={sendingRecuFiscal}
-                          >
-                            {sendingRecuFiscal ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <>
-                                <Text style={styles.recuFiscalButtonIcon}>📧</Text>
-                                <Text style={styles.recuFiscalButtonText}>
-                                  {language === 'ar' ? 'استلام بالبريد' : 'Recevoir par email'}
-                                </Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        ) : (
-                          <Text style={styles.recuNotAvailable}>
-                            {language === 'ar'
-                              ? `متاح في 01/01/${year + 1}`
-                              : `Disponible le 01/01/${year + 1}`}
-                          </Text>
-                        )}
-                      </View>
-                    );
+                      );
+                    });
                   })()}
                 </View>
               </View>
