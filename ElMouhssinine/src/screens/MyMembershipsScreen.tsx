@@ -294,7 +294,7 @@ const MyMembershipsScreen = () => {
                   <Text style={styles.paymentStatusLabel}>
                     {language === 'ar' ? 'حالة الدفع:' : 'Paiement:'}
                   </Text>
-                  {myMembership.datePaiement ? (
+                  {myMembership.status === 'actif' || myMembership.datePaiement ? (
                     <View style={[styles.paymentBadge, styles.paymentPaid]}>
                       <Text style={styles.paymentBadgeText}>✓ Payé</Text>
                     </View>
