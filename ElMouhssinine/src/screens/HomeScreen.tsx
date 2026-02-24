@@ -405,6 +405,8 @@ const HomeScreen = () => {
     });
 
     // Countdown timer
+    // Appel immédiat pour éviter le délai d'1 seconde
+    calculateCountdown();
     const timer = setInterval(() => {
       calculateCountdown();
     }, 1000);
@@ -1383,6 +1385,31 @@ const HomeScreen = () => {
                 );
               })}
             </View>
+
+            {/* Bouton calendrier des prières annuel */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('PrayerCalendar')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(201,162,39,0.1)',
+                borderRadius: 12,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                marginTop: 12,
+                borderWidth: 1,
+                borderColor: 'rgba(201,162,39,0.3)',
+              }}
+              accessibilityLabel="Voir le calendrier annuel des prières"
+              accessibilityRole="button"
+            >
+              <Text style={{ fontSize: 18, marginRight: 8 }}>📅</Text>
+              <Text style={{ fontSize: 14, color: '#C9A227', fontWeight: '600' }}>
+                {language === 'ar' ? 'تقويم الصلاة السنوي' : 'Calendrier annuel des prières'}
+              </Text>
+              <Text style={{ marginLeft: 'auto', fontSize: 16, color: '#C9A227' }}>→</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Horaire Jumu'a - Affiché si c'est vendredi ou jeudi */}

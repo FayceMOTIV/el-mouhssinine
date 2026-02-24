@@ -232,13 +232,18 @@ const MemberScreen = () => {
         const unsubHistory = firestore()
           .collection('payments')
           .where('metadata.memberId', '==', user.uid)
-          .orderBy('createdAt', 'desc')
           .onSnapshot(
             (snapshot) => {
               const payments = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
               }));
+              // Tri côté client (plus fiable sans index Firestore composite)
+              payments.sort((a: any, b: any) => {
+                const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+                const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+                return dateB.getTime() - dateA.getTime();
+              });
               setPaymentHistory(payments);
               // Calculer les années disponibles dynamiquement
               const yearsSet = new Set<number>([new Date().getFullYear()]);

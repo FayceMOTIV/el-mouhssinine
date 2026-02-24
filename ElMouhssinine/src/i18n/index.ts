@@ -14,7 +14,7 @@ export const translations = {
     // Home Screen
     welcome: 'السلام عليكم ورحمة الله وبركاته',
     salamTranslation: 'Que la paix, la miséricorde et les bénédictions d\'Allah soient sur vous',
-    mosqueName: 'El Mohsinine',
+    mosqueName: 'EL MOHSININE',
     mosqueLocation: 'Mosquée - Bourg-en-Bresse',
     nextPrayer: 'Prochaine prière',
     todaySchedule: 'Horaires du jour',

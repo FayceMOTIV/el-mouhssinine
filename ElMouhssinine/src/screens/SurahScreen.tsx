@@ -156,8 +156,13 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   const handlePlayVerse = async (index: number) => {
     console.log('[SurahScreen] handlePlayVerse:', index);
     setShowMiniPlayer(true);
-    // Utiliser playVerseAtIndex directement au lieu de seekToVerse + play
-    await player.playVerseAtIndex(index);
+    try {
+      // Utiliser playVerseAtIndex directement au lieu de seekToVerse + play
+      await player.playVerseAtIndex(index);
+    } catch (error) {
+      console.error('[SurahScreen] Erreur lecture verset:', error);
+      Alert.alert('Erreur', 'Impossible de lire ce verset. Vérifiez votre connexion.');
+    }
   };
 
   const handlePreviousSurah = useCallback(() => {

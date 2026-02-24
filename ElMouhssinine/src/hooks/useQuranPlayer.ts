@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Alert } from 'react-native';
 import TrackPlayer, { State, Event } from 'react-native-track-player';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupPlayer } from '../services/audioPlayer';
@@ -152,10 +153,12 @@ export const useQuranPlayer = ({
             setVerseProgress(position / duration);
           }
         } else if (currentState === State.Paused) {
+          setIsLoading(false);
           if (isPlayingRef.current && !isLoadingTrackRef.current) {
             setIsPlaying(false);
           }
         } else if (currentState === State.Stopped || currentState === State.None) {
+          setIsLoading(false);
           if (isPlayingRef.current && !isLoadingTrackRef.current) {
             setIsPlaying(false);
           }
@@ -297,6 +300,11 @@ export const useQuranPlayer = ({
       isLoadingTrackRef.current = false;
       setIsLoading(false);
       setIsPlaying(false);
+      Alert.alert(
+        'Erreur audio',
+        'Impossible de lire ce verset. Vérifiez votre connexion internet.',
+        [{ text: 'OK' }]
+      );
       return false;
     }
   };

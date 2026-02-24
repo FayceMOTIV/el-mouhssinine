@@ -744,6 +744,7 @@ export const addCotisation = async (params: AddCotisationParams): Promise<string
             montantPaye: params.amount,
             stripePaymentId: params.stripePaymentIntentId,
             formule: params.period || 'annuel',
+            modePaiement: params.stripeSubscriptionId ? 'prelevement' : 'carte',
             cotisation: {
               type: params.period || 'annuel',
               montant: params.amount,

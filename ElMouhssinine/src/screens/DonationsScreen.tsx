@@ -18,7 +18,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, MODAL_WIDTH, isSmallScreen, isTablet, moderateScale } from '../theme/colors';
-import { subscribeToProjects, subscribeToMosqueeInfo, createDonation, addDonation, requestRecuFiscal } from '../services/firebase';
+import { subscribeToProjects, subscribeToMosqueeInfo, createDonation, addDonation } from '../services/firebase';
 import { Project, ProjectFile, MosqueeInfo } from '../types';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useLanguage } from '../context/LanguageContext';
@@ -64,11 +64,8 @@ const DonationsScreen = () => {
   const [donorCompanyName, setDonorCompanyName] = useState('');
   const [donorSiret, setDonorSiret] = useState('');
   const [donorLegalRep, setDonorLegalRep] = useState('');
-  const [acceptRecuFiscal, setAcceptRecuFiscal] = useState(true);
   const [donorFormFilled, setDonorFormFilled] = useState(false);
 
-  // Reçu fiscal
-  const [sendingRecuFiscal, setSendingRecuFiscal] = useState(false);
   const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(null);
 
   // Pré-remplir si user connecté + écouter changements de compte
@@ -115,44 +112,6 @@ const DonationsScreen = () => {
     });
     return () => unsubAuth();
   }, []);
-
-  // Demander l'envoi du reçu fiscal
-  const handleRequestRecuFiscal = async (year: number) => {
-    const email = memberProfile?.email || donorEmail;
-    if (!email) {
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar' ? 'البريد الإلكتروني غير متوفر. يرجى تسجيل الدخول أولاً' : 'Email non disponible. Veuillez vous connecter d\'abord dans l\'onglet Adhérent.'
-      );
-      return;
-    }
-
-    setSendingRecuFiscal(true);
-    try {
-      const result = await requestRecuFiscal(email, year);
-      if (result.success) {
-        Alert.alert(
-          language === 'ar' ? 'تم الإرسال' : 'Envoyé !',
-          language === 'ar'
-            ? `تم إرسال إيصالك الضريبي بمبلغ ${result.montantTotal?.toFixed(2)}€ إلى ${email}`
-            : `Votre reçu fiscal de ${result.montantTotal?.toFixed(2)}€ a été envoyé à ${email}`
-        );
-      } else {
-        Alert.alert(
-          language === 'ar' ? 'خطأ' : 'Erreur',
-          result.message
-        );
-      }
-    } catch (error) {
-      const err = error as Error;
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        err?.message || (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue')
-      );
-    } finally {
-      setSendingRecuFiscal(false);
-    }
-  };
 
   const validateSIRET = (siret: string): boolean => {
     const cleaned = siret.replace(/\s/g, '');
@@ -365,12 +324,12 @@ const DonationsScreen = () => {
     const currentUser = AuthService.getCurrentUser();
     const isAnonymous = !currentUser;
 
-    // Avertir l'utilisateur non connecté qu'il ne recevra pas de reçu fiscal
+    // Avertir l'utilisateur non connecté que le don sera anonyme
     if (isAnonymous) {
       return new Promise<void>((resolve) => {
         Alert.alert(
           'Don anonyme',
-          'Vous n\'êtes pas connecté. Votre don sera anonyme et vous ne pourrez pas recevoir de reçu fiscal.\n\nVoulez-vous continuer ?',
+          'Vous n\'êtes pas connecté. Votre don sera enregistré de manière anonyme.\n\nVoulez-vous continuer ?',
           [
             {
               text: 'Annuler',
@@ -448,13 +407,12 @@ const DonationsScreen = () => {
         // Fermer le modal et afficher succès
         setShowPaymentModal(false);
 
-        // Message avec info recu fiscal
-        const nextYear = new Date().getFullYear() + 1;
+        // Message de succès
         Alert.alert(
           language === 'ar' ? 'شكراً لك!' : 'Merci !',
           language === 'ar'
-            ? `تم تسجيل تبرعك بنجاح. سيكون إيصالك الضريبي متاحاً في يناير ${nextYear}.`
-            : `Votre don a ete enregistre avec succes. Votre recu fiscal sera disponible en janvier ${nextYear}.`,
+            ? 'تم تسجيل تبرعك بنجاح. جزاك الله خيراً!'
+            : 'Votre don a été enregistré avec succès. Jazak Allah Khayran !',
         );
 
         // Reset complet et retour page 1
@@ -622,64 +580,6 @@ const DonationsScreen = () => {
                 {t('donationDisclaimer')}
               </Text>
 
-              {/* Reçus Fiscaux */}
-              <View style={styles.recuFiscalSection}>
-                <Text style={[styles.recuFiscalTitle, isRTL && styles.rtlText]}>
-                  📄 {language === 'ar' ? 'إيصالاتي الضريبية' : 'Mes reçus fiscaux'}
-                </Text>
-                <View style={styles.recuFiscalCard}>
-                  <Text style={[styles.recuFiscalInfo, isRTL && styles.rtlText]}>
-                    {language === 'ar'
-                      ? 'لديك الحق في خصم 66% من تبرعاتك من الضرائب (المادة 200 من القانون العام للضرائب). تتوفر الإيصالات في بداية يناير عن السنة المنقضية.'
-                      : 'Vous avez droit à 66% de réduction d\'impôt pour vos dons (article 200 CGI). Les reçus sont disponibles début janvier pour l\'année écoulée.'}
-                  </Text>
-
-                  {/* Années dynamiques : année précédente (disponible) + année en cours (pas encore) */}
-                  {(() => {
-                    const currentYear = new Date().getFullYear();
-                    const years = [currentYear - 1, currentYear];
-                    return years.map((year) => {
-                      return (
-                        <View key={year} style={styles.recuYearRow}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.recuYearText, isRTL && styles.rtlText]}>
-                              {language === 'ar' ? `إيصال ضريبي ${year}` : `Reçu fiscal ${year}`}
-                            </Text>
-                            <Text style={[styles.recuYearSubtext, isRTL && styles.rtlText]}>
-                              {language === 'ar' ? 'جميع التبرعات للسنة' : 'Tous les dons de l\'année'}
-                            </Text>
-                          </View>
-                          {year === currentYear ? (
-                            <Text style={styles.recuNotAvailable}>
-                              {language === 'ar'
-                                ? `متاح في 01/01/${year + 1}`
-                                : `Disponible le 01/01/${year + 1}`}
-                            </Text>
-                          ) : (
-                            <Text style={[styles.recuNotAvailable, { fontSize: 12 }]}>
-                              {language === 'ar'
-                                ? `📋 تواصلوا مع المسجد لإيصال ${year}`
-                                : `📋 Contactez la mosquée pour votre reçu ${year}`}
-                            </Text>
-                          )}
-                        </View>
-                      );
-                    });
-                  })()}
-                </View>
-              </View>
-
-              {/* Texte legal recu fiscal */}
-              <View style={styles.legalBox}>
-                <Text style={[styles.legalTitle, isRTL && styles.rtlText]}>
-                  {language === 'ar' ? 'إيصال ضريبي' : 'Recu fiscal'}
-                </Text>
-                <Text style={[styles.legalText, isRTL && styles.rtlText]}>
-                  {language === 'ar'
-                    ? 'الأفراد: خصم 66% من المبلغ المتبرع به (المادة 200 من القانون العام للضرائب) - CERFA 11580*05\nالشركات: خصم 60% من المبلغ المتبرع به (المادة 238 مكرر من القانون العام للضرائب) - CERFA 16216*02\n\nستتلقون إيصالكم الضريبي في يناير من السنة التالية.'
-                    : 'Particuliers : deduction de 66% du montant (article 200 du CGI) - CERFA 11580*05\nEntreprises : deduction de 60% du montant (article 238 bis du CGI) - CERFA 16216*02\n\nVotre recu fiscal vous sera envoyé en janvier N+1.'}
-                </Text>
-              </View>
             </>
           )}
 
@@ -712,15 +612,6 @@ const DonationsScreen = () => {
                     🏢 {language === 'ar' ? 'شركة' : 'Entreprise'}
                   </Text>
                 </TouchableOpacity>
-              </View>
-
-              {/* Reduction fiscale info */}
-              <View style={styles.fiscalInfoBox}>
-                <Text style={[styles.fiscalInfoText, isRTL && styles.rtlText]}>
-                  {donorType === 'particulier'
-                    ? (language === 'ar' ? '✅ خصم 66% - المادة 200 من القانون العام للضرائب' : '✅ Deduction 66% - Article 200 du CGI')
-                    : (language === 'ar' ? '✅ خصم 60% - المادة 238 مكرر من القانون العام للضرائب' : '✅ Deduction 60% - Article 238 bis du CGI')}
-                </Text>
               </View>
 
               {/* Formulaire identite */}
@@ -888,37 +779,7 @@ const DonationsScreen = () => {
                   />
                   <Text style={styles.customAmountSuffix}>€</Text>
                 </View>
-
-                {/* Affichage reduction fiscale */}
-                {getFinalAmount() > 0 && (
-                  <View style={styles.fiscalPreview}>
-                    <Text style={[styles.fiscalPreviewText, isRTL && styles.rtlText]}>
-                      {donorType === 'particulier'
-                        ? (language === 'ar'
-                          ? `💡 بعد الخصم الضريبي (66%): ${(getFinalAmount() * 0.34).toFixed(2)}€ فقط`
-                          : `💡 Apres reduction fiscale (66%) : ${(getFinalAmount() * 0.34).toFixed(2)}€ seulement`)
-                        : (language === 'ar'
-                          ? `💡 بعد الخصم الضريبي (60%): ${(getFinalAmount() * 0.40).toFixed(2)}€ فقط`
-                          : `💡 Apres reduction fiscale (60%) : ${(getFinalAmount() * 0.40).toFixed(2)}€ seulement`)}
-                    </Text>
-                  </View>
-                )}
               </View>
-
-              {/* Checkbox recu fiscal */}
-              <TouchableOpacity
-                style={styles.checkboxRow}
-                onPress={() => setAcceptRecuFiscal(!acceptRecuFiscal)}
-              >
-                <View style={[styles.checkbox, acceptRecuFiscal && styles.checkboxChecked]}>
-                  {acceptRecuFiscal && <Text style={styles.checkboxCheck}>✓</Text>}
-                </View>
-                <Text style={[styles.checkboxLabel, isRTL && styles.rtlText]}>
-                  {language === 'ar'
-                    ? 'أرغب في استلام إيصالي الضريبي عبر البريد الإلكتروني'
-                    : 'Je souhaite recevoir mon recu fiscal par email'}
-                </Text>
-              </TouchableOpacity>
 
               {/* Bouton payer */}
               <TouchableOpacity
@@ -2349,73 +2210,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     color: colors.accent,
   },
-  // Reçu Fiscal
-  recuFiscalSection: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  recuFiscalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  recuFiscalCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-  },
-  recuFiscalInfo: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    marginBottom: spacing.lg,
-    lineHeight: 20,
-  },
-  recuYearRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-  },
-  recuYearText: {
-    fontSize: fontSize.md,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  recuYearSubtext: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
-  recuNotAvailable: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    fontStyle: 'italic',
-  },
-  recuFiscalButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accent,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
-  },
-  recuFiscalButtonDisabled: {
-    backgroundColor: 'rgba(201,162,39,0.4)',
-  },
-  recuFiscalButtonIcon: {
-    fontSize: 14,
-  },
-  recuFiscalButtonText: {
-    fontSize: fontSize.sm,
-    color: '#ffffff',
-    fontWeight: '600',
-  },
   // RTL Styles
   rtlText: {
     textAlign: 'right',
@@ -2727,25 +2521,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   // PAGE 1 : Choix type de don
-  legalBox: {
-    backgroundColor: 'rgba(39,174,96,0.08)',
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(39,174,96,0.2)',
-  },
-  legalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    color: colors.success,
-    marginBottom: spacing.sm,
-  },
-  legalText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
   donChoiceBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2788,19 +2563,6 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '600',
   },
-  fiscalInfoBox: {
-    backgroundColor: 'rgba(39,174,96,0.08)',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(39,174,96,0.2)',
-  },
-  fiscalInfoText: {
-    fontSize: fontSize.sm,
-    color: colors.success,
-    fontWeight: '600',
-  },
   formInput: {
     backgroundColor: '#f8f8fa',
     borderRadius: borderRadius.md,
@@ -2817,49 +2579,6 @@ const styles = StyleSheet.create({
   },
   formHalf: {
     flex: 1,
-  },
-  fiscalPreview: {
-    backgroundColor: 'rgba(201,162,39,0.1)',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(201,162,39,0.3)',
-  },
-  fiscalPreviewText: {
-    fontSize: fontSize.sm,
-    color: colors.accent,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-    paddingHorizontal: spacing.sm,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  checkboxChecked: {
-    backgroundColor: colors.accent,
-  },
-  checkboxCheck: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  checkboxLabel: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
   },
 });
 
