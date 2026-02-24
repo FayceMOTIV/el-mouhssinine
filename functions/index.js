@@ -1708,8 +1708,7 @@ exports.stripeWebhook = functions
               // Mettre à jour le membre (déjà lu en phase 1)
               if (memberRef && memberDoc && memberDoc.exists) {
                 transaction.update(memberRef, {
-                  statut: 'active',
-                  status: 'active',
+                  status: 'actif',
                   datePaiement: admin.firestore.FieldValue.serverTimestamp(),
                   montantPaye: montantCotisation,
                   stripePaymentId: paymentIntentId,
@@ -1881,8 +1880,7 @@ exports.stripeWebhook = functions
 
           // Mettre à jour le membre
           await memberDoc.ref.update({
-            status: 'active',
-            statut: 'active', // FIX A: Paiement récurrent mensuel réussi → 'active' (Page 3 - Membre Actif)
+            status: 'actif',
             datePaiement: admin.firestore.FieldValue.serverTimestamp(),
             montantPaye: amountEuros,
             stripePaymentId: invoice.payment_intent,
@@ -1947,9 +1945,8 @@ exports.stripeWebhook = functions
             };
 
             if (attemptCount >= 3) {
-              statusUpdate.status = 'expired';
-              statusUpdate.statut = 'expired'; // FIX A: Échec paiement → 'expired' (Page 2 - Espace Adhérent pour renouveler, PAS sympathisant)
-              console.log('3 tentatives échouées, membre passé en expired pour renouvellement');
+              statusUpdate.status = 'expire';
+              console.log('3 tentatives échouées, membre passé en expire pour renouvellement');
             }
 
             await failedMemberDoc.ref.update(statusUpdate);
@@ -2070,8 +2067,7 @@ exports.stripeWebhook = functions
             const subMemberDoc = subMembersSnapshot.docs[0];
             const subMemberData = subMemberDoc.data();
             await subMemberDoc.ref.update({
-              status: 'expired',
-              statut: 'expired', // FIX A: Annulation abonnement → 'expired' (Page 2 - Espace Adhérent pour renouveler, PAS sympathisant)
+              status: 'expire',
               cotisationType: null,
               stripeSubscriptionId: null,
               subscriptionCancelledAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2177,11 +2173,9 @@ exports.stripeWebhook = functions
 
             // Mettre à jour le statut selon le statut Stripe
             if (updatedSubscription.status === 'active') {
-              updateData.status = 'active';
-              updateData.statut = 'active'; // FIX A: Abonnement actif → 'active' (Page 3 - Membre Actif)
+              updateData.status = 'actif';
             } else if (updatedSubscription.status === 'canceled' || updatedSubscription.status === 'unpaid') {
-              updateData.status = 'expired';
-              updateData.statut = 'expired'; // FIX A: Abonnement annulé/impayé → 'expired' (Page 2 - Espace Adhérent pour renouveler)
+              updateData.status = 'expire';
             }
 
             if (Object.keys(updateData).length > 0) {
@@ -5152,7 +5146,7 @@ exports.checkExpiringCotisations = functions
     // Récupérer tous les membres actifs
     const membersSnapshot = await admin.firestore()
       .collection('members')
-      .where('status', 'in', ['actif', 'active'])
+      .where('status', 'in', ['actif'])
       .get();
 
     const now = new Date();

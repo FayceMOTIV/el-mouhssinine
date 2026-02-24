@@ -180,14 +180,14 @@ const MemberScreen = () => {
               nom: profile.nom,
               prenom: profile.prenom,
               cotisationType: profile.cotisation.type,
-              cotisationStatus: profile.cotisation.status as 'none' | 'active' | 'expired' | 'pending',
+              cotisationStatus: profile.cotisation.status as 'actif' | 'expire' | 'en_attente_paiement' | 'en_attente_validation' | 'en_attente_signature' | 'aucun' | 'sympathisant' | 'annule',
               cotisationExpiry: profile.cotisation.dateFin || undefined,
               telephone: profile.telephone,
               adresse: profile.adresse,
               createdAt: new Date(),
             };
             setMemberProfile(memberProf);
-            const isActive = profile.cotisation.status === 'active';
+            const isActive = profile.cotisation.status === 'actif';
             setIsPaid(isActive);
 
             // Detecter expiration
@@ -208,9 +208,9 @@ const MemberScreen = () => {
                 'Cotisation expirée',
                 'Votre adhésion a expiré. Renouvelez-la pour rester membre actif.'
               );
-            } else if (profile.cotisation.status === 'cancelled' || profile.cotisation.status === 'expired') {
+            } else if (profile.cotisation.status === 'annule' || profile.cotisation.status === 'expire') {
               setMemberPage('devenir_adherent');
-            } else if (!profile.cotisation.status || profile.cotisation.status === 'sympathisant' || profile.cotisation.status === 'none') {
+            } else if (!profile.cotisation.status || profile.cotisation.status === 'sympathisant' || profile.cotisation.status === 'aucun') {
               setMemberPage('sympathisant');
             } else {
               setMemberPage('devenir_adherent');
@@ -1058,7 +1058,7 @@ const MemberScreen = () => {
   const isSympathisant = memberProfile && (
     (memberProfile as any).cotisationStatus === 'sympathisant' ||
     (memberProfile as any).status === 'sympathisant' ||
-    (memberProfile.cotisationStatus === 'none' && !memberProfile.cotisationExpiry)
+    (memberProfile.cotisationStatus === 'aucun' && !memberProfile.cotisationExpiry)
   );
 
   // Vérifier si le membre attend la validation du bureau
@@ -1072,12 +1072,12 @@ const MemberScreen = () => {
     // Pour MemberProfile
     if ('cotisationStatus' in profile) {
       const status = profile.cotisationStatus as string;
-      if (status === 'actif' || status === 'active') return 'paid';
+      if (status === 'actif') return 'paid';
       if (status === 'en_attente_paiement') return 'pending';
       return 'unpaid';
     }
     // Pour InscribedMember
-    if (profile.status === 'actif' || profile.status === 'active') return 'paid';
+    if (profile.status === 'actif') return 'paid';
     if (profile.status === 'en_attente_paiement') return 'virement_pending';
     if (profile.status === 'en_attente_signature') return 'paid'; // Payé mais pas encore signé
     if (profile.status === 'en_attente_validation') return 'paid'; // Payé, en attente de validation bureau
@@ -1089,7 +1089,7 @@ const MemberScreen = () => {
     name: memberProfile.name,
     memberId: memberProfile.memberId,
     membershipExpirationDate: memberProfile.cotisationExpiry,
-    status: memberProfile.cotisationStatus || 'inactive',
+    status: memberProfile.cotisationStatus || 'aucun',
     paymentStatus: getPaymentStatus(memberProfile),
     subscriptionType: memberProfile.cotisationType || undefined,
   } : null;

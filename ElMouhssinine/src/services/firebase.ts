@@ -1505,12 +1505,12 @@ export const createMember = async (member: CreateMemberData | Omit<Member, 'id' 
 };
 
 // Helper pour déterminer le statut de cotisation
-const getCotisationStatus = (cotisation: any): 'active' | 'expired' | 'none' | 'pending' => {
-  if (!cotisation) return 'none';
-  if (!cotisation.dateFin) return 'pending';
+const getCotisationStatus = (cotisation: any): 'actif' | 'expire' | 'aucun' | 'en_attente_paiement' => {
+  if (!cotisation) return 'aucun';
+  if (!cotisation.dateFin) return 'en_attente_paiement';
   const now = new Date();
   const dateFin = toDate(cotisation.dateFin);
-  return dateFin > now ? 'active' : 'expired';
+  return dateFin > now ? 'actif' : 'expire';
 };
 
 // Helper pour calculer la prochaine date de paiement
@@ -1803,9 +1803,9 @@ const buildMemberProfile = (docId: string, data: any): MemberProfileRealtime => 
   const hasValidCotisation = data.cotisation?.dateFin &&
     (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
 
-  const cotisationStatus = data.status === 'actif' || hasValidCotisation ? 'active' :
-    data.status === 'en_attente_paiement' ? 'pending' :
-    data.status === 'sympathisant' ? 'sympathisant' : 'expired';
+  const cotisationStatus = data.status === 'actif' || hasValidCotisation ? 'actif' :
+    data.status === 'en_attente_paiement' ? 'en_attente_paiement' :
+    data.status === 'sympathisant' ? 'sympathisant' : 'expire';
 
   return {
     id: docId,

@@ -18,7 +18,7 @@ export interface MemberProfile {
   nom?: string;
   prenom?: string;
   cotisationType: 'mensuel' | 'annuel' | null;
-  cotisationStatus: 'none' | 'active' | 'expired' | 'pending' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' | 'en_attente_paiement';
+  cotisationStatus: 'aucun' | 'actif' | 'expire' | 'en_attente_paiement' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature';
   cotisationExpiry?: Date;
   phone?: string;
   address?: string;
@@ -378,7 +378,7 @@ export const AuthService = {
           nom: newProfile.nom,
           prenom: newProfile.prenom,
           cotisationType: 'annuel',
-          cotisationStatus: 'none',
+          cotisationStatus: 'aucun',
           phone: '',
           address: '',
           telephone: '', // Alias français
@@ -429,7 +429,7 @@ export const AuthService = {
   updateCotisation: async (
     uid: string,
     type: 'mensuel' | 'annuel',
-    status: 'active' | 'pending'
+    status: 'actif' | 'en_attente_paiement'
   ): Promise<void> => {
     const now = new Date();
     const dateFin = type === 'mensuel'
@@ -447,7 +447,7 @@ export const AuthService = {
    * Vérifier si la cotisation est active
    */
   isCotisationActive: (profile: MemberProfile | null): boolean => {
-    if (!profile || profile.cotisationStatus !== 'active') {
+    if (!profile || profile.cotisationStatus !== 'actif') {
       return false;
     }
 
@@ -470,7 +470,7 @@ function mapFirestoreToProfile(uid: string, data: any): MemberProfile {
   const cotisation = data.cotisation || {};
 
   // Calculer le statut de cotisation
-  let cotisationStatus: 'none' | 'active' | 'expired' | 'pending' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' | 'en_attente_paiement' = 'none';
+  let cotisationStatus: 'aucun' | 'actif' | 'expire' | 'en_attente_paiement' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' = 'aucun';
   let cotisationExpiry: Date | undefined;
 
   // Extraire la date d'expiration si elle existe
@@ -490,11 +490,11 @@ function mapFirestoreToProfile(uid: string, data: any): MemberProfile {
   } else if (data.status === 'actif' || cotisationExpiry) {
     // Si explicitement actif ou si date d'expiration existe
     if (cotisationExpiry && new Date() < cotisationExpiry) {
-      cotisationStatus = 'active';
+      cotisationStatus = 'actif';
     } else if (cotisationExpiry) {
-      cotisationStatus = 'expired';
+      cotisationStatus = 'expire';
     } else if (data.status === 'actif') {
-      cotisationStatus = 'active';
+      cotisationStatus = 'actif';
     }
   }
 
