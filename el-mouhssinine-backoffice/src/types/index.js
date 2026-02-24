@@ -71,7 +71,8 @@ export const CotisationStatut = {
   AUCUN: 'aucun',
   EN_ATTENTE_VALIDATION: 'en_attente_validation', // A payé, attend validation bureau
   EN_ATTENTE_SIGNATURE: 'en_attente_signature',
-  EN_ATTENTE_PAIEMENT: 'en_attente_paiement'
+  EN_ATTENTE_PAIEMENT: 'en_attente_paiement',
+  ANNULE: 'annule'
 }
 
 // ==================== NOTIFICATIONS ====================

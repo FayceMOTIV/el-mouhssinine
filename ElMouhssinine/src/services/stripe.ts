@@ -54,6 +54,7 @@ const createPaymentIntent = async (
   metadata: Record<string, any>
 ): Promise<{ clientSecret: string; paymentIntentId: string }> => {
   try {
+    logger.log('[Stripe] createPaymentIntent appelé:', { amount: eurosToCents(amount), description });
     const createPayment = firebase.app().functions('europe-west1').httpsCallable('createPaymentIntent');
     const result = await createPayment({
       amount: eurosToCents(amount),
@@ -63,10 +64,11 @@ const createPaymentIntent = async (
     });
 
     const data = result.data as { clientSecret: string; paymentIntentId: string };
+    logger.log('[Stripe] PaymentIntent reçu:', data.paymentIntentId);
     return data;
   } catch (error) {
     const err = error as Error;
-    logger.error('Erreur création PaymentIntent:', err);
+    logger.error('[Stripe] Erreur création PaymentIntent:', err?.message, err);
     throw new Error(err?.message || 'Erreur lors de la création du paiement');
   }
 };
@@ -176,25 +178,35 @@ export const makePayment = async (params: PaymentParams): Promise<PaymentResult>
 // ============================================================
 export const makeApplePayPayment = async (params: PaymentParams): Promise<PaymentResult> => {
   const { amount, description, type, metadata = {} } = params;
+  logger.log('[ApplePay] Début paiement:', { amount, description, type });
 
   const validationError = validateAmount(amount);
-  if (validationError) return validationError;
+  if (validationError) {
+    logger.log('[ApplePay] Validation échouée:', validationError);
+    return validationError;
+  }
 
   try {
     // 1. Vérifier qu'Apple Pay est disponible
+    logger.log('[ApplePay] Vérification isPlatformPaySupported...');
     const supported = await isPlatformPaySupported();
+    logger.log('[ApplePay] isPlatformPaySupported =', supported);
     if (!supported) {
+      Alert.alert('Apple Pay indisponible', 'Apple Pay n\'est pas configuré sur cet appareil. Vérifiez que vous avez une carte dans votre Wallet.');
       return { success: false, error: 'Apple Pay n\'est pas disponible sur cet appareil' };
     }
 
     // 2. Créer le PaymentIntent via Cloud Function
+    logger.log('[ApplePay] Création PaymentIntent...');
     const { clientSecret, paymentIntentId } = await createPaymentIntent(
       amount,
       description,
       { type, ...metadata }
     );
+    logger.log('[ApplePay] PaymentIntent créé:', paymentIntentId);
 
     // 3. Lancer Apple Pay directement
+    logger.log('[ApplePay] Lancement confirmPlatformPayPayment...');
     const { error } = await confirmPlatformPayPayment(clientSecret, {
       applePay: {
         cartItems: [
@@ -211,17 +223,21 @@ export const makeApplePayPayment = async (params: PaymentParams): Promise<Paymen
 
     if (error) {
       if (error.code === 'Canceled') {
+        logger.log('[ApplePay] Paiement annulé par l\'utilisateur');
         return { success: false, error: 'Paiement annulé' };
       }
-      logger.error('Erreur Apple Pay:', error);
+      logger.error('[ApplePay] Erreur confirmPlatformPayPayment:', error);
+      Alert.alert('Erreur Apple Pay', `Code: ${error.code}\n${error.message}`);
       return { success: false, error: error.message };
     }
 
     // 4. Paiement réussi
+    logger.log('[ApplePay] Paiement réussi!', paymentIntentId);
     return { success: true, paymentIntentId };
   } catch (error) {
     const err = error as Error;
-    logger.error('Erreur Apple Pay:', err);
+    logger.error('[ApplePay] Exception:', err?.message, err);
+    Alert.alert('Erreur Apple Pay', `Exception: ${err?.message || 'Erreur inconnue'}`);
     return { success: false, error: err?.message || 'Une erreur est survenue' };
   }
 };
@@ -339,24 +355,31 @@ export const makeSubscription = async (params: PaymentParams): Promise<Subscript
 // ============================================================
 export const makeApplePaySubscription = async (params: PaymentParams): Promise<SubscriptionResult> => {
   const { amount, description, type, metadata = {} } = params;
+  logger.log('[ApplePay-Sub] Début abonnement:', { amount, description, type });
 
   const validationError = validateAmount(amount);
   if (validationError) return { ...validationError, subscriptionId: undefined };
 
   try {
+    logger.log('[ApplePay-Sub] Vérification isPlatformPaySupported...');
     const supported = await isPlatformPaySupported();
+    logger.log('[ApplePay-Sub] isPlatformPaySupported =', supported);
     if (!supported) {
+      Alert.alert('Apple Pay indisponible', 'Apple Pay n\'est pas configuré sur cet appareil.');
       return { success: false, error: 'Apple Pay n\'est pas disponible sur cet appareil' };
     }
 
     // 1. Créer la Subscription via Cloud Function
+    logger.log('[ApplePay-Sub] Création Subscription...');
     const { clientSecret, subscriptionId, paymentIntentId } = await createSubscription(
       amount,
       description,
       { type, ...metadata }
     );
+    logger.log('[ApplePay-Sub] Subscription créée:', subscriptionId, paymentIntentId);
 
     // 2. Lancer Apple Pay directement
+    logger.log('[ApplePay-Sub] Lancement confirmPlatformPayPayment...');
     const { error } = await confirmPlatformPayPayment(clientSecret, {
       applePay: {
         cartItems: [
@@ -373,16 +396,20 @@ export const makeApplePaySubscription = async (params: PaymentParams): Promise<S
 
     if (error) {
       if (error.code === 'Canceled') {
+        logger.log('[ApplePay-Sub] Annulé par utilisateur');
         return { success: false, error: 'Paiement annulé' };
       }
-      logger.error('Erreur Apple Pay Subscription:', error);
+      logger.error('[ApplePay-Sub] Erreur:', error);
+      Alert.alert('Erreur Apple Pay', `Code: ${error.code}\n${error.message}`);
       return { success: false, error: error.message };
     }
 
+    logger.log('[ApplePay-Sub] Abonnement réussi!');
     return { success: true, subscriptionId, paymentIntentId };
   } catch (error) {
     const err = error as Error;
-    logger.error('Erreur Apple Pay abonnement:', err);
+    logger.error('[ApplePay-Sub] Exception:', err?.message, err);
+    Alert.alert('Erreur Apple Pay', `Exception: ${err?.message || 'Erreur inconnue'}`);
     return { success: false, error: err?.message || 'Une erreur est survenue' };
   }
 };

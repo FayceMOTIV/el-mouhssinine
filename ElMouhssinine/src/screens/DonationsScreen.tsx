@@ -339,13 +339,17 @@ const DonationsScreen = () => {
   };
 
   const handlePayment = async () => {
+    console.log('[Donations] handlePayment appelé, method:', paymentMethod, 'processing:', isProcessingPayment, 'ref:', processingRef.current);
     // PROTECTION DOUBLE PAIEMENT: Double vérification state + ref
     if (isProcessingPayment || processingRef.current) {
-      if (__DEV__) console.log('Paiement déjà en cours, ignoré');
+      console.log('[Donations] Paiement déjà en cours, ignoré');
       return;
     }
 
-    if (!selectedProject || getFinalAmount() <= 0) return;
+    if (!selectedProject || getFinalAmount() <= 0) {
+      console.log('[Donations] Pas de projet sélectionné ou montant <= 0:', selectedProject, getFinalAmount());
+      return;
+    }
 
     const amount = getFinalAmount();
     const project = getSelectedProjectData();

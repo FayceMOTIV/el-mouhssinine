@@ -273,7 +273,7 @@ const MyMembershipsScreen = () => {
                   <View style={styles.unifiedCardInfoItem}>
                     <Text style={styles.unifiedCardInfoLabel}>📋 Formule</Text>
                     <Text style={[styles.unifiedCardInfoValue, styles.infoHighlight]}>
-                      {formatFormule(myMembership.formule)}
+                      {formatFormule(myMembership.cotisation?.type || myMembership.formule)}
                     </Text>
                   </View>
                   <View style={styles.unifiedCardInfoItem}>
@@ -338,8 +338,8 @@ const MyMembershipsScreen = () => {
                       <Text style={styles.actionBtnText}>🔄 Renouveler</Text>
                     </TouchableOpacity>
                   )}
-                  {/* Bouton résilier pour tout abonnement actif */}
-                  {(myMembership.status === 'actif' || myMembership.status === 'active' ||
+                  {/* Bouton résilier pour tout abonnement actif (fallback pour anciens statuts) */}
+                  {(['actif', 'active'].includes(myMembership.status) ||
                     myMembership.status === 'en_attente_validation' ||
                     myMembership.status === 'en_attente_signature') && (
                     <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelSubscription}>
@@ -504,7 +504,7 @@ const MyMembershipsScreen = () => {
                 <View style={styles.memberListDetails}>
                   <Text style={styles.memberListDetail}>📞 {member.telephone || '-'}</Text>
                   <Text style={styles.memberListDetail}>
-                    💰 {formatFormule(member.formule)} • {member.montant ? `${member.montant} €` : '-'}
+                    💰 {formatFormule(member.cotisation?.type || member.formule)} • {member.cotisation?.montant || member.montant ? `${member.cotisation?.montant || member.montant} €` : '-'}
                   </Text>
                   {member.dateFin && (
                     <Text style={styles.memberListDetail}>
@@ -513,8 +513,8 @@ const MyMembershipsScreen = () => {
                   )}
                 </View>
 
-                {/* Bouton résilier si actif */}
-                {(member.status === 'actif' || member.status === 'active') && (
+                {/* Bouton résilier si actif (fallback pour anciens statuts) */}
+                {['actif', 'active'].includes(member.status) && (
                   <TouchableOpacity style={styles.cancelBtnSmall} onPress={handleCancelSubscription}>
                     <Text style={styles.cancelBtnText}>
                       {language === 'ar' ? 'إلغاء' : 'Résilier'}

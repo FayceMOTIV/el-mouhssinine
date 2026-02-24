@@ -619,7 +619,11 @@ const MemberScreen = () => {
   // ============================================================
 
   const handlePayment = async (method: 'card' | 'apple' | 'virement') => {
-    if (isProcessingRef.current || isProcessingPayment || !memberProfile) return;
+    console.log('[Member] handlePayment appelé, method:', method, 'processing:', isProcessingPayment, 'ref:', isProcessingRef.current, 'profile:', !!memberProfile);
+    if (isProcessingRef.current || isProcessingPayment || !memberProfile) {
+      console.log('[Member] Bloqué - processing:', isProcessingRef.current, isProcessingPayment, 'profile:', !!memberProfile);
+      return;
+    }
     isProcessingRef.current = true; // BUG 7 FIX: Verrou synchrone immédiat
 
     const totalAmount = getCurrentAmount();
