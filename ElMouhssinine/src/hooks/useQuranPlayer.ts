@@ -71,6 +71,10 @@ export const useQuranPlayer = ({
   const isHandlingEndRef = useRef(false);
   // Dernier verset dont la fin a été traitée (empêche double-avancement)
   const lastHandledEndForVerseRef = useRef<number>(-1);
+  // Compteur de génération : incrémenté à chaque chargement de piste.
+  // Permet de détecter les événements obsolètes (fire du listener précédent
+  // après que loadAndPlayVerse a déjà avancé au verset suivant).
+  const trackGenRef = useRef(0);
 
   // Sync refs
   useEffect(() => {
@@ -141,9 +145,10 @@ export const useQuranPlayer = ({
       // Primaire : PlaybackQueueEnded — fiable sur iOS & Android
       subs.push(
         TrackPlayer.addEventListener(Event.PlaybackQueueEnded, async () => {
-          console.log('[QuranPlayer] PlaybackQueueEnded fired');
+          const gen = trackGenRef.current;
+          console.log(`[QuranPlayer] PlaybackQueueEnded fired (gen=${gen})`);
           if (!isLoadingTrackRef.current) {
-            await handleTrackEnd();
+            await handleTrackEnd(gen);
           }
         })
       );
@@ -151,8 +156,9 @@ export const useQuranPlayer = ({
       subs.push(
         TrackPlayer.addEventListener(Event.PlaybackState, async (event) => {
           if (event.state === State.Ended && !isLoadingTrackRef.current) {
-            console.log('[QuranPlayer] PlaybackState.Ended fired');
-            await handleTrackEnd();
+            const gen = trackGenRef.current;
+            console.log(`[QuranPlayer] PlaybackState.Ended fired (gen=${gen})`);
+            await handleTrackEnd(gen);
           }
         })
       );
@@ -236,9 +242,18 @@ export const useQuranPlayer = ({
   }, [isPlayerReady]);
 
   // === Gestion fin de piste ===
-  const handleTrackEnd = async () => {
+  const handleTrackEnd = async (triggerGen?: number) => {
     if (isLoadingTrackRef.current) return;
     if (isHandlingEndRef.current) return;
+
+    // Si la génération a changé depuis que l'événement a été capturé,
+    // c'est un événement obsolète (ex: PlaybackState.Ended qui fire après
+    // que PlaybackQueueEnded a déjà avancé au verset suivant).
+    if (triggerGen !== undefined && triggerGen !== trackGenRef.current) {
+      console.log(`[QuranPlayer] handleTrackEnd SKIP stale event (triggerGen=${triggerGen} current=${trackGenRef.current})`);
+      return;
+    }
+
     isHandlingEndRef.current = true;
 
     try {
@@ -248,10 +263,10 @@ export const useQuranPlayer = ({
       const max = maxRepeatRef.current;
       const versesArray = versesRef.current;
 
-      console.log(`[QuranPlayer] handleTrackEnd idx=${idx} mode=${mode} count=${count}`);
+      console.log(`[QuranPlayer] handleTrackEnd idx=${idx} mode=${mode} count=${count} gen=${trackGenRef.current}`);
 
       // Empêcher le double-traitement de la fin du même verset
-      // (guard : PlaybackQueueEnded + PlaybackState.Ended peuvent fire pour la même piste)
+      // (guard supplémentaire : PlaybackQueueEnded + PlaybackState.Ended peuvent fire pour la même piste)
       if (lastHandledEndForVerseRef.current === idx && mode !== 'verse') {
         console.log(`[QuranPlayer] handleTrackEnd SKIP (déjà traité pour idx=${idx})`);
         return;
@@ -317,6 +332,10 @@ export const useQuranPlayer = ({
       console.warn('[QuranPlayer] Index invalide:', index);
       return false;
     }
+
+    // Incrémenter la génération AVANT toute opération async.
+    // Les événements capturés avant cet instant seront détectés comme obsolètes.
+    trackGenRef.current++;
 
     // Marquer qu'on charge - synchrone AVANT toute opération async
     isLoadingTrackRef.current = true;
@@ -527,6 +546,8 @@ export const useQuranPlayer = ({
   }, []);
 
   const stop = useCallback(async () => {
+    // Incrémenter la génération pour invalider tout événement en cours
+    trackGenRef.current++;
     isLoadingTrackRef.current = true;
     try {
       await TrackPlayer.reset();
