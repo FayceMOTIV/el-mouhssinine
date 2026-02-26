@@ -41,7 +41,7 @@ interface Verse {
 
 const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   const { t, isRTL } = useLanguage();
-  const surahNumber = route.params?.surahNumber;
+  const surahNumber = route.params?.surahNumber ?? 1; // Fallback sourate Al-Fatiha si params manquant
   const [loading, setLoading] = useState(true);
   const [surahData, setSurahData] = useState<{
     arabic: SurahData;
@@ -154,10 +154,10 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
 
   // Lecture d'un verset spécifique
   const handlePlayVerse = async (index: number) => {
+    if (!verses.length) return;
     console.log('[SurahScreen] handlePlayVerse:', index);
     setShowMiniPlayer(true);
     try {
-      // Utiliser playVerseAtIndex directement au lieu de seekToVerse + play
       await player.playVerseAtIndex(index);
     } catch (error) {
       console.error('[SurahScreen] Erreur lecture verset:', error);
@@ -206,10 +206,8 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
           showTranslation={showTranslation}
           onPress={() => {
             handleAyahPress(ayah.numberInSurah);
-            // Clic pour jouer ce verset
-            if (showMiniPlayer || player.isPlaying) {
-              handlePlayVerse(index);
-            }
+            // Toujours lancer la lecture au clic sur un verset
+            handlePlayVerse(index);
           }}
           onLayout={(event) => handleVerseLayout(event, index)}
         />
@@ -248,7 +246,7 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
         )}
       </View>
     );
-  }, [surahData?.translation?.ayahs, selectedAyah, player.currentVerseIndex, player.isPlaying, showTranslation, favorites, t, isRTL, showMiniPlayer]);
+  }, [surahData?.translation?.ayahs, selectedAyah, player.currentVerseIndex, player.isPlaying, showTranslation, favorites, t, isRTL]);
 
   const ListHeaderComponent = useCallback(() => (
     <>
@@ -303,14 +301,16 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
       {/* Lecteur Karaoke Pro */}
       <View style={[styles.karaokePlayer, isRTL && styles.karaokePlayerRTL]}>
         <TouchableOpacity
-          style={styles.mainPlayButton}
+          style={[styles.mainPlayButton, (!verses.length || !player.isInitialized) && { opacity: 0.4 }]}
+          disabled={!verses.length || !player.isInitialized}
           onPress={async () => {
+            if (!verses.length) return;
             setShowMiniPlayer(true);
             await player.togglePlayPause();
           }}
         >
           <Text style={styles.mainPlayIcon}>
-            {player.isLoading ? '⏳' : player.isPlaying ? '⏸️' : '▶️'}
+            {!player.isInitialized ? '⏳' : player.isLoading ? '⏳' : player.isPlaying ? '⏸️' : '▶️'}
           </Text>
         </TouchableOpacity>
 

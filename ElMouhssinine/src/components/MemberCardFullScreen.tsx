@@ -42,7 +42,14 @@ const getBackgroundColor = (status?: string) => {
     case 'expiré':
       return '#991B1B'; // Rouge foncé
     case 'inactive':
+    case 'annule':
+    case 'annulé':
+    case 'aucun':
       return '#374151'; // Gris foncé
+    case 'expire':
+      return '#991B1B'; // Rouge foncé (expire sans accent)
+    case 'sympathisant':
+      return '#065F46'; // Vert (sympathisant considéré actif)
     case 'unpaid':
     case 'en_attente_paiement':
       return '#92400E'; // Ambre foncé

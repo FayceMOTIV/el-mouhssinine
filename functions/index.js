@@ -584,65 +584,16 @@ exports.sendManualNotification = functions
   });
 
 // ==================== RAPPEL JUMU'A AUTOMATIQUE ====================
-// Tous les vendredis à 11h30 (heure Paris)
-
-exports.scheduledJumuaReminder = functions
-  .region('europe-west1')
-  .pubsub
-  .schedule('30 11 * * 5') // 11h30 chaque vendredi
-  .timeZone('Europe/Paris')
-  .onRun(async (context) => {
-    // Récupérer l'heure de Jumu'a depuis les settings
-    let jumuaTime = '13:30';
-    try {
-      const settingsDoc = await admin.firestore()
-        .collection('settings')
-        .doc('prayerTimes')
-        .get();
-      if (settingsDoc.exists && settingsDoc.data().jumua?.jumua1) {
-        jumuaTime = settingsDoc.data().jumua.jumua1;
-      }
-    } catch (e) {
-      console.log('Impossible de recuperer l\'heure Jumu\'a, utilisation par defaut');
-    }
-
-    const message = {
-      notification: {
-        title: "🕌 Jumu'a aujourd'hui à " + jumuaTime,
-        body: "Jour béni ! Arrivez tôt pour la meilleure place et pensez à vous garer correctement.",
-      },
-      data: {
-        type: 'jumua_reminder',
-        time: jumuaTime,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-          },
-        },
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          sound: 'default',
-          channelId: 'prayer_reminders',
-        },
-      },
-      topic: 'jumua',
-    };
-
-    try {
-      const response = await admin.messaging().send(message);
-      console.log('Rappel Jumu\'a envoye:', response);
-      return null;
-    } catch (error) {
-      console.error('Erreur rappel Jumu\'a:', error);
-      return null;
-    }
-  });
+// DESACTIVE: La notification Jumu'a est maintenant geree uniquement par
+// prayerNotifications.ts cote client pour eviter la triple notification
+// (notifications.ts local + prayerNotifications.ts + Cloud Function)
+//
+// exports.scheduledJumuaReminder = functions
+//   .region('europe-west1')
+//   .pubsub
+//   .schedule('30 11 * * 5')
+//   .timeZone('Europe/Paris')
+//   .onRun(async (context) => { ... });
 
 // ==================== RAPPEL PRIERES DYNAMIQUE ====================
 // DESACTIVE: Les notifications de priere sont maintenant gerees localement
@@ -1524,6 +1475,8 @@ exports.createSubscription = functions
         stripeCustomerId: customer.id,
         stripeSubscriptionId: subscription.id,
         cotisationType: 'mensuel',
+        status: 'en_attente_paiement',
+        statut: 'en_attente_paiement',
       });
 
       console.log('IDs Stripe sauvegardés dans Firestore');
@@ -1709,6 +1662,8 @@ exports.stripeWebhook = functions
               if (memberRef && memberDoc && memberDoc.exists) {
                 transaction.update(memberRef, {
                   status: 'actif',
+                  statut: 'actif',
+                  aPaye: true,
                   datePaiement: admin.firestore.FieldValue.serverTimestamp(),
                   montantPaye: montantCotisation,
                   stripePaymentId: paymentIntentId,
@@ -1824,46 +1779,16 @@ exports.stripeWebhook = functions
           const memberId = memberDoc.id;
           const memberData = memberDoc.data();
 
-          // Créer un document payment pour ce renouvellement
-          // Bug 3 Fix: utiliser invoice.id comme docId pour idempotence
-          const paymentRef = admin.firestore().collection('payments').doc(invoice.id);
-          await paymentRef.set({
-            stripePaymentIntentId: invoice.payment_intent,
-            stripeSubscriptionId: subscriptionId,
-            stripeInvoiceId: invoice.id,
-            amount: amountEuros,
-            montant: amountEuros,
-            currency: invoice.currency,
-            status: 'succeeded',
-            type: 'cotisation',
-            description: 'Renouvellement cotisation mensuelle',
-            memberId: metadata.memberIdDisplay || '',
-            memberName: memberData.prenom + ' ' + memberData.nom,
-            period: 'mensuel',
-            source: 'stripe_subscription',
-            metadata: {
-              memberId: memberId,
-              memberIdDisplay: metadata.memberIdDisplay || '',
-              memberName: memberData.prenom + ' ' + memberData.nom,
-              email: email,
-              period: 'mensuel',
-            },
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-
           // Étendre la date de fin de cotisation de 1 mois
           const now = new Date();
           let newEndDate;
 
           if (memberData.cotisation?.dateFin) {
             const currentEnd = memberData.cotisation.dateFin.toDate();
-            // Si la date de fin est dans le futur, on ajoute 1 mois à partir de cette date
-            // Sinon, on ajoute 1 mois à partir d'aujourd'hui
             if (currentEnd > now) {
               newEndDate = new Date(currentEnd);
               const origDay1 = newEndDate.getDate();
               newEndDate.setMonth(newEndDate.getMonth() + 1);
-              // Bug 5 Fix: débordement mois (31 jan → 3 mars)
               if (newEndDate.getDate() !== origDay1) newEndDate.setDate(0);
             } else {
               newEndDate = new Date(now);
@@ -1878,26 +1803,55 @@ exports.stripeWebhook = functions
             if (newEndDate.getDate() !== origDay3) newEndDate.setDate(0);
           }
 
-          // Mettre à jour le membre
-          await memberDoc.ref.update({
-            status: 'actif',
-            datePaiement: admin.firestore.FieldValue.serverTimestamp(),
-            montantPaye: amountEuros,
-            stripePaymentId: invoice.payment_intent,
-            cotisation: {
-              type: 'mensuel',
+          // Transaction atomique : payment + member update + idempotence
+          const paymentRef = admin.firestore().collection('payments').doc(invoice.id);
+          const memberRefTx = memberDoc.ref;
+          await admin.firestore().runTransaction(async (t) => {
+            t.set(paymentRef, {
+              stripePaymentIntentId: invoice.payment_intent,
+              stripeSubscriptionId: subscriptionId,
+              stripeInvoiceId: invoice.id,
+              amount: amountEuros,
               montant: amountEuros,
-              dateDebut: memberData.cotisation?.dateDebut || admin.firestore.Timestamp.fromDate(now),
-              dateFin: admin.firestore.Timestamp.fromDate(newEndDate),
-            },
-          });
+              currency: invoice.currency,
+              status: 'succeeded',
+              type: 'cotisation',
+              description: 'Renouvellement cotisation mensuelle',
+              memberId: metadata.memberIdDisplay || '',
+              memberName: memberData.prenom + ' ' + memberData.nom,
+              period: 'mensuel',
+              source: 'stripe_subscription',
+              metadata: {
+                memberId: memberId,
+                memberIdDisplay: metadata.memberIdDisplay || '',
+                memberName: memberData.prenom + ' ' + memberData.nom,
+                email: email,
+                period: 'mensuel',
+              },
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
 
-          // Bug 3 Fix: Marquer l'invoice comme traitée (idempotence)
-          await invoiceProcessedRef.set({
-            processedAt: admin.firestore.FieldValue.serverTimestamp(),
-            type: 'invoice_payment',
-            invoiceId: invoice.id,
-            subscriptionId: subscriptionId,
+            t.update(memberRefTx, {
+              status: 'actif',
+              statut: 'actif',
+              aPaye: true,
+              datePaiement: admin.firestore.FieldValue.serverTimestamp(),
+              montantPaye: amountEuros,
+              stripePaymentId: invoice.payment_intent,
+              cotisation: {
+                type: 'mensuel',
+                montant: amountEuros,
+                dateDebut: memberData.cotisation?.dateDebut || admin.firestore.Timestamp.fromDate(now),
+                dateFin: admin.firestore.Timestamp.fromDate(newEndDate),
+              },
+            });
+
+            t.set(invoiceProcessedRef, {
+              processedAt: admin.firestore.FieldValue.serverTimestamp(),
+              type: 'invoice_payment',
+              invoiceId: invoice.id,
+              subscriptionId: subscriptionId,
+            });
           });
 
           console.log('Cotisation renouvelée jusqu\'au:', newEndDate.toISOString());
@@ -5240,7 +5194,7 @@ exports.checkExpiringCotisations = functions
           // Passer le membre en sympathisant
           await memberDoc.ref.update({
             status: 'sympathisant',
-            statut: 'sympathisant',
+            aPaye: false,
             cotisationExpiredAt: admin.firestore.FieldValue.serverTimestamp(),
           });
         }

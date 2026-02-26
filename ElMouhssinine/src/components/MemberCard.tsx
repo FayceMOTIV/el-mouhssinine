@@ -10,6 +10,7 @@ const CARD_HEIGHT = CARD_WIDTH * 0.6;
 
 export type MembershipStatus = 'active' | 'expiring' | 'expired' | 'inactive' | 'unpaid' | 'pending_signature' | 'none';
 
+// Build 249 - Fix: reconnaît les statuts français de Firebase + date d'expiration
 export const getMembershipStatus = (member: MemberCardProps['member']): MembershipStatus => {
   if (member?.status === 'en_attente_paiement' || member?.status === 'unpaid') {
     return 'unpaid';
@@ -17,7 +18,24 @@ export const getMembershipStatus = (member: MemberCardProps['member']): Membersh
   if (member?.status === 'en_attente_signature') {
     return 'pending_signature';
   }
-  if (!member?.membershipExpirationDate) return 'none';
+  // Statuts français directs
+  if (member?.status === 'annule' || member?.status === 'annulé' || member?.status === 'aucun') {
+    return 'inactive';
+  }
+  if (member?.status === 'expire' || member?.status === 'expiré') {
+    return 'expired';
+  }
+  if (member?.status === 'en_attente_validation') {
+    return 'pending_signature';
+  }
+  if (member?.status === 'sympathisant') {
+    return 'none';
+  }
+  if (!member?.membershipExpirationDate) {
+    // Si pas de date mais statut actif en français, considérer actif
+    if (member?.status === 'actif') return 'active';
+    return 'none';
+  }
 
   let expiration: Date;
   if (typeof member.membershipExpirationDate === 'object' && member.membershipExpirationDate?.toDate) {
@@ -57,13 +75,21 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth }) => {
   const width = cardWidth || CARD_WIDTH;
   const height = width * 0.55;
 
-  const isExpired = member?.status === 'expired' || member?.status === 'inactive';
+  // Build 249 - Fix: utilise statuts français de Firebase (expire, annule, en_attente_*)
+  const isExpired = member?.status === 'expired' || member?.status === 'inactive'
+    || member?.status === 'expire' || member?.status === 'annule' || member?.status === 'aucun';
   const isPendingSignature = member?.status === 'en_attente_signature';
   const isPendingPayment = member?.status === 'en_attente_paiement' || member?.status === 'unpaid';
+  const isPendingValidation = member?.status === 'en_attente_validation';
+  const isSympathisant = member?.status === 'sympathisant';
   const badgeText = isPendingSignature
     ? t('memberCardPendingSignature')
     : isPendingPayment
     ? t('memberCardPendingPayment')
+    : isPendingValidation
+    ? (isRTL ? 'في انتظار التحقق' : 'En attente')
+    : isSympathisant
+    ? (isRTL ? 'متعاطف' : 'Sympathisant')
     : isExpired
     ? t('memberCardExpired')
     : t('memberCardActive');
@@ -71,6 +97,10 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth }) => {
     ? '#F59E0B'
     : isPendingPayment
     ? '#F59E0B'
+    : isPendingValidation
+    ? '#8B5CF6'
+    : isSympathisant
+    ? '#06B6D4'
     : isExpired
     ? '#EF4444'
     : '#10B981';

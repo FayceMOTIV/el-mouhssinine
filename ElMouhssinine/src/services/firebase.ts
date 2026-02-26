@@ -522,7 +522,7 @@ export const createDonation = async (donation: Omit<Donation, 'id' | 'createdAt'
       projetId: donation.projectId,
       projetNom: donation.projectName,
       modePaiement: donation.paymentMethod,
-      statut: donation.status,
+      status: donation.status,
       date: firestore.FieldValue.serverTimestamp(),
     });
     return docRef.id;
@@ -594,7 +594,7 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
         projetNom: params.projectName,
         modePaiement: params.paymentMethod,
         stripePaymentIntentId: params.stripePaymentIntentId,
-        statut: 'completed',
+        status: 'completed',
         isAnonymous: params.isAnonymous || false,
         source: 'app_mobile',
         date: firestore.FieldValue.serverTimestamp(),
@@ -710,7 +710,7 @@ export const addCotisation = async (params: AddCotisationParams): Promise<string
         modePaiement: params.paymentMethod,
         stripePaymentIntentId: params.stripePaymentIntentId,
         type: 'cotisation',
-        statut: 'completed',
+        status: 'completed',
         source: 'app_mobile',
         period: params.period || 'annuel',
         date: firestore.FieldValue.serverTimestamp(),
@@ -738,7 +738,6 @@ export const addCotisation = async (params: AddCotisationParams): Promise<string
         const memberDoc = await transaction.get(memberRef);
         if (memberDoc.exists()) {
           const memberUpdate: any = {
-            statut: 'actif',
             status: 'actif',
             datePaiement: firestore.FieldValue.serverTimestamp(),
             montantPaye: params.amount,

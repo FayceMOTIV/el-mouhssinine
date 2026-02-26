@@ -37,7 +37,7 @@ import {
 } from '../services/firebase';
 import { AuthService, MemberProfile } from '../services/auth';
 import { makePayment, makeApplePayPayment, makeSubscription, makeApplePaySubscription, showPaymentError, showPaymentSuccess } from '../services/stripe';
-import { subscribeToMembersTopic, saveFCMTokenToFirestore } from '../services/notifications';
+import { subscribeToMembersTopic, saveFCMTokenToFirestore, removeFCMTokenFromFirestore } from '../services/notifications';
 import { useLanguage } from '../context/LanguageContext';
 import MemberCard from '../components/MemberCard';
 import MemberCardFullScreen from '../components/MemberCardFullScreen';
@@ -142,9 +142,13 @@ const MemberScreen = () => {
   // EFFECTS
   // ============================================================
 
-  // Listener pour profil membre en temps réel
-  const [memberProfileUnsubscribe, setMemberProfileUnsubscribe] = useState<(() => void) | null>(null);
-  const [paymentHistoryUnsubscribe, setPaymentHistoryUnsubscribe] = useState<(() => void) | null>(null);
+  // Listener pour profil membre en temps réel (useRef pour éviter stale closure avec useState)
+  const memberProfileUnsubscribeRef = useRef<(() => void) | null>(null);
+  const paymentHistoryUnsubscribeRef = useRef<(() => void) | null>(null);
+  const donationHistoryUnsubscribeRef = useRef<(() => void) | null>(null);
+  // Build 249 - Refs pour fusionner payments + donations en temps réel
+  const paymentsRef = React.useRef<any[]>([]);
+  const donationsRef = React.useRef<any[]>([]);
 
   useEffect(() => {
     const unsubscribe = AuthService.onAuthStateChanged(async (user) => {
@@ -156,13 +160,17 @@ const MemberScreen = () => {
       setIsLoading(true);
 
       // Nettoyer les anciens listeners si existants
-      if (memberProfileUnsubscribe) {
-        memberProfileUnsubscribe();
-        setMemberProfileUnsubscribe(null);
+      if (memberProfileUnsubscribeRef.current) {
+        memberProfileUnsubscribeRef.current();
+        memberProfileUnsubscribeRef.current = null;
       }
-      if (paymentHistoryUnsubscribe) {
-        paymentHistoryUnsubscribe();
-        setPaymentHistoryUnsubscribe(null);
+      if (paymentHistoryUnsubscribeRef.current) {
+        paymentHistoryUnsubscribeRef.current();
+        paymentHistoryUnsubscribeRef.current = null;
+      }
+      if (donationHistoryUnsubscribeRef.current) {
+        donationHistoryUnsubscribeRef.current();
+        donationHistoryUnsubscribeRef.current = null;
       }
 
       if (user) {
@@ -225,55 +233,76 @@ const MemberScreen = () => {
           setIsLoading(false);
         });
 
-        setMemberProfileUnsubscribe(() => unsubMember);
+        memberProfileUnsubscribeRef.current = unsubMember;
 
-        // Historique des paiements en temps réel (onSnapshot)
+        // Build 249 - Historique paiements + dons fusionnés en temps réel
         setLoadingHistory(true);
+
+        // Fonction de fusion payments + donations, triés par date
+        const mergeAndSetHistory = () => {
+          const all = [...paymentsRef.current, ...donationsRef.current];
+          all.sort((a: any, b: any) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+            return dateB.getTime() - dateA.getTime();
+          });
+          setPaymentHistory(all);
+          // Calculer les années disponibles dynamiquement
+          const yearsSet = new Set<number>([new Date().getFullYear()]);
+          all.forEach((p: any) => {
+            const d = p.createdAt?.toDate?.() || new Date(p.createdAt);
+            if (d && !isNaN(d.getTime())) yearsSet.add(d.getFullYear());
+          });
+          setAvailableYears(Array.from(yearsSet).sort((a, b) => b - a));
+          setLoadingHistory(false);
+        };
+
+        // Listener cotisations (collection payments)
         const unsubHistory = firestore()
           .collection('payments')
           .where('metadata.memberId', '==', user.uid)
           .onSnapshot(
             (snapshot) => {
-              const payments = snapshot.docs.map(doc => ({
+              paymentsRef.current = snapshot.docs.map(doc => ({
                 id: doc.id,
+                _type: 'cotisation',
                 ...doc.data()
               }));
-              // Tri côté client (plus fiable sans index Firestore composite)
-              payments.sort((a: any, b: any) => {
-                const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
-                const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
-                return dateB.getTime() - dateA.getTime();
-              });
-              setPaymentHistory(payments);
-              // Calculer les années disponibles dynamiquement
-              const yearsSet = new Set<number>([new Date().getFullYear()]);
-              payments.forEach((p: any) => {
-                const d = p.createdAt?.toDate?.() || new Date(p.createdAt);
-                if (d && !isNaN(d.getTime())) yearsSet.add(d.getFullYear());
-              });
-              setAvailableYears(Array.from(yearsSet).sort((a, b) => b - a));
-              setLoadingHistory(false);
+              mergeAndSetHistory();
             },
             (error) => {
               if (__DEV__) console.error('Error loading payment history:', error);
               setLoadingHistory(false);
             }
           );
-        setPaymentHistoryUnsubscribe(() => unsubHistory);
+        paymentHistoryUnsubscribeRef.current = unsubHistory;
+
+        // Listener dons (collection donations)
+        const unsubDonations = firestore()
+          .collection('donations')
+          .where('userId', '==', user.uid)
+          .onSnapshot(
+            (snapshot) => {
+              donationsRef.current = snapshot.docs.map(doc => ({
+                id: doc.id,
+                _type: 'donation',
+                ...doc.data()
+              }));
+              mergeAndSetHistory();
+            },
+            (error) => {
+              if (__DEV__) console.error('Error loading donation history:', error);
+            }
+          );
+        donationHistoryUnsubscribeRef.current = unsubDonations;
 
         // S'abonner aux notifications et sauvegarder le token
         await subscribeToMembersTopic();
         await saveFCMTokenToFirestore(user.uid);
       } else {
-        // Cleanup des listeners lors de la déconnexion
-        if (memberProfileUnsubscribe) {
-          memberProfileUnsubscribe();
-          setMemberProfileUnsubscribe(null);
-        }
-        if (paymentHistoryUnsubscribe) {
-          paymentHistoryUnsubscribe();
-          setPaymentHistoryUnsubscribe(null);
-        }
+        // Listeners déjà nettoyés en haut du callback (lignes 163-174)
+        paymentsRef.current = [];
+        donationsRef.current = [];
         setIsLoggedIn(false);
         setMemberProfile(null);
         setIsPaid(false);
@@ -289,11 +318,14 @@ const MemberScreen = () => {
 
     return () => {
       unsubscribe();
-      if (memberProfileUnsubscribe) {
-        memberProfileUnsubscribe();
+      if (memberProfileUnsubscribeRef.current) {
+        memberProfileUnsubscribeRef.current();
       }
-      if (paymentHistoryUnsubscribe) {
-        paymentHistoryUnsubscribe();
+      if (paymentHistoryUnsubscribeRef.current) {
+        paymentHistoryUnsubscribeRef.current();
+      }
+      if (donationHistoryUnsubscribeRef.current) {
+        donationHistoryUnsubscribeRef.current();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Runs once on mount, cleanup handled internally
@@ -561,6 +593,11 @@ const MemberScreen = () => {
           text: t('logout'),
           style: 'destructive',
           onPress: async () => {
+            // Supprimer le token FCM avant déconnexion
+            const uid = AuthService.getCurrentUser()?.uid;
+            if (uid) {
+              await removeFCMTokenFromFirestore(uid).catch(() => {});
+            }
             await AuthService.signOut();
           },
         },
@@ -1461,10 +1498,10 @@ const MemberScreen = () => {
               return null;
             })()}
 
-            {/* Historique des paiements par année */}
+            {/* Build 249 - Historique paiements + dons par année */}
             <View style={styles.card}>
               <Text style={[styles.cardTitle, { marginBottom: 16 }]}>
-                💳 Historique des paiements
+                💳 Historique des paiements et dons
               </Text>
 
               {/* Boutons années */}
@@ -1519,11 +1556,20 @@ const MemberScreen = () => {
                         year: 'numeric'
                       });
 
-                      const type = payment.metadata?.period === 'mensuel' ? 'Mensuel' : 'Annuel';
+                      // Build 249 - Affichage différencié dons vs cotisations
+                      const isDonation = payment._type === 'donation';
+                      const type = isDonation
+                        ? `Don${payment.projetNom ? ' — ' + payment.projetNom : ''}`
+                        : payment.metadata?.period === 'mensuel' ? 'Cotisation Mensuel' : 'Cotisation Annuel';
 
                       let status = 'payé';
                       let statusColor = colors.accent;
-                      if (payment.status === 'refunded') {
+                      if (isDonation) {
+                        if (payment.statut === 'refunded') {
+                          status = 'remboursé';
+                          statusColor = '#f97316';
+                        }
+                      } else if (payment.status === 'refunded') {
                         status = 'remboursé';
                         statusColor = '#f97316';
                       } else if (payment.status === 'failed') {

@@ -392,7 +392,8 @@ const DonationsScreen = () => {
 
       if (result.success && result.paymentIntentId) {
         // Enregistrer le don dans Firebase avec donorType + donorInfo
-        await addDonation({
+        // Retry une fois si l'écriture Firebase échoue (paiement déjà confirmé par Stripe)
+        const donationData = {
           projectId: selectedProject || '',
           projectName: project?.name || '',
           amount,
@@ -402,7 +403,14 @@ const DonationsScreen = () => {
           donorEmail: donorEmail || currentUser?.email?.toLowerCase() || '',
           donorType: (donorFormFilled || donPage === 'formulaire') ? donorType : undefined,
           donorInfo: (donorFormFilled || donPage === 'formulaire') ? getDonorInfo() : undefined,
-        });
+        };
+        try {
+          await addDonation(donationData);
+        } catch (firebaseError) {
+          // Retry une fois — le paiement Stripe est déjà confirmé
+          if (__DEV__) console.warn('[Donations] Firebase write failed, retrying...', firebaseError);
+          await addDonation(donationData);
+        }
 
         // Fermer le modal et afficher succès
         setShowPaymentModal(false);
@@ -430,7 +438,6 @@ const DonationsScreen = () => {
         setDonorCompanyName('');
         setDonorSiret('');
         setDonorLegalRep('');
-        setAcceptRecuFiscal(true);
         setDonorFormFilled(false);
         setDonPage('choix');
       } else {
@@ -538,6 +545,21 @@ const DonationsScreen = () => {
               >
                 <Text style={[styles.secondaryBtnText, styles.zakatBtnText, isRTL && styles.rtlText]}>🧮 {t('calculateZakat')}</Text>
               </TouchableOpacity>
+
+              {/* Reçu fiscal */}
+              <View style={styles.receiptInfoCard}>
+                <Text style={styles.receiptInfoIcon}>🧾</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.receiptInfoTitle, isRTL && styles.rtlText]}>
+                    {language === 'ar' ? 'إيصال ضريبي' : 'Reçu fiscal'}
+                  </Text>
+                  <Text style={[styles.receiptInfoDesc, isRTL && styles.rtlText]}>
+                    {language === 'ar'
+                      ? 'تبرعاتكم لعام 2026 معفاة من الضرائب. سيتم إرسال الإيصال الضريبي في بداية 2027.'
+                      : 'Vos dons 2026 sont déductibles des impôts. Le reçu fiscal sera envoyé début 2027.'}
+                  </Text>
+                </View>
+              </View>
 
               {/* Moyens de paiement acceptes */}
               <View style={styles.paymentSection}>
@@ -1870,6 +1892,31 @@ const styles = StyleSheet.create({
   },
   zakatBtnText: {
     color: colors.success,
+  },
+  receiptInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.accent + '12',
+    borderWidth: 1,
+    borderColor: colors.accent + '30',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.lg,
+    gap: spacing.md,
+  },
+  receiptInfoIcon: {
+    fontSize: moderateScale(28),
+  },
+  receiptInfoTitle: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.accent,
+    marginBottom: 2,
+  },
+  receiptInfoDesc: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
   disclaimer: {
     fontSize: fontSize.sm,

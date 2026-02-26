@@ -159,16 +159,32 @@ export const saveFCMTokenToFirestore = async (userId: string): Promise<boolean> 
       return false;
     }
 
-    // Mettre à jour le document membre avec le token FCM
-    await firestore().collection('members').doc(userId).update({
+    // Mettre à jour le document membre avec le token FCM (set+merge pour éviter crash si doc inexistant)
+    await firestore().collection('members').doc(userId).set({
       fcmToken: token,
       fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
-    });
+    }, { merge: true });
 
     logger.log('[FCM] Token sauvegardé pour userId:', userId);
     return true;
   } catch (error) {
     logger.error('[FCM] Erreur sauvegarde token:', error);
+    return false;
+  }
+};
+
+// Supprimer le token FCM de Firestore lors de la déconnexion
+export const removeFCMTokenFromFirestore = async (userId: string): Promise<boolean> => {
+  try {
+    if (!userId) return false;
+    await firestore().collection('members').doc(userId).set({
+      fcmToken: firestore.FieldValue.delete(),
+      fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    logger.log('[FCM] Token supprimé pour userId:', userId);
+    return true;
+  } catch (error) {
+    logger.error('[FCM] Erreur suppression token:', error);
     return false;
   }
 };
@@ -323,9 +339,13 @@ export const requestNotificationPermission = async () => {
 };
 
 // Programmer la notification Jumu'a (chaque vendredi à 12h30)
+// NOTE: Désactivé — prayerNotifications.ts gère déjà la notification Jumu'a
+// pour éviter la triple notification (local + prayerNotifications + Cloud Function)
 export const scheduleJumuaReminder = async (language: 'fr' | 'ar' = 'fr') => {
-  // Annuler l'ancienne si existe
+  // Annuler l'ancienne notification standalone pour éviter doublon avec prayerNotifications
   await notifee.cancelNotification('jumua-reminder');
+  logger.log("[Jumu'a] scheduleJumuaReminder désactivé — géré par prayerNotifications");
+  return;
 
   // Créer le channel Android
   await notifee.createChannel({
