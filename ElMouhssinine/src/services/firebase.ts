@@ -528,7 +528,7 @@ export const createDonation = async (donation: Omit<Donation, 'id' | 'createdAt'
     return docRef.id;
   } catch (error) {
     logger.error('[Firebase] createDonation error:', error);
-    return `error-donation-${Date.now()}`;
+    throw error;
   }
 };
 
@@ -1617,10 +1617,16 @@ export const getMyMembership = async (email: string): Promise<MyMembership | nul
     const doc = snapshot.docs[0];
     const data = doc.data();
 
-    // Déterminer le statut - null signifie "actif" (legacy du backoffice)
+    // Déterminer le statut — ALIGNÉ avec buildMemberProfile
     const hasValidCotisation = data.cotisation?.dateFin &&
       (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
-    const memberStatus = data.status || (hasValidCotisation ? 'actif' : 'en_attente_signature');
+    const memberStatus = data.status === 'actif' || hasValidCotisation ? 'actif' :
+      data.status === 'en_attente_paiement' ? 'en_attente_paiement' :
+      data.status === 'en_attente_validation' ? 'en_attente_validation' :
+      data.status === 'en_attente_signature' ? 'en_attente_signature' :
+      data.status === 'sympathisant' ? 'sympathisant' :
+      data.status === 'annule' ? 'annule' :
+      data.status || 'en_attente_signature';
 
     return {
       id: doc.id,
@@ -1674,10 +1680,16 @@ export const subscribeToMyMembership = (
           const doc = snapshot.docs[0];
           const data = doc.data();
 
-          // Déterminer le statut
+          // Déterminer le statut — ALIGNÉ avec buildMemberProfile
           const hasValidCotisation = data.cotisation?.dateFin &&
             (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
-          const memberStatus = data.status || (hasValidCotisation ? 'actif' : 'en_attente_signature');
+          // Logique identique à buildMemberProfile pour cohérence carte/adhésions
+          const memberStatus = data.status === 'actif' || hasValidCotisation ? 'actif' :
+            data.status === 'en_attente_paiement' ? 'en_attente_paiement' :
+            data.status === 'en_attente_validation' ? 'en_attente_validation' :
+            data.status === 'en_attente_signature' ? 'en_attente_signature' :
+            data.status === 'sympathisant' ? 'sympathisant' :
+            data.status === 'annule' ? 'annule' : 'expire';
 
           callback({
             id: doc.id,
@@ -1804,9 +1816,13 @@ const buildMemberProfile = (docId: string, data: any): MemberProfileRealtime => 
   const hasValidCotisation = data.cotisation?.dateFin &&
     (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
 
+  // Build 249 - Fix: aligné avec subscribeToMyMembership pour cohérence carte/adhésions
   const cotisationStatus = data.status === 'actif' || hasValidCotisation ? 'actif' :
     data.status === 'en_attente_paiement' ? 'en_attente_paiement' :
-    data.status === 'sympathisant' ? 'sympathisant' : 'expire';
+    data.status === 'en_attente_validation' ? 'en_attente_validation' :
+    data.status === 'en_attente_signature' ? 'en_attente_signature' :
+    data.status === 'sympathisant' ? 'sympathisant' :
+    data.status === 'annule' ? 'annule' : 'expire';
 
   return {
     id: docId,

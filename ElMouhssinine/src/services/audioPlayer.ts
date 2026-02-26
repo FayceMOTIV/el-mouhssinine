@@ -1,17 +1,23 @@
-import TrackPlayer, { Capability, State, AppKilledPlaybackBehavior } from 'react-native-track-player';
+import TrackPlayer, { Capability, State, AppKilledPlaybackBehavior, IOSCategoryMode, IOSCategory, IOSCategoryOptions } from 'react-native-track-player';
 import { logger } from '../utils';
 
 let isSetup = false;
 let setupPromise: Promise<void> | null = null;
 
-export const setupPlayer = async () => {
+// Build 249 - Fix: deadlock setupPromise + iOS audio category explicite
+export const setupPlayer = async (): Promise<boolean> => {
   // Si déjà configuré, retourner immédiatement
-  if (isSetup) return;
+  if (isSetup) return true;
 
   // Si une configuration est en cours, attendre qu'elle se termine
   if (setupPromise) {
-    await setupPromise;
-    return;
+    try {
+      await setupPromise;
+    } catch {
+      // La tentative précédente a échoué, on va réessayer
+      setupPromise = null;
+    }
+    if (isSetup) return true;
   }
 
   setupPromise = (async () => {
@@ -28,6 +34,13 @@ export const setupPlayer = async () => {
 
       await TrackPlayer.setupPlayer({
         waitForBuffer: true,
+        // iOS: catégorie Playback pour que l'audio joue même en mode silencieux
+        iosCategory: IOSCategory.Playback,
+        iosCategoryMode: IOSCategoryMode.SpokenAudio,
+        iosCategoryOptions: [
+          IOSCategoryOptions.AllowAirPlay,
+          IOSCategoryOptions.AllowBluetooth,
+        ],
       });
 
       await TrackPlayer.updateOptions({
@@ -53,13 +66,21 @@ export const setupPlayer = async () => {
         logger.log('[AudioPlayer] Player était déjà initialisé');
       } else {
         logger.error('[AudioPlayer] Erreur setup:', error);
-        throw error;
+        // Ne pas throw - laisser le player dans un état non-initialisé
+        // useQuranPlayer gérera isPlayerReady=false
+        return;
       }
     }
   })();
 
-  await setupPromise;
-  setupPromise = null;
+  try {
+    await setupPromise;
+  } finally {
+    // TOUJOURS nettoyer setupPromise, même en cas d'erreur
+    // pour éviter un deadlock permanent
+    setupPromise = null;
+  }
+  return isSetup;
 };
 
 export const playAudio = async (url: string, title: string, artist: string = 'Coran') => {
@@ -101,8 +122,8 @@ export const stopAudio = async () => {
 
 export const getIsPlaying = async () => {
   try {
-    const state = await TrackPlayer.getState();
-    return state === State.Playing;
+    const state = await TrackPlayer.getPlaybackState();
+    return state.state === State.Playing;
   } catch {
     return false;
   }

@@ -272,7 +272,7 @@ const MyMembershipsScreen = () => {
                   <View style={styles.unifiedCardInfoItem}>
                     <Text style={styles.unifiedCardInfoLabel}>📋 Formule</Text>
                     <Text style={[styles.unifiedCardInfoValue, styles.infoHighlight]}>
-                      {formatFormule(myMembership.cotisation?.type || myMembership.formule)}
+                      {formatFormule(myMembership.formule)}
                     </Text>
                   </View>
                   <View style={styles.unifiedCardInfoItem}>
@@ -294,7 +294,7 @@ const MyMembershipsScreen = () => {
                   <Text style={styles.paymentStatusLabel}>
                     {language === 'ar' ? 'حالة الدفع:' : 'Paiement:'}
                   </Text>
-                  {myMembership.status === 'actif' || myMembership.datePaiement ? (
+                  {myMembership.status === 'actif' || myMembership.status === 'en_attente_validation' || myMembership.datePaiement ? (
                     <View style={[styles.paymentBadge, styles.paymentPaid]}>
                       <Text style={styles.paymentBadgeText}>✓ Payé</Text>
                     </View>
@@ -485,7 +485,7 @@ const MyMembershipsScreen = () => {
                   <Text style={styles.paymentStatusLabel}>
                     {language === 'ar' ? 'حالة الدفع:' : 'Paiement:'}
                   </Text>
-                  {member.datePaiement ? (
+                  {member.status === 'actif' || member.datePaiement ? (
                     <View style={[styles.paymentBadge, styles.paymentPaid]}>
                       <Text style={styles.paymentBadgeText}>✓ Payé</Text>
                     </View>
@@ -493,9 +493,13 @@ const MyMembershipsScreen = () => {
                     <View style={[styles.paymentBadge, styles.paymentPending]}>
                       <Text style={styles.paymentBadgeText}>⏳ En attente virement</Text>
                     </View>
+                  ) : member.status === 'en_attente_validation' || member.status === 'en_attente_signature' ? (
+                    <View style={[styles.paymentBadge, styles.paymentPending]}>
+                      <Text style={styles.paymentBadgeText}>⏳ En attente</Text>
+                    </View>
                   ) : (
-                    <View style={[styles.paymentBadge, styles.paymentPaid]}>
-                      <Text style={styles.paymentBadgeText}>✓ Payé</Text>
+                    <View style={[styles.paymentBadge, styles.paymentUnpaid]}>
+                      <Text style={styles.paymentBadgeText}>Non payé</Text>
                     </View>
                   )}
                 </View>
@@ -504,7 +508,7 @@ const MyMembershipsScreen = () => {
                 <View style={styles.memberListDetails}>
                   <Text style={styles.memberListDetail}>📞 {member.telephone || '-'}</Text>
                   <Text style={styles.memberListDetail}>
-                    💰 {formatFormule(member.cotisation?.type || member.formule)} • {member.cotisation?.montant || member.montant ? `${member.cotisation?.montant || member.montant} €` : '-'}
+                    💰 {formatFormule(member.formule)} • {member.montant ? `${member.montant} €` : '-'}
                   </Text>
                   {member.dateFin && (
                     <Text style={styles.memberListDetail}>
