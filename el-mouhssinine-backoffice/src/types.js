@@ -148,13 +148,14 @@ export const CotisationType = {
 
 // Statuts de cotisation
 export const CotisationStatut = {
+  SYMPATHISANT: 'sympathisant',
   ACTIF: 'actif',
   EXPIRE: 'expire',
-  EN_ATTENTE: 'en_attente',
+  AUCUN: 'aucun',
+  EN_ATTENTE_VALIDATION: 'en_attente_validation',
   EN_ATTENTE_SIGNATURE: 'en_attente_signature',
   EN_ATTENTE_PAIEMENT: 'en_attente_paiement',
-  EN_ATTENTE_VALIDATION: 'en_attente_validation',
-  AUCUN: 'aucun'
+  ANNULE: 'annule'
 }
 
 // Fichiers autorises
