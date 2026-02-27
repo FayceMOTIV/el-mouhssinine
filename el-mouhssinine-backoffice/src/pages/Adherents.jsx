@@ -33,11 +33,29 @@ import { fr } from 'date-fns/locale'
 
 // Helper: Détermine le statut de cotisation d'un membre (déplacé hors composant pour éviter re-renders)
 const getCotisationStatus = (membre) => {
+  // Non-payment statuses take priority
   if (membre.status === 'sympathisant') return CotisationStatut.SYMPATHISANT
   if (membre.status === 'en_attente_validation') return CotisationStatut.EN_ATTENTE_VALIDATION
   if (membre.status === 'en_attente_signature') return CotisationStatut.EN_ATTENTE_SIGNATURE
   if (membre.status === 'en_attente_paiement') return CotisationStatut.EN_ATTENTE_PAIEMENT
-  if (membre.status === 'actif') return CotisationStatut.ACTIF
+
+  // For 'actif' status, MUST check if cotisation.dateFin is still valid
+  // This fixes the consistency issue where backoffice showed ACTIF while app showed EXPIRÉ
+  if (membre.status === 'actif') {
+    if (!membre.cotisation?.dateFin) {
+      // Has 'actif' status but no dateFin = inconsistent data, needs correction
+      console.warn(`⚠️ Member ${membre.id} has status='actif' but no cotisation.dateFin - inconsistent state`)
+      return CotisationStatut.ACTIF
+    }
+    const dateFin = membre.cotisation.dateFin?.toDate?.() || new Date(membre.cotisation.dateFin)
+    if (isPast(dateFin)) {
+      // Cotisation has expired despite status='actif' - this was the bug!
+      return CotisationStatut.EXPIRE
+    }
+    return CotisationStatut.ACTIF
+  }
+
+  // Fallback: check dateFin if status not set
   if (!membre.cotisation?.dateFin) return CotisationStatut.AUCUN
   const dateFin = membre.cotisation.dateFin?.toDate?.() || new Date(membre.cotisation.dateFin)
   return isPast(dateFin) ? CotisationStatut.EXPIRE : CotisationStatut.ACTIF
@@ -323,6 +341,17 @@ export default function Adherents() {
     const isPaid = membre.aPaye || membre.datePaiement
     if (isPaid && isSigned) {
       updates.status = 'actif'
+      // FIX: Ensure cotisation.dateFin is set when marking as signed + paid
+      if (!membre.cotisation?.dateFin) {
+        const now = new Date()
+        const type = membre.cotisation?.type || membre.formule || 'annuel'
+        const dateFin = type === 'mensuel' ? addMonths(now, 1) : addYears(now, 1)
+        updates.cotisation = {
+          ...membre.cotisation,
+          dateDebut: membre.cotisation?.dateDebut || now,
+          dateFin: dateFin
+        }
+      }
     } else if (isPaid && !isSigned) {
       updates.status = 'en_attente_signature'
     } else {
@@ -407,11 +436,27 @@ export default function Adherents() {
 
     setSaving(true)
     try {
-      await updateDocument('members', membre.id, {
+      const updates = {
         status: 'actif',
         validatedAt: new Date(),
         validatedBy: 'bureau'
-      })
+      }
+
+      // FIX: Ensure cotisation.dateFin is set when validating adhesion
+      // This prevents the inconsistency where status='actif' but dateFin=null
+      if (!membre.cotisation?.dateFin) {
+        const now = new Date()
+        const type = membre.cotisation?.type || membre.formule || 'annuel'
+        const dateFin = type === 'mensuel' ? addMonths(now, 1) : addYears(now, 1)
+
+        updates.cotisation = {
+          ...membre.cotisation,
+          dateDebut: membre.cotisation?.dateDebut || now,
+          dateFin: dateFin
+        }
+      }
+
+      await updateDocument('members', membre.id, updates)
       toast.success(`Adhésion de ${membre.prenom} ${membre.nom} validée !`)
     } catch (err) {
       console.error('Error validating adhesion:', err)

@@ -18,7 +18,7 @@ export interface MemberProfile {
   nom?: string;
   prenom?: string;
   cotisationType: 'mensuel' | 'annuel' | null;
-  cotisationStatus: 'aucun' | 'actif' | 'expire' | 'en_attente_paiement' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature';
+  cotisationStatus: 'aucun' | 'actif' | 'expire' | 'en_attente_paiement' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' | 'annule';
   cotisationExpiry?: Date;
   phone?: string;
   address?: string;

@@ -41,7 +41,7 @@ import {
   DisplaySettings,
   RamadanSettings,
 } from '../services/firebase';
-import { PrayerAPI, PrayerTimings } from '../services/prayerApi';
+import { PrayerAPI, PrayerTimings, getParisDate } from '../services/prayerApi';
 import { PrayerTime, Announcement, Event, Janaza } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -96,7 +96,7 @@ const HomeScreen = () => {
   const navigation = useNavigation<any>();
   const { t, isRTL, language } = useLanguage();
   const [prayerTimes, setPrayerTimes] = useState<PrayerTime[]>(mockPrayerTimes);
-  const [nextPrayer, setNextPrayer] = useState({ name: 'Dhuhr', time: '13:15', icon: '☀️' });
+  const [nextPrayer, setNextPrayer] = useState({ name: 'Dhuhr', time: '13:15', icon: '☀️', isTomorrow: false });
   const [countdown, setCountdown] = useState('01:23:45');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -230,10 +230,12 @@ const HomeScreen = () => {
         const iconMap: Record<string, string> = {
           Fajr: '🌅', Dhuhr: '☀️', Asr: '🌤️', Maghrib: '🌅', Isha: '🌙'
         };
+        const isTomorrow = next.name.includes('(demain)') || next.name.includes('(غدا)');
         setNextPrayer({
           name: next.name,
           time: PrayerAPI.formatTime(next.time),
-          icon: iconMap[next.name.replace(' (demain)', '')] || '🕌'
+          icon: iconMap[next.name.replace(' (demain)', '').replace(' (غدا)', '')] || '🕌',
+          isTomorrow,
         });
       }
 
@@ -263,54 +265,62 @@ const HomeScreen = () => {
   }, [t]);
 
   // Calculer le countdown vers la prochaine priere
-  // Forcer Europe/Paris pour que le diff soit cohérent avec les horaires Mawaqit
+  // Utilise getParisDate() pour cohérence avec les horaires Mawaqit
   const calculateCountdown = useCallback(() => {
-    const now = new Date();
-    // Heure actuelle en Paris
-    const parisNow = new Date(
-      now.toLocaleString('en-US', { timeZone: 'Europe/Paris' })
-    );
+    try {
+      const parisNow = getParisDate();
 
-    const [hours, minutes] = nextPrayer.time.split(':').map(Number);
-    if (isNaN(hours) || isNaN(minutes)) {
-      setCountdown('00:00:00');
-      return;
+      const [hours, minutes] = nextPrayer.time.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes)) {
+        setCountdown('00:00:00');
+        return;
+      }
+
+      const target = new Date(parisNow.getTime());
+      target.setHours(hours, minutes, 0, 0);
+
+      // Si la prière est marquée "demain" (après Isha, les horaires ont déjà basculé),
+      // on met target à demain directement. Sinon, si l'heure est passée aujourd'hui,
+      // on avance d'un jour.
+      if (nextPrayer.isTomorrow) {
+        target.setDate(target.getDate() + 1);
+      } else if (target <= parisNow) {
+        target.setDate(target.getDate() + 1);
+      }
+
+      const diff = target.getTime() - parisNow.getTime();
+      if (diff < 0 || isNaN(diff)) {
+        setCountdown('00:00:00');
+        return;
+      }
+
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+
+      const newCountdown = [h, m, s]
+        .map(v => String(v).padStart(2, '0'))
+        .join(':');
+
+      setCountdown(newCountdown);
+
+      // Mettre à jour l'heure de Paris
+      const now = new Date();
+      const parisTimeStr = now.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Paris'
+      });
+      setParisTime(parisTimeStr);
+    } catch (error) {
+      // Fallback si getParisDate échoue
+      setCountdown('--:--:--');
     }
+  }, [nextPrayer.time, nextPrayer.isTomorrow]);
 
-    const target = new Date(parisNow);
-    target.setHours(hours, minutes, 0, 0);
-
-    if (target <= parisNow) {
-      target.setDate(target.getDate() + 1);
-    }
-
-    const diff = target.getTime() - parisNow.getTime();
-    if (diff < 0 || isNaN(diff)) {
-      setCountdown('00:00:00');
-      return;
-    }
-
-    const h = Math.floor(diff / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    const s = Math.floor((diff % 60000) / 1000);
-
-    const newCountdown = [h, m, s]
-      .map(v => String(v).padStart(2, '0'))
-      .join(':');
-
-    setCountdown(newCountdown);
-
-    // Mettre à jour l'heure de Paris
-    const parisTimeStr = now.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Europe/Paris'
-    });
-    setParisTime(parisTimeStr);
-  }, [nextPrayer.time]);
-
+  // useEffect 1: Charger les données et subscriptions Firebase (run au mount uniquement)
   useEffect(() => {
-    // Charger les donnees API (horaires de priere depuis Aladhan)
+    // Charger les donnees API (horaires de priere depuis Mawaqit)
     loadPrayerData();
 
     // Subscriptions Firebase
@@ -404,13 +414,6 @@ const HomeScreen = () => {
       }
     });
 
-    // Countdown timer
-    // Appel immédiat pour éviter le délai d'1 seconde
-    calculateCountdown();
-    const timer = setInterval(() => {
-      calculateCountdown();
-    }, 1000);
-
     return () => {
       unsubAnnouncements();
       unsubEvents();
@@ -422,9 +425,17 @@ const HomeScreen = () => {
       unsubGeneralSettings();
       unsubRamadan();
       unsubPopups();
-      clearInterval(timer);
     };
-  }, [loadPrayerData, calculateCountdown]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // useEffect 2: Countdown timer (séparé pour ne pas re-subscribe Firebase à chaque tick)
+  useEffect(() => {
+    // Appel immédiat pour éviter le délai d'1 seconde
+    calculateCountdown();
+    const timer = setInterval(calculateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [calculateCountdown]);
 
   // Scheduler les notifications locales de priere à chaque focus de l'écran
   // IMPORTANT: Les notifications iOS expirent, il faut les reprogrammer régulièrement

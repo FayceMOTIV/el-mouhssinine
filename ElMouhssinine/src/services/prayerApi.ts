@@ -1006,7 +1006,7 @@ export const PrayerAPI = {
       const [hours, minutes] = prayer.time.split(':').map(Number);
       const prayerMinutes = hours * 60 + minutes;
 
-      if (prayerMinutes > currentMinutes) {
+      if (prayerMinutes >= currentMinutes) {
         return prayer;
       }
     }
