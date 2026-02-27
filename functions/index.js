@@ -2023,12 +2023,13 @@ exports.stripeWebhook = functions
             const subMemberDoc = subMembersSnapshot.docs[0];
             const subMemberData = subMemberDoc.data();
             await subMemberDoc.ref.update({
-              status: 'expire',
+              status: 'sympathisant',
               cotisationType: null,
               stripeSubscriptionId: null,
+              aPaye: false,
               subscriptionCancelledAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-            console.log('Membre mis à jour en expired suite à annulation abonnement');
+            console.log('Membre passé en sympathisant suite à suppression abonnement Stripe');
 
             // Envoyer email de confirmation d'annulation
             const cancelEmail = subMemberData.email;
