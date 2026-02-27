@@ -4,7 +4,7 @@
 
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
-import { logger } from '../utils';
+import { logger, computeMemberStatus } from '../utils';
 import { firebase } from '@react-native-firebase/functions';
 import {
   Project,
@@ -1679,16 +1679,11 @@ export const subscribeToMyMembership = (
           const doc = snapshot.docs[0];
           const data = doc.data();
 
-          // Déterminer le statut — ALIGNÉ avec buildMemberProfile
-          const hasValidCotisation = data.cotisation?.dateFin &&
-            (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
-          // Logique identique à buildMemberProfile pour cohérence carte/adhésions
-          const memberStatus = data.status === 'actif' || hasValidCotisation ? 'actif' :
-            data.status === 'en_attente_paiement' ? 'en_attente_paiement' :
-            data.status === 'en_attente_validation' ? 'en_attente_validation' :
-            data.status === 'en_attente_signature' ? 'en_attente_signature' :
-            data.status === 'sympathisant' ? 'sympathisant' :
-            data.status === 'annule' ? 'annule' : 'expire';
+          // Source unique de verite — computeMemberStatus (utils/memberStatus.ts)
+          const memberStatus = computeMemberStatus({
+            status: data.status,
+            cotisationDateFin: data.cotisation?.dateFin,
+          });
 
           callback({
             id: doc.id,
@@ -1812,16 +1807,11 @@ export const subscribeToMemberProfile = (
 
 // Helper pour construire le profil membre
 const buildMemberProfile = (docId: string, data: any): MemberProfileRealtime => {
-  const hasValidCotisation = data.cotisation?.dateFin &&
-    (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
-
-  // Build 249 - Fix: aligné avec subscribeToMyMembership pour cohérence carte/adhésions
-  const cotisationStatus = data.status === 'actif' || hasValidCotisation ? 'actif' :
-    data.status === 'en_attente_paiement' ? 'en_attente_paiement' :
-    data.status === 'en_attente_validation' ? 'en_attente_validation' :
-    data.status === 'en_attente_signature' ? 'en_attente_signature' :
-    data.status === 'sympathisant' ? 'sympathisant' :
-    data.status === 'annule' ? 'annule' : 'expire';
+  // Source unique de verite — computeMemberStatus (utils/memberStatus.ts)
+  const resolvedStatus = computeMemberStatus({
+    status: data.status,
+    cotisationDateFin: data.cotisation?.dateFin,
+  });
 
   return {
     id: docId,
@@ -1831,13 +1821,13 @@ const buildMemberProfile = (docId: string, data: any): MemberProfileRealtime => 
     email: data.email || '',
     telephone: data.telephone || '',
     adresse: data.adresse || '',
-    status: data.status || (hasValidCotisation ? 'actif' : 'en_attente_signature'),
+    status: resolvedStatus,
     cotisation: {
       type: data.formule || data.cotisation?.type || null,
       montant: data.montant || data.cotisation?.montant || 0,
       dateDebut: data.cotisation?.dateDebut ? toDate(data.cotisation.dateDebut) : null,
       dateFin: data.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : null,
-      status: cotisationStatus,
+      status: resolvedStatus,
     },
   };
 };

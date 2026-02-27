@@ -2,60 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useLanguage } from '../context/LanguageContext';
+import { getStatusBadgeConfig } from '../utils';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_MARGIN = 12;
 const CARD_WIDTH = SCREEN_WIDTH - (CARD_MARGIN * 2);
 const CARD_HEIGHT = CARD_WIDTH * 0.6;
-
-export type MembershipStatus = 'active' | 'expiring' | 'expired' | 'inactive' | 'unpaid' | 'pending_signature' | 'none';
-
-// Build 249 - Fix: reconnaît les statuts français de Firebase + date d'expiration
-export const getMembershipStatus = (member: MemberCardProps['member']): MembershipStatus => {
-  if (member?.status === 'en_attente_paiement' || member?.status === 'unpaid') {
-    return 'unpaid';
-  }
-  if (member?.status === 'en_attente_signature') {
-    return 'pending_signature';
-  }
-  // Statuts français directs
-  if (member?.status === 'annule' || member?.status === 'annulé' || member?.status === 'aucun') {
-    return 'inactive';
-  }
-  if (member?.status === 'expire' || member?.status === 'expiré') {
-    return 'expired';
-  }
-  if (member?.status === 'en_attente_validation') {
-    return 'pending_signature';
-  }
-  if (member?.status === 'sympathisant') {
-    return 'none';
-  }
-  if (!member?.membershipExpirationDate) {
-    // Si pas de date mais statut actif en français, considérer actif
-    if (member?.status === 'actif') return 'active';
-    return 'none';
-  }
-
-  let expiration: Date;
-  if (typeof member.membershipExpirationDate === 'object' && member.membershipExpirationDate?.toDate) {
-    expiration = member.membershipExpirationDate.toDate();
-  } else if (member.membershipExpirationDate instanceof Date) {
-    expiration = member.membershipExpirationDate;
-  } else if (typeof member.membershipExpirationDate === 'string') {
-    expiration = new Date(member.membershipExpirationDate);
-  } else {
-    return 'none';
-  }
-
-  const now = new Date();
-  const diffDays = Math.floor((expiration.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (diffDays > 30) return 'active';
-  if (diffDays > 0) return 'expiring';
-  if (diffDays > -30) return 'expired';
-  return 'inactive';
-};
 
 interface MemberCardProps {
   member: {
@@ -75,35 +27,10 @@ const MemberCard: React.FC<MemberCardProps> = ({ member, cardWidth }) => {
   const width = cardWidth || CARD_WIDTH;
   const height = width * 0.55;
 
-  // Build 249 - Fix: utilise statuts français de Firebase (expire, annule, en_attente_*)
-  const isExpired = member?.status === 'expired' || member?.status === 'inactive'
-    || member?.status === 'expire' || member?.status === 'annule' || member?.status === 'aucun';
-  const isPendingSignature = member?.status === 'en_attente_signature';
-  const isPendingPayment = member?.status === 'en_attente_paiement' || member?.status === 'unpaid';
-  const isPendingValidation = member?.status === 'en_attente_validation';
-  const isSympathisant = member?.status === 'sympathisant';
-  const badgeText = isPendingSignature
-    ? t('memberCardPendingSignature')
-    : isPendingPayment
-    ? t('memberCardPendingPayment')
-    : isPendingValidation
-    ? (isRTL ? 'في انتظار التحقق' : 'En attente')
-    : isSympathisant
-    ? (isRTL ? 'متعاطف' : 'Sympathisant')
-    : isExpired
-    ? t('memberCardExpired')
-    : t('memberCardActive');
-  const badgeColor = isPendingSignature
-    ? '#F59E0B'
-    : isPendingPayment
-    ? '#F59E0B'
-    : isPendingValidation
-    ? '#8B5CF6'
-    : isSympathisant
-    ? '#06B6D4'
-    : isExpired
-    ? '#EF4444'
-    : '#10B981';
+  // Source unique de vérité : getStatusBadgeConfig (utils/memberStatus.ts)
+  const badgeConfig = getStatusBadgeConfig(member?.status || 'aucun');
+  const badgeText = isRTL ? badgeConfig.labelAr : badgeConfig.label;
+  const badgeColor = badgeConfig.color;
 
   const formatDate = () => {
     if (!member?.membershipExpirationDate) return '--/--';

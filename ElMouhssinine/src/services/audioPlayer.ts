@@ -128,3 +128,16 @@ export const getIsPlaying = async () => {
     return false;
   }
 };
+
+/**
+ * Réinitialise l'état du player pour éviter les crashs "already initialized"
+ * lors du retour sur l'écran Coran après navigation.
+ * Appeler dans le cleanup de useEffect du composant Coran.
+ */
+export const resetPlayer = async () => {
+  try {
+    await TrackPlayer.reset();
+  } catch {
+    // Ignorer si le player n'est pas initialisé
+  }
+};

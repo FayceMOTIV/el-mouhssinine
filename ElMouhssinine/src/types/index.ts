@@ -78,7 +78,7 @@ export interface Member {
   phone?: string;
   memberId: string;
   cotisationType: 'mensuel' | 'annuel' | null;
-  cotisationStatus: 'active' | 'expired' | 'none' | 'pending' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' | 'en_attente_paiement';
+  cotisationStatus: 'actif' | 'expire' | 'aucun' | 'annule' | 'en_attente_paiement' | 'en_attente_validation' | 'en_attente_signature' | 'sympathisant';
   nextPaymentDate?: Date;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;

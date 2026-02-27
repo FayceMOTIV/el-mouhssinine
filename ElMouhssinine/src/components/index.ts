@@ -6,8 +6,7 @@
 export { default as ProgressBar } from './ProgressBar';
 export { default as ArabicLetter } from './ArabicLetter';
 export { default as AudioPlayer } from './AudioPlayer';
-export { default as MemberCard, getMembershipStatus } from './MemberCard';
-export type { MembershipStatus } from './MemberCard';
+export { default as MemberCard } from './MemberCard';
 
 // UI/UX améliorés - Skeletons
 export {

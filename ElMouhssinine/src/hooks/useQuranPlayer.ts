@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert } from 'react-native';
 import TrackPlayer, { State, Event } from 'react-native-track-player';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setupPlayer } from '../services/audioPlayer';
+import { setupPlayer, resetPlayer } from '../services/audioPlayer';
 import { getVerseAudioUrl } from '../services/quranApi';
 
 interface Verse {
@@ -596,12 +596,15 @@ export const useQuranPlayer = ({
     reciterCodeRef.current = newReciterCode;
   }, []);
 
-  // Cleanup timeout on unmount
+  // Cleanup on unmount : reset player + clear timeout
   useEffect(() => {
     return () => {
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
       }
+      // Reset le player pour éviter les crashs "already initialized"
+      // lors du retour sur l'écran Coran après navigation
+      resetPlayer();
     };
   }, []);
 

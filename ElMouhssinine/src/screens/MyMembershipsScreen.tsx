@@ -23,7 +23,7 @@ import {
   InscribedMember,
   MosqueeInfo,
 } from '../services/firebase';
-// MemberCard supprimé - affichage liste uniquement
+import { getStatusBadgeConfig } from '../utils';
 
 const MyMembershipsScreen = () => {
   const navigation = useNavigation<any>();
@@ -117,21 +117,9 @@ const MyMembershipsScreen = () => {
     });
   };
 
-  // Obtenir le badge de statut
+  // Source unique de vérité : getStatusBadgeConfig (utils/memberStatus.ts)
   const getStatusBadge = (status: string) => {
-    const config: Record<string, { label: string; labelAr: string; color: string; bg: string }> = {
-      actif: { label: 'Actif', labelAr: 'نشط', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
-      en_attente_validation: { label: 'En attente validation', labelAr: 'في انتظار التحقق', color: '#8b5cf6', bg: 'rgba(139,92,246,0.15)' },
-      en_attente_signature: { label: 'En attente signature', labelAr: 'في انتظار التوقيع', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-      en_attente_paiement: { label: 'En attente paiement', labelAr: 'في انتظار الدفع', color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
-      expire: { label: 'Expiré', labelAr: 'منتهي', color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
-      sympathisant: { label: 'Sympathisant', labelAr: 'متعاطف', color: '#06b6d4', bg: 'rgba(6,182,212,0.15)' },
-      annule: { label: 'Annulé', labelAr: 'ملغى', color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
-      aucun: { label: 'Aucun', labelAr: 'لا يوجد', color: '#9ca3af', bg: 'rgba(156,163,175,0.15)' },
-    };
-
-    const statusConfig = config[status] || config.en_attente_validation;
-
+    const statusConfig = getStatusBadgeConfig(status);
     return (
       <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
         <Text style={[styles.statusText, { color: statusConfig.color }]}>
