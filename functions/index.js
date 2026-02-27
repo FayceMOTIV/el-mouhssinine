@@ -417,7 +417,9 @@ exports.onNotificationFromBackoffice = functions
       'announcements': 'announcements',
       'events': 'events',
       'janaza': 'janaza',
-      'prayer_reminders': 'jumua',
+      // B5.1 Fix: Jumu'a est gérée par les notifications locales (Notifee) côté app.
+      // Supprimer le mapping FCM pour éviter les doublons.
+      // 'prayer_reminders': 'jumua',
       'membres': 'members', // Topic specifique aux adherents
     };
 

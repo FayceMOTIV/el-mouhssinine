@@ -66,6 +66,7 @@ const MemberScreen = () => {
   // 3 pages : 'sympathisant' | 'devenir_adherent' | 'membre_actif'
   const [memberPage, setMemberPage] = useState<'sympathisant' | 'devenir_adherent' | 'membre_actif'>('sympathisant');
   const [isExpired, setIsExpired] = useState(false);
+  const [contextMessage, setContextMessage] = useState<string | null>(null);
 
   // Prix et infos
   const [formulePrices, setFormulePrices] = useState<CotisationPrices>({ mensuel: 10, annuel: 100 });
@@ -210,14 +211,16 @@ const MemberScreen = () => {
             // Determiner la page membre
             if (isActive && !expired) {
               setMemberPage('membre_actif');
+              setContextMessage(null);
             } else if (expired) {
               setMemberPage('devenir_adherent');
-              Alert.alert(
-                'Cotisation expirée',
-                'Votre adhésion a expiré. Renouvelez-la pour rester membre actif.'
-              );
-            } else if (profile.cotisation.status === 'annule' || profile.cotisation.status === 'expire') {
+              setContextMessage('Votre cotisation a expiré. Renouvelez pour rester membre actif.');
+            } else if (profile.cotisation.status === 'annule') {
               setMemberPage('devenir_adherent');
+              setContextMessage('Votre adhésion a été annulée. Contactez la mosquée si besoin.');
+            } else if (profile.cotisation.status === 'expire') {
+              setMemberPage('devenir_adherent');
+              setContextMessage('Votre cotisation a expiré. Renouvelez pour rester membre actif.');
             } else if (!profile.cotisation.status || profile.cotisation.status === 'sympathisant' || profile.cotisation.status === 'aucun') {
               setMemberPage('sympathisant');
             } else {
@@ -312,6 +315,7 @@ const MemberScreen = () => {
         setAvailableYears([new Date().getFullYear()]);
         setHistoryYear(new Date().getFullYear());
         setMemberPage('sympathisant');
+        setContextMessage(null);
         setIsLoading(false);
       }
     });
@@ -799,6 +803,7 @@ const MemberScreen = () => {
 
         // Passer directement en page membre actif
         setMemberPage('membre_actif');
+        setContextMessage(null);
         setIsPaid(true);
         setIsExpired(false);
 
@@ -1206,11 +1211,11 @@ const MemberScreen = () => {
               <Text style={[styles.pageSubtitle]}>Pour devenir membre actif</Text>
             </View>
 
-            {/* Message expiration si applicable */}
-            {isExpired && (
+            {/* Message contextuel (expiration ou annulation) */}
+            {contextMessage && (
               <View style={[styles.card, { backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', borderWidth: 1 }]}>
                 <Text style={[styles.cardSubtitle, { color: '#ef4444', fontWeight: '600' }]}>
-                  Votre adhésion a expiré. Renouvelez-la pour rester membre actif.
+                  {contextMessage}
                 </Text>
               </View>
             )}

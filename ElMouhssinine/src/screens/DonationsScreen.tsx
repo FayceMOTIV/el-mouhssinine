@@ -555,8 +555,8 @@ const DonationsScreen = () => {
                   </Text>
                   <Text style={[styles.receiptInfoDesc, isRTL && styles.rtlText]}>
                     {language === 'ar'
-                      ? 'تبرعاتكم لعام 2026 معفاة من الضرائب. سيتم إرسال الإيصال الضريبي في بداية 2027.'
-                      : 'Vos dons 2026 sont déductibles des impôts. Le reçu fiscal sera envoyé début 2027.'}
+                      ? `تبرعاتكم لعام ${new Date().getFullYear()} معفاة من الضرائب. سيتم إرسال الإيصال الضريبي في بداية ${new Date().getFullYear() + 1}.`
+                      : `Vos dons ${new Date().getFullYear()} sont déductibles des impôts. Le reçu fiscal sera envoyé début ${new Date().getFullYear() + 1}.`}
                   </Text>
                 </View>
               </View>
