@@ -42,12 +42,14 @@ const topicOptions = [
   { value: NotificationTopic.PRAYER_REMINDERS, label: 'Rappels de prière' },
   { value: NotificationTopic.JANAZA, label: 'Salat Janaza' },
   { value: NotificationTopic.EVENTS, label: 'Événements' },
-  { value: NotificationTopic.MEMBRES, label: 'Membres uniquement' }
+  { value: NotificationTopic.MEMBRES, label: 'Membres uniquement' },
+  { value: NotificationTopic.NON_MEMBRES, label: 'Non-membres uniquement' }
 ]
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
+  const [sendingNotifId, setSendingNotifId] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, notification: null })
   const [editingNotification, setEditingNotification] = useState(null)
@@ -162,6 +164,8 @@ export default function Notifications() {
   }
 
   const handleSendNow = async (notification) => {
+    if (sendingNotifId) return // Protection double-clic
+    setSendingNotifId(notification.id)
     try {
       await updateDocument('notifications', notification.id, {
         statut: NotificationStatut.ENVOYEE,
@@ -171,6 +175,8 @@ export default function Notifications() {
     } catch (err) {
       console.error('Error sending notification:', err)
       toast.error('Erreur lors de l\'envoi')
+    } finally {
+      setSendingNotifId(null)
     }
   }
 
@@ -247,10 +253,11 @@ export default function Notifications() {
           {row.statut === NotificationStatut.PROGRAMMEE && (
             <button
               onClick={() => handleSendNow(row)}
-              className="p-2 hover:bg-green-500/10 rounded-lg transition-colors"
+              disabled={sendingNotifId === row.id}
+              className={`p-2 rounded-lg transition-colors ${sendingNotifId === row.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-500/10'}`}
               title="Envoyer maintenant"
             >
-              <Send className="w-4 h-4 text-green-400" />
+              <Send className={`w-4 h-4 ${sendingNotifId === row.id ? 'text-white/30 animate-pulse' : 'text-green-400'}`} />
             </button>
           )}
           <button

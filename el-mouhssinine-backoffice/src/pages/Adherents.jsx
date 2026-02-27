@@ -117,6 +117,7 @@ export default function Adherents() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [payeurFilter, setPayeurFilter] = useState('all')
+  const [formuleFilter, setFormuleFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, membre: null })
   const [cotisationModal, setCotisationModal] = useState({ open: false, membre: null })
@@ -275,8 +276,12 @@ export default function Adherents() {
       filtered = filtered.filter(m => !!m.inscritPar)
     }
 
+    if (formuleFilter !== 'all') {
+      filtered = filtered.filter(m => m.cotisation?.type === formuleFilter)
+    }
+
     setFilteredMembres(filtered)
-  }, [membres, searchQuery, statusFilter, payeurFilter]) // getCotisationStatus est maintenant module-scoped
+  }, [membres, searchQuery, statusFilter, payeurFilter, formuleFilter]) // getCotisationStatus est maintenant module-scoped
 
   // ========== GESTION COTISATION (MODAL UNIQUE) ==========
   const handleCotisationUpdate = async (updates) => {
@@ -668,16 +673,51 @@ export default function Adherents() {
     }
   }
 
+  // A3: Escape CSV — protège les champs contenant des séparateurs/guillemets
+  const escapeCSV = (value) => {
+    if (value === null || value === undefined) return ''
+    const str = String(value)
+    if (str.includes(';') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`
+    }
+    return str
+  }
+
   const exportCSV = async () => {
-    const headers = ['Nom', 'Prénom', 'Email', 'Téléphone', 'Statut', 'Type cotisation', 'Montant', 'Date fin']
-    const rows = membres.map(m => [
-      m.nom, m.prenom, m.email, m.telephone,
-      getStatusLabel(getCotisationStatus(m)),
-      m.cotisation?.type || '', m.cotisation?.montant || '',
-      m.cotisation?.dateFin ? format(m.cotisation.dateFin?.toDate?.() || new Date(m.cotisation.dateFin), 'dd/MM/yyyy') : ''
-    ])
+    // A2: 15 colonnes complètes
+    const headers = [
+      'Nom', 'Prénom', 'Email', 'Téléphone', 'Adresse', 'Ville', 'Code postal',
+      'Statut', 'Formule', 'Montant (€)', 'Date début', 'Date fin',
+      'Mode paiement', 'Payé par', 'Date inscription'
+    ]
+    // A1: utiliser filteredMembres, pas membres
+    const rows = filteredMembres.map(m => {
+      const dateFin = m.cotisation?.dateFin ? format(m.cotisation.dateFin?.toDate?.() || new Date(m.cotisation.dateFin), 'dd/MM/yyyy') : ''
+      const dateDebut = m.cotisation?.dateDebut ? format(m.cotisation.dateDebut?.toDate?.() || new Date(m.cotisation.dateDebut), 'dd/MM/yyyy') : ''
+      const dateInscription = m.createdAt ? format(m.createdAt?.toDate?.() || new Date(m.createdAt), 'dd/MM/yyyy') : ''
+      // A4: Format téléphone Excel ="06..."
+      const tel = m.telephone ? `="${m.telephone}"` : ''
+      return [
+        escapeCSV(m.nom),
+        escapeCSV(m.prenom),
+        escapeCSV(m.email),
+        tel,
+        escapeCSV(m.adresse || ''),
+        escapeCSV(m.ville || ''),
+        escapeCSV(m.codePostal || ''),
+        escapeCSV(getStatusLabel(getCotisationStatus(m))),
+        escapeCSV(m.cotisation?.type || ''),
+        m.cotisation?.montant || '',
+        dateDebut,
+        dateFin,
+        escapeCSV(m.cotisation?.modePaiement || m.modePaiement || ''),
+        escapeCSV(m.inscritPar ? getPayeurName(m) : 'Lui-même'),
+        dateInscription
+      ]
+    })
     const BOM = '\uFEFF'
-    const csv = BOM + [headers, ...rows].map(row => row.join(',')).join('\n')
+    // A3: séparateur point-virgule pour Excel FR
+    const csv = BOM + [headers, ...rows].map(row => row.join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -691,14 +731,14 @@ export default function Adherents() {
         action: 'export_csv_adherents',
         adminEmail: admin?.email || 'unknown',
         adminUid: admin?.uid || '',
-        rowCount: membres.length,
+        rowCount: filteredMembres.length,
         timestamp: new Date().toISOString(),
       })
     } catch (e) {
       console.error('Audit log failed:', e)
     }
 
-    toast.success('Export téléchargé')
+    toast.success(`Export de ${filteredMembres.length} adhérents téléchargé`)
   }
 
   // ========== COLONNES TABLEAU SIMPLIFIÉ ==========
@@ -1063,6 +1103,11 @@ export default function Adherents() {
             <option value="all">Tous les payeurs</option>
             <option value="lui-meme">Payé par lui-même</option>
             <option value="tiers">Payé par tiers</option>
+          </select>
+          <select value={formuleFilter} onChange={(e) => setFormuleFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
+            <option value="all">Toutes les formules</option>
+            <option value="mensuel">Mensuel</option>
+            <option value="annuel">Annuel</option>
           </select>
         </div>
         <div className="flex gap-3">

@@ -97,39 +97,84 @@ export default function Dons() {
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
+  const [modeFilter, setModeFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const DONS_PER_PAGE = 20
   const [refundingDon, setRefundingDon] = useState(null)
   const [refundAmount, setRefundAmount] = useState('')
   const [refundDonationModal, setRefundDonationModal] = useState({ open: false, donationId: null, amount: null, totalAmount: 0 })
 
+  // DO1: Calculer le montant actuel de chaque projet à partir des dons réels
+  const projetMontants = useMemo(() => {
+    const totals = {}
+    dons.forEach(d => {
+      if (d.projetId && d.montant) {
+        totals[d.projetId] = (totals[d.projetId] || 0) + (d.montant || 0)
+      }
+    })
+    return totals
+  }, [dons])
+
+  // Projets enrichis avec montantActuel calculé
+  const projetsAvecMontants = useMemo(() => {
+    return projets.map(p => ({
+      ...p,
+      montantActuel: projetMontants[p.id] || 0
+    }))
+  }, [projets, projetMontants])
+
   // Filtrer les projets par recherche
   const filteredProjets = useMemo(() => {
-    if (!searchQuery) return projets
+    if (!searchQuery) return projetsAvecMontants
     const query = searchQuery.toLowerCase()
-    return projets.filter(p =>
+    return projetsAvecMontants.filter(p =>
       p.titre?.toLowerCase().includes(query) ||
       p.description?.toLowerCase().includes(query) ||
       p.lieu?.toLowerCase().includes(query)
     )
-  }, [projets, searchQuery])
+  }, [projetsAvecMontants, searchQuery])
 
-  // Filtrer les dons par recherche
+  // Filtrer les dons par recherche, date et mode de paiement
   const filteredDons = useMemo(() => {
-    if (!searchQuery) return dons
-    const query = searchQuery.toLowerCase()
-    return dons.filter(d => {
-      const projet = projets.find(p => p.id === d.projetId)
-      return (
-        d.donateur?.toLowerCase().includes(query) ||
-        projet?.titre?.toLowerCase().includes(query) ||
-        d.modePaiement?.toLowerCase().includes(query)
-      )
-    })
-  }, [dons, projets, searchQuery])
+    let result = dons
+
+    // Filtre par recherche texte
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      result = result.filter(d => {
+        const projet = projets.find(p => p.id === d.projetId)
+        return (
+          d.donateur?.toLowerCase().includes(query) ||
+          projet?.titre?.toLowerCase().includes(query) ||
+          d.modePaiement?.toLowerCase().includes(query)
+        )
+      })
+    }
+
+    // Filtre par mois (format "YYYY-MM")
+    if (dateFilter) {
+      result = result.filter(d => {
+        const rawDate = d.date || d.createdAt || d.webhookProcessedAt
+        if (!rawDate) return false
+        try {
+          const date = rawDate?.toDate?.() || new Date(rawDate)
+          const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+          return ym === dateFilter
+        } catch { return false }
+      })
+    }
+
+    // Filtre par mode de paiement
+    if (modeFilter) {
+      result = result.filter(d => d.modePaiement === modeFilter)
+    }
+
+    return result
+  }, [dons, projets, searchQuery, dateFilter, modeFilter])
 
   // Réinitialiser la page quand le filtre change
-  useEffect(() => { setCurrentPage(1) }, [searchQuery])
+  useEffect(() => { setCurrentPage(1) }, [searchQuery, dateFilter, modeFilter])
 
   // Pagination des dons
   const totalPages = Math.ceil(filteredDons.length / DONS_PER_PAGE)
@@ -248,7 +293,6 @@ export default function Dons() {
         titre: formData.titre,
         description: formData.description,
         objectif: parseFloat(formData.objectif),
-        montantActuel: parseFloat(formData.montantActuel) || 0,
         categorie: formData.categorie,
         actif: formData.actif,
         statut: formData.statut || null,
@@ -667,9 +711,11 @@ export default function Dons() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <div className="text-center">
-            <p className="text-white/50 text-sm">Total des dons</p>
+            <p className="text-white/50 text-sm">
+              Total des dons{(dateFilter || modeFilter) ? ' (filtré)' : ''}
+            </p>
             <p className="text-2xl font-bold text-secondary">
-              {dons.reduce((sum, d) => sum + (d.montant || 0), 0).toLocaleString()} €
+              {filteredDons.reduce((sum, d) => sum + (d.montant || 0), 0).toLocaleString()} €
             </p>
           </div>
         </Card>
@@ -812,7 +858,7 @@ export default function Dons() {
           <div className="flex items-center justify-between mb-4">
             <p className="text-white/50 text-sm">
               {filteredDons.length} don{filteredDons.length !== 1 ? 's' : ''}
-              {searchQuery && ` sur ${dons.length}`}
+              {(searchQuery || dateFilter || modeFilter) && ` sur ${dons.length}`}
             </p>
             {filteredDons.length > 0 && (
               <button
@@ -821,6 +867,37 @@ export default function Dons() {
               >
                 <Download className="w-4 h-4" />
                 Export CSV
+              </button>
+            )}
+          </div>
+          {/* Filtres dons */}
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <input
+              type="month"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-secondary"
+              placeholder="Filtrer par mois"
+            />
+            <select
+              value={modeFilter}
+              onChange={(e) => setModeFilter(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-secondary"
+            >
+              <option value="">Tous les modes</option>
+              <option value={ModePaiement.CARTE}>Carte</option>
+              <option value={ModePaiement.VIREMENT}>Virement</option>
+              <option value={ModePaiement.ESPECES}>Espèces</option>
+              <option value={ModePaiement.CHEQUE}>Chèque</option>
+              <option value={ModePaiement.PAYPAL}>PayPal</option>
+            </select>
+            {(dateFilter || modeFilter) && (
+              <button
+                onClick={() => { setDateFilter(''); setModeFilter('') }}
+                className="flex items-center gap-1 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg text-sm text-red-400 transition-colors"
+              >
+                <X className="w-3 h-3" />
+                Réinitialiser
               </button>
             )}
           </div>
@@ -939,13 +1016,13 @@ export default function Dons() {
               placeholder="Ex: 5000"
               required
             />
-            <Input
-              label="Montant actuel (€)"
-              type="number"
-              value={formData.montantActuel}
-              onChange={(e) => setFormData({ ...formData, montantActuel: e.target.value })}
-              placeholder="0"
-            />
+            <div>
+              <label className="block text-sm font-medium text-white/70 mb-1">Montant actuel (€)</label>
+              <p className="text-lg font-bold text-secondary px-3 py-2 bg-white/5 rounded-lg">
+                {editingProjet ? (projetMontants[editingProjet.id] || 0).toLocaleString() : 0} €
+              </p>
+              <p className="text-xs text-white/40 mt-1">Calculé automatiquement depuis les dons</p>
+            </div>
           </div>
           <Select
             label="Catégorie"

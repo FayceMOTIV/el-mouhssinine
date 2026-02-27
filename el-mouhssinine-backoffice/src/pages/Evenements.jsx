@@ -27,7 +27,9 @@ import { fr } from 'date-fns/locale'
 
 const defaultEvenement = {
   titre: '',
+  titreAr: '',
   description: '',
+  descriptionAr: '',
   date: '',
   heure: '',
   lieu: '',
@@ -71,7 +73,9 @@ export default function Evenements() {
       const date = evenement.date?.toDate?.() || new Date(evenement.date)
       setFormData({
         titre: evenement.titre || '',
+        titreAr: evenement.titreAr || '',
         description: evenement.description || '',
+        descriptionAr: evenement.descriptionAr || '',
         date: format(date, 'yyyy-MM-dd'),
         heure: evenement.heure || '',
         lieu: evenement.lieu || '',
@@ -140,7 +144,9 @@ export default function Evenements() {
     setEditingEvenement(null)
     setFormData({
       titre: `${evenement.titre} (copie)`,
+      titreAr: evenement.titreAr || '',
       description: evenement.description || '',
+      descriptionAr: evenement.descriptionAr || '',
       date: '',
       heure: evenement.heure || '',
       lieu: evenement.lieu || '',
@@ -432,6 +438,31 @@ export default function Evenements() {
             onChange={(e) => setFormData({ ...formData, lieu: e.target.value })}
             placeholder="Ex: Salle principale de la mosquée"
           />
+          {/* Champs arabes */}
+          <div className="border-t border-white/10 pt-4">
+            <p className="text-white/50 text-sm mb-3">Version arabe (optionnel)</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-white mb-1">العنوان (Titre en arabe)</label>
+                <Input
+                  value={formData.titreAr}
+                  onChange={(e) => setFormData({ ...formData, titreAr: e.target.value })}
+                  placeholder="العنوان بالعربية"
+                  dir="rtl"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white mb-1">الوصف (Description en arabe)</label>
+                <Textarea
+                  value={formData.descriptionAr}
+                  onChange={(e) => setFormData({ ...formData, descriptionAr: e.target.value })}
+                  placeholder="الوصف بالعربية..."
+                  rows={3}
+                  dir="rtl"
+                />
+              </div>
+            </div>
+          </div>
           <Toggle
             label="Événement actif"
             checked={formData.actif}

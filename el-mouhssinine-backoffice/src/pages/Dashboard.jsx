@@ -29,17 +29,42 @@ import {
   getPaymentStats,
   PaymentType,
   getPrayerTimes,
-  subscribeToUnreadMessagesCount
+  subscribeToUnreadMessagesCount,
+  subscribeToAnnonces
 } from '../services/firebase'
-import { format } from 'date-fns'
+import { CotisationStatut } from '../types'
+import { format, isPast } from 'date-fns'
 import { fr } from 'date-fns/locale'
+
+// Helper: Détermine le statut de cotisation d'un membre (même logique que Adherents.jsx)
+const getCotisationStatus = (membre) => {
+  if (membre.status === 'sympathisant') return CotisationStatut.SYMPATHISANT
+  if (membre.status === 'en_attente_validation') return CotisationStatut.EN_ATTENTE_VALIDATION
+  if (membre.status === 'en_attente_signature') return CotisationStatut.EN_ATTENTE_SIGNATURE
+  if (membre.status === 'en_attente_paiement') return CotisationStatut.EN_ATTENTE_PAIEMENT
+  if (membre.status === 'annule') return CotisationStatut.ANNULE
+  if (membre.status === 'actif') {
+    if (!membre.cotisation?.dateFin) return CotisationStatut.ACTIF
+    const dateFin = membre.cotisation.dateFin?.toDate?.() || new Date(membre.cotisation.dateFin)
+    return isPast(dateFin) ? CotisationStatut.EXPIRE : CotisationStatut.ACTIF
+  }
+  if (!membre.cotisation?.dateFin) return CotisationStatut.AUCUN
+  const dateFin = membre.cotisation.dateFin?.toDate?.() || new Date(membre.cotisation.dateFin)
+  return isPast(dateFin) ? CotisationStatut.EXPIRE : CotisationStatut.ACTIF
+}
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
     membres: 0,
     membresActifs: 0,
+    membresSympathisants: 0,
+    membresExpires: 0,
+    membresAucun: 0,
+    membresEnAttenteValidation: 0,
     membresEnAttente: 0,
     membresEnAttentePaiement: 0,
+    membresAnnules: 0,
+    annoncesActives: 0,
     donsTotal: 0,
     donsMois: 0,
     evenements: 0,
@@ -64,17 +89,33 @@ export default function Dashboard() {
     // Membres
     unsubscribes.push(
       subscribeToMembres((data) => {
-        // Calculer les stats par statut
-        const actifs = data.filter(m => m.status === 'actif' || (!m.status && m.cotisation?.dateFin && new Date(m.cotisation.dateFin.toDate?.() || m.cotisation.dateFin) >= new Date()))
-        const enAttente = data.filter(m => m.status === 'en_attente_signature')
-        const enAttentePaiement = data.filter(m => m.status === 'en_attente_paiement')
+        // Calculer les stats par statut via getCotisationStatus (cohérent avec Adherents.jsx)
+        const counts = {
+          [CotisationStatut.ACTIF]: 0,
+          [CotisationStatut.SYMPATHISANT]: 0,
+          [CotisationStatut.EXPIRE]: 0,
+          [CotisationStatut.AUCUN]: 0,
+          [CotisationStatut.EN_ATTENTE_VALIDATION]: 0,
+          [CotisationStatut.EN_ATTENTE_SIGNATURE]: 0,
+          [CotisationStatut.EN_ATTENTE_PAIEMENT]: 0,
+          [CotisationStatut.ANNULE]: 0
+        }
+        data.forEach(m => {
+          const s = getCotisationStatus(m)
+          if (counts[s] !== undefined) counts[s]++
+        })
 
         setStats(prev => ({
           ...prev,
           membres: data.length,
-          membresActifs: actifs.length,
-          membresEnAttente: enAttente.length,
-          membresEnAttentePaiement: enAttentePaiement.length
+          membresActifs: counts[CotisationStatut.ACTIF],
+          membresSympathisants: counts[CotisationStatut.SYMPATHISANT],
+          membresExpires: counts[CotisationStatut.EXPIRE],
+          membresAucun: counts[CotisationStatut.AUCUN],
+          membresEnAttenteValidation: counts[CotisationStatut.EN_ATTENTE_VALIDATION],
+          membresEnAttente: counts[CotisationStatut.EN_ATTENTE_SIGNATURE],
+          membresEnAttentePaiement: counts[CotisationStatut.EN_ATTENTE_PAIEMENT],
+          membresAnnules: counts[CotisationStatut.ANNULE]
         }))
 
         // Generer les donnees du graphique des nouveaux membres (6 derniers mois)
@@ -105,6 +146,14 @@ export default function Dashboard() {
     unsubscribes.push(
       subscribeToUnreadMessagesCount((count) => {
         setStats(prev => ({ ...prev, messagesNonLus: count }))
+      })
+    )
+
+    // Annonces actives (D2)
+    unsubscribes.push(
+      subscribeToAnnonces((data) => {
+        const actives = data.filter(a => a.actif !== false)
+        setStats(prev => ({ ...prev, annoncesActives: actives.length }))
       })
     )
 
@@ -227,13 +276,25 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Stats Grid - Ligne 2 : Membres & Messages */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stats Grid - Ligne 2 : Détail Membres */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
           title="Membres actifs"
           value={stats?.membresActifs ?? 0}
           icon={UserCheck}
           variant="success"
+        />
+        <StatCard
+          title="Sympathisants"
+          value={stats?.membresSympathisants ?? 0}
+          icon={Heart}
+          variant="info"
+        />
+        <StatCard
+          title="Expirés"
+          value={stats?.membresExpires ?? 0}
+          icon={UserX}
+          variant="danger"
         />
         <StatCard
           title="En attente signature"
@@ -245,8 +306,12 @@ export default function Dashboard() {
           title="En attente paiement"
           value={stats?.membresEnAttentePaiement ?? 0}
           icon={CreditCard}
-          variant="info"
+          variant="warning"
         />
+      </div>
+
+      {/* Stats Grid - Ligne 3 : Messages & Annonces */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Link to="/messages" className="block">
           <StatCard
             title="Messages non lus"
@@ -255,6 +320,11 @@ export default function Dashboard() {
             variant={(stats?.messagesNonLus ?? 0) > 0 ? 'danger' : 'default'}
           />
         </Link>
+        <StatCard
+          title="Annonces actives"
+          value={stats?.annoncesActives ?? 0}
+          icon={Megaphone}
+        />
       </div>
 
       {/* Recettes App (Paiements CB/Apple Pay) */}

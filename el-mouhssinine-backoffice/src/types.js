@@ -90,7 +90,8 @@ export const NotificationTopic = {
   PRAYER_REMINDERS: 'prayer_reminders',
   JANAZA: 'janaza',
   EVENTS: 'events',
-  MEMBRES: 'membres'
+  MEMBRES: 'membres',
+  NON_MEMBRES: 'non_membres'
 }
 
 // Janaza genres

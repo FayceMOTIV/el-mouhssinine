@@ -24,17 +24,19 @@ import {
   sendNotification
 } from '../services/firebase'
 import { JanazaGenre, SalatOptions, defaultJanazaPhrase } from '../types'
-import { format } from 'date-fns'
+import { format, isPast } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 const defaultJanaza = {
   nomDefunt: '',
+  prenomDefunt: '',
   genre: JanazaGenre.HOMME,
   age: '',
   date: '',
   heurePriere: '',
   salatApres: SalatOptions.DHUHR,
   lieu: '',
+  adresseCimetiere: '',
   phraseAr: defaultJanazaPhrase.ar,
   phraseFr: defaultJanazaPhrase.fr,
   actif: true
@@ -77,6 +79,21 @@ export default function Janaza() {
     )
   }, [janazas, searchQuery])
 
+  // Séparer janazas à venir et passées
+  const janazasAVenir = useMemo(() => {
+    return filteredJanazas.filter(j => {
+      const date = j.date?.toDate?.() || new Date(j.date)
+      return !isPast(date) || format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+    })
+  }, [filteredJanazas])
+
+  const janazasPassees = useMemo(() => {
+    return filteredJanazas.filter(j => {
+      const date = j.date?.toDate?.() || new Date(j.date)
+      return isPast(date) && format(date, 'yyyy-MM-dd') !== format(new Date(), 'yyyy-MM-dd')
+    })
+  }, [filteredJanazas])
+
   useEffect(() => {
     const unsubscribe = subscribeToJanazas((data) => {
       setJanazas(data)
@@ -91,12 +108,14 @@ export default function Janaza() {
       const date = janaza.date?.toDate?.() || new Date(janaza.date)
       setFormData({
         nomDefunt: janaza.nomDefunt || '',
+        prenomDefunt: janaza.prenomDefunt || '',
         genre: janaza.genre || JanazaGenre.HOMME,
         age: janaza.age || '',
         date: format(date, 'yyyy-MM-dd'),
         heurePriere: janaza.heurePriere || '',
         salatApres: janaza.salatApres || SalatOptions.DHUHR,
         lieu: janaza.lieu || '',
+        adresseCimetiere: janaza.adresseCimetiere || '',
         phraseAr: janaza.phraseAr || defaultJanazaPhrase.ar,
         phraseFr: janaza.phraseFr || defaultJanazaPhrase.fr,
         actif: janaza.actif !== false
@@ -241,7 +260,9 @@ export default function Janaza() {
       label: 'Défunt(e)',
       render: (row) => (
         <div>
-          <p className="font-medium text-white">{row.nomDefunt}</p>
+          <p className="font-medium text-white">
+            {row.prenomDefunt ? `${row.prenomDefunt} ${row.nomDefunt}` : row.nomDefunt}
+          </p>
           <p className="text-sm text-white/50">
             {getGenreLabel(row.genre)}
             {row.age && ` - ${row.age} ans`}
@@ -278,7 +299,12 @@ export default function Janaza() {
       key: 'lieu',
       label: 'Lieu',
       render: (row) => (
-        <span className="text-white/70">{row.lieu || 'Mosquée'}</span>
+        <div>
+          <span className="text-white/70">{row.lieu || 'Mosquée'}</span>
+          {row.adresseCimetiere && (
+            <p className="text-sm text-white/50">Cimetière : {row.adresseCimetiere}</p>
+          )}
+        </div>
       )
     },
     {
@@ -381,9 +407,33 @@ export default function Janaza() {
           <p className="text-center text-white/50 py-8">Aucun résultat pour "{searchQuery}"</p>
         </Card>
       ) : (
-        <Card>
-          <Table columns={columns} data={filteredJanazas} />
-        </Card>
+        <>
+          {/* Janazas à venir */}
+          {janazasAVenir.length > 0 && (
+            <div>
+              <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 bg-green-400 rounded-full" />
+                À venir ({janazasAVenir.length})
+              </h3>
+              <Card>
+                <Table columns={columns} data={janazasAVenir} />
+              </Card>
+            </div>
+          )}
+
+          {/* Janazas passées */}
+          {janazasPassees.length > 0 && (
+            <div>
+              <h3 className="text-white/50 font-semibold mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 bg-white/30 rounded-full" />
+                Passées ({janazasPassees.length})
+              </h3>
+              <Card className="opacity-70">
+                <Table columns={columns} data={janazasPassees} />
+              </Card>
+            </div>
+          )}
+        </>
       )}
 
       {/* Create/Edit Modal */}
@@ -394,13 +444,21 @@ export default function Janaza() {
         size="xl"
       >
         <div className="space-y-4">
-          <Input
-            label="Nom du défunt"
-            value={formData.nomDefunt}
-            onChange={(e) => setFormData({ ...formData, nomDefunt: e.target.value })}
-            placeholder="Ex: Mohamed Ben Ali"
-            required
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Nom du défunt"
+              value={formData.nomDefunt}
+              onChange={(e) => setFormData({ ...formData, nomDefunt: e.target.value })}
+              placeholder="Ex: Ben Ali"
+              required
+            />
+            <Input
+              label="Prénom du défunt (optionnel)"
+              value={formData.prenomDefunt}
+              onChange={(e) => setFormData({ ...formData, prenomDefunt: e.target.value })}
+              placeholder="Ex: Mohamed"
+            />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
               label="Genre"
@@ -439,12 +497,18 @@ export default function Janaza() {
               onChange={(e) => setFormData({ ...formData, heurePriere: e.target.value })}
             />
             <Input
-              label="Lieu"
+              label="Lieu de prière"
               value={formData.lieu}
               onChange={(e) => setFormData({ ...formData, lieu: e.target.value })}
               placeholder="Ex: Mosquée El Mohsinine"
             />
           </div>
+          <Input
+            label="Adresse du cimetière (optionnel)"
+            value={formData.adresseCimetiere}
+            onChange={(e) => setFormData({ ...formData, adresseCimetiere: e.target.value })}
+            placeholder="Ex: Cimetière musulman de Strasbourg"
+          />
           <div className="relative">
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-white">Phrase en arabe</label>

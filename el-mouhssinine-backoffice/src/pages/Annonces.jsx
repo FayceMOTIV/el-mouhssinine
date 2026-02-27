@@ -27,7 +27,9 @@ import { fr } from 'date-fns/locale'
 
 const defaultAnnonce = {
   titre: '',
+  titreAr: '',
   contenu: '',
+  contenuAr: '',
   actif: true
 }
 
@@ -66,7 +68,9 @@ export default function Annonces() {
       setEditingAnnonce(annonce)
       setFormData({
         titre: annonce.titre || '',
+        titreAr: annonce.titreAr || '',
         contenu: annonce.contenu || '',
+        contenuAr: annonce.contenuAr || '',
         actif: annonce.actif !== false
       })
     } else {
@@ -137,7 +141,9 @@ export default function Annonces() {
     setEditingAnnonce(null)
     setFormData({
       titre: `${annonce.titre} (copie)`,
+      titreAr: annonce.titreAr || '',
       contenu: annonce.contenu || '',
+      contenuAr: annonce.contenuAr || '',
       actif: true
     })
     setModalOpen(true)
@@ -378,6 +384,31 @@ export default function Annonces() {
               rows={5}
               required
             />
+          </div>
+          {/* Champs arabes */}
+          <div className="border-t border-white/10 pt-4">
+            <p className="text-white/50 text-sm mb-3">Version arabe (optionnel)</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-white mb-1">العنوان (Titre en arabe)</label>
+                <Input
+                  value={formData.titreAr}
+                  onChange={(e) => setFormData({ ...formData, titreAr: e.target.value })}
+                  placeholder="العنوان بالعربية"
+                  dir="rtl"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white mb-1">المحتوى (Contenu en arabe)</label>
+                <Textarea
+                  value={formData.contenuAr}
+                  onChange={(e) => setFormData({ ...formData, contenuAr: e.target.value })}
+                  placeholder="المحتوى بالعربية..."
+                  rows={4}
+                  dir="rtl"
+                />
+              </div>
+            </div>
           </div>
           <Toggle
             label="Annonce active"
