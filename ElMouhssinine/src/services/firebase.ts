@@ -144,7 +144,9 @@ export const subscribeToAnnouncements = (callback: (data: Announcement[]) => voi
             return {
               id: doc.id,
               title: docData.titre,
+              titleAr: docData.titreAr || '',
               content: docData.contenu,
+              contentAr: docData.contenuAr || '',
               isActive: docData.actif,
               publishedAt: toDate(docData.createdAt),
             };
@@ -177,10 +179,12 @@ export const getAnnouncements = async (): Promise<Announcement[]> => {
       .where('actif', '==', true)
       .orderBy('createdAt', 'desc')
       .get();
-    const data = snapshot.docs.map(doc => ({
+    const data: Announcement[] = snapshot.docs.map(doc => ({
       id: doc.id,
       title: doc.data().titre,
+      titleAr: doc.data().titreAr || '',
       content: doc.data().contenu,
+      contentAr: doc.data().contenuAr || '',
       isActive: doc.data().actif,
       publishedAt: toDate(doc.data().createdAt),
     }));
@@ -217,7 +221,9 @@ export const subscribeToEvents = (callback: (data: Event[]) => void) => {
             return {
               id: doc.id,
               title: docData.titre,
+              titleAr: docData.titreAr || '',
               description: docData.description,
+              descriptionAr: docData.descriptionAr || '',
               date: toDate(docData.date),
               time: docData.heure,
               location: docData.lieu,
@@ -256,7 +262,9 @@ export const getEvents = async (): Promise<Event[]> => {
     const data: Event[] = snapshot.docs.map(doc => ({
       id: doc.id,
       title: doc.data().titre,
+      titleAr: doc.data().titreAr || '',
       description: doc.data().description,
+      descriptionAr: doc.data().descriptionAr || '',
       date: toDate(doc.data().date),
       time: doc.data().heure,
       location: doc.data().lieu,
@@ -308,6 +316,8 @@ export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
             id: doc.id,
             deceasedName: docData.nomDefunt,
             deceasedNameAr: docData.nomDefuntAr || docData.phraseAr,
+            deceasedFirstName: docData.prenomDefunt || '',
+            cemeteryAddress: docData.adresseCimetiere || '',
             prayerDate: toDate(docData.date),
             prayerTime: docData.heurePriere,
             location: docData.lieu,
@@ -359,6 +369,8 @@ export const subscribeToJanazaList = (callback: (data: Janaza[]) => void) => {
               id: doc.id,
               deceasedName: docData.nomDefunt,
               deceasedNameAr: docData.nomDefuntAr || docData.phraseAr,
+              deceasedFirstName: docData.prenomDefunt || '',
+              cemeteryAddress: docData.adresseCimetiere || '',
               prayerDate: toDate(docData.date),
               prayerTime: docData.heurePriere,
               location: docData.lieu,
@@ -406,6 +418,8 @@ export const getActiveJanaza = async (): Promise<Janaza | null> => {
       id: doc.id,
       deceasedName: doc.data().nomDefunt,
       deceasedNameAr: doc.data().nomDefuntAr || doc.data().phraseAr,
+      deceasedFirstName: doc.data().prenomDefunt || '',
+      cemeteryAddress: doc.data().adresseCimetiere || '',
       prayerDate: toDate(doc.data().date),
       prayerTime: doc.data().heurePriere,
       location: doc.data().lieu,

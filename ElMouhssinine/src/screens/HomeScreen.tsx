@@ -1454,8 +1454,11 @@ const HomeScreen = () => {
                 const dateValue = janazaItem.prayerDate || janazaItem.date;
                 const dateObj = dateValue instanceof Date ? dateValue :
                   (dateValue ? new Date(dateValue) : new Date());
-                const nom = janazaItem.deceasedName || `${janazaItem.prenom || ''} ${janazaItem.nom || ''}`.trim();
+                const prenom = janazaItem.deceasedFirstName || janazaItem.prenom || '';
+                const nomBase = janazaItem.deceasedName || janazaItem.nom || '';
+                const nom = prenom ? `${prenom} ${nomBase}`.trim() : nomBase;
                 const lieu = janazaItem.location || janazaItem.lieu;
+                const adresseCimetiere = janazaItem.cemeteryAddress || '';
                 const heure = janazaItem.prayerTime || janazaItem.heure;
                 const phraseAr = janazaItem.deceasedNameAr || janazaItem.phraseAr || 'إِنَّا لِلَّهِ وَإِنَّا إِلَيْهِ رَاجِعُونَ';
                 const phraseFr = janazaItem.message || janazaItem.phraseFr || 'Nous sommes à Allah et vers Lui nous retournons';
@@ -1487,7 +1490,7 @@ const HomeScreen = () => {
                     style={styles.janazaMockCard}
                     onPress={() => Alert.alert(
                       `⚰️ ${t('janazaPrayer')}`,
-                      `👤 ${nom}\n\n📅 ${dateFormatee}\n⏰ ${heureInfo}\n📍 ${lieu}\n\n"${isRTL ? phraseAr : phraseFr}"`,
+                      `👤 ${nom}\n\n📅 ${dateFormatee}\n⏰ ${heureInfo}\n📍 ${lieu}${adresseCimetiere ? `\n🪦 ${adresseCimetiere}` : ''}\n\n"${isRTL ? phraseAr : phraseFr}"`,
                       [{ text: 'OK' }]
                     )}
                     activeOpacity={0.7}
@@ -1514,24 +1517,28 @@ const HomeScreen = () => {
           {(announcements || []).length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📢 {t('announcements')}</Text>
-            {announcements.map((announcement) => (
+            {announcements.map((announcement) => {
+              const titreAffiche = (language === 'ar' && announcement.titleAr) ? announcement.titleAr : announcement.title;
+              const contenuAffiche = (language === 'ar' && announcement.contentAr) ? announcement.contentAr : announcement.content;
+              return (
               <TouchableOpacity
                 key={announcement.id}
                 style={styles.card}
                 onPress={() => Alert.alert(
-                  `📢 ${announcement.title}`,
-                  `${announcement.content}\n\n📅 ${t('publishedOn')} ${announcement.publishedAt?.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}`,
+                  `📢 ${titreAffiche}`,
+                  `${contenuAffiche}\n\n📅 ${t('publishedOn')} ${announcement.publishedAt?.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}`,
                   [{ text: 'OK' }]
                 )}
                 activeOpacity={0.7}
               >
                 <View style={styles.announcementHeader}>
-                  <Text style={[styles.announcementTitle, isRTL && styles.rtlText, { flex: 1 }]} numberOfLines={1}>{announcement.title}</Text>
+                  <Text style={[styles.announcementTitle, isRTL && styles.rtlText, { flex: 1 }]} numberOfLines={1}>{titreAffiche}</Text>
                   <Text style={styles.tapIndicator}>ℹ️</Text>
                 </View>
-                <Text style={[styles.announcementContent, isRTL && styles.rtlText]} numberOfLines={2}>{announcement.content}</Text>
+                <Text style={[styles.announcementContent, isRTL && styles.rtlText]} numberOfLines={2}>{contenuAffiche}</Text>
               </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
           )}
 
@@ -1542,13 +1549,15 @@ const HomeScreen = () => {
             <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📅 {t('upcomingEvents')}</Text>
             {events.map((event) => {
               const { day, month } = formatDate(event.date);
+              const titreAffiche = (language === 'ar' && event.titleAr) ? event.titleAr : event.title;
+              const descAffiche = (language === 'ar' && event.descriptionAr) ? event.descriptionAr : event.description;
               return (
                 <TouchableOpacity
                   key={event.id}
                   style={styles.card}
                   onPress={() => Alert.alert(
-                    event.title,
-                    `📅 ${day} ${month}\n⏰ ${event.time}\n📍 ${event.location}${event.description ? `\n\n${event.description}` : ''}`,
+                    titreAffiche,
+                    `📅 ${day} ${month}\n⏰ ${event.time}\n📍 ${event.location}${descAffiche ? `\n\n${descAffiche}` : ''}`,
                     [{ text: 'OK' }]
                   )}
                   activeOpacity={0.7}
@@ -1559,7 +1568,7 @@ const HomeScreen = () => {
                       <Text style={styles.eventMonth}>{month}</Text>
                     </View>
                     <View style={styles.eventDetails}>
-                      <Text style={[styles.eventTitle, isRTL && styles.rtlText]} numberOfLines={1}>{event.title}</Text>
+                      <Text style={[styles.eventTitle, isRTL && styles.rtlText]} numberOfLines={1}>{titreAffiche}</Text>
                       <Text style={[styles.eventSubtitle, isRTL && styles.rtlText]} numberOfLines={1}>
                         {event.time} • {event.location}
                       </Text>

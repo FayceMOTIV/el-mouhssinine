@@ -17,7 +17,9 @@ export interface IslamicDate {
 export interface Announcement {
   id: string;
   title: string;
+  titleAr?: string;
   content: string;
+  contentAr?: string;
   publishedAt: Date;
   isActive: boolean;
 }
@@ -25,7 +27,9 @@ export interface Announcement {
 export interface Event {
   id: string;
   title: string;
+  titleAr?: string;
   description: string;
+  descriptionAr?: string;
   date: Date;
   time: string;
   location: string;
@@ -38,6 +42,8 @@ export interface Janaza {
   id: string;
   deceasedName: string;
   deceasedNameAr?: string;
+  deceasedFirstName?: string;
+  cemeteryAddress?: string;
   prayerTime: string;
   prayerDate: Date;
   location: string;
@@ -236,6 +242,8 @@ export type RootStackParamList = {
   Quiz: { lessonId: number };
   Spiritual: undefined;
   MyMemberships: undefined;
+  PrayerCalendar: undefined;
+  PrivacyPolicy: undefined;
 };
 
 // ==================== MESSAGE TYPES ====================
