@@ -63,6 +63,8 @@ export const useQuranPlayer = ({
   const rangeEndRef = useRef(rangeEnd);
   const playbackSpeedRef = useRef(playbackSpeed);
 
+  // Guard: empêcher setState sur composant démonté (crash Fabric/New Arch)
+  const isMountedRef = useRef(true);
   // Flag pour savoir si on est en train de charger une piste
   const isLoadingTrackRef = useRef(false);
   // Timer de sécurité pour reset isLoadingTrackRef
@@ -329,7 +331,9 @@ export const useQuranPlayer = ({
         if (mode === 'surah') {
           await loadAndPlayVerse(0);
         } else {
-          setIsPlaying(false);
+          if (isMountedRef.current) {
+            setIsPlaying(false);
+          }
           await saveProgress();
         }
       }
@@ -448,9 +452,11 @@ export const useQuranPlayer = ({
       }
 
       // Mettre à jour l'état IMMÉDIATEMENT après play()
-      setCurrentVerseIndex(index);
-      setIsPlaying(true);
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setCurrentVerseIndex(index);
+        setIsPlaying(true);
+        setIsLoading(false);
+      }
       // Petit délai pour laisser TrackPlayer confirmer State.Playing
       await delay(30);
 
@@ -460,7 +466,9 @@ export const useQuranPlayer = ({
         loadingTimeoutRef.current = null;
       }
       isLoadingTrackRef.current = false;
-      onVerseChangeRef.current?.(index);
+      if (isMountedRef.current) {
+        onVerseChangeRef.current?.(index);
+      }
 
       return true;
     } catch (error) {
@@ -471,13 +479,15 @@ export const useQuranPlayer = ({
         loadingTimeoutRef.current = null;
       }
       isLoadingTrackRef.current = false;
-      setIsLoading(false);
-      setIsPlaying(false);
-      Alert.alert(
-        'Erreur audio',
-        'Impossible de lire ce verset. Vérifiez votre connexion internet.',
-        [{ text: 'OK' }],
-      );
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsPlaying(false);
+        Alert.alert(
+          'Erreur audio',
+          'Impossible de lire ce verset. Vérifiez votre connexion internet.',
+          [{ text: 'OK' }],
+        );
+      }
       return false;
     }
   };
@@ -603,12 +613,14 @@ export const useQuranPlayer = ({
       loadingTimeoutRef.current = null;
     }
     lastHandledEndForVerseRef.current = -1;
-    setIsPlaying(false);
-    setIsLoading(false);
-    setCurrentVerseIndex(0);
-    setRepeatCount(0);
-    setVerseProgress(0);
-    onVerseChangeRef.current?.(0);
+    if (isMountedRef.current) {
+      setIsPlaying(false);
+      setIsLoading(false);
+      setCurrentVerseIndex(0);
+      setRepeatCount(0);
+      setVerseProgress(0);
+      onVerseChangeRef.current?.(0);
+    }
   }, []);
 
   const changeSpeed = useCallback(async (speed?: PlaybackSpeed) => {
@@ -645,14 +657,14 @@ export const useQuranPlayer = ({
     reciterCodeRef.current = newReciterCode;
   }, []);
 
-  // Cleanup on unmount : reset player + clear timeout
+  // Cleanup on unmount : marquer démonté + reset player + clear timeout
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
       }
-      // Reset le player pour éviter les crashs "already initialized"
-      // lors du retour sur l'écran Coran après navigation
+      // Reset la queue audio (mais ne touche pas isSetup)
       resetPlayer();
     };
   }, []);

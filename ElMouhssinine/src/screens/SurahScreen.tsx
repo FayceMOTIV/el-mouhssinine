@@ -547,12 +547,9 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
     loadSurah();
   }, [surahNumber]);
 
-  // Cleanup - utiliser player.stop() au lieu de stopAudio() pour respecter les flags internes
-  useEffect(() => {
-    return () => {
-      player.stop();
-    };
-  }, []);
+  // Cleanup géré par useQuranPlayer (resetPlayer dans son propre useEffect cleanup)
+  // NE PAS appeler player.stop() ici : double cleanup concurrent avec
+  // useQuranPlayer cause un crash (setState sur composant démonté avec Fabric).
 
   // Afficher le mini player quand la lecture commence
   useEffect(() => {

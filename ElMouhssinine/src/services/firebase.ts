@@ -108,21 +108,29 @@ export interface DateIslamique {
 // ==================== HELPER FUNCTIONS ====================
 
 // Ajouter des minutes à une heure (HH:MM)
-export const addMinutesToTime = (time: string, minutes: number | string): string => {
+export const addMinutesToTime = (
+  time: string,
+  minutes: number | string,
+): string => {
   if (!time || minutes === undefined || minutes === null) return '--:--';
   const [hours, mins] = time.split(':').map(Number);
   if (isNaN(hours) || isNaN(mins)) return '--:--';
   const totalMins = hours * 60 + mins + parseInt(String(minutes));
   const newHours = Math.floor(totalMins / 60) % 24;
   const newMins = totalMins % 60;
-  return `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`;
+  return `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(
+    2,
+    '0',
+  )}`;
 };
 
 // ==================== ANNONCES ====================
 // Collection Firestore: "announcements"
 // Champs backoffice: titre, contenu, actif, createdAt
 
-export const subscribeToAnnouncements = (callback: (data: Announcement[]) => void) => {
+export const subscribeToAnnouncements = (
+  callback: (data: Announcement[]) => void,
+) => {
   if (FORCE_DEMO_MODE) {
     callback(mockAnnouncements as Announcement[]);
     return () => {};
@@ -137,7 +145,11 @@ export const subscribeToAnnouncements = (callback: (data: Announcement[]) => voi
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          logger.firebase('📢 Annonces snapshot:', snapshot.docs.length, 'documents');
+          logger.firebase(
+            '📢 Annonces snapshot:',
+            snapshot.docs.length,
+            'documents',
+          );
           const data = snapshot.docs.map(doc => {
             const docData = doc.data();
             logger.firebase('📢 Annonce:', doc.id, docData.titre);
@@ -152,14 +164,18 @@ export const subscribeToAnnouncements = (callback: (data: Announcement[]) => voi
             };
           });
           // Tri côté client (plus récent en premier)
-          data.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+          data.sort(
+            (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime(),
+          );
           logger.firebase('📢 Annonces finales:', data.length);
-          callback(data.length > 0 ? data : mockAnnouncements as Announcement[]);
+          callback(
+            data.length > 0 ? data : (mockAnnouncements as Announcement[]),
+          );
         },
         error => {
           logger.error('❌ [Firebase] Announcements error:', error.message);
           callback(mockAnnouncements as Announcement[]);
-        }
+        },
       );
   } catch (error) {
     const err = error as Error;
@@ -214,7 +230,11 @@ export const subscribeToEvents = (callback: (data: Event[]) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          logger.firebase('📅 Events snapshot:', snapshot.docs.length, 'documents');
+          logger.firebase(
+            '📅 Events snapshot:',
+            snapshot.docs.length,
+            'documents',
+          );
           const data = snapshot.docs.map(doc => {
             const docData = doc.data();
             logger.firebase('📅 Event:', doc.id, docData.titre);
@@ -234,12 +254,12 @@ export const subscribeToEvents = (callback: (data: Event[]) => void) => {
           // Tri côté client (plus proche en premier)
           data.sort((a, b) => a.date.getTime() - b.date.getTime());
           logger.firebase('📅 Events finaux:', data.length);
-          callback(data.length > 0 ? data : mockEvents as Event[]);
+          callback(data.length > 0 ? data : (mockEvents as Event[]));
         },
         error => {
           logger.error('❌ [Firebase] Events error:', error.message);
           callback(mockEvents as Event[]);
-        }
+        },
       );
   } catch (error) {
     const err = error as Error;
@@ -298,7 +318,11 @@ export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          logger.firebase('🤲 Janaza snapshot:', snapshot.docs.length, 'documents');
+          logger.firebase(
+            '🤲 Janaza snapshot:',
+            snapshot.docs.length,
+            'documents',
+          );
           if (snapshot.empty) {
             logger.firebase('🤲 Pas de janaza active');
             callback(null);
@@ -330,7 +354,7 @@ export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
         error => {
           logger.error('❌ [Firebase] Janaza error:', error.message);
           callback(null);
-        }
+        },
       );
   } catch (error) {
     const err = error as Error;
@@ -356,7 +380,11 @@ export const subscribeToJanazaList = (callback: (data: Janaza[]) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          logger.firebase('🤲 Janaza list snapshot:', snapshot.docs.length, 'documents');
+          logger.firebase(
+            '🤲 Janaza list snapshot:',
+            snapshot.docs.length,
+            'documents',
+          );
           if (snapshot.empty) {
             logger.firebase('🤲 Pas de janaza active');
             callback([]);
@@ -380,14 +408,16 @@ export const subscribeToJanazaList = (callback: (data: Janaza[]) => void) => {
             };
           });
           // Trier par date (plus récent en premier)
-          janazaList.sort((a, b) => b.prayerDate.getTime() - a.prayerDate.getTime());
+          janazaList.sort(
+            (a, b) => b.prayerDate.getTime() - a.prayerDate.getTime(),
+          );
           logger.firebase('🤲 Janaza list:', janazaList.length, 'items');
           callback(janazaList);
         },
         error => {
           logger.error('❌ [Firebase] Janaza list error:', error.message);
           callback([]);
-        }
+        },
       );
   } catch (error) {
     const err = error as Error;
@@ -468,7 +498,7 @@ export const subscribeToProjects = (callback: (data: Project[]) => void) => {
         error => {
           logger.error('[Firebase] Projects error:', error);
           callback(mockProjects as Project[]);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] Projects catch:', error);
@@ -480,7 +510,9 @@ export const subscribeToProjects = (callback: (data: Project[]) => void) => {
 export const getProjects = async (isExternal?: boolean): Promise<Project[]> => {
   if (FORCE_DEMO_MODE) {
     if (isExternal !== undefined) {
-      return (mockProjects as Project[]).filter(p => p.isExternal === isExternal);
+      return (mockProjects as Project[]).filter(
+        p => p.isExternal === isExternal,
+      );
     }
     return mockProjects as Project[];
   }
@@ -510,7 +542,9 @@ export const getProjects = async (isExternal?: boolean): Promise<Project[]> => {
   } catch (error) {
     logger.error('[Firebase] getProjects error:', error);
     if (isExternal !== undefined) {
-      return (mockProjects as Project[]).filter(p => p.isExternal === isExternal);
+      return (mockProjects as Project[]).filter(
+        p => p.isExternal === isExternal,
+      );
     }
     return mockProjects as Project[];
   }
@@ -519,7 +553,9 @@ export const getProjects = async (isExternal?: boolean): Promise<Project[]> => {
 // ==================== DONATIONS ====================
 // Collection Firestore: "donations"
 
-export const createDonation = async (donation: Omit<Donation, 'id' | 'createdAt'>): Promise<string> => {
+export const createDonation = async (
+  donation: Omit<Donation, 'id' | 'createdAt'>,
+): Promise<string> => {
   if (FORCE_DEMO_MODE) {
     return `mock-donation-${Date.now()}`;
   }
@@ -529,16 +565,18 @@ export const createDonation = async (donation: Omit<Donation, 'id' | 'createdAt'
     if (!currentUser) {
       throw new Error('Utilisateur non connecté');
     }
-    const docRef = await firestore().collection('donations').add({
-      userId: currentUser.uid,
-      donateur: donation.memberEmail || 'Anonyme',
-      montant: donation.amount,
-      projetId: donation.projectId,
-      projetNom: donation.projectName,
-      modePaiement: donation.paymentMethod,
-      status: donation.status,
-      date: firestore.FieldValue.serverTimestamp(),
-    });
+    const docRef = await firestore()
+      .collection('donations')
+      .add({
+        userId: currentUser.uid,
+        donateur: donation.memberEmail || 'Anonyme',
+        montant: donation.amount,
+        projetId: donation.projectId,
+        projetNom: donation.projectName,
+        modePaiement: donation.paymentMethod,
+        status: donation.status,
+        date: firestore.FieldValue.serverTimestamp(),
+      });
     return docRef.id;
   } catch (error) {
     logger.error('[Firebase] createDonation error:', error);
@@ -571,7 +609,9 @@ export interface AddDonationParams {
   };
 }
 
-export const addDonation = async (params: AddDonationParams): Promise<string> => {
+export const addDonation = async (
+  params: AddDonationParams,
+): Promise<string> => {
   if (FORCE_DEMO_MODE) {
     return `mock-donation-${Date.now()}`;
   }
@@ -580,12 +620,14 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
     // Si retry, le même document sera réécrit au lieu d'en créer un nouveau
     const docId = params.stripePaymentIntentId || `donation-${Date.now()}`;
     const donationRef = firestore().collection('donations').doc(docId);
-    const projectRef = params.projectId ? firestore().collection('projects').doc(params.projectId) : null;
+    const projectRef = params.projectId
+      ? firestore().collection('projects').doc(params.projectId)
+      : null;
 
     // TRANSACTION ATOMIQUE: donation + update projet
     // merge: true permet de ne pas écraser les champs déjà écrits par le webhook Stripe
     // et garantit que donorInfo/donorType sont toujours sauvés même si le webhook est arrivé avant
-    await firestore().runTransaction(async (transaction) => {
+    await firestore().runTransaction(async transaction => {
       // BUG 7 FIX: userId garanti non-vide (évite permission-denied)
       const currentUser = auth().currentUser;
       if (!currentUser) {
@@ -601,8 +643,10 @@ export const addDonation = async (params: AddDonationParams): Promise<string> =>
       // ÉTAPE 2: TOUTES LES ÉCRITURES APRÈS
       const donationData: Record<string, any> = {
         userId: currentUser.uid,
-        donateur: params.isAnonymous ? 'Anonyme' : (params.donorName || params.donorEmail || 'Anonyme'),
-        donateurEmail: params.isAnonymous ? null : (params.donorEmail || null),
+        donateur: params.isAnonymous
+          ? 'Anonyme'
+          : params.donorName || params.donorEmail || 'Anonyme',
+        donateurEmail: params.isAnonymous ? null : params.donorEmail || null,
         montant: params.amount,
         projetId: params.projectId,
         projetNom: params.projectName,
@@ -656,7 +700,9 @@ export interface AddCotisationParams {
 // Alias rétrocompatible
 export type AddPaymentParams = AddCotisationParams;
 
-export const addCotisation = async (params: AddCotisationParams): Promise<string> => {
+export const addCotisation = async (
+  params: AddCotisationParams,
+): Promise<string> => {
   if (FORCE_DEMO_MODE) {
     return `mock-payment-${Date.now()}`;
   }
@@ -666,7 +712,9 @@ export const addCotisation = async (params: AddCotisationParams): Promise<string
     const paymentRef = firestore().collection('payments').doc(docId);
     // IMPORTANT: Utiliser memberUid (Firebase Auth UID) pour la mise à jour du document membre
     // memberId (ELM-XXXX) est juste pour l'affichage, pas pour le lookup Firestore
-    const memberRef = params.memberUid ? firestore().collection('members').doc(params.memberUid) : null;
+    const memberRef = params.memberUid
+      ? firestore().collection('members').doc(params.memberUid)
+      : null;
 
     // Vérifier si paiement existe déjà (idempotence)
     const existingDoc = await paymentRef.get();
@@ -688,7 +736,9 @@ export const addCotisation = async (params: AddCotisationParams): Promise<string
           const currentData = currentMember.data();
           const currentExpiry = currentData?.cotisation?.dateFin;
           if (currentExpiry) {
-            const expiryDate = currentExpiry.toDate ? currentExpiry.toDate() : new Date(currentExpiry);
+            const expiryDate = currentExpiry.toDate
+              ? currentExpiry.toDate()
+              : new Date(currentExpiry);
             if (expiryDate > now) {
               baseDate = expiryDate;
             }
@@ -715,7 +765,7 @@ export const addCotisation = async (params: AddCotisationParams): Promise<string
     }
 
     // TRANSACTION ATOMIQUE: cotisation + update membre
-    await firestore().runTransaction(async (transaction) => {
+    await firestore().runTransaction(async transaction => {
       // 1. Créer la cotisation
       const paymentData: any = {
         memberId: params.memberId,
@@ -806,10 +856,14 @@ export const subscribeToPopups = (callback: (data: Popup[]) => void) => {
       .where('actif', '==', true)
       .onSnapshot(
         snapshot => {
-          logger.log(`[Firebase] Popups snapshot: ${snapshot.docs.length} docs trouvés`);
+          logger.log(
+            `[Firebase] Popups snapshot: ${snapshot.docs.length} docs trouvés`,
+          );
           const allPopups = snapshot.docs.map(doc => {
             const d = doc.data();
-            logger.log(`[Firebase] Popup raw: id=${doc.id}, titre=${d.titre}, actif=${d.actif}, dateDebut=${d.dateDebut}, dateFin=${d.dateFin}, contenu=${d.contenu}, message=${d.message}, frequence=${d.frequence}`);
+            logger.log(
+              `[Firebase] Popup raw: id=${doc.id}, titre=${d.titre}, actif=${d.actif}, dateDebut=${d.dateDebut}, dateFin=${d.dateFin}, contenu=${d.contenu}, message=${d.message}, frequence=${d.frequence}`,
+            );
             return {
               id: doc.id,
               titre: d.titre,
@@ -834,8 +888,12 @@ export const subscribeToPopups = (callback: (data: Popup[]) => void) => {
               };
               const startDate = toDateStr(popup.dateDebut);
               const endDate = toDateStr(popup.dateFin);
-              const pass = !(startDate && startDate > today) && !(endDate && endDate < today);
-              logger.log(`[Firebase] Popup filter: id=${popup.id}, today=${today}, startDate=${startDate}, endDate=${endDate}, pass=${pass}`);
+              const pass =
+                !(startDate && startDate > today) &&
+                !(endDate && endDate < today);
+              logger.log(
+                `[Firebase] Popup filter: id=${popup.id}, today=${today}, startDate=${startDate}, endDate=${endDate}, pass=${pass}`,
+              );
               return pass;
             })
             .sort((a, b) => (b.priorite || 0) - (a.priorite || 0));
@@ -845,7 +903,7 @@ export const subscribeToPopups = (callback: (data: Popup[]) => void) => {
         error => {
           logger.error('[Firebase] Popups error:', error);
           callback(mockPopups as Popup[]);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] Popups catch:', error);
@@ -882,7 +940,7 @@ export const subscribeToRappels = (callback: (data: Rappel[]) => void) => {
         error => {
           logger.error('[Firebase] Rappels error:', error);
           callback(mockRappels as Rappel[]);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] Rappels catch:', error);
@@ -918,7 +976,9 @@ export const getRappels = async (): Promise<Rappel[]> => {
 // Collection Firestore: "settings/mosqueeInfo"
 // Champs backoffice: nom, adresse, codePostal, ville, telephone, email, siteWeb, iban, bic, bankName, accountHolder
 
-export const subscribeToMosqueeInfo = (callback: (data: MosqueeInfo & { headerImageUrl?: string }) => void) => {
+export const subscribeToMosqueeInfo = (
+  callback: (data: MosqueeInfo & { headerImageUrl?: string }) => void,
+) => {
   if (FORCE_DEMO_MODE) {
     callback(mockMosqueeInfo);
     return () => {};
@@ -943,7 +1003,8 @@ export const subscribeToMosqueeInfo = (callback: (data: MosqueeInfo & { headerIm
               iban: data?.iban || mockMosqueeInfo.iban,
               bic: data?.bic || mockMosqueeInfo.bic,
               bankName: data?.bankName || mockMosqueeInfo.bankName,
-              accountHolder: data?.accountHolder || mockMosqueeInfo.accountHolder,
+              accountHolder:
+                data?.accountHolder || mockMosqueeInfo.accountHolder,
               headerImageUrl: data?.headerImageUrl || undefined,
             });
           } else {
@@ -953,7 +1014,7 @@ export const subscribeToMosqueeInfo = (callback: (data: MosqueeInfo & { headerIm
         error => {
           logger.error('[Firebase] MosqueeInfo error:', error);
           callback(mockMosqueeInfo);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] MosqueeInfo catch:', error);
@@ -989,7 +1050,9 @@ const defaultRamadanSettings: RamadanSettings = {
   },
 };
 
-export const subscribeToRamadanSettings = (callback: (data: RamadanSettings) => void) => {
+export const subscribeToRamadanSettings = (
+  callback: (data: RamadanSettings) => void,
+) => {
   if (FORCE_DEMO_MODE) {
     callback(defaultRamadanSettings);
     return () => {};
@@ -1009,9 +1072,15 @@ export const subscribeToRamadanSettings = (callback: (data: RamadanSettings) => 
               endDate: data?.endDate || '',
               tarawihTime: data?.tarawihTime || '21:30',
               notifications: {
-                suhoor: data?.notifications?.suhoor || defaultRamadanSettings.notifications.suhoor,
-                iftar: data?.notifications?.iftar || defaultRamadanSettings.notifications.iftar,
-                tarawih: data?.notifications?.tarawih || defaultRamadanSettings.notifications.tarawih,
+                suhoor:
+                  data?.notifications?.suhoor ||
+                  defaultRamadanSettings.notifications.suhoor,
+                iftar:
+                  data?.notifications?.iftar ||
+                  defaultRamadanSettings.notifications.iftar,
+                tarawih:
+                  data?.notifications?.tarawih ||
+                  defaultRamadanSettings.notifications.tarawih,
               },
             });
           } else {
@@ -1021,7 +1090,7 @@ export const subscribeToRamadanSettings = (callback: (data: RamadanSettings) => 
         error => {
           logger.error('[Firebase] RamadanSettings error:', error);
           callback(defaultRamadanSettings);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] RamadanSettings catch:', error);
@@ -1042,7 +1111,9 @@ const defaultCotisationPrices: CotisationPrices = {
   annuel: 100,
 };
 
-export const subscribeToCotisationPrices = (callback: (data: CotisationPrices) => void) => {
+export const subscribeToCotisationPrices = (
+  callback: (data: CotisationPrices) => void,
+) => {
   if (FORCE_DEMO_MODE) {
     callback(defaultCotisationPrices);
     return () => {};
@@ -1067,7 +1138,7 @@ export const subscribeToCotisationPrices = (callback: (data: CotisationPrices) =
         error => {
           logger.error('[Firebase] CotisationPrices error:', error);
           callback(defaultCotisationPrices);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] CotisationPrices catch:', error);
@@ -1081,7 +1152,10 @@ export const getMosqueeInfo = async (): Promise<MosqueeInfo> => {
     return mockMosqueeInfo;
   }
   try {
-    const doc = await firestore().collection('settings').doc('mosqueeInfo').get();
+    const doc = await firestore()
+      .collection('settings')
+      .doc('mosqueeInfo')
+      .get();
     if (doc.exists()) {
       const data = doc.data();
       return {
@@ -1135,7 +1209,7 @@ export const subscribeToIqama = (callback: (data: HorairesData) => void) => {
         error => {
           logger.error('[Firebase] Iqama error:', error);
           callback({ iqama: mockIqama, jumua: mockJumua });
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] Iqama catch:', error);
@@ -1149,7 +1223,10 @@ export const getPrayerTimes = async (): Promise<HorairesData> => {
     return { iqama: mockIqama, jumua: mockJumua };
   }
   try {
-    const doc = await firestore().collection('settings').doc('prayerTimes').get();
+    const doc = await firestore()
+      .collection('settings')
+      .doc('prayerTimes')
+      .get();
     if (doc.exists() && doc.data()?.iqama) {
       return {
         iqama: doc.data()?.iqama || mockIqama,
@@ -1197,7 +1274,9 @@ const defaultGeneralSettings: GeneralSettings = {
   },
 };
 
-export const subscribeToGeneralSettings = (callback: (data: GeneralSettings) => void) => {
+export const subscribeToGeneralSettings = (
+  callback: (data: GeneralSettings) => void,
+) => {
   if (FORCE_DEMO_MODE) {
     callback(defaultGeneralSettings);
     return () => {};
@@ -1229,7 +1308,7 @@ export const subscribeToGeneralSettings = (callback: (data: GeneralSettings) => 
         error => {
           logger.error('[Firebase] GeneralSettings error:', error);
           callback(defaultGeneralSettings);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] GeneralSettings catch:', error);
@@ -1268,7 +1347,9 @@ export const getGeneralSettings = async (): Promise<GeneralSettings> => {
 // ==================== DATES ISLAMIQUES ====================
 // Collection Firestore: "dates_islamiques"
 
-export const subscribeToIslamicDates = (callback: (data: DateIslamique[]) => void) => {
+export const subscribeToIslamicDates = (
+  callback: (data: DateIslamique[]) => void,
+) => {
   if (FORCE_DEMO_MODE) {
     callback(mockDatesIslamiques as DateIslamique[]);
     return () => {};
@@ -1294,7 +1375,7 @@ export const subscribeToIslamicDates = (callback: (data: DateIslamique[]) => voi
         error => {
           logger.error('[Firebase] IslamicDates error:', error);
           callback(mockDatesIslamiques as DateIslamique[]);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] IslamicDates catch:', error);
@@ -1347,7 +1428,9 @@ export const getMember = async (memberId: string): Promise<Member | null> => {
       memberId: doc.id,
       cotisationType: data?.cotisation?.type || null,
       cotisationStatus: getCotisationStatus(data?.cotisation),
-      nextPaymentDate: data?.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : undefined,
+      nextPaymentDate: data?.cotisation?.dateFin
+        ? toDate(data.cotisation.dateFin)
+        : undefined,
       createdAt: toDate(data?.createdAt),
     };
   } catch (error) {
@@ -1356,7 +1439,10 @@ export const getMember = async (memberId: string): Promise<Member | null> => {
   }
 };
 
-export const updateMember = async (memberId: string, data: Partial<Member>): Promise<void> => {
+export const updateMember = async (
+  memberId: string,
+  data: Partial<Member>,
+): Promise<void> => {
   if (FORCE_DEMO_MODE) return;
   try {
     const updateData: any = {};
@@ -1375,7 +1461,7 @@ export const updateMember = async (memberId: string, data: Partial<Member>): Pro
 
 // Interface pour l'objet inscritPar (info du payeur)
 export interface InscritParData {
-  odUserId: string;  // ID Firebase du payeur
+  odUserId: string; // ID Firebase du payeur
   nom: string;
   prenom: string;
 }
@@ -1396,7 +1482,12 @@ export interface CreateMemberData {
   phone?: string;
   // Nouveaux champs multi-membres
   inscritPar?: InscritParData | string; // Objet avec info du payeur (ou string pour rétrocompatibilité)
-  status?: 'actif' | 'en_attente_validation' | 'en_attente_signature' | 'en_attente_paiement' | 'expire';
+  status?:
+    | 'actif'
+    | 'en_attente_validation'
+    | 'en_attente_signature'
+    | 'en_attente_paiement'
+    | 'expire';
   dateInscription?: Date;
   datePaiement?: Date | null; // null pour virement non encore reçu
   paiementId?: string; // ID pour regrouper les membres payés ensemble
@@ -1414,7 +1505,9 @@ export interface CreateMemberData {
   cotisationType?: 'mensuel' | 'annuel' | null;
 }
 
-export const createMember = async (member: CreateMemberData | Omit<Member, 'id' | 'createdAt' | 'memberId'>): Promise<string> => {
+export const createMember = async (
+  member: CreateMemberData | Omit<Member, 'id' | 'createdAt' | 'memberId'>,
+): Promise<string> => {
   if (FORCE_DEMO_MODE) {
     return `mock-member-${Date.now()}`;
   }
@@ -1425,7 +1518,7 @@ export const createMember = async (member: CreateMemberData | Omit<Member, 'id' 
 
     if ('nom' in member && member.nom) {
       nom = member.nom;
-      prenom = ('prenom' in member && member.prenom) ? member.prenom : '';
+      prenom = 'prenom' in member && member.prenom ? member.prenom : '';
     } else if ('name' in member && member.name) {
       const nameParts = member.name.split(' ');
       prenom = nameParts[0];
@@ -1433,13 +1526,14 @@ export const createMember = async (member: CreateMemberData | Omit<Member, 'id' 
     }
 
     // Déterminer téléphone et email
-    const telephone = ('telephone' in member && member.telephone)
-      ? member.telephone
-      : ('phone' in member && member.phone)
+    const telephone =
+      'telephone' in member && member.telephone
+        ? member.telephone
+        : 'phone' in member && member.phone
         ? member.phone
         : '';
     const email = member.email || '';
-    const adresse = ('adresse' in member && member.adresse) ? member.adresse : '';
+    const adresse = 'adresse' in member && member.adresse ? member.adresse : '';
 
     // Construire l'objet cotisation
     let cotisationData: any;
@@ -1461,8 +1555,11 @@ export const createMember = async (member: CreateMemberData | Omit<Member, 'id' 
     }
 
     // Déterminer genre et date de naissance
-    const genre = ('genre' in member && member.genre) ? member.genre : '';
-    const dateNaissance = ('dateNaissance' in member && member.dateNaissance) ? member.dateNaissance : '';
+    const genre = 'genre' in member && member.genre ? member.genre : '';
+    const dateNaissance =
+      'dateNaissance' in member && member.dateNaissance
+        ? member.dateNaissance
+        : '';
 
     // Construire le document
     const docData: any = {
@@ -1519,7 +1616,9 @@ export const createMember = async (member: CreateMemberData | Omit<Member, 'id' 
 };
 
 // Helper pour déterminer le statut de cotisation
-const getCotisationStatus = (cotisation: any): 'actif' | 'expire' | 'aucun' | 'en_attente_paiement' => {
+const getCotisationStatus = (
+  cotisation: any,
+): 'actif' | 'expire' | 'aucun' | 'en_attente_paiement' => {
   if (!cotisation) return 'aucun';
   if (!cotisation.dateFin) return 'en_attente_paiement';
   const now = new Date();
@@ -1555,7 +1654,9 @@ export interface InscribedMember {
   paiementId?: string;
 }
 
-export const getMembersInscribedBy = async (userId: string): Promise<InscribedMember[]> => {
+export const getMembersInscribedBy = async (
+  userId: string,
+): Promise<InscribedMember[]> => {
   if (FORCE_DEMO_MODE) return [];
   try {
     const snapshot = await firestore()
@@ -1578,7 +1679,9 @@ export const getMembersInscribedBy = async (userId: string): Promise<InscribedMe
         montant: data.montant || data.cotisation?.montant || 0,
         modePaiement: data.modePaiement || '',
         datePaiement: data.datePaiement ? toDate(data.datePaiement) : undefined,
-        dateFin: data.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : undefined,
+        dateFin: data.cotisation?.dateFin
+          ? toDate(data.cotisation.dateFin)
+          : undefined,
         paiementId: data.paiementId || '',
       };
     });
@@ -1616,7 +1719,9 @@ export interface MyMembership {
   referenceVirement?: string;
 }
 
-export const getMyMembership = async (email: string): Promise<MyMembership | null> => {
+export const getMyMembership = async (
+  email: string,
+): Promise<MyMembership | null> => {
   if (FORCE_DEMO_MODE) return null;
   try {
     const snapshot = await firestore()
@@ -1631,15 +1736,25 @@ export const getMyMembership = async (email: string): Promise<MyMembership | nul
     const data = doc.data();
 
     // Déterminer le statut — ALIGNÉ avec buildMemberProfile
-    const hasValidCotisation = data.cotisation?.dateFin &&
-      (data.cotisation.dateFin.toDate ? data.cotisation.dateFin.toDate() : new Date(data.cotisation.dateFin)) > new Date();
-    const memberStatus = data.status === 'actif' || hasValidCotisation ? 'actif' :
-      data.status === 'en_attente_paiement' ? 'en_attente_paiement' :
-      data.status === 'en_attente_validation' ? 'en_attente_validation' :
-      data.status === 'en_attente_signature' ? 'en_attente_signature' :
-      data.status === 'sympathisant' ? 'sympathisant' :
-      data.status === 'annule' ? 'annule' :
-      data.status || 'en_attente_signature';
+    const hasValidCotisation =
+      data.cotisation?.dateFin &&
+      (data.cotisation.dateFin.toDate
+        ? data.cotisation.dateFin.toDate()
+        : new Date(data.cotisation.dateFin)) > new Date();
+    const memberStatus =
+      data.status === 'actif' || hasValidCotisation
+        ? 'actif'
+        : data.status === 'en_attente_paiement'
+        ? 'en_attente_paiement'
+        : data.status === 'en_attente_validation'
+        ? 'en_attente_validation'
+        : data.status === 'en_attente_signature'
+        ? 'en_attente_signature'
+        : data.status === 'sympathisant'
+        ? 'sympathisant'
+        : data.status === 'annule'
+        ? 'annule'
+        : data.status || 'en_attente_signature';
 
     return {
       id: doc.id,
@@ -1653,13 +1768,18 @@ export const getMyMembership = async (email: string): Promise<MyMembership | nul
       montant: data.montant || data.cotisation?.montant || 0,
       dateInscription: toDate(data.dateInscription),
       datePaiement: data.datePaiement ? toDate(data.datePaiement) : undefined,
-      dateDebut: data.cotisation?.dateDebut ? toDate(data.cotisation.dateDebut) : undefined,
-      dateFin: data.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : undefined,
+      dateDebut: data.cotisation?.dateDebut
+        ? toDate(data.cotisation.dateDebut)
+        : undefined,
+      dateFin: data.cotisation?.dateFin
+        ? toDate(data.cotisation.dateFin)
+        : undefined,
       modePaiement: data.modePaiement || '',
       paiementId: data.paiementId || '',
-      inscritPar: data.inscritPar && typeof data.inscritPar === 'object'
-        ? { nom: data.inscritPar.nom, prenom: data.inscritPar.prenom }
-        : null,
+      inscritPar:
+        data.inscritPar && typeof data.inscritPar === 'object'
+          ? { nom: data.inscritPar.nom, prenom: data.inscritPar.prenom }
+          : null,
       referenceVirement: data.referenceVirement || undefined,
     };
   } catch (error) {
@@ -1669,16 +1789,109 @@ export const getMyMembership = async (email: string): Promise<MyMembership | nul
 };
 
 // Listener temps réel pour les adhésions (mise à jour automatique depuis le backoffice)
+// Build 254 Fix: requête par UID d'abord (comme subscribeToMemberProfile)
+// pour trouver le MÊME document que la carte membre et éviter les incohérences.
 export const subscribeToMyMembership = (
   email: string,
-  callback: (membership: MyMembership | null, error?: string) => void
+  callback: (membership: MyMembership | null, error?: string) => void,
 ): (() => void) => {
   if (FORCE_DEMO_MODE || !email) {
     callback(null);
     return () => {};
   }
 
+  // Helper pour mapper un doc Firestore vers MyMembership
+  const mapDocToMembership = (doc: any, data: any): MyMembership => {
+    const memberStatus = computeMemberStatus({
+      status: data.status,
+      cotisationDateFin: data.cotisation?.dateFin,
+    });
+
+    return {
+      id: doc.id,
+      nom: data.nom || '',
+      prenom: data.prenom || '',
+      email: data.email || '',
+      telephone: data.telephone || '',
+      adresse: data.adresse || '',
+      status: memberStatus,
+      formule: data.formule || data.cotisation?.type || null,
+      montant: data.montant || data.cotisation?.montant || 0,
+      dateInscription: toDate(data.dateInscription),
+      datePaiement: data.datePaiement ? toDate(data.datePaiement) : undefined,
+      dateDebut: data.cotisation?.dateDebut
+        ? toDate(data.cotisation.dateDebut)
+        : undefined,
+      dateFin: data.cotisation?.dateFin
+        ? toDate(data.cotisation.dateFin)
+        : undefined,
+      modePaiement: data.modePaiement || '',
+      paiementId: data.paiementId || '',
+      inscritPar:
+        data.inscritPar && typeof data.inscritPar === 'object'
+          ? { nom: data.inscritPar.nom, prenom: data.inscritPar.prenom }
+          : null,
+      referenceVirement: data.referenceVirement || undefined,
+    };
+  };
+
   try {
+    // Stratégie : UID d'abord (même document que la carte membre),
+    // fallback email pour les membres créés depuis le backoffice.
+    const currentUser = auth().currentUser;
+    const uid = currentUser?.uid;
+
+    if (uid) {
+      // Écouter par UID d'abord
+      return firestore()
+        .collection('members')
+        .where('uid', '==', uid)
+        .limit(1)
+        .onSnapshot(
+          async snapshot => {
+            if (!snapshot.empty) {
+              const doc = snapshot.docs[0];
+              callback(mapDocToMembership(doc, doc.data()));
+              return;
+            }
+
+            // Fallback : chercher par email (membre créé depuis backoffice sans uid)
+            try {
+              const emailSnapshot = await firestore()
+                .collection('members')
+                .where('email', '==', email.toLowerCase())
+                .limit(1)
+                .get();
+
+              if (!emailSnapshot.empty) {
+                const doc = emailSnapshot.docs[0];
+                const data = doc.data();
+
+                // Lier le UID au document pour les prochaines requêtes
+                if (!data.uid) {
+                  await doc.ref.update({ uid });
+                }
+
+                callback(mapDocToMembership(doc, data));
+              } else {
+                callback(null);
+              }
+            } catch (emailError) {
+              logger.error(
+                '[Firebase] subscribeToMyMembership email fallback error:',
+                emailError,
+              );
+              callback(null);
+            }
+          },
+          error => {
+            logger.error('[Firebase] subscribeToMyMembership error:', error);
+            callback(null, 'firestore_error');
+          },
+        );
+    }
+
+    // Pas d'UID : écouter par email directement
     return firestore()
       .collection('members')
       .where('email', '==', email.toLowerCase())
@@ -1689,42 +1902,13 @@ export const subscribeToMyMembership = (
             callback(null);
             return;
           }
-
           const doc = snapshot.docs[0];
-          const data = doc.data();
-
-          // Source unique de verite — computeMemberStatus (utils/memberStatus.ts)
-          const memberStatus = computeMemberStatus({
-            status: data.status,
-            cotisationDateFin: data.cotisation?.dateFin,
-          });
-
-          callback({
-            id: doc.id,
-            nom: data.nom || '',
-            prenom: data.prenom || '',
-            email: data.email || '',
-            telephone: data.telephone || '',
-            adresse: data.adresse || '',
-            status: memberStatus,
-            formule: data.formule || data.cotisation?.type || null,
-            montant: data.montant || data.cotisation?.montant || 0,
-            dateInscription: toDate(data.dateInscription),
-            datePaiement: data.datePaiement ? toDate(data.datePaiement) : undefined,
-            dateDebut: data.cotisation?.dateDebut ? toDate(data.cotisation.dateDebut) : undefined,
-            dateFin: data.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : undefined,
-            modePaiement: data.modePaiement || '',
-            paiementId: data.paiementId || '',
-            inscritPar: data.inscritPar && typeof data.inscritPar === 'object'
-              ? { nom: data.inscritPar.nom, prenom: data.inscritPar.prenom }
-              : null,
-            referenceVirement: data.referenceVirement || undefined,
-          });
+          callback(mapDocToMembership(doc, doc.data()));
         },
         error => {
           logger.error('[Firebase] subscribeToMyMembership error:', error);
           callback(null, 'firestore_error');
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] subscribeToMyMembership catch:', error);
@@ -1756,7 +1940,7 @@ export interface MemberProfileRealtime {
 export const subscribeToMemberProfile = (
   uid: string,
   email: string,
-  callback: (profile: MemberProfileRealtime | null) => void
+  callback: (profile: MemberProfileRealtime | null) => void,
 ): (() => void) => {
   if (FORCE_DEMO_MODE || (!uid && !email)) {
     callback(null);
@@ -1767,7 +1951,10 @@ export const subscribeToMemberProfile = (
     // Chercher par UID d'abord, puis par email
     const query = uid
       ? firestore().collection('members').where('uid', '==', uid).limit(1)
-      : firestore().collection('members').where('email', '==', email.toLowerCase()).limit(1);
+      : firestore()
+          .collection('members')
+          .where('email', '==', email.toLowerCase())
+          .limit(1);
 
     return query.onSnapshot(
       async snapshot => {
@@ -1810,7 +1997,7 @@ export const subscribeToMemberProfile = (
       error => {
         logger.error('[Firebase] subscribeToMemberProfile error:', error);
         callback(null);
-      }
+      },
     );
   } catch (error) {
     logger.error('[Firebase] subscribeToMemberProfile catch:', error);
@@ -1820,7 +2007,10 @@ export const subscribeToMemberProfile = (
 };
 
 // Helper pour construire le profil membre
-const buildMemberProfile = (docId: string, data: any): MemberProfileRealtime => {
+const buildMemberProfile = (
+  docId: string,
+  data: any,
+): MemberProfileRealtime => {
   // Source unique de verite — computeMemberStatus (utils/memberStatus.ts)
   const resolvedStatus = computeMemberStatus({
     status: data.status,
@@ -1839,8 +2029,12 @@ const buildMemberProfile = (docId: string, data: any): MemberProfileRealtime => 
     cotisation: {
       type: data.formule || data.cotisation?.type || null,
       montant: data.montant || data.cotisation?.montant || 0,
-      dateDebut: data.cotisation?.dateDebut ? toDate(data.cotisation.dateDebut) : null,
-      dateFin: data.cotisation?.dateFin ? toDate(data.cotisation.dateFin) : null,
+      dateDebut: data.cotisation?.dateDebut
+        ? toDate(data.cotisation.dateDebut)
+        : null,
+      dateFin: data.cotisation?.dateFin
+        ? toDate(data.cotisation.dateFin)
+        : null,
       status: resolvedStatus,
     },
   };
@@ -1857,12 +2051,13 @@ export interface ReglementData {
  * Écouter les changements du règlement intérieur en temps réel
  */
 export const subscribeToReglement = (
-  callback: (reglement: ReglementData | null) => void
+  callback: (reglement: ReglementData | null) => void,
 ): (() => void) => {
   if (FORCE_DEMO_MODE) {
     callback({
-      contenu: 'Règlement intérieur de l\'association...\n\nARTICLE 1 - OBJET\n...',
-      updatedAt: null
+      contenu:
+        "Règlement intérieur de l'association...\n\nARTICLE 1 - OBJET\n...",
+      updatedAt: null,
     });
     return () => {};
   }
@@ -1872,21 +2067,23 @@ export const subscribeToReglement = (
       .collection('settings')
       .doc('reglement')
       .onSnapshot(
-        (doc) => {
+        doc => {
           if (doc.exists()) {
             const data = doc.data();
             callback({
               contenu: data?.contenu || '',
-              updatedAt: data?.updatedAt?.toDate ? data.updatedAt.toDate() : null
+              updatedAt: data?.updatedAt?.toDate
+                ? data.updatedAt.toDate()
+                : null,
             });
           } else {
             callback(null);
           }
         },
-        (error) => {
+        error => {
           logger.error('[Firebase] subscribeToReglement error:', error);
           callback(null);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] subscribeToReglement catch:', error);
@@ -1963,7 +2160,7 @@ export const sendMessage = async (
   userName: string,
   userEmail: string,
   sujet: string,
-  message: string
+  message: string,
 ): Promise<{ success: boolean; error?: string; messageId?: string }> => {
   if (FORCE_DEMO_MODE) {
     return { success: false, error: 'Mode démo activé' };
@@ -1971,13 +2168,19 @@ export const sendMessage = async (
 
   // Validation
   if (!message || message.trim().length < 10) {
-    return { success: false, error: 'Le message doit contenir au moins 10 caractères' };
+    return {
+      success: false,
+      error: 'Le message doit contenir au moins 10 caractères',
+    };
   }
 
   // Vérifier limite anti-spam
   const canSend = await checkDailyMessageLimit(userId);
   if (!canSend) {
-    return { success: false, error: 'Vous avez atteint la limite de 5 messages par jour' };
+    return {
+      success: false,
+      error: 'Vous avez atteint la limite de 5 messages par jour',
+    };
   }
 
   try {
@@ -1997,12 +2200,14 @@ export const sendMessage = async (
   } catch (error) {
     const err = error as Error;
     logger.error('[Firebase] sendMessage error:', err);
-    return { success: false, error: err?.message || 'Erreur lors de l\'envoi' };
+    return { success: false, error: err?.message || "Erreur lors de l'envoi" };
   }
 };
 
 // Récupérer les messages d'un utilisateur
-export const getUserMessages = async (userId: string): Promise<UserMessage[]> => {
+export const getUserMessages = async (
+  userId: string,
+): Promise<UserMessage[]> => {
   if (FORCE_DEMO_MODE) return [];
 
   try {
@@ -2041,7 +2246,7 @@ export const getUserMessages = async (userId: string): Promise<UserMessage[]> =>
 // Souscrire aux messages d'un utilisateur (temps réel)
 export const subscribeToUserMessages = (
   userId: string,
-  callback: (messages: UserMessage[]) => void
+  callback: (messages: UserMessage[]) => void,
 ) => {
   if (FORCE_DEMO_MODE) {
     callback([]);
@@ -2085,7 +2290,7 @@ export const subscribeToUserMessages = (
         error => {
           logger.error('[Firebase] subscribeToUserMessages error:', error);
           callback([]);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] subscribeToUserMessages catch:', error);
@@ -2098,14 +2303,17 @@ export const subscribeToUserMessages = (
 export const addUserReplyToMessage = async (
   messageId: string,
   replyText: string,
-  userId?: string
+  userId?: string,
 ): Promise<{ success: boolean; error?: string }> => {
   if (FORCE_DEMO_MODE) {
     return { success: false, error: 'Mode démo activé' };
   }
 
   if (!replyText || replyText.trim().length < 5) {
-    return { success: false, error: 'La réponse doit contenir au moins 5 caractères' };
+    return {
+      success: false,
+      error: 'La réponse doit contenir au moins 5 caractères',
+    };
   }
 
   try {
@@ -2119,7 +2327,11 @@ export const addUserReplyToMessage = async (
     // SÉCURITÉ: Vérifier que l'utilisateur est le propriétaire du message
     const data = doc.data();
     if (userId && data?.odUserId !== userId) {
-      logger.warn('[Firebase] Tentative de réponse non autorisée:', { messageId, userId, owner: data?.odUserId });
+      logger.warn('[Firebase] Tentative de réponse non autorisée:', {
+        messageId,
+        userId,
+        owner: data?.odUserId,
+      });
       return { success: false, error: 'Non autorisé' };
     }
 
@@ -2142,12 +2354,14 @@ export const addUserReplyToMessage = async (
   } catch (error) {
     const err = error as Error;
     logger.error('[Firebase] addUserReplyToMessage error:', err);
-    return { success: false, error: err?.message || 'Erreur lors de l\'envoi' };
+    return { success: false, error: err?.message || "Erreur lors de l'envoi" };
   }
 };
 
 // Récupérer un message spécifique
-export const getMessage = async (messageId: string): Promise<UserMessage | null> => {
+export const getMessage = async (
+  messageId: string,
+): Promise<UserMessage | null> => {
   if (FORCE_DEMO_MODE) return null;
 
   try {
@@ -2182,7 +2396,7 @@ export const getMessage = async (messageId: string): Promise<UserMessage | null>
 // Supprimer un message (soft delete - reste visible dans le backoffice)
 export const deleteMessage = async (
   messageId: string,
-  userId?: string
+  userId?: string,
 ): Promise<{ success: boolean; error?: string }> => {
   if (FORCE_DEMO_MODE) {
     return { success: false, error: 'Mode démo activé' };
@@ -2199,7 +2413,11 @@ export const deleteMessage = async (
       }
       const data = doc.data();
       if (data?.odUserId !== userId) {
-        logger.warn('[Firebase] Tentative de suppression non autorisée:', { messageId, userId, owner: data?.odUserId });
+        logger.warn('[Firebase] Tentative de suppression non autorisée:', {
+          messageId,
+          userId,
+          owner: data?.odUserId,
+        });
         return { success: false, error: 'Non autorisé' };
       }
     }
@@ -2213,14 +2431,17 @@ export const deleteMessage = async (
   } catch (error) {
     const err = error as Error;
     logger.error('[Firebase] deleteMessage error:', err);
-    return { success: false, error: err?.message || 'Erreur lors de la suppression' };
+    return {
+      success: false,
+      error: err?.message || 'Erreur lors de la suppression',
+    };
   }
 };
 
 // Souscrire à un message spécifique (temps réel)
 export const subscribeToMessage = (
   messageId: string,
-  callback: (message: UserMessage | null) => void
+  callback: (message: UserMessage | null) => void,
 ) => {
   if (FORCE_DEMO_MODE) {
     callback(null);
@@ -2259,7 +2480,7 @@ export const subscribeToMessage = (
         error => {
           logger.error('[Firebase] subscribeToMessage error:', error);
           callback(null);
-        }
+        },
       );
   } catch (error) {
     logger.error('[Firebase] subscribeToMessage catch:', error);
@@ -2277,7 +2498,7 @@ export const subscribeToMessage = (
  */
 export const requestRecuFiscal = async (
   email: string,
-  annee: number
+  annee: number,
 ): Promise<{ success: boolean; message: string; montantTotal?: number }> => {
   if (FORCE_DEMO_MODE) {
     return {
@@ -2287,7 +2508,10 @@ export const requestRecuFiscal = async (
   }
 
   try {
-    const sendRecuFiscal = firebase.app().functions('europe-west1').httpsCallable('sendRecuFiscal');
+    const sendRecuFiscal = firebase
+      .app()
+      .functions('europe-west1')
+      .httpsCallable('sendRecuFiscal');
     const result = await sendRecuFiscal({ email, annee });
     const data = result.data as any;
 
@@ -2299,12 +2523,12 @@ export const requestRecuFiscal = async (
   } catch (error) {
     const err = error as Error & { code?: string };
     logger.error('[Firebase] requestRecuFiscal error:', err);
-    let message = 'Erreur lors de l\'envoi du reçu fiscal';
+    let message = "Erreur lors de l'envoi du reçu fiscal";
 
     if (err?.code === 'functions/not-found') {
       message = 'Aucun don trouvé pour cette année';
     } else if (err?.code === 'functions/failed-precondition') {
-      message = 'Service non configuré. Contactez l\'administration.';
+      message = "Service non configuré. Contactez l'administration.";
     } else if (err?.message) {
       message = err.message;
     }
@@ -2323,14 +2547,17 @@ export const requestRecuFiscal = async (
  */
 export const getDonsTotalByYear = async (
   email: string,
-  annee: number
+  annee: number,
 ): Promise<{ total: number; count: number } | null> => {
   if (FORCE_DEMO_MODE) {
     return null;
   }
 
   try {
-    const getDonsByYear = firebase.app().functions('europe-west1').httpsCallable('getDonsByYear');
+    const getDonsByYear = firebase
+      .app()
+      .functions('europe-west1')
+      .httpsCallable('getDonsByYear');
     const result = await getDonsByYear({ email, annee });
     const data = result.data as any;
 
@@ -2345,28 +2572,45 @@ export const getDonsTotalByYear = async (
 };
 
 // ==================== CANCEL SUBSCRIPTION ====================
-export const cancelSubscription = async (reason?: string): Promise<{ success: boolean; message: string }> => {
+export const cancelSubscription = async (
+  reason?: string,
+): Promise<{ success: boolean; message: string }> => {
   try {
-    const cancelFn = firebase.app().functions('europe-west1').httpsCallable('cancelSubscription');
+    const cancelFn = firebase
+      .app()
+      .functions('europe-west1')
+      .httpsCallable('cancelSubscription');
     const result = await cancelFn({ reason: reason || 'Annulé par le membre' });
     const data = result.data as any;
     return { success: data.success, message: data.message };
   } catch (error: any) {
     logger.error('[Firebase] cancelSubscription error:', error);
-    return { success: false, message: error?.message || 'Erreur lors de l\'annulation' };
+    return {
+      success: false,
+      message: error?.message || "Erreur lors de l'annulation",
+    };
   }
 };
 
 // ==================== DELETE MY ACCOUNT (SELF-SERVICE RGPD) ====================
-export const deleteMyAccount = async (): Promise<{ success: boolean; message: string }> => {
+export const deleteMyAccount = async (): Promise<{
+  success: boolean;
+  message: string;
+}> => {
   try {
-    const deleteFn = firebase.app().functions('europe-west1').httpsCallable('deleteMyAccount');
+    const deleteFn = firebase
+      .app()
+      .functions('europe-west1')
+      .httpsCallable('deleteMyAccount');
     const result = await deleteFn({});
     const data = result.data as any;
     return { success: data.success, message: data.message };
   } catch (error: any) {
     logger.error('[Firebase] deleteMyAccount error:', error);
-    return { success: false, message: error?.message || 'Erreur lors de la suppression du compte' };
+    return {
+      success: false,
+      message: error?.message || 'Erreur lors de la suppression du compte',
+    };
   }
 };
 

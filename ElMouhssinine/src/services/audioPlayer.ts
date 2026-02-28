@@ -156,7 +156,7 @@ export const resetPlayer = async () => {
   } catch {
     // Ignorer si le player n'est pas initialisé
   }
-  // Remettre le flag pour forcer un re-setup au prochain montage
-  isSetup = false;
-  setupPromise = null;
+  // NE PAS remettre isSetup=false : TrackPlayer.reset() ne détruit pas
+  // le player natif, il vide seulement la queue. Le player reste initialisé.
+  // Mettre isSetup=false causerait un double setupPlayer() → crash.
 };

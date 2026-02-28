@@ -12,7 +12,15 @@ import {
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, platformShadow, isSmallScreen } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  platformShadow,
+  isSmallScreen,
+} from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
 import { AuthService } from '../services/auth';
 import {
@@ -33,7 +41,9 @@ const MyMembershipsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
   const [myMembership, setMyMembership] = useState<MyMembership | null>(null);
-  const [inscribedMembers, setInscribedMembers] = useState<InscribedMember[]>([]);
+  const [inscribedMembers, setInscribedMembers] = useState<InscribedMember[]>(
+    [],
+  );
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
@@ -54,7 +64,7 @@ const MyMembershipsScreen = () => {
     let unsubscribeMembership: (() => void) | null = null;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    const unsubscribeAuth = AuthService.onAuthStateChanged(async (user) => {
+    const unsubscribeAuth = AuthService.onAuthStateChanged(async user => {
       // IMPORTANT: Nettoyer le listener précédent AVANT d'en créer un nouveau
       // Évite les memory leaks lors de changements d'utilisateur (logout/login)
       if (unsubscribeMembership) {
@@ -79,21 +89,24 @@ const MyMembershipsScreen = () => {
         }, 10000);
 
         // S'abonner aux changements en temps réel de l'adhésion
-        unsubscribeMembership = subscribeToMyMembership(user.email, (membership, error) => {
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-          }
-          if (error) {
-            setConnectionError(true);
-          } else {
-            setDataReceived(true);
-            setConnectionError(false);
-          }
-          setMyMembership(membership);
-          setLoading(false);
-          setRefreshing(false);
-        });
+        unsubscribeMembership = subscribeToMyMembership(
+          user.email,
+          (membership, error) => {
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+            if (error) {
+              setConnectionError(true);
+            } else {
+              setDataReceived(true);
+              setConnectionError(false);
+            }
+            setMyMembership(membership);
+            setLoading(false);
+            setRefreshing(false);
+          },
+        );
 
         // Charger les membres inscrits
         await loadInscribedMembers(user.uid);
@@ -158,7 +171,9 @@ const MyMembershipsScreen = () => {
   };
 
   // Formater le type d'abonnement
-  const formatFormule = (formule: 'mensuel' | 'annuel' | null | undefined): string => {
+  const formatFormule = (
+    formule: 'mensuel' | 'annuel' | null | undefined,
+  ): string => {
     if (!formule) return '-';
     if (language === 'ar') {
       return formule === 'mensuel' ? 'شهري' : 'سنوي';
@@ -169,7 +184,7 @@ const MyMembershipsScreen = () => {
   // Annuler un abonnement - redirige vers la messagerie
   const handleCancelSubscription = () => {
     Alert.alert(
-      language === 'ar' ? 'إلغاء الاشتراك' : 'Résilier l\'abonnement',
+      language === 'ar' ? 'إلغاء الاشتراك' : "Résilier l'abonnement",
       language === 'ar'
         ? 'لإلغاء اشتراكك، يرجى إرسال طلب عبر الرسائل للتواصل مع المسجد.'
         : 'Pour résilier votre abonnement, veuillez envoyer une demande via la messagerie pour contacter la mosquée.',
@@ -179,7 +194,7 @@ const MyMembershipsScreen = () => {
           text: language === 'ar' ? 'إرسال رسالة' : 'Envoyer un message',
           onPress: () => navigation.navigate('Member'),
         },
-      ]
+      ],
     );
   };
 
@@ -187,7 +202,10 @@ const MyMembershipsScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
@@ -196,7 +214,13 @@ const MyMembershipsScreen = () => {
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.md }}>
+          <Text
+            style={{
+              color: colors.textMuted,
+              fontSize: fontSize.sm,
+              marginTop: spacing.md,
+            }}
+          >
             {language === 'ar' ? 'جاري التحميل...' : 'Chargement...'}
           </Text>
         </View>
@@ -208,7 +232,10 @@ const MyMembershipsScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
@@ -246,7 +273,10 @@ const MyMembershipsScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.title}>
@@ -277,7 +307,10 @@ const MyMembershipsScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={[styles.title, isRTL && styles.rtlText]}>
@@ -289,7 +322,11 @@ const MyMembershipsScreen = () => {
         style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+          />
         }
       >
         {/* Mon Adhésion */}
@@ -306,11 +343,14 @@ const MyMembershipsScreen = () => {
                 <View style={styles.unifiedCardHeader}>
                   <View style={styles.unifiedCardAvatar}>
                     <Text style={styles.unifiedCardAvatarText}>
-                      {myMembership.prenom?.[0]}{myMembership.nom?.[0]}
+                      {myMembership.prenom?.[0]}
+                      {myMembership.nom?.[0]}
                     </Text>
                   </View>
                   <View style={styles.unifiedCardNameSection}>
-                    <Text style={[styles.unifiedCardName, isRTL && styles.rtlText]}>
+                    <Text
+                      style={[styles.unifiedCardName, isRTL && styles.rtlText]}
+                    >
                       {myMembership.prenom} {myMembership.nom}
                     </Text>
                     <Text style={styles.unifiedCardEmail} numberOfLines={1}>
@@ -323,25 +363,43 @@ const MyMembershipsScreen = () => {
                 {/* Infos principales */}
                 <View style={styles.unifiedCardInfoGrid}>
                   <View style={styles.unifiedCardInfoItem}>
-                    <Text style={styles.unifiedCardInfoLabel}>📞 Téléphone</Text>
-                    <Text style={styles.unifiedCardInfoValue}>{myMembership.telephone || '-'}</Text>
+                    <Text style={styles.unifiedCardInfoLabel}>
+                      📞 Téléphone
+                    </Text>
+                    <Text style={styles.unifiedCardInfoValue}>
+                      {myMembership.telephone || '-'}
+                    </Text>
                   </View>
                   <View style={styles.unifiedCardInfoItem}>
                     <Text style={styles.unifiedCardInfoLabel}>📋 Formule</Text>
-                    <Text style={[styles.unifiedCardInfoValue, styles.infoHighlight]}>
+                    <Text
+                      style={[
+                        styles.unifiedCardInfoValue,
+                        styles.infoHighlight,
+                      ]}
+                    >
                       {formatFormule(myMembership.formule)}
                     </Text>
                   </View>
                   <View style={styles.unifiedCardInfoItem}>
                     <Text style={styles.unifiedCardInfoLabel}>💰 Montant</Text>
-                    <Text style={[styles.unifiedCardInfoValue, styles.infoHighlight]}>
+                    <Text
+                      style={[
+                        styles.unifiedCardInfoValue,
+                        styles.infoHighlight,
+                      ]}
+                    >
                       {myMembership.montant ? `${myMembership.montant} €` : '-'}
                     </Text>
                   </View>
                   {myMembership.modePaiement && (
                     <View style={styles.unifiedCardInfoItem}>
-                      <Text style={styles.unifiedCardInfoLabel}>💳 Mode paiement</Text>
-                      <Text style={styles.unifiedCardInfoValue}>{myMembership.modePaiement}</Text>
+                      <Text style={styles.unifiedCardInfoLabel}>
+                        💳 Mode paiement
+                      </Text>
+                      <Text style={styles.unifiedCardInfoValue}>
+                        {myMembership.modePaiement}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -351,11 +409,13 @@ const MyMembershipsScreen = () => {
                   <Text style={styles.paymentStatusLabel}>
                     {language === 'ar' ? 'حالة الدفع:' : 'Paiement:'}
                   </Text>
-                  {myMembership.status === 'actif' || myMembership.status === 'en_attente_validation' || myMembership.datePaiement ? (
+                  {myMembership.status === 'actif' ||
+                  myMembership.status === 'en_attente_validation' ? (
                     <View style={[styles.paymentBadge, styles.paymentPaid]}>
                       <Text style={styles.paymentBadgeText}>✓ Payé</Text>
                     </View>
-                  ) : myMembership.status === 'en_attente_paiement' ? (
+                  ) : myMembership.status === 'en_attente_paiement' ||
+                    myMembership.status === 'en_attente_signature' ? (
                     <View style={[styles.paymentBadge, styles.paymentPending]}>
                       <Text style={styles.paymentBadgeText}>⏳ En attente</Text>
                     </View>
@@ -369,9 +429,12 @@ const MyMembershipsScreen = () => {
                 {/* Si inscrit par quelqu'un d'autre */}
                 {myMembership.inscritPar && (
                   <View style={styles.inscritParBanner}>
-                    <Text style={[styles.inscritParText, isRTL && styles.rtlText]}>
+                    <Text
+                      style={[styles.inscritParText, isRTL && styles.rtlText]}
+                    >
                       ℹ️ {language === 'ar' ? 'مسجل بواسطة' : 'Inscrit par'}{' '}
-                      {myMembership.inscritPar.prenom} {myMembership.inscritPar.nom}
+                      {myMembership.inscritPar.prenom}{' '}
+                      {myMembership.inscritPar.nom}
                     </Text>
                   </View>
                 )}
@@ -383,10 +446,14 @@ const MyMembershipsScreen = () => {
                       style={styles.actionBtn}
                       onPress={() => navigation.navigate('Member')}
                     >
-                      <Text style={styles.actionBtnText}>💳 Payer maintenant</Text>
+                      <Text style={styles.actionBtnText}>
+                        💳 Payer maintenant
+                      </Text>
                     </TouchableOpacity>
                   )}
-                  {['expire', 'aucun', 'annule'].includes(myMembership.status) && (
+                  {['expire', 'aucun', 'annule'].includes(
+                    myMembership.status,
+                  ) && (
                     <TouchableOpacity
                       style={styles.actionBtn}
                       onPress={() => navigation.navigate('Member')}
@@ -399,9 +466,14 @@ const MyMembershipsScreen = () => {
                     myMembership.status === 'en_attente_validation' ||
                     myMembership.status === 'en_attente_signature' ||
                     myMembership.status === 'en_attente_paiement') && (
-                    <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelSubscription}>
+                    <TouchableOpacity
+                      style={styles.cancelBtn}
+                      onPress={handleCancelSubscription}
+                    >
                       <Text style={styles.cancelBtnText}>
-                        {language === 'ar' ? 'إلغاء الاشتراك' : 'Résilier l\'abonnement'}
+                        {language === 'ar'
+                          ? 'إلغاء الاشتراك'
+                          : "Résilier l'abonnement"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -412,7 +484,10 @@ const MyMembershipsScreen = () => {
               {myMembership.status === 'en_attente_paiement' && mosqueeInfo && (
                 <View style={styles.virementBanner}>
                   <Text style={styles.virementBannerTitle}>
-                    🏦 {language === 'ar' ? 'معلومات التحويل البنكي' : 'Informations pour le virement'}
+                    🏦{' '}
+                    {language === 'ar'
+                      ? 'معلومات التحويل البنكي'
+                      : 'Informations pour le virement'}
                   </Text>
                   <Text style={styles.virementBannerSubtitle}>
                     {language === 'ar'
@@ -427,10 +502,15 @@ const MyMembershipsScreen = () => {
                       onPress={() => {
                         Clipboard.setString(mosqueeInfo.iban || '');
                         Vibration.vibrate(50);
-                        Alert.alert('✓', language === 'ar' ? 'تم نسخ IBAN' : 'IBAN copié');
+                        Alert.alert(
+                          '✓',
+                          language === 'ar' ? 'تم نسخ IBAN' : 'IBAN copié',
+                        );
                       }}
                     >
-                      <Text style={styles.virementValue}>{mosqueeInfo.iban}</Text>
+                      <Text style={styles.virementValue}>
+                        {mosqueeInfo.iban}
+                      </Text>
                       <Text style={styles.copyIcon}>📋</Text>
                     </TouchableOpacity>
                   </View>
@@ -442,10 +522,15 @@ const MyMembershipsScreen = () => {
                       onPress={() => {
                         Clipboard.setString(mosqueeInfo.bic || '');
                         Vibration.vibrate(50);
-                        Alert.alert('✓', language === 'ar' ? 'تم نسخ BIC' : 'BIC copié');
+                        Alert.alert(
+                          '✓',
+                          language === 'ar' ? 'تم نسخ BIC' : 'BIC copié',
+                        );
                       }}
                     >
-                      <Text style={styles.virementValue}>{mosqueeInfo.bic}</Text>
+                      <Text style={styles.virementValue}>
+                        {mosqueeInfo.bic}
+                      </Text>
                       <Text style={styles.copyIcon}>📋</Text>
                     </TouchableOpacity>
                   </View>
@@ -458,12 +543,21 @@ const MyMembershipsScreen = () => {
                       <TouchableOpacity
                         style={styles.copyBtn}
                         onPress={() => {
-                          Clipboard.setString(myMembership.referenceVirement || '');
+                          Clipboard.setString(
+                            myMembership.referenceVirement || '',
+                          );
                           Vibration.vibrate(50);
-                          Alert.alert('✓', language === 'ar' ? 'تم نسخ المرجع' : 'Référence copiée');
+                          Alert.alert(
+                            '✓',
+                            language === 'ar'
+                              ? 'تم نسخ المرجع'
+                              : 'Référence copiée',
+                          );
                         }}
                       >
-                        <Text style={[styles.virementValue, styles.referenceValue]}>
+                        <Text
+                          style={[styles.virementValue, styles.referenceValue]}
+                        >
                           {myMembership.referenceVirement}
                         </Text>
                         <Text style={styles.copyIcon}>📋</Text>
@@ -472,9 +566,10 @@ const MyMembershipsScreen = () => {
                   )}
 
                   <Text style={styles.virementNote}>
-                    ⚠️ {language === 'ar'
+                    ⚠️{' '}
+                    {language === 'ar'
                       ? 'يرجى ذكر المرجع في موضوع التحويل'
-                      : 'Merci d\'indiquer la référence dans le motif du virement'}
+                      : "Merci d'indiquer la référence dans le motif du virement"}
                   </Text>
                 </View>
               )}
@@ -489,7 +584,7 @@ const MyMembershipsScreen = () => {
                   <Text style={styles.validationBannerText}>
                     {language === 'ar'
                       ? 'عضويتك في انتظار التحقق من قبل المكتب. سيتم إعلامك بمجرد التحقق منها.'
-                      : 'Votre adhésion est en attente de validation par le bureau. Vous serez notifié dès qu\'elle sera validée.'}
+                      : "Votre adhésion est en attente de validation par le bureau. Vous serez notifié dès qu'elle sera validée."}
                   </Text>
                 </View>
               )}
@@ -507,7 +602,9 @@ const MyMembershipsScreen = () => {
                 onPress={() => navigation.navigate('Member')}
               >
                 <Text style={styles.subscribeBtnText}>
-                  {language === 'ar' ? 'الاشتراك الآن' : 'S\'inscrire maintenant'}
+                  {language === 'ar'
+                    ? 'الاشتراك الآن'
+                    : "S'inscrire maintenant"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -519,19 +616,25 @@ const MyMembershipsScreen = () => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
-                👥 {language === 'ar' ? 'الأشخاص المسجلون بواسطتي' : 'Personnes inscrites par moi'}
+                👥{' '}
+                {language === 'ar'
+                  ? 'الأشخاص المسجلون بواسطتي'
+                  : 'Personnes inscrites par moi'}
               </Text>
               <View style={styles.totalBadge}>
                 <Text style={styles.totalBadgeText}>
-                  {inscribedMembers.length} {language === 'ar' ? 'شخص' : 'pers.'}
+                  {inscribedMembers.length}{' '}
+                  {language === 'ar' ? 'شخص' : 'pers.'}
                 </Text>
               </View>
             </View>
 
-            {inscribedMembers.map((member) => (
+            {inscribedMembers.map(member => (
               <View key={member.id} style={styles.memberListItem}>
                 <View style={styles.memberListHeader}>
-                  <Text style={[styles.memberListName, isRTL && styles.rtlText]}>
+                  <Text
+                    style={[styles.memberListName, isRTL && styles.rtlText]}
+                  >
                     {member.prenom} {member.nom}
                   </Text>
                   {getStatusBadge(member.status)}
@@ -548,9 +651,12 @@ const MyMembershipsScreen = () => {
                     </View>
                   ) : member.status === 'en_attente_paiement' ? (
                     <View style={[styles.paymentBadge, styles.paymentPending]}>
-                      <Text style={styles.paymentBadgeText}>⏳ En attente virement</Text>
+                      <Text style={styles.paymentBadgeText}>
+                        ⏳ En attente virement
+                      </Text>
                     </View>
-                  ) : member.status === 'en_attente_validation' || member.status === 'en_attente_signature' ? (
+                  ) : member.status === 'en_attente_validation' ||
+                    member.status === 'en_attente_signature' ? (
                     <View style={[styles.paymentBadge, styles.paymentPending]}>
                       <Text style={styles.paymentBadgeText}>⏳ En attente</Text>
                     </View>
@@ -563,9 +669,12 @@ const MyMembershipsScreen = () => {
 
                 {/* Infos */}
                 <View style={styles.memberListDetails}>
-                  <Text style={styles.memberListDetail}>📞 {member.telephone || '-'}</Text>
                   <Text style={styles.memberListDetail}>
-                    💰 {formatFormule(member.formule)} • {member.montant ? `${member.montant} €` : '-'}
+                    📞 {member.telephone || '-'}
+                  </Text>
+                  <Text style={styles.memberListDetail}>
+                    💰 {formatFormule(member.formule)} •{' '}
+                    {member.montant ? `${member.montant} €` : '-'}
                   </Text>
                   {member.dateFin && (
                     <Text style={styles.memberListDetail}>
@@ -576,7 +685,10 @@ const MyMembershipsScreen = () => {
 
                 {/* Bouton résilier si actif */}
                 {member.status === 'actif' && (
-                  <TouchableOpacity style={styles.cancelBtnSmall} onPress={handleCancelSubscription}>
+                  <TouchableOpacity
+                    style={styles.cancelBtnSmall}
+                    onPress={handleCancelSubscription}
+                  >
                     <Text style={styles.cancelBtnText}>
                       {language === 'ar' ? 'إلغاء' : 'Résilier'}
                     </Text>

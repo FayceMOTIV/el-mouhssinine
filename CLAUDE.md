@@ -1,30 +1,75 @@
 # El Mouhssinine - Contexte Projet
 
+Application mobile iOS pour la mosquee El Mouhssinine (Centre Culturel Islamique).
+Bilingue FR/AR avec support RTL. En production sur l'App Store.
+
 ## Structure
 ```
 ~/Downloads/el-mouhssinine/
-├── ElMouhssinine/              # App mobile React Native
-├── el-mouhssinine-backoffice/  # Backoffice React
-├── functions/                  # Cloud Functions Firebase
-├── firestore.rules             # Regles securite Firestore
-└── firebase.json               # Config Firebase
+├── ElMouhssinine/                    # App mobile React Native (iOS)
+│   ├── src/
+│   │   ├── screens/                  # 28 ecrans (.tsx)
+│   │   ├── services/                 # 13 fichiers services (firebase.ts = 2374 lignes)
+│   │   ├── components/               # 14 composants reutilisables
+│   │   ├── hooks/                    # useQuranPlayer.ts, useResponsive.ts
+│   │   ├── i18n/                     # index.ts (traductions FR/AR)
+│   │   ├── navigation/               # AppNavigator.tsx, TabNavigator.tsx
+│   │   ├── context/                  # LanguageContext.tsx
+│   │   ├── data/                     # adhkar, alphabet, lessons, quizData, vocabulary
+│   │   └── theme/                    # colors.ts
+│   ├── ios/                          # Xcode project, CocoaPods, export plists
+│   └── android/                      # (non utilise en production)
+├── el-mouhssinine-backoffice/        # Backoffice React (admin mosquee)
+│   ├── src/pages/                    # 22+ pages admin
+│   ├── src/components/
+│   ├── src/services/
+│   └── types.js                      # Types partages (statuts, enums)
+├── functions/                        # Cloud Functions Firebase (Node 20)
+│   ├── index.js                      # 235KB, 32 fonctions exportees
+│   └── .env                          # Stripe keys, Brevo SMTP
+├── firestore.rules                   # Regles securite Firestore
+├── storage.rules                     # Regles securite Storage
+├── firebase.json                     # Config Firebase (hosting, functions, rules)
+├── .firebaserc                       # Projet: el-mouhssinine
+└── CLAUDE.md                         # Ce fichier
 ```
 
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 231
+- **Build actuel** : 252
+- **Version marketing** : Geree dans project.pbxproj (MARKETING_VERSION)
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
+- **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
+- **iOS minimum** : arm64 requis
+- **Ecrans principaux** : HomeScreen (accueil priere), DonationsScreen, MemberScreen, IslamScreen (tab Coran/Adhkar/Alphabet/Lecons), MoreScreen (parametres)
+
+### Fichiers cles app mobile
+| Fichier | Lignes | Role |
+|---------|--------|------|
+| src/services/firebase.ts | ~2374 | Toute la logique Firebase (Auth, Firestore, FCM, Stripe calls) |
+| src/services/prayerApi.ts | ~600 | Horaires priere, countdown, calendrier 2026 complet |
+| src/services/stripe.ts | ~200 | Appels Stripe (makePayment, makeSubscription) |
+| src/screens/HomeScreen.tsx | ~800 | Accueil avec horaires, annonces, evenements, Ramadan |
+| src/screens/QuranScreen.tsx | ~280 | Liste des 114 sourates |
+| src/screens/SurahScreen.tsx | ~400 | Lecture sourate avec mode Karaoke |
+| src/screens/MemberScreen.tsx | ~600 | Inscription multi-adherents, paiement, carte membre |
+| src/screens/DonationsScreen.tsx | ~500 | Dons CB/Apple Pay/virement, historique |
+| src/screens/MyMembershipsScreen.tsx | ~270 | Carte membre digitale, statut adherent |
+| src/hooks/useQuranPlayer.ts | ~400 | Hook audio Coran (TrackPlayer, repetition, vitesse) |
+| src/navigation/AppNavigator.tsx | ~300 | Stack Navigator principal |
+| src/i18n/index.ts | ~500 | Toutes les traductions FR/AR |
 
 ## Backoffice
 - **Chemin** : ~/Downloads/el-mouhssinine/el-mouhssinine-backoffice/
 - **URL** : https://el-mouhssinine.web.app
-- **Stack** : React, Vite, Firebase
+- **Stack** : React, Vite, TailwindCSS, Firebase
+- **Pages principales** : Dashboard, Adherents, Dons, Annonces, Evenements, Janaza, Notifications, Horaires, Parametres, Popups, RecusFiscaux, Revenus, Messages, Admins
 
 ## Firebase
 - **Projet** : el-mouhssinine
 - **Region** : europe-west1
-- **Collections** : announcements, events, janaza, projects, members, popups, rappels, settings, dates_islamiques, donations, messages, payments
+- **Collections** : announcements, events, janaza, projects, members, popups, rappels, settings, dates_islamiques, donations, messages, payments, processed_payments, notifications_history
 
 ## Cloud Functions (32 deployees)
 | Fonction | Type | Description |
@@ -64,11 +109,14 @@
 
 ### Coran
 - 114 sourates avec audio recitation
+- Mode Karaoke : lecture verset par verset synchronisee (highlight + auto-scroll)
 - Mode lecture page par page (604 pages Mushaf)
-- Marque-pages et sauvegarde progression
+- Mini player flottant (play/pause, prev/next, vitesse, repetition)
+- Marque-pages et sauvegarde progression (AsyncStorage)
 - Toggle arabe seul / francais seul
 - Navigation par sourate, page ou juz
 - Cache offline avec retry automatique
+- **IMPORTANT** : Ne PAS utiliser `getItemLayout` + `removeClippedSubviews` sur les FlatList avec ListHeaderComponent (cause ecran vide)
 
 ### Adhesion et Paiement
 - Multi-adherents (inscrire plusieurs personnes)
@@ -129,18 +177,32 @@
 
 ## Commandes utiles
 
-### Build iOS
+### Build iOS (archive)
 ```bash
 cd ElMouhssinine/ios && pod install
-xcodebuild archive -workspace ElMouhssinine.xcworkspace -scheme ElMouhssinine -configuration Release -destination 'generic/platform=iOS' -archivePath ./build/ElMouhssinine.xcarchive
+xcodebuild archive -workspace ElMouhssinine.xcworkspace -scheme ElMouhssinine \
+  -configuration Release -destination 'generic/platform=iOS' \
+  -archivePath /tmp/ElMouhssinine-BUILD_NUMBER.xcarchive
 ```
 
-### Export et Upload TestFlight (une seule commande)
+### Export IPA (local)
 ```bash
-xcodebuild -exportArchive -archivePath ./build/ElMouhssinine.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath ./build/upload -allowProvisioningUpdates
+xcodebuild -exportArchive \
+  -archivePath /tmp/ElMouhssinine-BUILD_NUMBER.xcarchive \
+  -exportOptionsPlist ElMouhssinine/ios/ExportOptionsLocal.plist \
+  -exportPath /tmp/ElMouhssinine-BUILD_NUMBER-export
 ```
-Note : `ExportOptions.plist` contient `destination: upload` → exporte ET uploade sur TestFlight en une seule commande.
-Pour exporter l'IPA sans upload : utiliser `ExportOptionsNoUpload.plist` avec `-exportPath ./build/export`.
+Note : `ExportOptionsLocal.plist` exporte l'IPA localement.
+
+### Upload TestFlight
+**Methode recommandee** : Ouvrir l'archive dans Xcode Organizer puis "Distribute App"
+```bash
+open /tmp/ElMouhssinine-BUILD_NUMBER.xcarchive
+```
+**Note** : L'upload CLI (`xcrun altool`, `iTMSTransporter`) echoue actuellement (probleme Issuer ID API Key). Utiliser Xcode Organizer.
+
+### Bump version
+Modifier `CURRENT_PROJECT_VERSION` dans `ElMouhssinine/ios/ElMouhssinine.xcodeproj/project.pbxproj` (2 occurrences : Debug et Release) + `CFBundleVersion` dans `ElMouhssinine/ios/ElMouhssinine/Info.plist`.
 
 ### Backoffice
 ```bash
@@ -586,6 +648,91 @@ useEffect(() => {
 ### Deployement
 - [x] App iOS : Build 231 TestFlight (clean rebuild avec --reset-cache + bundle JS frais)
 
+## Corrige (19 Fev 2026 - Build 232)
+
+### Notifications en double
+- [x] Suppression des triggers push auto onCreate (onNewAnnouncement, onNewEvent, onNewJanaza envoyaient des doublons)
+- [x] Deduplication historique notifications
+- [x] Fix timezone horaires priere : cache key mismatch UTC vs Paris
+
+## Corrige (19 Fev 2026 - Build 233-234)
+
+### Ramadan + Production
+- [x] Fix 6 bugs prod : don bloque, pre-fill donateur, recus 2025, scroll Coran, Google Pay iOS, historique dons
+- [x] Fix textes Ramadan coupes : retrait numberOfLines, padding gradient, textAlign center
+- [x] adjustsFontSizeToFit sur textes Ramadan longs
+
+## Corrige (20 Fev 2026 - Build 235)
+
+### Separation flux CB vs Apple Pay
+- [x] Flux distincts pour carte bancaire et Apple Pay dans stripe.ts
+- [x] Corrections BUILD 230 restantes
+
+## Corrige (21 Fev 2026 - Build 241-245)
+
+### Ramadan + Islam + Membre + Securite
+- [x] Fix notif proximite mosquee + Jumu'a 13h30
+- [x] Auto-scheduler notifications Ramadan au demarrage
+- [x] TTS bouton ecouter page Islam
+- [x] Diagnostic Apple Pay + coherence membres backoffice
+- [x] Standardisation statuts membres en francais (actif/expire/aucun)
+- [x] Corrections accueil, dons, membre, coran + suppression sections fiscales
+
+## Corrige (23 Fev 2026 - Build 245-250)
+
+### Coherence carte membre et statuts
+- [x] Fix definitif carte membre + Coran : source unique de verite
+- [x] Coherence statuts entre app et backoffice
+- [x] Fix Coran crash apres Bismillah (race condition listeners)
+- [x] Fix 9 bugs critiques logique metier
+- [x] Fix countdown, cotisation expiry, comparaison horaires (>= au lieu de >)
+- [x] Fix 3 bugs : Jumu'a double notif, recu fiscal annee, cancelled vs expired
+- [x] Backoffice : ajout SYMPATHISANT et ANNULE dans CotisationStatut (types.js)
+- [x] Webhook Stripe : met 'sympathisant' (pas 'expire') quand abonnement annule
+
+## Corrige (26 Fev 2026 - Build 250-251)
+
+### Backoffice 19 bugs + champs arabes
+- [x] 19 bugs backoffice : CSV filtres+colonnes, dashboard statuts, bilingue FR/AR, dons auto, janaza passees/futures
+- [x] App mobile : lecture champs arabes annonces/evenements/janaza depuis Firestore
+- [x] Fix Coran ecran vide (removeClippedSubviews + getItemLayout) — tentative partielle
+
+## Corrige (28 Fev 2026 - Build 252)
+
+### Fix Coran ecran vide — CAUSE RACINE
+- [x] QuranScreen.tsx : Suppression `removeClippedSubviews={true}` et `getItemLayout` de la FlatList
+- [x] Cause : `getItemLayout` calculait les offsets comme `76 * index` sans tenir compte du `ListHeaderComponent` (~300px). Combine avec `removeClippedSubviews`, tous les items etaient clippes = ecran vide
+- [x] Suppression `paddingBottom: 100` inutile dans le style `content`
+
+### Fix Mes Adhesions — erreur Firestore silencieuse
+- [x] firebase.ts : `subscribeToMyMembership` callback etendu avec parametre `error?: string`
+- [x] 3 cas distincts : `callback(null)` (pas de donnees), `callback(null, 'firestore_error')` (erreur), `callback(membership)` (succes)
+- [x] MyMembershipsScreen.tsx : distingue maintenant "pas connecte" vs "erreur Firestore" vs "donnees recues"
+- [x] `setConnectionError(true)` sur erreur, `setDataReceived(true)` sur succes
+
+### Version
+- [x] Info.plist CFBundleVersion : 251 → 252
+- [x] project.pbxproj CURRENT_PROJECT_VERSION : 250 → 252 (2 occurrences)
+
+## Bugs connus / Pieges
+
+### FlatList + getItemLayout + ListHeaderComponent
+**NE JAMAIS** utiliser `getItemLayout` sur une FlatList qui a un `ListHeaderComponent`. Les offsets calcules ne tiennent pas compte de la hauteur du header, ce qui cause des items invisibles. Combine avec `removeClippedSubviews={true}`, tous les items sont clippes.
+
+### Upload TestFlight CLI
+`xcrun altool` et `iTMSTransporter` echouent avec erreur 401 NOT_AUTHORIZED. Le probleme est l'Issuer ID des API Keys App Store Connect. Utiliser Xcode Organizer (GUI) pour l'upload.
+
+### Firebase onSnapshot error handling
+Toujours passer un parametre d'erreur dans les callbacks `onSnapshot` pour distinguer "pas de donnees" de "erreur Firestore". Sinon l'app affiche "pas connecte" au lieu d'un message d'erreur.
+
+### useQuranPlayer (react-native-track-player)
+- Ne PAS utiliser `useProgress()` ou `useTrackPlayerEvents()` avant que le player soit initialise (crash)
+- Utiliser `TrackPlayer.addEventListener()` manuellement conditionne sur `isPlayerReady`
+- Polling manuel de la progression avec `setInterval` (200ms)
+
+### Statuts membres
+Les statuts doivent etre en francais minuscule : `actif`, `expire`, `sympathisant`, `annule`, `en_attente`. Le backoffice et l'app doivent utiliser les memes valeurs (definies dans `types.js`).
+
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
 - Mock data janaza supprime (donnees sensibles)
@@ -593,3 +740,7 @@ useEffect(() => {
 - Cloud Functions bien structurees, 32 fonctions deployees
 - Score audit securite : 9/10 (apres corrections Build 228)
 - Score audit i18n : 9/10 (apres corrections Build 98)
+- App iOS uniquement en production (Android non deploye)
+- Horaires de priere : calendrier local 2026 complet (fallback si API Mawaqit indisponible)
+- Stripe en mode LIVE (cles sk_live et pk_live)
+- Brevo SMTP pour tous les emails transactionnels

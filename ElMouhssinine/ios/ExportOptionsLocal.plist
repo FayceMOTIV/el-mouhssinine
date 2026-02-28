@@ -8,5 +8,9 @@
 	<string>5ZR87TPM89</string>
 	<key>uploadSymbols</key>
 	<true/>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>destination</key>
+	<string>export</string>
 </dict>
 </plist>
