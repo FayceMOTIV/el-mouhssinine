@@ -11,7 +11,6 @@ import {
 import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
 import { QuranAPI, surahsInfo } from '../services/quranApi';
 import { useLanguage } from '../context/LanguageContext';
-import { SkeletonLoader } from '../components';
 
 interface QuranScreenProps {
   navigation: any;
@@ -22,7 +21,8 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
   const [surahs, setSurahs] = useState(surahsInfo);
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery); // Debounce pour éviter le lag
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'meccan' | 'medinan'>('all');
 
   useEffect(() => {
@@ -32,6 +32,7 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
   const loadSurahs = async () => {
     try {
       setLoading(true);
+      setError(false);
       const data = await QuranAPI.getAllSurahs();
       // Merge avec nos donnees locales pour avoir les traductions francaises
       const merged = surahsInfo.map((local, index) => ({
@@ -39,8 +40,10 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
         ...(data[index] || {}),
       }));
       setSurahs(merged);
-    } catch (error) {
+    } catch (err) {
       console.log('Utilisation des donnees hors-ligne');
+      setError(true);
+      // Garder les données locales (surahsInfo) - déjà dans state
     } finally {
       setLoading(false);
     }
@@ -203,29 +206,30 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
         </View>
 
         {loading && (
-          <View style={{ gap: spacing.md }}>
-            {[...Array(8)].map((_, i) => (
-              <View key={i} style={[styles.surahCard, { flexDirection: 'row', alignItems: 'center' }]}>
-                <SkeletonLoader width={50} height={50} borderRadius={25} />
-                <View style={{ marginLeft: spacing.md, flex: 1 }}>
-                  <SkeletonLoader width="60%" height={18} borderRadius={4} />
-                  <SkeletonLoader width="40%" height={14} borderRadius={4} style={{ marginTop: 6 }} />
-                </View>
-                <SkeletonLoader width={30} height={30} borderRadius={15} />
-              </View>
-            ))}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm }}>
+            <ActivityIndicator size="small" color={colors.accent} />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginLeft: spacing.sm }}>
+              {isRTL ? 'تحديث...' : 'Mise à jour...'}
+            </Text>
+          </View>
+        )}
+        {error && !loading && (
+          <View style={{ backgroundColor: 'rgba(201,162,39,0.1)', padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.md }}>
+            <Text style={{ color: colors.accent, fontSize: fontSize.sm, textAlign: 'center' }}>
+              {isRTL ? 'وضع عدم الاتصال — البيانات المحلية' : 'Mode hors-ligne — données locales'}
+            </Text>
           </View>
         )}
       </View>
     </>
-  ), [isRTL, t, searchQuery, filterType, surahs, filteredSurahs.length, loading, handleSurahPress]);
+  ), [isRTL, t, searchQuery, filterType, surahs, filteredSurahs.length, loading, error, handleSurahPress]);
 
   const keyExtractor = useCallback((item: typeof surahsInfo[0]) => item.number.toString(), []);
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={loading ? [] : filteredSurahs}
+        data={filteredSurahs}
         renderItem={renderSurahItem}
         keyExtractor={keyExtractor}
         ListHeaderComponent={ListHeaderComponent}

@@ -31,11 +31,13 @@ const MyMembershipsScreen = () => {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
   const [myMembership, setMyMembership] = useState<MyMembership | null>(null);
   const [inscribedMembers, setInscribedMembers] = useState<InscribedMember[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
+  const [dataReceived, setDataReceived] = useState(false);
 
   // Charger les membres inscrits par l'utilisateur
   const loadInscribedMembers = async (uid: string) => {
@@ -50,6 +52,7 @@ const MyMembershipsScreen = () => {
   // Écouter l'état d'authentification Firebase et s'abonner aux changements en temps réel
   useEffect(() => {
     let unsubscribeMembership: (() => void) | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const unsubscribeAuth = AuthService.onAuthStateChanged(async (user) => {
       // IMPORTANT: Nettoyer le listener précédent AVANT d'en créer un nouveau
@@ -58,13 +61,31 @@ const MyMembershipsScreen = () => {
         unsubscribeMembership();
         unsubscribeMembership = null;
       }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
 
       if (user && user.email) {
         setUserEmail(user.email);
         setUserId(user.uid);
+        setConnectionError(false);
+        setDataReceived(false);
+
+        // Timeout: si pas de données après 10s, probablement un problème de connexion
+        timeoutId = setTimeout(() => {
+          setLoading(false);
+          setConnectionError(true);
+        }, 10000);
 
         // S'abonner aux changements en temps réel de l'adhésion
         unsubscribeMembership = subscribeToMyMembership(user.email, (membership) => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          setDataReceived(true);
+          setConnectionError(false);
           setMyMembership(membership);
           setLoading(false);
           setRefreshing(false);
@@ -85,6 +106,9 @@ const MyMembershipsScreen = () => {
       unsubscribeAuth();
       if (unsubscribeMembership) {
         unsubscribeMembership();
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
     };
   }, []);
@@ -155,7 +179,7 @@ const MyMembershipsScreen = () => {
     );
   };
 
-  if (loading) {
+  if (loading && !connectionError) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -168,6 +192,47 @@ const MyMembershipsScreen = () => {
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.md }}>
+            {language === 'ar' ? 'جاري التحميل...' : 'Chargement...'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (connectionError && !dataReceived) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>
+            {language === 'ar' ? 'عضوياتي' : 'Mes Adhésions'}
+          </Text>
+        </View>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📡</Text>
+          <Text style={styles.emptyText}>
+            {language === 'ar'
+              ? 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.'
+              : 'Impossible de se connecter au serveur. Vérifiez votre connexion internet.'}
+          </Text>
+          <TouchableOpacity
+            style={styles.loginBtn}
+            onPress={() => {
+              setLoading(true);
+              setConnectionError(false);
+              setDataReceived(false);
+              // Force re-mount by navigating back and forth
+              navigation.goBack();
+              setTimeout(() => navigation.navigate('MyMemberships'), 100);
+            }}
+          >
+            <Text style={styles.loginBtnText}>
+              {language === 'ar' ? 'إعادة المحاولة' : 'Réessayer'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
