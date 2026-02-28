@@ -17,7 +17,17 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, platformShadow, isSmallScreen, isTablet, moderateScale } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  platformShadow,
+  isSmallScreen,
+  isTablet,
+  moderateScale,
+} from '../theme/colors';
 import {
   subscribeToCotisationPrices,
   CotisationPrices,
@@ -36,12 +46,24 @@ import {
   cancelSubscription,
 } from '../services/firebase';
 import { AuthService, MemberProfile } from '../services/auth';
-import { makePayment, makeApplePayPayment, makeSubscription, makeApplePaySubscription, showPaymentError, showPaymentSuccess } from '../services/stripe';
-import { subscribeToMembersTopic, saveFCMTokenToFirestore, removeFCMTokenFromFirestore } from '../services/notifications';
+import {
+  makePayment,
+  makeApplePayPayment,
+  makeSubscription,
+  makeApplePaySubscription,
+  showPaymentError,
+  showPaymentSuccess,
+} from '../services/stripe';
+import {
+  subscribeToMembersTopic,
+  saveFCMTokenToFirestore,
+  removeFCMTokenFromFirestore,
+} from '../services/notifications';
 import { useLanguage } from '../context/LanguageContext';
 import MemberCard from '../components/MemberCard';
 import MemberCardFullScreen from '../components/MemberCardFullScreen';
 import { logger } from '../utils';
+import { computeMemberStatus } from '../utils/memberStatus';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import firestore from '@react-native-firebase/firestore';
 
@@ -58,18 +80,27 @@ const MemberScreen = () => {
   // États principaux
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(null);
+  const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(
+    null,
+  );
   const [isPaid, setIsPaid] = useState(false);
-  const [inscribedMembers, setInscribedMembers] = useState<InscribedMember[]>([]);
+  const [inscribedMembers, setInscribedMembers] = useState<InscribedMember[]>(
+    [],
+  );
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   // 3 pages : 'sympathisant' | 'devenir_adherent' | 'membre_actif'
-  const [memberPage, setMemberPage] = useState<'sympathisant' | 'devenir_adherent' | 'membre_actif'>('sympathisant');
+  const [memberPage, setMemberPage] = useState<
+    'sympathisant' | 'devenir_adherent' | 'membre_actif'
+  >('sympathisant');
   const [isExpired, setIsExpired] = useState(false);
   const [contextMessage, setContextMessage] = useState<string | null>(null);
 
   // Prix et infos
-  const [formulePrices, setFormulePrices] = useState<CotisationPrices>({ mensuel: 10, annuel: 100 });
+  const [formulePrices, setFormulePrices] = useState<CotisationPrices>({
+    mensuel: 10,
+    annuel: 100,
+  });
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
 
   // Modales
@@ -94,7 +125,9 @@ const MemberScreen = () => {
   const [registerPrenom, setRegisterPrenom] = useState('');
   const [registerTelephone, setRegisterTelephone] = useState('');
   const [registerAdresse, setRegisterAdresse] = useState('');
-  const [registerGenre, setRegisterGenre] = useState<'homme' | 'femme' | ''>('');
+  const [registerGenre, setRegisterGenre] = useState<'homme' | 'femme' | ''>(
+    '',
+  );
   const [registerDateNaissance, setRegisterDateNaissance] = useState('');
   const [acceptedRules, setAcceptedRules] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -103,24 +136,36 @@ const MemberScreen = () => {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   // Paiement
-  const [selectedFormule, setSelectedFormule] = useState<'mensuel' | 'annuel'>('annuel');
+  const [selectedFormule, setSelectedFormule] = useState<'mensuel' | 'annuel'>(
+    'annuel',
+  );
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const isProcessingRef = useRef(false); // BUG 7 FIX: Verrou synchrone anti-double tap
   const [customAmount, setCustomAmount] = useState<string>('');
 
   // Reçu fiscal
-  const [selectedRecuYear, setSelectedRecuYear] = useState(new Date().getFullYear() - 1);
+  const [selectedRecuYear, setSelectedRecuYear] = useState(
+    new Date().getFullYear() - 1,
+  );
   const [sendingRecuFiscal, setSendingRecuFiscal] = useState(false);
 
   // Historique par année
   const [historyYear, setHistoryYear] = useState(new Date().getFullYear());
-  const [availableYears, setAvailableYears] = useState<number[]>([new Date().getFullYear()]);
+  const [availableYears, setAvailableYears] = useState<number[]>([
+    new Date().getFullYear(),
+  ]);
 
   // Calculer cotisation (fixe) et don (surplus)
   // Utilise les prix de Firebase (formulePrices) pour respecter les prix configurés dans le backoffice
-  const getPaymentBreakdown = (formule: 'mensuel' | 'annuel', totalAmount?: number) => {
+  const getPaymentBreakdown = (
+    formule: 'mensuel' | 'annuel',
+    totalAmount?: number,
+  ) => {
     const cotisationFixe = formulePrices[formule]; // Prix depuis Firebase, pas hardcodé
-    const total = totalAmount && totalAmount >= cotisationFixe ? totalAmount : cotisationFixe;
+    const total =
+      totalAmount && totalAmount >= cotisationFixe
+        ? totalAmount
+        : cotisationFixe;
     const don = Math.max(0, total - cotisationFixe);
     return { cotisation: cotisationFixe, don, total };
   };
@@ -136,8 +181,21 @@ const MemberScreen = () => {
   };
 
   // Famille
-  const [familyMembers, setFamilyMembers] = useState<{id: string; nom: string; prenom: string; telephone: string; adresse: string; genre: 'homme' | 'femme' | ''; dateNaissance: string; accepte: boolean}[]>([]);
-  const [familyFormule, setFamilyFormule] = useState<'mensuel' | 'annuel'>('annuel');
+  const [familyMembers, setFamilyMembers] = useState<
+    {
+      id: string;
+      nom: string;
+      prenom: string;
+      telephone: string;
+      adresse: string;
+      genre: 'homme' | 'femme' | '';
+      dateNaissance: string;
+      accepte: boolean;
+    }[]
+  >([]);
+  const [familyFormule, setFamilyFormule] = useState<'mensuel' | 'annuel'>(
+    'annuel',
+  );
 
   // ============================================================
   // EFFECTS
@@ -152,7 +210,7 @@ const MemberScreen = () => {
   const donationsRef = React.useRef<any[]>([]);
 
   useEffect(() => {
-    const unsubscribe = AuthService.onAuthStateChanged(async (user) => {
+    const unsubscribe = AuthService.onAuthStateChanged(async user => {
       // Ne pas changer la vue pendant l'inscription (évite le flash modal)
       if (isRegistrationInProgress.current) {
         return;
@@ -178,63 +236,78 @@ const MemberScreen = () => {
         setIsLoggedIn(true);
 
         // Souscrire au profil en temps réel (se met à jour depuis le backoffice)
-        const unsubMember = subscribeToMemberProfile(user.uid, user.email || '', (profile) => {
-          if (profile) {
-            // Convertir MemberProfileRealtime vers MemberProfile
-            const memberProf: MemberProfile = {
-              uid: user.uid,
-              name: `${profile.prenom} ${profile.nom}`.trim(),
-              email: profile.email,
-              memberId: profile.memberId,
-              nom: profile.nom,
-              prenom: profile.prenom,
-              cotisationType: profile.cotisation.type,
-              cotisationStatus: profile.cotisation.status as 'actif' | 'expire' | 'en_attente_paiement' | 'en_attente_validation' | 'en_attente_signature' | 'aucun' | 'sympathisant' | 'annule',
-              cotisationExpiry: profile.cotisation.dateFin || undefined,
-              telephone: profile.telephone,
-              adresse: profile.adresse,
-              createdAt: new Date(),
-            };
-            setMemberProfile(memberProf);
-            const isActive = profile.cotisation.status === 'actif';
-            setIsPaid(isActive);
+        const unsubMember = subscribeToMemberProfile(
+          user.uid,
+          user.email || '',
+          profile => {
+            if (profile) {
+              // Convertir MemberProfileRealtime vers MemberProfile
+              const memberProf: MemberProfile = {
+                uid: user.uid,
+                name: `${profile.prenom} ${profile.nom}`.trim(),
+                email: profile.email,
+                memberId: profile.memberId,
+                nom: profile.nom,
+                prenom: profile.prenom,
+                cotisationType: profile.cotisation.type,
+                cotisationStatus: profile.cotisation.status as
+                  | 'actif'
+                  | 'expire'
+                  | 'en_attente_paiement'
+                  | 'en_attente_validation'
+                  | 'en_attente_signature'
+                  | 'aucun'
+                  | 'sympathisant'
+                  | 'annule',
+                cotisationExpiry: profile.cotisation.dateFin || undefined,
+                telephone: profile.telephone,
+                adresse: profile.adresse,
+                createdAt: new Date(),
+              };
+              setMemberProfile(memberProf);
 
-            // Detecter expiration
-            const dateFin = profile.cotisation.dateFin;
-            let expired = false;
-            if (dateFin) {
-              const expiryDate = dateFin instanceof Date ? dateFin : (dateFin as any)?.toDate?.() || new Date(dateFin);
-              expired = expiryDate.getTime() < Date.now();
-            }
-            setIsExpired(expired);
+              // Source unique de vérité : computeMemberStatus
+              const resolvedStatus = computeMemberStatus({
+                status: profile.cotisation.status,
+                cotisationDateFin: profile.cotisation.dateFin,
+              });
+              const isActive = resolvedStatus === 'actif';
+              setIsPaid(isActive);
+              setIsExpired(resolvedStatus === 'expire');
 
-            // Determiner la page membre
-            if (isActive && !expired) {
-              setMemberPage('membre_actif');
-              setContextMessage(null);
-            } else if (expired) {
-              setMemberPage('devenir_adherent');
-              setContextMessage('Votre cotisation a expiré. Renouvelez pour rester membre actif.');
-            } else if (profile.cotisation.status === 'annule') {
-              setMemberPage('devenir_adherent');
-              setContextMessage('Votre adhésion a été annulée. Contactez la mosquée si besoin.');
-            } else if (profile.cotisation.status === 'expire') {
-              setMemberPage('devenir_adherent');
-              setContextMessage('Votre cotisation a expiré. Renouvelez pour rester membre actif.');
-            } else if (!profile.cotisation.status || profile.cotisation.status === 'sympathisant' || profile.cotisation.status === 'aucun') {
-              setMemberPage('sympathisant');
+              // Determiner la page membre
+              if (isActive) {
+                setMemberPage('membre_actif');
+                setContextMessage(null);
+              } else if (resolvedStatus === 'expire') {
+                setMemberPage('devenir_adherent');
+                setContextMessage(
+                  'Votre cotisation a expiré. Renouvelez pour rester membre actif.',
+                );
+              } else if (resolvedStatus === 'annule') {
+                setMemberPage('devenir_adherent');
+                setContextMessage(
+                  'Votre adhésion a été annulée. Contactez la mosquée si besoin.',
+                );
+              } else if (
+                resolvedStatus === 'sympathisant' ||
+                resolvedStatus === 'aucun'
+              ) {
+                setMemberPage('sympathisant');
+              } else {
+                // en_attente_validation, en_attente_signature, en_attente_paiement
+                setMemberPage('devenir_adherent');
+              }
+
+              // Charger les membres inscrits (une seule fois)
+              getMembersInscribedBy(user.uid).then(setInscribedMembers);
             } else {
-              setMemberPage('devenir_adherent');
+              // Profil pas encore créé, charger via la méthode classique (pour création initiale)
+              loadMemberData(user.uid);
             }
-
-            // Charger les membres inscrits (une seule fois)
-            getMembersInscribedBy(user.uid).then(setInscribedMembers);
-          } else {
-            // Profil pas encore créé, charger via la méthode classique (pour création initiale)
-            loadMemberData(user.uid);
-          }
-          setIsLoading(false);
-        });
+            setIsLoading(false);
+          },
+        );
 
         memberProfileUnsubscribeRef.current = unsubMember;
 
@@ -265,18 +338,19 @@ const MemberScreen = () => {
           .collection('payments')
           .where('metadata.memberId', '==', user.uid)
           .onSnapshot(
-            (snapshot) => {
+            snapshot => {
               paymentsRef.current = snapshot.docs.map(doc => ({
                 id: doc.id,
                 _type: 'cotisation',
-                ...doc.data()
+                ...doc.data(),
               }));
               mergeAndSetHistory();
             },
-            (error) => {
-              if (__DEV__) console.error('Error loading payment history:', error);
+            error => {
+              if (__DEV__)
+                console.error('Error loading payment history:', error);
               setLoadingHistory(false);
-            }
+            },
           );
         paymentHistoryUnsubscribeRef.current = unsubHistory;
 
@@ -285,17 +359,18 @@ const MemberScreen = () => {
           .collection('donations')
           .where('userId', '==', user.uid)
           .onSnapshot(
-            (snapshot) => {
+            snapshot => {
               donationsRef.current = snapshot.docs.map(doc => ({
                 id: doc.id,
                 _type: 'donation',
-                ...doc.data()
+                ...doc.data(),
               }));
               mergeAndSetHistory();
             },
-            (error) => {
-              if (__DEV__) console.error('Error loading donation history:', error);
-            }
+            error => {
+              if (__DEV__)
+                console.error('Error loading donation history:', error);
+            },
           );
         donationHistoryUnsubscribeRef.current = unsubDonations;
 
@@ -392,12 +467,16 @@ const MemberScreen = () => {
       } else if (retryCount < MAX_RETRIES) {
         // Race condition: le document Firestore n'est peut-être pas encore créé
         // Attendre et réessayer
-        await new Promise<void>(resolve => setTimeout(() => resolve(), RETRY_DELAY));
+        await new Promise<void>(resolve =>
+          setTimeout(() => resolve(), RETRY_DELAY),
+        );
         return loadMemberData(uid, retryCount + 1);
       }
     } catch (error) {
       if (retryCount < MAX_RETRIES) {
-        await new Promise<void>(resolve => setTimeout(() => resolve(), RETRY_DELAY));
+        await new Promise<void>(resolve =>
+          setTimeout(() => resolve(), RETRY_DELAY),
+        );
         return loadMemberData(uid, retryCount + 1);
       }
       if (__DEV__) console.error('Error loading member data:', error);
@@ -435,11 +514,18 @@ const MemberScreen = () => {
   const isAdult = (dateNaissance: string): boolean => {
     const parts = dateNaissance.split('/');
     if (parts.length !== 3) return false;
-    const birthDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    const birthDate = new Date(
+      parseInt(parts[2]),
+      parseInt(parts[1]) - 1,
+      parseInt(parts[0]),
+    );
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
       age--;
     }
     return age >= 16;
@@ -453,7 +539,8 @@ const MemberScreen = () => {
     const limited = numbers.slice(0, 8);
     // Formate avec les "/"
     if (limited.length <= 2) return limited;
-    if (limited.length <= 4) return `${limited.slice(0, 2)}/${limited.slice(2)}`;
+    if (limited.length <= 4)
+      return `${limited.slice(0, 2)}/${limited.slice(2)}`;
     return `${limited.slice(0, 2)}/${limited.slice(2, 4)}/${limited.slice(4)}`;
   };
 
@@ -463,8 +550,14 @@ const MemberScreen = () => {
     const phoneRegex = /^0[1-9][0-9]{8}$/;
 
     // 1. Validation champs vides
-    if (!registerNom.trim() || !registerPrenom.trim() || !registerTelephone.trim() ||
-        !registerAdresse.trim() || !loginEmail.trim() || !loginPassword.trim()) {
+    if (
+      !registerNom.trim() ||
+      !registerPrenom.trim() ||
+      !registerTelephone.trim() ||
+      !registerAdresse.trim() ||
+      !loginEmail.trim() ||
+      !loginPassword.trim()
+    ) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
@@ -478,7 +571,10 @@ const MemberScreen = () => {
     // 3. Validation format téléphone français (B4)
     const cleanPhone = registerTelephone.replace(/\s/g, '');
     if (!phoneRegex.test(cleanPhone)) {
-      Alert.alert('Erreur', 'Veuillez entrer un numéro de téléphone valide (10 chiffres commençant par 0)');
+      Alert.alert(
+        'Erreur',
+        'Veuillez entrer un numéro de téléphone valide (10 chiffres commençant par 0)',
+      );
       return;
     }
 
@@ -494,18 +590,27 @@ const MemberScreen = () => {
 
     // 4. Validation âge minimum 16 ans (B6)
     if (!isAdult(registerDateNaissance)) {
-      Alert.alert('Erreur', 'Vous devez avoir au moins 16 ans pour vous inscrire');
+      Alert.alert(
+        'Erreur',
+        'Vous devez avoir au moins 16 ans pour vous inscrire',
+      );
       return;
     }
 
     if (loginPassword.length < 6) {
-      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+      Alert.alert(
+        'Erreur',
+        'Le mot de passe doit contenir au moins 6 caractères',
+      );
       return;
     }
 
     // 5. Validation règlement accepté (B5 - CRITIQUE)
     if (!acceptedRules) {
-      Alert.alert('Erreur', 'Vous devez accepter le règlement intérieur pour vous inscrire');
+      Alert.alert(
+        'Erreur',
+        'Vous devez accepter le règlement intérieur pour vous inscrire',
+      );
       return;
     }
 
@@ -520,7 +625,7 @@ const MemberScreen = () => {
         registerTelephone.trim(),
         registerAdresse.trim(),
         registerGenre,
-        registerDateNaissance
+        registerDateNaissance,
       );
 
       isRegistrationInProgress.current = false; // Réactive le listener auth
@@ -538,17 +643,20 @@ const MemberScreen = () => {
         if (!result.user.emailVerified) {
           Alert.alert(
             'Merci pour votre inscription !',
-            'Vous allez recevoir un email de bienvenue et d\'explications.\n\nUn email de vérification a également été envoyé. Veuillez le confirmer.\n\n(Pensez à vérifier vos spams)',
+            "Vous allez recevoir un email de bienvenue et d'explications.\n\nUn email de vérification a également été envoyé. Veuillez le confirmer.\n\n(Pensez à vérifier vos spams)",
             [
               { text: 'OK', style: 'default' },
-              { text: 'Renvoyer l\'email', onPress: () => result.user?.sendEmailVerification() },
-            ]
+              {
+                text: "Renvoyer l'email",
+                onPress: () => result.user?.sendEmailVerification(),
+              },
+            ],
           );
         } else {
           Alert.alert(
             'Merci pour votre inscription !',
-            'Vous allez recevoir un email de bienvenue et d\'explications.\n\n(Pensez à vérifier vos spams)',
-            [{ text: 'OK', style: 'default' }]
+            "Vous allez recevoir un email de bienvenue et d'explications.\n\n(Pensez à vérifier vos spams)",
+            [{ text: 'OK', style: 'default' }],
           );
         }
       } else if (!result.success) {
@@ -573,7 +681,10 @@ const MemberScreen = () => {
     try {
       const result = await AuthService.resetPassword(forgotEmail.trim());
       if (result.success) {
-        Alert.alert('Email envoyé', 'Vérifiez votre boîte mail pour réinitialiser votre mot de passe');
+        Alert.alert(
+          'Email envoyé',
+          'Vérifiez votre boîte mail pour réinitialiser votre mot de passe',
+        );
         setShowForgotPassword(false);
         setForgotEmail('');
       } else {
@@ -588,25 +699,21 @@ const MemberScreen = () => {
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      t('logout'),
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: t('logout'),
-          style: 'destructive',
-          onPress: async () => {
-            // Supprimer le token FCM avant déconnexion
-            const uid = AuthService.getCurrentUser()?.uid;
-            if (uid) {
-              await removeFCMTokenFromFirestore(uid).catch(() => {});
-            }
-            await AuthService.signOut();
-          },
+    Alert.alert(t('logout'), 'Êtes-vous sûr de vouloir vous déconnecter ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: t('logout'),
+        style: 'destructive',
+        onPress: async () => {
+          // Supprimer le token FCM avant déconnexion
+          const uid = AuthService.getCurrentUser()?.uid;
+          if (uid) {
+            await removeFCMTokenFromFirestore(uid).catch(() => {});
+          }
+          await AuthService.signOut();
         },
-      ]
-    );
+      },
+    ]);
   };
 
   // Demander l'envoi du reçu fiscal
@@ -615,7 +722,9 @@ const MemberScreen = () => {
     if (!memberProfile?.email) {
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar' ? 'البريد الإلكتروني غير متوفر' : 'Email non disponible'
+        language === 'ar'
+          ? 'البريد الإلكتروني غير متوفر'
+          : 'Email non disponible',
       );
       return;
     }
@@ -627,20 +736,22 @@ const MemberScreen = () => {
         Alert.alert(
           language === 'ar' ? 'تم الإرسال' : 'Envoyé !',
           language === 'ar'
-            ? `تم إرسال إيصالك الضريبي بمبلغ ${result.montantTotal?.toFixed(2)}€ إلى ${memberProfile.email}`
-            : `Votre reçu fiscal de ${result.montantTotal?.toFixed(2)}€ a été envoyé à ${memberProfile.email}`
+            ? `تم إرسال إيصالك الضريبي بمبلغ ${result.montantTotal?.toFixed(
+                2,
+              )}€ إلى ${memberProfile.email}`
+            : `Votre reçu fiscal de ${result.montantTotal?.toFixed(
+                2,
+              )}€ a été envoyé à ${memberProfile.email}`,
         );
       } else {
-        Alert.alert(
-          language === 'ar' ? 'خطأ' : 'Erreur',
-          result.message
-        );
+        Alert.alert(language === 'ar' ? 'خطأ' : 'Erreur', result.message);
       }
     } catch (error) {
       const err = error as Error;
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
-        err?.message || (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue')
+        err?.message ||
+          (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue'),
       );
     } finally {
       setSendingRecuFiscal(false);
@@ -665,9 +776,24 @@ const MemberScreen = () => {
   // ============================================================
 
   const handlePayment = async (method: 'card' | 'apple' | 'virement') => {
-    console.log('[Member] handlePayment appelé, method:', method, 'processing:', isProcessingPayment, 'ref:', isProcessingRef.current, 'profile:', !!memberProfile);
+    console.log(
+      '[Member] handlePayment appelé, method:',
+      method,
+      'processing:',
+      isProcessingPayment,
+      'ref:',
+      isProcessingRef.current,
+      'profile:',
+      !!memberProfile,
+    );
     if (isProcessingRef.current || isProcessingPayment || !memberProfile) {
-      console.log('[Member] Bloqué - processing:', isProcessingRef.current, isProcessingPayment, 'profile:', !!memberProfile);
+      console.log(
+        '[Member] Bloqué - processing:',
+        isProcessingRef.current,
+        isProcessingPayment,
+        'profile:',
+        !!memberProfile,
+      );
       return;
     }
     isProcessingRef.current = true; // BUG 7 FIX: Verrou synchrone immédiat
@@ -676,7 +802,10 @@ const MemberScreen = () => {
     const breakdown = getPaymentBreakdown(selectedFormule, totalAmount);
 
     if (method === 'virement') {
-      const reference = `ADH-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      const reference = `ADH-${new Date().getFullYear()}-${Math.random()
+        .toString(36)
+        .substr(2, 6)
+        .toUpperCase()}`;
 
       // Mettre à jour le membre avec status 'en_attente_paiement' pour que le backoffice le voie
       try {
@@ -688,18 +817,24 @@ const MemberScreen = () => {
           formule: selectedFormule,
           montantAttendu: breakdown.total,
         });
-        logger.log('[Virement] Membre mis à jour avec status en_attente_paiement');
+        logger.log(
+          '[Virement] Membre mis à jour avec status en_attente_paiement',
+        );
       } catch (updateError) {
         logger.error('[Virement] Erreur mise à jour membre:', updateError);
         // Continuer quand même pour afficher l'alerte
       }
 
-      let message = `IBAN: ${mosqueeInfo?.iban || 'IBAN indisponible'}\nBIC: ${mosqueeInfo?.bic || 'BIC indisponible'}\n\nCotisation: ${breakdown.cotisation}€`;
+      let message = `IBAN: ${mosqueeInfo?.iban || 'IBAN indisponible'}\nBIC: ${
+        mosqueeInfo?.bic || 'BIC indisponible'
+      }\n\nCotisation: ${breakdown.cotisation}€`;
       if (breakdown.don > 0) {
         message += `\nDon: ${breakdown.don}€`;
       }
       message += `\nTotal: ${breakdown.total}€\n\nRéférence: ${reference}\n\nImportant: Indiquez la référence dans le motif du virement.`;
-      Alert.alert('🏦 Virement bancaire', message, [{ text: 'Compris', style: 'default' }]);
+      Alert.alert('🏦 Virement bancaire', message, [
+        { text: 'Compris', style: 'default' },
+      ]);
       setShowPaymentModal(false);
       setCustomAmount('');
 
@@ -721,9 +856,10 @@ const MemberScreen = () => {
       let paymentResult: any;
       let subscriptionId: string | undefined;
 
-      const paymentDescription = breakdown.don > 0
-        ? `Cotisation ${selectedFormule} (${breakdown.cotisation}€) + Don (${breakdown.don}€) - El Mohsinine`
-        : `Cotisation ${selectedFormule} - El Mohsinine`;
+      const paymentDescription =
+        breakdown.don > 0
+          ? `Cotisation ${selectedFormule} (${breakdown.cotisation}€) + Don (${breakdown.don}€) - El Mohsinine`
+          : `Cotisation ${selectedFormule} - El Mohsinine`;
 
       const paymentMeta = {
         memberId: memberProfile.uid,
@@ -737,7 +873,9 @@ const MemberScreen = () => {
 
       if (isMensuel) {
         // Abonnement récurrent mensuel via Stripe Subscriptions
-        const subscriptionFn = isApplePay ? makeApplePaySubscription : makeSubscription;
+        const subscriptionFn = isApplePay
+          ? makeApplePaySubscription
+          : makeSubscription;
         const subscriptionResult = await subscriptionFn({
           amount: breakdown.total,
           description: paymentDescription,
@@ -795,21 +933,17 @@ const MemberScreen = () => {
           ? 'Votre abonnement mensuel est activé ! Vous serez prélevé automatiquement chaque mois. Vous allez recevoir toutes les infos par email.'
           : 'Vous allez recevoir toutes les infos par email.';
 
-        Alert.alert(
-          'Merci pour votre adhésion !',
-          message,
-          [{ text: 'OK', style: 'default' }]
-        );
+        Alert.alert('Merci pour votre adhésion !', message, [
+          { text: 'OK', style: 'default' },
+        ]);
 
-        // Passer directement en page membre actif
+        // Passer directement en page membre actif (UI optimiste)
+        // Le listener temps réel (subscribeToMemberProfile) recevra la confirmation
+        // du webhook Stripe automatiquement dans 2-5s
         setMemberPage('membre_actif');
         setContextMessage(null);
         setIsPaid(true);
         setIsExpired(false);
-
-        // Recharger les données
-        const user = AuthService.getCurrentUser();
-        if (user) await loadMemberData(user.uid);
       }
     } catch (error) {
       const err = error as Error;
@@ -825,16 +959,19 @@ const MemberScreen = () => {
   // ============================================================
 
   const addFamilyMember = () => {
-    setFamilyMembers([...familyMembers, {
-      id: Date.now().toString(),
-      nom: '',
-      prenom: '',
-      telephone: '',
-      adresse: '',
-      genre: '',
-      dateNaissance: '',
-      accepte: false,
-    }]);
+    setFamilyMembers([
+      ...familyMembers,
+      {
+        id: Date.now().toString(),
+        nom: '',
+        prenom: '',
+        telephone: '',
+        adresse: '',
+        genre: '',
+        dateNaissance: '',
+        accepte: false,
+      },
+    ]);
   };
 
   const removeFamilyMember = (id: string) => {
@@ -842,42 +979,69 @@ const MemberScreen = () => {
   };
 
   const updateFamilyMember = (id: string, field: string, value: any) => {
-    setFamilyMembers(familyMembers.map(m =>
-      m.id === id ? { ...m, [field]: value } : m
-    ));
+    setFamilyMembers(
+      familyMembers.map(m => (m.id === id ? { ...m, [field]: value } : m)),
+    );
   };
 
   const handlePayFamily = async (method: 'card' | 'apple' | 'virement') => {
-    if (isProcessingRef.current || isProcessingPayment || !memberProfile || familyMembers.length === 0) return;
+    if (
+      isProcessingRef.current ||
+      isProcessingPayment ||
+      !memberProfile ||
+      familyMembers.length === 0
+    )
+      return;
     isProcessingRef.current = true; // BUG 7 FIX: Verrou synchrone immédiat
 
     // Validation
     for (const member of familyMembers) {
-      if (!member.nom.trim() || !member.prenom.trim() || !member.telephone.trim() || !member.adresse.trim()) {
-        Alert.alert('Erreur', 'Veuillez remplir tous les champs pour chaque membre');
+      if (
+        !member.nom.trim() ||
+        !member.prenom.trim() ||
+        !member.telephone.trim() ||
+        !member.adresse.trim()
+      ) {
+        Alert.alert(
+          'Erreur',
+          'Veuillez remplir tous les champs pour chaque membre',
+        );
         isProcessingRef.current = false;
         return;
       }
       if (!member.genre) {
-        Alert.alert('Erreur', `Veuillez sélectionner le genre pour ${member.prenom || 'ce membre'}`);
+        Alert.alert(
+          'Erreur',
+          `Veuillez sélectionner le genre pour ${member.prenom || 'ce membre'}`,
+        );
         isProcessingRef.current = false;
         return;
       }
       if (!member.dateNaissance.trim()) {
-        Alert.alert('Erreur', `Veuillez entrer la date de naissance pour ${member.prenom || 'ce membre'}`);
+        Alert.alert(
+          'Erreur',
+          `Veuillez entrer la date de naissance pour ${
+            member.prenom || 'ce membre'
+          }`,
+        );
         isProcessingRef.current = false;
         return;
       }
       if (!isAdult(member.dateNaissance)) {
         Alert.alert(
           'Adhésion impossible',
-          `${member.prenom || 'Ce membre'} doit avoir au moins 16 ans pour devenir adhérent de l'association.`
+          `${
+            member.prenom || 'Ce membre'
+          } doit avoir au moins 16 ans pour devenir adhérent de l'association.`,
         );
         isProcessingRef.current = false;
         return;
       }
       if (!member.accepte) {
-        Alert.alert('Erreur', `${member.prenom} doit accepter le règlement intérieur`);
+        Alert.alert(
+          'Erreur',
+          `${member.prenom} doit accepter le règlement intérieur`,
+        );
         isProcessingRef.current = false;
         return;
       }
@@ -887,7 +1051,10 @@ const MemberScreen = () => {
     const paiementId = `PAY-${Date.now()}`;
 
     if (method === 'virement') {
-      const reference = `FAM-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      const reference = `FAM-${new Date().getFullYear()}-${Math.random()
+        .toString(36)
+        .substr(2, 6)
+        .toUpperCase()}`;
 
       // Créer les membres en attente
       const nameParts = memberProfile.name.split(' ');
@@ -904,7 +1071,11 @@ const MemberScreen = () => {
           genre: member.genre,
           dateNaissance: member.dateNaissance,
           accepteReglement: true,
-          inscritPar: { odUserId: memberProfile.uid, nom: payeurNom, prenom: payeurPrenom },
+          inscritPar: {
+            odUserId: memberProfile.uid,
+            nom: payeurNom,
+            prenom: payeurPrenom,
+          },
           status: 'en_attente_paiement',
           referenceVirement: reference,
           formule: familyFormule,
@@ -914,8 +1085,12 @@ const MemberScreen = () => {
 
       Alert.alert(
         '🏦 Virement bancaire',
-        `Montant total: ${totalAmount}€ (${familyMembers.length} membre${familyMembers.length > 1 ? 's' : ''} - ${familyFormule})\n\nIBAN: ${mosqueeInfo?.iban || 'IBAN indisponible'}\nRéférence: ${reference}`,
-        [{ text: 'Compris' }]
+        `Montant total: ${totalAmount}€ (${familyMembers.length} membre${
+          familyMembers.length > 1 ? 's' : ''
+        } - ${familyFormule})\n\nIBAN: ${
+          mosqueeInfo?.iban || 'IBAN indisponible'
+        }\nRéférence: ${reference}`,
+        [{ text: 'Compris' }],
       );
 
       setShowFamilyModal(false);
@@ -929,7 +1104,8 @@ const MemberScreen = () => {
 
     setIsProcessingPayment(true);
     try {
-      const familyPayFn = method === 'apple' ? makeApplePayPayment : makePayment;
+      const familyPayFn =
+        method === 'apple' ? makeApplePayPayment : makePayment;
       const paymentResult = await familyPayFn({
         amount: totalAmount,
         description: `Cotisation famille ${familyFormule} (${familyMembers.length}) - El Mohsinine`,
@@ -969,7 +1145,11 @@ const MemberScreen = () => {
             genre: member.genre,
             dateNaissance: member.dateNaissance,
             accepteReglement: true,
-            inscritPar: { odUserId: memberProfile.uid, nom: payeurNom2, prenom: payeurPrenom2 },
+            inscritPar: {
+              odUserId: memberProfile.uid,
+              nom: payeurNom2,
+              prenom: payeurPrenom2,
+            },
             status: 'en_attente_validation',
             dateInscription: timestamp,
             datePaiement: timestamp,
@@ -1023,33 +1203,48 @@ const MemberScreen = () => {
   if (!isLoggedIn) {
     return (
       <BackgroundPattern>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerEmoji}>🕌</Text>
-            <Text style={[styles.title, isRTL && styles.rtlText]}>{t('memberArea')}</Text>
+            <Text style={[styles.title, isRTL && styles.rtlText]}>
+              {t('memberArea')}
+            </Text>
           </View>
 
           {/* Card connexion */}
           <View style={styles.card}>
             <Text style={styles.cardIcon}>👤</Text>
-            <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>{t('connectYourself')}</Text>
+            <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>
+              {t('connectYourself')}
+            </Text>
             <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
               {t('accessMemberArea')}
             </Text>
 
             <TouchableOpacity
               style={styles.primaryButton}
-              onPress={() => { setIsRegistering(false); setShowLoginModal(true); }}
+              onPress={() => {
+                setIsRegistering(false);
+                setShowLoginModal(true);
+              }}
             >
               <Text style={styles.primaryButtonText}>{t('login')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.secondaryButton}
-              onPress={() => { setIsRegistering(true); setShowLoginModal(true); }}
+              onPress={() => {
+                setIsRegistering(true);
+                setShowLoginModal(true);
+              }}
             >
-              <Text style={styles.secondaryButtonText}>{t('createAccount')}</Text>
+              <Text style={styles.secondaryButtonText}>
+                {t('createAccount')}
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -1066,13 +1261,22 @@ const MemberScreen = () => {
                 Bienvenue à la mosquée El Mohsinine !
               </Text>
               <Text style={[styles.welcomeText, isRTL && styles.rtlText]}>
-                Rejoignez notre communauté en devenant membre de l'association. En tant que membre, vous bénéficiez de nombreux avantages :
+                Rejoignez notre communauté en devenant membre de l'association.
+                En tant que membre, vous bénéficiez de nombreux avantages :
               </Text>
               <View style={styles.welcomeBenefits}>
-                <Text style={styles.welcomeBenefit}>✅ Reçu fiscal pour vos dons (déduction d'impôts)</Text>
-                <Text style={styles.welcomeBenefit}>✅ Droit de vote aux assemblées générales</Text>
-                <Text style={styles.welcomeBenefit}>✅ Participation aux décisions de la mosquée</Text>
-                <Text style={styles.welcomeBenefit}>✅ Accès aux événements réservés aux membres</Text>
+                <Text style={styles.welcomeBenefit}>
+                  ✅ Reçu fiscal pour vos dons (déduction d'impôts)
+                </Text>
+                <Text style={styles.welcomeBenefit}>
+                  ✅ Droit de vote aux assemblées générales
+                </Text>
+                <Text style={styles.welcomeBenefit}>
+                  ✅ Participation aux décisions de la mosquée
+                </Text>
+                <Text style={styles.welcomeBenefit}>
+                  ✅ Accès aux événements réservés aux membres
+                </Text>
               </View>
               <TouchableOpacity
                 style={styles.welcomeButton}
@@ -1102,44 +1306,51 @@ const MemberScreen = () => {
   // ============================================================
 
   // Vérifier si le membre est sympathisant
-  const isSympathisant = memberProfile && (
-    (memberProfile as any).cotisationStatus === 'sympathisant' ||
-    (memberProfile as any).status === 'sympathisant' ||
-    (memberProfile.cotisationStatus === 'aucun' && !memberProfile.cotisationExpiry)
-  );
+  const isSympathisant =
+    memberProfile &&
+    ((memberProfile as any).cotisationStatus === 'sympathisant' ||
+      (memberProfile as any).status === 'sympathisant' ||
+      (memberProfile.cotisationStatus === 'aucun' &&
+        !memberProfile.cotisationExpiry));
 
   // Vérifier si le membre attend la validation du bureau
-  const isAwaitingValidation = memberProfile && (
-    (memberProfile as any).cotisationStatus === 'en_attente_validation' ||
-    (memberProfile as any).status === 'en_attente_validation'
-  );
+  const isAwaitingValidation =
+    memberProfile &&
+    ((memberProfile as any).cotisationStatus === 'en_attente_validation' ||
+      (memberProfile as any).status === 'en_attente_validation');
 
   // Préparation des cartes de membre (utilisateur + inscrits)
-  const getPaymentStatus = (profile: MemberProfile | InscribedMember): 'paid' | 'pending' | 'virement_pending' | 'unpaid' => {
+  const getPaymentStatus = (
+    profile: MemberProfile | InscribedMember,
+  ): 'paid' | 'pending' | 'virement_pending' | 'unpaid' => {
     // Pour MemberProfile
     if ('cotisationStatus' in profile) {
       const status = profile.cotisationStatus as string;
       if (status === 'actif') return 'paid';
       if (status === 'en_attente_paiement') return 'pending';
+      if (status === 'en_attente_validation') return 'pending';
+      if (status === 'en_attente_signature') return 'pending';
       return 'unpaid';
     }
     // Pour InscribedMember
     if (profile.status === 'actif') return 'paid';
-    if (profile.status === 'en_attente_paiement') return 'virement_pending';
-    if (profile.status === 'en_attente_signature') return 'paid'; // Payé mais pas encore signé
-    if (profile.status === 'en_attente_validation') return 'paid'; // Payé, en attente de validation bureau
+    if (profile.status === 'en_attente_paiement') return 'pending';
+    if (profile.status === 'en_attente_validation') return 'pending';
+    if (profile.status === 'en_attente_signature') return 'pending';
     if (profile.datePaiement) return 'paid';
     return 'unpaid';
   };
 
-  const memberForCard = memberProfile ? {
-    name: memberProfile.name,
-    memberId: memberProfile.memberId,
-    membershipExpirationDate: memberProfile.cotisationExpiry,
-    status: memberProfile.cotisationStatus || 'aucun',
-    paymentStatus: getPaymentStatus(memberProfile),
-    subscriptionType: memberProfile.cotisationType || undefined,
-  } : null;
+  const memberForCard = memberProfile
+    ? {
+        name: memberProfile.name,
+        memberId: memberProfile.memberId,
+        membershipExpirationDate: memberProfile.cotisationExpiry,
+        status: memberProfile.cotisationStatus || 'aucun',
+        paymentStatus: getPaymentStatus(memberProfile),
+        subscriptionType: memberProfile.cotisationType || undefined,
+      }
+    : null;
 
   // Tous les membres pour le swipe (utilisateur + inscrits)
   const allMembersForCard = [
@@ -1160,11 +1371,16 @@ const MemberScreen = () => {
 
   return (
     <BackgroundPattern>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Header avec nom */}
         <View style={styles.header}>
           <Text style={[styles.greeting, isRTL && styles.rtlText]}>
-            {isRTL ? `${memberProfile?.name?.split(' ')[0] || ''} 👋 مرحبا` : `Bonjour, ${memberProfile?.name?.split(' ')[0] || ''} 👋`}
+            {isRTL
+              ? `${memberProfile?.name?.split(' ')[0] || ''} 👋 مرحبا`
+              : `Bonjour, ${memberProfile?.name?.split(' ')[0] || ''} 👋`}
           </Text>
         </View>
 
@@ -1179,22 +1395,37 @@ const MemberScreen = () => {
             </View>
 
             <View style={styles.card}>
-              <Text style={[styles.cardSubtitle, isRTL && styles.rtlText, { fontSize: 16, lineHeight: 24 }]}>
-                Bienvenue {memberProfile?.name?.split(' ')[0] || ''},
-                {'\n\n'}Te voilà membre sympathisant, tu as accès à toutes les fonctionnalités de l'application, tu seras informé des événements de la mosquée.
-                {'\n\n'}Si tu veux aller plus loin et devenir membre actif (adhérent de l'association Centre Culturel Islamique de Bourg-en-Bresse) clique ici :
+              <Text
+                style={[
+                  styles.cardSubtitle,
+                  isRTL && styles.rtlText,
+                  { fontSize: 16, lineHeight: 24 },
+                ]}
+              >
+                Bienvenue {memberProfile?.name?.split(' ')[0] || ''},{'\n\n'}Te
+                voilà membre sympathisant, tu as accès à toutes les
+                fonctionnalités de l'application, tu seras informé des
+                événements de la mosquée.
+                {'\n\n'}Si tu veux aller plus loin et devenir membre actif
+                (adhérent de l'association Centre Culturel Islamique de
+                Bourg-en-Bresse) clique ici :
               </Text>
 
               <TouchableOpacity
                 style={[styles.primaryButton, { marginTop: 24 }]}
                 onPress={() => setMemberPage('devenir_adherent')}
               >
-                <Text style={styles.primaryButtonText}>Devenir membre actif</Text>
+                <Text style={styles.primaryButtonText}>
+                  Devenir membre actif
+                </Text>
               </TouchableOpacity>
             </View>
 
             {/* Déconnexion */}
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
               <Text style={styles.logoutButtonText}>{t('logout')}</Text>
             </TouchableOpacity>
           </>
@@ -1208,13 +1439,29 @@ const MemberScreen = () => {
             {/* Titre page */}
             <View style={styles.pageTitleContainer}>
               <Text style={styles.pageTitle}>ESPACE ADHÉRENT</Text>
-              <Text style={[styles.pageSubtitle]}>Pour devenir membre actif</Text>
+              <Text style={[styles.pageSubtitle]}>
+                Pour devenir membre actif
+              </Text>
             </View>
 
             {/* Message contextuel (expiration ou annulation) */}
             {contextMessage && (
-              <View style={[styles.card, { backgroundColor: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', borderWidth: 1 }]}>
-                <Text style={[styles.cardSubtitle, { color: '#ef4444', fontWeight: '600' }]}>
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                    borderColor: '#ef4444',
+                    borderWidth: 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.cardSubtitle,
+                    { color: '#ef4444', fontWeight: '600' },
+                  ]}
+                >
                   {contextMessage}
                 </Text>
               </View>
@@ -1224,28 +1471,40 @@ const MemberScreen = () => {
             {isAwaitingValidation && (
               <View style={styles.card}>
                 <Text style={styles.cardIcon}>⏳</Text>
-                <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Adhésion en cours de validation</Text>
+                <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>
+                  Adhésion en cours de validation
+                </Text>
                 <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
-                  Votre paiement a été reçu. Le bureau va valider votre adhésion prochainement.
+                  Votre paiement a été reçu. Le bureau va valider votre adhésion
+                  prochainement.
                 </Text>
               </View>
             )}
 
             {/* Section Avantages */}
             <View style={styles.card}>
-              <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Avantages d'être adhérent :</Text>
+              <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>
+                Avantages d'être adhérent :
+              </Text>
               <View style={styles.sympathisantBenefits}>
                 <View style={styles.advantageRow}>
                   <Text style={styles.advantageIcon}>✨</Text>
-                  <Text style={styles.benefitItem}>Tu deviens un soutien fort de ta mosquée et tu gagnes des hassanates</Text>
+                  <Text style={styles.benefitItem}>
+                    Tu deviens un soutien fort de ta mosquée et tu gagnes des
+                    hassanates
+                  </Text>
                 </View>
                 <View style={styles.advantageRow}>
                   <Text style={styles.advantageIcon}>🗳️</Text>
-                  <Text style={styles.benefitItem}>Tu as le droit de vote à chaque assemblée générale/élection</Text>
+                  <Text style={styles.benefitItem}>
+                    Tu as le droit de vote à chaque assemblée générale/élection
+                  </Text>
                 </View>
                 <View style={styles.advantageRow}>
                   <Text style={styles.advantageIcon}>🎫</Text>
-                  <Text style={styles.benefitItem}>Tu as le droit à la carte membre</Text>
+                  <Text style={styles.benefitItem}>
+                    Tu as le droit à la carte membre
+                  </Text>
                 </View>
               </View>
             </View>
@@ -1253,7 +1512,9 @@ const MemberScreen = () => {
             {/* Section Paiement */}
             {!isAwaitingValidation && (
               <View style={styles.card}>
-                <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>Activer ma cotisation</Text>
+                <Text style={[styles.cardTitle, isRTL && styles.rtlText]}>
+                  Activer ma cotisation
+                </Text>
                 <Text style={[styles.cardSubtitle, isRTL && styles.rtlText]}>
                   Choisissez votre formule d'adhésion
                 </Text>
@@ -1261,36 +1522,87 @@ const MemberScreen = () => {
                 {/* Formules */}
                 <View style={styles.formulesContainer}>
                   <TouchableOpacity
-                    style={[styles.formuleOption, selectedFormule === 'mensuel' && styles.formuleSelected]}
+                    style={[
+                      styles.formuleOption,
+                      selectedFormule === 'mensuel' && styles.formuleSelected,
+                    ]}
                     onPress={() => setSelectedFormule('mensuel')}
                   >
-                    <Text style={[styles.formuleLabel, selectedFormule === 'mensuel' && styles.formuleLabelSelected]}>
+                    <Text
+                      style={[
+                        styles.formuleLabel,
+                        selectedFormule === 'mensuel' &&
+                          styles.formuleLabelSelected,
+                      ]}
+                    >
                       Mensuel
                     </Text>
-                    <Text style={[styles.formulePrice, selectedFormule === 'mensuel' && styles.formulePriceSelected]}>
+                    <Text
+                      style={[
+                        styles.formulePrice,
+                        selectedFormule === 'mensuel' &&
+                          styles.formulePriceSelected,
+                      ]}
+                    >
                       {formulePrices.mensuel}€/mois
                     </Text>
-                    <Text style={[styles.formuleDesc, selectedFormule === 'mensuel' && styles.formuleDescSelected]}>
+                    <Text
+                      style={[
+                        styles.formuleDesc,
+                        selectedFormule === 'mensuel' &&
+                          styles.formuleDescSelected,
+                      ]}
+                    >
                       Paiement récurrent
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.formuleOption, selectedFormule === 'annuel' && styles.formuleSelected]}
+                    style={[
+                      styles.formuleOption,
+                      selectedFormule === 'annuel' && styles.formuleSelected,
+                    ]}
                     onPress={() => setSelectedFormule('annuel')}
                   >
-                    <Text style={[styles.formuleLabel, selectedFormule === 'annuel' && styles.formuleLabelSelected]}>
+                    <Text
+                      style={[
+                        styles.formuleLabel,
+                        selectedFormule === 'annuel' &&
+                          styles.formuleLabelSelected,
+                      ]}
+                    >
                       Annuel
                     </Text>
-                    <Text style={[styles.formulePrice, selectedFormule === 'annuel' && styles.formulePriceSelected]}>
+                    <Text
+                      style={[
+                        styles.formulePrice,
+                        selectedFormule === 'annuel' &&
+                          styles.formulePriceSelected,
+                      ]}
+                    >
                       {formulePrices.annuel}€/an
                     </Text>
-                    <Text style={[styles.formuleDesc, selectedFormule === 'annuel' && styles.formuleDescSelected]}>
+                    <Text
+                      style={[
+                        styles.formuleDesc,
+                        selectedFormule === 'annuel' &&
+                          styles.formuleDescSelected,
+                      ]}
+                    >
                       Paiement unique
                     </Text>
                     {formulePrices.annuel < formulePrices.mensuel * 12 && (
                       <View style={styles.economyBadge}>
-                        <Text style={styles.economyText}>-{Math.round((1 - formulePrices.annuel / (formulePrices.mensuel * 12)) * 100)}%</Text>
+                        <Text style={styles.economyText}>
+                          -
+                          {Math.round(
+                            (1 -
+                              formulePrices.annuel /
+                                (formulePrices.mensuel * 12)) *
+                              100,
+                          )}
+                          %
+                        </Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -1304,7 +1616,9 @@ const MemberScreen = () => {
                     setShowReglementModal(true);
                   }}
                 >
-                  <Text style={styles.primaryButtonText}>Activer ma cotisation</Text>
+                  <Text style={styles.primaryButtonText}>
+                    Activer ma cotisation
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1312,15 +1626,29 @@ const MemberScreen = () => {
             {/* Bouton retour si vient de PAGE 1 */}
             {isSympathisant && !isExpired && (
               <TouchableOpacity
-                style={[styles.logoutButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.accent }]}
+                style={[
+                  styles.logoutButton,
+                  {
+                    backgroundColor: 'transparent',
+                    borderWidth: 1,
+                    borderColor: colors.accent,
+                  },
+                ]}
                 onPress={() => setMemberPage('sympathisant')}
               >
-                <Text style={[styles.logoutButtonText, { color: colors.accent }]}>Retour</Text>
+                <Text
+                  style={[styles.logoutButtonText, { color: colors.accent }]}
+                >
+                  Retour
+                </Text>
               </TouchableOpacity>
             )}
 
             {/* Déconnexion */}
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
               <Text style={styles.logoutButtonText}>{t('logout')}</Text>
             </TouchableOpacity>
           </>
@@ -1343,11 +1671,20 @@ const MemberScreen = () => {
             >
               <Text style={styles.memberCardButtonIcon}>🪪</Text>
               <View style={styles.memberCardButtonContent}>
-                <Text style={[styles.memberCardButtonText, isRTL && styles.rtlText]}>
+                <Text
+                  style={[styles.memberCardButtonText, isRTL && styles.rtlText]}
+                >
                   Voir ma carte de membre
                 </Text>
-                <Text style={[styles.memberCardButtonSubtext, isRTL && styles.rtlText]}>
-                  {inscribedMembers.length > 0 ? `${inscribedMembers.length + 1} cartes disponibles` : 'Afficher en plein écran'}
+                <Text
+                  style={[
+                    styles.memberCardButtonSubtext,
+                    isRTL && styles.rtlText,
+                  ]}
+                >
+                  {inscribedMembers.length > 0
+                    ? `${inscribedMembers.length + 1} cartes disponibles`
+                    : 'Afficher en plein écran'}
                 </Text>
               </View>
               <Text style={styles.memberCardButtonArrow}>→</Text>
@@ -1360,8 +1697,14 @@ const MemberScreen = () => {
             >
               <Text style={styles.familyButtonIcon}>👥</Text>
               <View style={styles.familyButtonContent}>
-                <Text style={[styles.familyButtonText, isRTL && styles.rtlText]}>Inscrire des proches</Text>
-                <Text style={[styles.familyButtonSubtext, isRTL && styles.rtlText]}>
+                <Text
+                  style={[styles.familyButtonText, isRTL && styles.rtlText]}
+                >
+                  Inscrire des proches
+                </Text>
+                <Text
+                  style={[styles.familyButtonSubtext, isRTL && styles.rtlText]}
+                >
                   Famille, amis...
                 </Text>
               </View>
@@ -1375,12 +1718,24 @@ const MemberScreen = () => {
             >
               <Text style={styles.membershipsButtonIcon}>📋</Text>
               <View style={styles.membershipsButtonContent}>
-                <Text style={[styles.membershipsButtonText, isRTL && styles.rtlText]}>
+                <Text
+                  style={[
+                    styles.membershipsButtonText,
+                    isRTL && styles.rtlText,
+                  ]}
+                >
                   Voir mes adhésions
                 </Text>
-                <Text style={[styles.membershipsButtonSubtext, isRTL && styles.rtlText]}>
+                <Text
+                  style={[
+                    styles.membershipsButtonSubtext,
+                    isRTL && styles.rtlText,
+                  ]}
+                >
                   {inscribedMembers.length > 0
-                    ? `${inscribedMembers.length + 1} membre${inscribedMembers.length > 0 ? 's' : ''}`
+                    ? `${inscribedMembers.length + 1} membre${
+                        inscribedMembers.length > 0 ? 's' : ''
+                      }`
                     : 'Détails et statuts'}
                 </Text>
               </View>
@@ -1391,21 +1746,33 @@ const MemberScreen = () => {
             {memberProfile && (
               <TouchableOpacity
                 style={styles.membershipsButton}
-                onPress={() => navigation.navigate('ProfileEdit', {
-                  uid: memberProfile.uid,
-                  nom: memberProfile.nom || '',
-                  prenom: memberProfile.prenom || '',
-                  telephone: memberProfile.telephone || '',
-                  adresse: memberProfile.adresse || '',
-                  email: memberProfile.email || '',
-                })}
+                onPress={() =>
+                  navigation.navigate('ProfileEdit', {
+                    uid: memberProfile.uid,
+                    nom: memberProfile.nom || '',
+                    prenom: memberProfile.prenom || '',
+                    telephone: memberProfile.telephone || '',
+                    adresse: memberProfile.adresse || '',
+                    email: memberProfile.email || '',
+                  })
+                }
               >
                 <Text style={styles.membershipsButtonIcon}>✏️</Text>
                 <View style={styles.membershipsButtonContent}>
-                  <Text style={[styles.membershipsButtonText, isRTL && styles.rtlText]}>
+                  <Text
+                    style={[
+                      styles.membershipsButtonText,
+                      isRTL && styles.rtlText,
+                    ]}
+                  >
                     Modifier mon profil
                   </Text>
-                  <Text style={[styles.membershipsButtonSubtext, isRTL && styles.rtlText]}>
+                  <Text
+                    style={[
+                      styles.membershipsButtonSubtext,
+                      isRTL && styles.rtlText,
+                    ]}
+                  >
                     Nom, téléphone, adresse
                   </Text>
                 </View>
@@ -1416,15 +1783,28 @@ const MemberScreen = () => {
             {/* Bouton annuler abonnement mensuel */}
             {memberProfile?.cotisationType === 'mensuel' && isPaid && (
               <TouchableOpacity
-                style={[styles.card, { flexDirection: 'row', alignItems: 'center', borderColor: '#ef4444', borderWidth: 1 }]}
+                style={[
+                  styles.card,
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    borderColor: '#ef4444',
+                    borderWidth: 1,
+                  },
+                ]}
                 onPress={() => {
                   Alert.alert(
-                    language === 'ar' ? 'إلغاء الاشتراك' : 'Annuler mon abonnement',
+                    language === 'ar'
+                      ? 'إلغاء الاشتراك'
+                      : 'Annuler mon abonnement',
                     language === 'ar'
                       ? 'هل أنت متأكد؟ سيتم إيقاف الخصم التلقائي. ستبقى متعاطفاً مع المسجد.'
                       : 'Êtes-vous sûr ? Cela arrêtera le prélèvement automatique. Vous resterez sympathisant de la mosquée.',
                     [
-                      { text: language === 'ar' ? 'لا' : 'Non', style: 'cancel' },
+                      {
+                        text: language === 'ar' ? 'لا' : 'Non',
+                        style: 'cancel',
+                      },
                       {
                         text: language === 'ar' ? 'نعم، إلغاء' : 'Oui, annuler',
                         style: 'destructive',
@@ -1433,18 +1813,24 @@ const MemberScreen = () => {
                             const result = await cancelSubscription();
                             if (result.success) {
                               // Mise à jour immédiate du state local (pas d'attente Firestore)
-                              setMemberProfile((prev: any) => prev ? ({
-                                ...prev,
-                                status: 'sympathisant',
-                                statut: 'sympathisant',
-                                cotisationType: null,
-                              }) : null);
+                              setMemberProfile((prev: any) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      status: 'sympathisant',
+                                      statut: 'sympathisant',
+                                      cotisationType: null,
+                                    }
+                                  : null,
+                              );
                               setIsPaid(false);
                               setMemberPage('sympathisant');
 
                               Alert.alert(
-                                language === 'ar' ? 'تم الإلغاء' : 'Abonnement annulé',
-                                result.message
+                                language === 'ar'
+                                  ? 'تم الإلغاء'
+                                  : 'Abonnement annulé',
+                                result.message,
                               );
 
                               // Recharger aussi depuis Firestore en arrière-plan
@@ -1453,55 +1839,71 @@ const MemberScreen = () => {
                             } else {
                               Alert.alert(
                                 language === 'ar' ? 'خطأ' : 'Erreur',
-                                result.message
+                                result.message,
                               );
                             }
                           } catch (err: any) {
                             Alert.alert(
                               language === 'ar' ? 'خطأ' : 'Erreur',
-                              err?.message || (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue')
+                              err?.message ||
+                                (language === 'ar'
+                                  ? 'حدث خطأ'
+                                  : 'Une erreur est survenue'),
                             );
                           }
                         },
                       },
-                    ]
+                    ],
                   );
                 }}
               >
                 <Text style={{ fontSize: 20, marginRight: 12 }}>❌</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.cardTitle, { color: '#ef4444', fontSize: 15 }]}>
-                    {language === 'ar' ? 'إلغاء اشتراكي الشهري' : 'Annuler mon abonnement mensuel'}
+                  <Text
+                    style={[
+                      styles.cardTitle,
+                      { color: '#ef4444', fontSize: 15 },
+                    ]}
+                  >
+                    {language === 'ar'
+                      ? 'إلغاء اشتراكي الشهري'
+                      : 'Annuler mon abonnement mensuel'}
                   </Text>
                   <Text style={[styles.cardSubtitle, { fontSize: 12 }]}>
-                    {language === 'ar' ? 'إيقاف الخصم التلقائي' : 'Arrêter le prélèvement automatique'}
+                    {language === 'ar'
+                      ? 'إيقاف الخصم التلقائي'
+                      : 'Arrêter le prélèvement automatique'}
                   </Text>
                 </View>
               </TouchableOpacity>
             )}
 
             {/* Renouveler si bientôt expiré */}
-            {memberProfile?.cotisationExpiry && (() => {
-              const expiryValue = memberProfile.cotisationExpiry as any;
-              const expiry = expiryValue instanceof Date
-                ? expiryValue
-                : expiryValue?.toDate?.() || new Date(expiryValue);
-              const daysLeft = Math.floor((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-
-              if (daysLeft <= 30 && daysLeft > 0) {
-                return (
-                  <TouchableOpacity
-                    style={styles.renewButton}
-                    onPress={() => setShowPaymentModal(true)}
-                  >
-                    <Text style={styles.renewButtonText}>
-                      ⚠️ Expire dans {daysLeft} jours - Renouveler
-                    </Text>
-                  </TouchableOpacity>
+            {memberProfile?.cotisationExpiry &&
+              (() => {
+                const expiryValue = memberProfile.cotisationExpiry as any;
+                const expiry =
+                  expiryValue instanceof Date
+                    ? expiryValue
+                    : expiryValue?.toDate?.() || new Date(expiryValue);
+                const daysLeft = Math.floor(
+                  (expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
                 );
-              }
-              return null;
-            })()}
+
+                if (daysLeft <= 30 && daysLeft > 0) {
+                  return (
+                    <TouchableOpacity
+                      style={styles.renewButton}
+                      onPress={() => setShowPaymentModal(true)}
+                    >
+                      <Text style={styles.renewButtonText}>
+                        ⚠️ Expire dans {daysLeft} jours - Renouveler
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }
+                return null;
+              })()}
 
             {/* Build 249 - Historique paiements + dons par année */}
             <View style={styles.card}>
@@ -1514,21 +1916,33 @@ const MemberScreen = () => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 data={availableYears}
-                keyExtractor={(item) => item.toString()}
+                keyExtractor={item => item.toString()}
                 style={{ marginBottom: 16 }}
-                contentContainerStyle={isTablet ? { alignItems: 'center', width: '100%', justifyContent: 'center' } : undefined}
+                contentContainerStyle={
+                  isTablet
+                    ? {
+                        alignItems: 'center',
+                        width: '100%',
+                        justifyContent: 'center',
+                      }
+                    : undefined
+                }
                 renderItem={({ item: year }) => (
                   <TouchableOpacity
                     onPress={() => setHistoryYear(year)}
                     style={[
                       styles.yearButton,
-                      historyYear === year ? styles.yearButtonActive : styles.yearButtonInactive,
+                      historyYear === year
+                        ? styles.yearButtonActive
+                        : styles.yearButtonInactive,
                     ]}
                   >
                     <Text
                       style={[
                         styles.yearButtonText,
-                        historyYear === year ? styles.yearButtonTextActive : styles.yearButtonTextInactive,
+                        historyYear === year
+                          ? styles.yearButtonTextActive
+                          : styles.yearButtonTextInactive,
                       ]}
                     >
                       {year}
@@ -1539,81 +1953,135 @@ const MemberScreen = () => {
 
               {loadingHistory ? (
                 <ActivityIndicator size="small" color={colors.accent} />
-              ) : (() => {
-                const filteredHistory = paymentHistory.filter((payment: any) => {
-                  const date = payment.createdAt?.toDate?.() || new Date(payment.createdAt);
-                  return date && !isNaN(date.getTime()) && date.getFullYear() === historyYear;
-                });
-                if (filteredHistory.length === 0) {
-                  return (
-                    <Text style={[styles.cardSubtitle, { textAlign: 'center', paddingVertical: 16 }]}>
-                      Aucun paiement en {historyYear}
-                    </Text>
+              ) : (
+                (() => {
+                  const filteredHistory = paymentHistory.filter(
+                    (payment: any) => {
+                      const date =
+                        payment.createdAt?.toDate?.() ||
+                        new Date(payment.createdAt);
+                      return (
+                        date &&
+                        !isNaN(date.getTime()) &&
+                        date.getFullYear() === historyYear
+                      );
+                    },
                   );
-                }
-                return (
-                  <View style={isTablet ? { maxWidth: 700, alignSelf: 'center', width: '100%' } : undefined}>
-                    {filteredHistory.map((payment: any, index: number) => {
-                      const date = payment.createdAt?.toDate?.() || new Date(payment.createdAt);
-                      const dateStr = date.toLocaleDateString('fr-FR', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric'
-                      });
+                  if (filteredHistory.length === 0) {
+                    return (
+                      <Text
+                        style={[
+                          styles.cardSubtitle,
+                          { textAlign: 'center', paddingVertical: 16 },
+                        ]}
+                      >
+                        Aucun paiement en {historyYear}
+                      </Text>
+                    );
+                  }
+                  return (
+                    <View
+                      style={
+                        isTablet
+                          ? {
+                              maxWidth: 700,
+                              alignSelf: 'center',
+                              width: '100%',
+                            }
+                          : undefined
+                      }
+                    >
+                      {filteredHistory.map((payment: any, index: number) => {
+                        const date =
+                          payment.createdAt?.toDate?.() ||
+                          new Date(payment.createdAt);
+                        const dateStr = date.toLocaleDateString('fr-FR', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        });
 
-                      // Build 249 - Affichage différencié dons vs cotisations
-                      const isDonation = payment._type === 'donation';
-                      const type = isDonation
-                        ? `Don${payment.projetNom ? ' — ' + payment.projetNom : ''}`
-                        : payment.metadata?.period === 'mensuel' ? 'Cotisation Mensuel' : 'Cotisation Annuel';
+                        // Build 249 - Affichage différencié dons vs cotisations
+                        const isDonation = payment._type === 'donation';
+                        const type = isDonation
+                          ? `Don${
+                              payment.projetNom ? ' — ' + payment.projetNom : ''
+                            }`
+                          : payment.metadata?.period === 'mensuel'
+                          ? 'Cotisation Mensuel'
+                          : 'Cotisation Annuel';
 
-                      let status = 'payé';
-                      let statusColor = colors.accent;
-                      if (isDonation) {
-                        if (payment.statut === 'refunded') {
+                        let status = 'payé';
+                        let statusColor = colors.accent;
+                        if (isDonation) {
+                          if (payment.statut === 'refunded') {
+                            status = 'remboursé';
+                            statusColor = '#f97316';
+                          }
+                        } else if (payment.status === 'refunded') {
                           status = 'remboursé';
                           statusColor = '#f97316';
+                        } else if (payment.status === 'failed') {
+                          status = 'échoué';
+                          statusColor = '#ef4444';
                         }
-                      } else if (payment.status === 'refunded') {
-                        status = 'remboursé';
-                        statusColor = '#f97316';
-                      } else if (payment.status === 'failed') {
-                        status = 'échoué';
-                        statusColor = '#ef4444';
-                      }
 
-                      return (
-                        <View
-                          key={payment.id}
-                          style={[
-                            styles.paymentHistoryItem,
-                            index !== filteredHistory.length - 1 && styles.paymentHistoryItemBorder
-                          ]}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.paymentHistoryDate}>{dateStr}</Text>
-                            <Text style={styles.paymentHistoryType}>{type}</Text>
-                          </View>
-                          <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={styles.paymentHistoryAmount}>
-                              {(payment.amount || payment.montant || 0).toFixed(2)} €
-                            </Text>
-                            <View style={[styles.paymentHistoryStatusBadge, { backgroundColor: statusColor + '20' }]}>
-                              <Text style={[styles.paymentHistoryStatusText, { color: statusColor }]}>
-                                {status}
+                        return (
+                          <View
+                            key={payment.id}
+                            style={[
+                              styles.paymentHistoryItem,
+                              index !== filteredHistory.length - 1 &&
+                                styles.paymentHistoryItemBorder,
+                            ]}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.paymentHistoryDate}>
+                                {dateStr}
+                              </Text>
+                              <Text style={styles.paymentHistoryType}>
+                                {type}
                               </Text>
                             </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                              <Text style={styles.paymentHistoryAmount}>
+                                {(
+                                  payment.amount ||
+                                  payment.montant ||
+                                  0
+                                ).toFixed(2)}{' '}
+                                €
+                              </Text>
+                              <View
+                                style={[
+                                  styles.paymentHistoryStatusBadge,
+                                  { backgroundColor: statusColor + '20' },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.paymentHistoryStatusText,
+                                    { color: statusColor },
+                                  ]}
+                                >
+                                  {status}
+                                </Text>
+                              </View>
+                            </View>
                           </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                );
-              })()}
+                        );
+                      })}
+                    </View>
+                  );
+                })()
+              )}
             </View>
 
             {/* Déconnexion */}
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
               <Text style={styles.logoutButtonText}>{t('logout')}</Text>
             </TouchableOpacity>
           </>
@@ -1646,14 +2114,22 @@ const MemberScreen = () => {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.modalContent}>
-            <TouchableOpacity style={styles.closeButton} onPress={() => { setShowLoginModal(false); resetLoginForm(); }}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                setShowLoginModal(false);
+                resetLoginForm();
+              }}
+            >
               <Text style={styles.closeButtonText}>×</Text>
             </TouchableOpacity>
 
             {showForgotPassword ? (
               // Mot de passe oublié
               <>
-                <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>🔑 Mot de passe oublié</Text>
+                <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>
+                  🔑 Mot de passe oublié
+                </Text>
 
                 <Text style={styles.inputLabel}>Email</Text>
                 <TextInput
@@ -1667,14 +2143,19 @@ const MemberScreen = () => {
                 />
 
                 <TouchableOpacity
-                  style={[styles.primaryButton, authLoading && styles.buttonDisabled]}
+                  style={[
+                    styles.primaryButton,
+                    authLoading && styles.buttonDisabled,
+                  ]}
                   onPress={handleForgotPassword}
                   disabled={authLoading}
                 >
                   {authLoading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>Envoyer le lien</Text>
+                    <Text style={styles.primaryButtonText}>
+                      Envoyer le lien
+                    </Text>
                   )}
                 </TouchableOpacity>
 
@@ -1684,7 +2165,10 @@ const MemberScreen = () => {
               </>
             ) : (
               // Connexion / Inscription
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
                 <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>
                   {isRegistering ? '📝 Créer un compte' : '🔐 Connexion'}
                 </Text>
@@ -1731,30 +2215,52 @@ const MemberScreen = () => {
                     <Text style={styles.inputLabel}>Genre *</Text>
                     <View style={styles.genreContainer}>
                       <TouchableOpacity
-                        style={[styles.genreOption, registerGenre === 'homme' && styles.genreSelected]}
+                        style={[
+                          styles.genreOption,
+                          registerGenre === 'homme' && styles.genreSelected,
+                        ]}
                         onPress={() => setRegisterGenre('homme')}
                       >
-                        <Text style={[styles.genreText, registerGenre === 'homme' && styles.genreTextSelected]}>
+                        <Text
+                          style={[
+                            styles.genreText,
+                            registerGenre === 'homme' &&
+                              styles.genreTextSelected,
+                          ]}
+                        >
                           Homme
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.genreOption, registerGenre === 'femme' && styles.genreSelected]}
+                        style={[
+                          styles.genreOption,
+                          registerGenre === 'femme' && styles.genreSelected,
+                        ]}
                         onPress={() => setRegisterGenre('femme')}
                       >
-                        <Text style={[styles.genreText, registerGenre === 'femme' && styles.genreTextSelected]}>
+                        <Text
+                          style={[
+                            styles.genreText,
+                            registerGenre === 'femme' &&
+                              styles.genreTextSelected,
+                          ]}
+                        >
                           Femme
                         </Text>
                       </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.inputLabel}>Date de naissance * (JJ/MM/AAAA)</Text>
+                    <Text style={styles.inputLabel}>
+                      Date de naissance * (JJ/MM/AAAA)
+                    </Text>
                     <TextInput
                       style={styles.input}
                       placeholder="01/01/1990"
                       placeholderTextColor="#999"
                       value={registerDateNaissance}
-                      onChangeText={(text) => setRegisterDateNaissance(formatDateInput(text))}
+                      onChangeText={text =>
+                        setRegisterDateNaissance(formatDateInput(text))
+                      }
                       keyboardType="numeric"
                       maxLength={10}
                     />
@@ -1787,7 +2293,9 @@ const MemberScreen = () => {
                     onPress={() => setShowPassword(!showPassword)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
+                    <Text style={styles.eyeIcon}>
+                      {showPassword ? '🙈' : '👁️'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1797,8 +2305,15 @@ const MemberScreen = () => {
                     onPress={() => setAcceptedRules(!acceptedRules)}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.checkbox, acceptedRules && styles.checkboxChecked]}>
-                      {acceptedRules && <Text style={styles.checkboxCheck}>✓</Text>}
+                    <View
+                      style={[
+                        styles.checkbox,
+                        acceptedRules && styles.checkboxChecked,
+                      ]}
+                    >
+                      {acceptedRules && (
+                        <Text style={styles.checkboxCheck}>✓</Text>
+                      )}
                     </View>
                     <Text style={styles.checkboxLabel}>
                       J'accepte le règlement intérieur de la mosquée
@@ -1807,7 +2322,10 @@ const MemberScreen = () => {
                 )}
 
                 <TouchableOpacity
-                  style={[styles.primaryButton, authLoading && styles.buttonDisabled]}
+                  style={[
+                    styles.primaryButton,
+                    authLoading && styles.buttonDisabled,
+                  ]}
                   onPress={isRegistering ? handleRegister : handleLogin}
                   disabled={authLoading}
                 >
@@ -1826,7 +2344,9 @@ const MemberScreen = () => {
                   </TouchableOpacity>
                 )}
 
-                <TouchableOpacity onPress={() => setIsRegistering(!isRegistering)}>
+                <TouchableOpacity
+                  onPress={() => setIsRegistering(!isRegistering)}
+                >
                   <Text style={styles.switchText}>
                     {isRegistering
                       ? 'Déjà un compte ? Se connecter'
@@ -1847,20 +2367,30 @@ const MemberScreen = () => {
 
   function renderReglementModal() {
     const handleScroll = (event: any) => {
-      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      const { layoutMeasurement, contentOffset, contentSize } =
+        event.nativeEvent;
       const paddingToBottom = 50;
-      if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+      if (
+        layoutMeasurement.height + contentOffset.y >=
+        contentSize.height - paddingToBottom
+      ) {
         setHasScrolledToEnd(true);
       }
     };
 
     const handleContinueToPayment = () => {
       if (!hasScrolledToEnd) {
-        Alert.alert('Lecture obligatoire', 'Veuillez lire le règlement jusqu\'à la fin avant de continuer.');
+        Alert.alert(
+          'Lecture obligatoire',
+          "Veuillez lire le règlement jusqu'à la fin avant de continuer.",
+        );
         return;
       }
       if (!acceptedReglement) {
-        Alert.alert('Acceptation requise', 'Veuillez cocher la case pour accepter le règlement.');
+        Alert.alert(
+          'Acceptation requise',
+          'Veuillez cocher la case pour accepter le règlement.',
+        );
         return;
       }
       setShowReglementModal(false);
@@ -1873,7 +2403,9 @@ const MemberScreen = () => {
           <View style={styles.familyModalContent}>
             {/* Header */}
             <View style={styles.familyModalHeader}>
-              <Text style={[styles.familyModalTitle, isRTL && styles.rtlText]}>📜 Statuts et Règlement</Text>
+              <Text style={[styles.familyModalTitle, isRTL && styles.rtlText]}>
+                📜 Statuts et Règlement
+              </Text>
               <TouchableOpacity
                 style={styles.familyCloseButton}
                 onPress={() => {
@@ -1899,7 +2431,9 @@ const MemberScreen = () => {
 
               {/* Indicateur de fin */}
               <View style={styles.reglementEndMarker}>
-                <Text style={styles.reglementEndText}>─── Fin du document ───</Text>
+                <Text style={styles.reglementEndText}>
+                  ─── Fin du document ───
+                </Text>
               </View>
             </ScrollView>
 
@@ -1907,7 +2441,9 @@ const MemberScreen = () => {
             <View style={styles.reglementFooter}>
               {!hasScrolledToEnd && (
                 <View style={styles.scrollWarning}>
-                  <Text style={styles.scrollWarningText}>⬇️ Faites défiler jusqu'en bas pour continuer</Text>
+                  <Text style={styles.scrollWarningText}>
+                    ⬇️ Faites défiler jusqu'en bas pour continuer
+                  </Text>
                 </View>
               )}
 
@@ -1915,8 +2451,15 @@ const MemberScreen = () => {
                 style={styles.checkboxRow}
                 onPress={() => setAcceptedReglement(!acceptedReglement)}
               >
-                <View style={[styles.checkbox, acceptedReglement && styles.checkboxChecked]}>
-                  {acceptedReglement && <Text style={styles.checkboxCheck}>✓</Text>}
+                <View
+                  style={[
+                    styles.checkbox,
+                    acceptedReglement && styles.checkboxChecked,
+                  ]}
+                >
+                  {acceptedReglement && (
+                    <Text style={styles.checkboxCheck}>✓</Text>
+                  )}
                 </View>
                 <Text style={[styles.checkboxLabel, { flex: 1 }]}>
                   J'ai lu et j'accepte les statuts et le règlement intérieur
@@ -1925,18 +2468,22 @@ const MemberScreen = () => {
 
               <View style={styles.reglementWarning}>
                 <Text style={styles.reglementWarningText}>
-                  ⚠️ En cas de refus d'adhésion par le bureau, votre paiement sera converti en don (éligible au reçu fiscal).
+                  ⚠️ En cas de refus d'adhésion par le bureau, votre paiement
+                  sera converti en don (éligible au reçu fiscal).
                 </Text>
               </View>
 
               <TouchableOpacity
                 style={[
                   styles.primaryButton,
-                  (!hasScrolledToEnd || !acceptedReglement) && styles.buttonDisabled
+                  (!hasScrolledToEnd || !acceptedReglement) &&
+                    styles.buttonDisabled,
                 ]}
                 onPress={handleContinueToPayment}
               >
-                <Text style={styles.primaryButtonText}>Continuer vers le paiement</Text>
+                <Text style={styles.primaryButtonText}>
+                  Continuer vers le paiement
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1958,20 +2505,30 @@ const MemberScreen = () => {
       <Modal visible={showPaymentModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <TouchableOpacity style={styles.closeButton} onPress={() => { setShowPaymentModal(false); setCustomAmount(''); }}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                setShowPaymentModal(false);
+                setCustomAmount('');
+              }}
+            >
               <Text style={styles.closeButtonText}>×</Text>
             </TouchableOpacity>
 
-            <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>💳 Paiement</Text>
+            <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>
+              💳 Paiement
+            </Text>
 
             {/* Montant personnalisable */}
             <View style={styles.amountSection}>
-              <Text style={styles.amountLabel}>Montant (minimum {minAmount}€)</Text>
+              <Text style={styles.amountLabel}>
+                Montant (minimum {minAmount}€)
+              </Text>
               <View style={styles.amountInputContainer}>
                 <TextInput
                   style={styles.amountInput}
                   value={customAmount || String(minAmount)}
-                  onChangeText={(text) => {
+                  onChangeText={text => {
                     const num = text.replace(/[^0-9]/g, '');
                     setCustomAmount(num);
                   }}
@@ -1989,25 +2546,34 @@ const MemberScreen = () => {
             {/* Répartition cotisation / don */}
             <View style={styles.breakdownSection}>
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>📋 Cotisation {selectedFormule}</Text>
-                <Text style={styles.breakdownValue}>{breakdown.cotisation}€</Text>
+                <Text style={styles.breakdownLabel}>
+                  📋 Cotisation {selectedFormule}
+                </Text>
+                <Text style={styles.breakdownValue}>
+                  {breakdown.cotisation}€
+                </Text>
               </View>
               {breakdown.don > 0 && (
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabelDon}>🎁 Don (reçu fiscal)</Text>
+                  <Text style={styles.breakdownLabelDon}>
+                    🎁 Don (reçu fiscal)
+                  </Text>
                   <Text style={styles.breakdownValueDon}>{breakdown.don}€</Text>
                 </View>
               )}
               <View style={[styles.breakdownRow, styles.breakdownTotal]}>
                 <Text style={styles.breakdownLabelTotal}>Total</Text>
-                <Text style={styles.breakdownValueTotal}>{breakdown.total}€</Text>
+                <Text style={styles.breakdownValueTotal}>
+                  {breakdown.total}€
+                </Text>
               </View>
             </View>
 
             {breakdown.don > 0 && (
               <View style={styles.donInfo}>
                 <Text style={styles.donInfoText}>
-                  ℹ️ Vous recevrez un reçu fiscal pour votre don de {breakdown.don}€ (déduction de 66% des impôts)
+                  ℹ️ Vous recevrez un reçu fiscal pour votre don de{' '}
+                  {breakdown.don}€ (déduction de 66% des impôts)
                 </Text>
               </View>
             )}
@@ -2020,10 +2586,22 @@ const MemberScreen = () => {
             >
               <Text style={styles.paymentMethodIcon}>💳</Text>
               <View style={styles.paymentMethodContent}>
-                <Text style={styles.paymentMethodTitle} numberOfLines={1} adjustsFontSizeToFit={true}>CB</Text>
-                <Text style={styles.paymentMethodSubtitle}>Visa, Mastercard</Text>
+                <Text
+                  style={styles.paymentMethodTitle}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                >
+                  CB
+                </Text>
+                <Text style={styles.paymentMethodSubtitle}>
+                  Visa, Mastercard
+                </Text>
               </View>
-              {isProcessingPayment ? <ActivityIndicator /> : <Text style={styles.paymentMethodArrow}>→</Text>}
+              {isProcessingPayment ? (
+                <ActivityIndicator />
+              ) : (
+                <Text style={styles.paymentMethodArrow}>→</Text>
+              )}
             </TouchableOpacity>
 
             {Platform.OS === 'ios' && (
@@ -2032,12 +2610,34 @@ const MemberScreen = () => {
                 onPress={() => handlePayment('apple')}
                 disabled={isProcessingPayment}
               >
-                <Image source={require('../assets/apple-logo.png')} style={styles.appleLogo} />
+                <Image
+                  source={require('../assets/apple-logo.png')}
+                  style={styles.appleLogo}
+                />
                 <View style={styles.paymentMethodContent}>
-                  <Text style={[styles.paymentMethodTitle, styles.applePayText]}>Apple Pay</Text>
-                  <Text style={[styles.paymentMethodSubtitle, styles.applePaySubtext]}>Paiement rapide</Text>
+                  <Text
+                    style={[styles.paymentMethodTitle, styles.applePayText]}
+                  >
+                    Apple Pay
+                  </Text>
+                  <Text
+                    style={[
+                      styles.paymentMethodSubtitle,
+                      styles.applePaySubtext,
+                    ]}
+                  >
+                    Paiement rapide
+                  </Text>
                 </View>
-                {isProcessingPayment ? <ActivityIndicator /> : <Text style={[styles.paymentMethodArrow, styles.applePayText]}>→</Text>}
+                {isProcessingPayment ? (
+                  <ActivityIndicator />
+                ) : (
+                  <Text
+                    style={[styles.paymentMethodArrow, styles.applePayText]}
+                  >
+                    →
+                  </Text>
+                )}
               </TouchableOpacity>
             )}
 
@@ -2047,12 +2647,21 @@ const MemberScreen = () => {
                 onPress={() => handlePayment('card')}
                 disabled={isProcessingPayment}
               >
-                <Image source={require('../assets/google-logo.png')} style={styles.googleLogo} />
+                <Image
+                  source={require('../assets/google-logo.png')}
+                  style={styles.googleLogo}
+                />
                 <View style={styles.paymentMethodContent}>
                   <Text style={styles.paymentMethodTitle}>Google Pay</Text>
-                  <Text style={styles.paymentMethodSubtitle}>Paiement rapide</Text>
+                  <Text style={styles.paymentMethodSubtitle}>
+                    Paiement rapide
+                  </Text>
                 </View>
-                {isProcessingPayment ? <ActivityIndicator /> : <Text style={styles.paymentMethodArrow}>→</Text>}
+                {isProcessingPayment ? (
+                  <ActivityIndicator />
+                ) : (
+                  <Text style={styles.paymentMethodArrow}>→</Text>
+                )}
               </TouchableOpacity>
             )}
 
@@ -2064,7 +2673,9 @@ const MemberScreen = () => {
               <Text style={styles.paymentMethodIcon}>🏦</Text>
               <View style={styles.paymentMethodContent}>
                 <Text style={styles.paymentMethodTitle}>Virement bancaire</Text>
-                <Text style={styles.paymentMethodSubtitle}>Paiement différé</Text>
+                <Text style={styles.paymentMethodSubtitle}>
+                  Paiement différé
+                </Text>
               </View>
               <Text style={styles.paymentMethodArrow}>→</Text>
             </TouchableOpacity>
@@ -2091,10 +2702,15 @@ const MemberScreen = () => {
           <View style={styles.familyModalContent}>
             {/* Header */}
             <View style={styles.familyModalHeader}>
-              <Text style={[styles.familyModalTitle, isRTL && styles.rtlText]}>👨‍👩‍👧‍👦 Inscrire des proches</Text>
+              <Text style={[styles.familyModalTitle, isRTL && styles.rtlText]}>
+                👨‍👩‍👧‍👦 Inscrire des proches
+              </Text>
               <TouchableOpacity
                 style={styles.familyCloseButton}
-                onPress={() => { setShowFamilyModal(false); setFamilyMembers([]); }}
+                onPress={() => {
+                  setShowFamilyModal(false);
+                  setFamilyMembers([]);
+                }}
               >
                 <Text style={styles.familyCloseButtonText}>✕</Text>
               </TouchableOpacity>
@@ -2103,25 +2719,55 @@ const MemberScreen = () => {
             {/* Sélecteur de formule */}
             <View style={styles.familyFormuleSelector}>
               <TouchableOpacity
-                style={[styles.familyFormuleOption, familyFormule === 'mensuel' && styles.familyFormuleSelected]}
+                style={[
+                  styles.familyFormuleOption,
+                  familyFormule === 'mensuel' && styles.familyFormuleSelected,
+                ]}
                 onPress={() => setFamilyFormule('mensuel')}
               >
-                <Text style={[styles.familyFormuleLabel, familyFormule === 'mensuel' && styles.familyFormuleLabelSelected]}>
+                <Text
+                  style={[
+                    styles.familyFormuleLabel,
+                    familyFormule === 'mensuel' &&
+                      styles.familyFormuleLabelSelected,
+                  ]}
+                >
                   Mensuel
                 </Text>
-                <Text style={[styles.familyFormulePrice, familyFormule === 'mensuel' && styles.familyFormulePriceSelected]}>
+                <Text
+                  style={[
+                    styles.familyFormulePrice,
+                    familyFormule === 'mensuel' &&
+                      styles.familyFormulePriceSelected,
+                  ]}
+                >
                   {formulePrices.mensuel}€/mois
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.familyFormuleOption, familyFormule === 'annuel' && styles.familyFormuleSelected]}
+                style={[
+                  styles.familyFormuleOption,
+                  familyFormule === 'annuel' && styles.familyFormuleSelected,
+                ]}
                 onPress={() => setFamilyFormule('annuel')}
               >
-                <Text style={[styles.familyFormuleLabel, familyFormule === 'annuel' && styles.familyFormuleLabelSelected]}>
+                <Text
+                  style={[
+                    styles.familyFormuleLabel,
+                    familyFormule === 'annuel' &&
+                      styles.familyFormuleLabelSelected,
+                  ]}
+                >
                   Annuel
                 </Text>
-                <Text style={[styles.familyFormulePrice, familyFormule === 'annuel' && styles.familyFormulePriceSelected]}>
+                <Text
+                  style={[
+                    styles.familyFormulePrice,
+                    familyFormule === 'annuel' &&
+                      styles.familyFormulePriceSelected,
+                  ]}
+                >
                   {formulePrices.annuel}€/an
                 </Text>
               </TouchableOpacity>
@@ -2135,8 +2781,12 @@ const MemberScreen = () => {
               {familyMembers.map((member, index) => (
                 <View key={member.id} style={styles.familyMemberCard}>
                   <View style={styles.familyMemberHeader}>
-                    <Text style={styles.familyMemberNumber}>Membre {index + 1}</Text>
-                    <TouchableOpacity onPress={() => removeFamilyMember(member.id)}>
+                    <Text style={styles.familyMemberNumber}>
+                      Membre {index + 1}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => removeFamilyMember(member.id)}
+                    >
                       <Text style={styles.removeButton}>✕</Text>
                     </TouchableOpacity>
                   </View>
@@ -2146,21 +2796,25 @@ const MemberScreen = () => {
                     placeholder="Nom"
                     placeholderTextColor="#999"
                     value={member.nom}
-                    onChangeText={(v) => updateFamilyMember(member.id, 'nom', v)}
+                    onChangeText={v => updateFamilyMember(member.id, 'nom', v)}
                   />
                   <TextInput
                     style={styles.familyInput}
                     placeholder="Prénom"
                     placeholderTextColor="#999"
                     value={member.prenom}
-                    onChangeText={(v) => updateFamilyMember(member.id, 'prenom', v)}
+                    onChangeText={v =>
+                      updateFamilyMember(member.id, 'prenom', v)
+                    }
                   />
                   <TextInput
                     style={styles.familyInput}
                     placeholder="Téléphone"
                     placeholderTextColor="#999"
                     value={member.telephone}
-                    onChangeText={(v) => updateFamilyMember(member.id, 'telephone', v)}
+                    onChangeText={v =>
+                      updateFamilyMember(member.id, 'telephone', v)
+                    }
                     keyboardType="phone-pad"
                   />
                   <TextInput
@@ -2168,24 +2822,48 @@ const MemberScreen = () => {
                     placeholder="Adresse"
                     placeholderTextColor="#999"
                     value={member.adresse}
-                    onChangeText={(v) => updateFamilyMember(member.id, 'adresse', v)}
+                    onChangeText={v =>
+                      updateFamilyMember(member.id, 'adresse', v)
+                    }
                   />
 
                   <Text style={styles.familyInputLabel}>Genre *</Text>
                   <View style={styles.familyGenreContainer}>
                     <TouchableOpacity
-                      style={[styles.familyGenreOption, member.genre === 'homme' && styles.familyGenreSelected]}
-                      onPress={() => updateFamilyMember(member.id, 'genre', 'homme')}
+                      style={[
+                        styles.familyGenreOption,
+                        member.genre === 'homme' && styles.familyGenreSelected,
+                      ]}
+                      onPress={() =>
+                        updateFamilyMember(member.id, 'genre', 'homme')
+                      }
                     >
-                      <Text style={[styles.familyGenreText, member.genre === 'homme' && styles.familyGenreTextSelected]}>
+                      <Text
+                        style={[
+                          styles.familyGenreText,
+                          member.genre === 'homme' &&
+                            styles.familyGenreTextSelected,
+                        ]}
+                      >
                         Homme
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.familyGenreOption, member.genre === 'femme' && styles.familyGenreSelected]}
-                      onPress={() => updateFamilyMember(member.id, 'genre', 'femme')}
+                      style={[
+                        styles.familyGenreOption,
+                        member.genre === 'femme' && styles.familyGenreSelected,
+                      ]}
+                      onPress={() =>
+                        updateFamilyMember(member.id, 'genre', 'femme')
+                      }
                     >
-                      <Text style={[styles.familyGenreText, member.genre === 'femme' && styles.familyGenreTextSelected]}>
+                      <Text
+                        style={[
+                          styles.familyGenreText,
+                          member.genre === 'femme' &&
+                            styles.familyGenreTextSelected,
+                        ]}
+                      >
                         Femme
                       </Text>
                     </TouchableOpacity>
@@ -2196,25 +2874,47 @@ const MemberScreen = () => {
                     placeholder="Date de naissance (JJ/MM/AAAA)"
                     placeholderTextColor="#999"
                     value={member.dateNaissance}
-                    onChangeText={(v) => updateFamilyMember(member.id, 'dateNaissance', formatDateInput(v))}
+                    onChangeText={v =>
+                      updateFamilyMember(
+                        member.id,
+                        'dateNaissance',
+                        formatDateInput(v),
+                      )
+                    }
                     keyboardType="numeric"
                     maxLength={10}
                   />
 
                   <TouchableOpacity
                     style={styles.checkboxRow}
-                    onPress={() => updateFamilyMember(member.id, 'accepte', !member.accepte)}
+                    onPress={() =>
+                      updateFamilyMember(member.id, 'accepte', !member.accepte)
+                    }
                   >
-                    <View style={[styles.checkbox, member.accepte && styles.checkboxChecked]}>
-                      {member.accepte && <Text style={styles.checkboxCheck}>✓</Text>}
+                    <View
+                      style={[
+                        styles.checkbox,
+                        member.accepte && styles.checkboxChecked,
+                      ]}
+                    >
+                      {member.accepte && (
+                        <Text style={styles.checkboxCheck}>✓</Text>
+                      )}
                     </View>
-                    <Text style={styles.checkboxLabel}>Accepte le règlement intérieur</Text>
+                    <Text style={styles.checkboxLabel}>
+                      Accepte le règlement intérieur
+                    </Text>
                   </TouchableOpacity>
                 </View>
               ))}
 
-              <TouchableOpacity style={styles.addMemberButton} onPress={addFamilyMember}>
-                <Text style={styles.addMemberButtonText}>+ Ajouter une personne</Text>
+              <TouchableOpacity
+                style={styles.addMemberButton}
+                onPress={addFamilyMember}
+              >
+                <Text style={styles.addMemberButtonText}>
+                  + Ajouter une personne
+                </Text>
               </TouchableOpacity>
             </ScrollView>
 
@@ -2223,7 +2923,9 @@ const MemberScreen = () => {
               <View style={styles.familyFooter}>
                 <View style={styles.familyTotalRow}>
                   <Text style={styles.familyTotalLabel}>
-                    {familyMembers.length} personne{familyMembers.length > 1 ? 's' : ''} × {formulePrices[familyFormule]}€
+                    {familyMembers.length} personne
+                    {familyMembers.length > 1 ? 's' : ''} ×{' '}
+                    {formulePrices[familyFormule]}€
                   </Text>
                   <Text style={styles.familyTotalAmount}>{totalAmount}€</Text>
                 </View>
@@ -2236,7 +2938,9 @@ const MemberScreen = () => {
                   {isProcessingPayment ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.familyPayButtonText}>💳 Payer par carte</Text>
+                    <Text style={styles.familyPayButtonText}>
+                      💳 Payer par carte
+                    </Text>
                   )}
                 </TouchableOpacity>
 
@@ -3341,7 +4045,11 @@ const styles = StyleSheet.create({
     borderColor: '#8B7355',
   },
   yearButtonText: {
-    fontSize: isTablet ? moderateScale(16) : isSmallScreen ? moderateScale(12) : moderateScale(14),
+    fontSize: isTablet
+      ? moderateScale(16)
+      : isSmallScreen
+      ? moderateScale(12)
+      : moderateScale(14),
     fontWeight: '600' as const,
   },
   yearButtonTextActive: {

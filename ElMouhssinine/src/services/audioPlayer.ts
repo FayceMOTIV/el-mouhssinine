@@ -1,4 +1,11 @@
-import TrackPlayer, { Capability, State, AppKilledPlaybackBehavior, IOSCategoryMode, IOSCategory, IOSCategoryOptions } from 'react-native-track-player';
+import TrackPlayer, {
+  Capability,
+  State,
+  AppKilledPlaybackBehavior,
+  IOSCategoryMode,
+  IOSCategory,
+  IOSCategoryOptions,
+} from 'react-native-track-player';
 import { logger } from '../utils';
 
 let isSetup = false;
@@ -50,9 +57,14 @@ export const setupPlayer = async (): Promise<boolean> => {
           Capability.Stop,
           Capability.SeekTo,
         ],
-        compactCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+        compactCapabilities: [
+          Capability.Play,
+          Capability.Pause,
+          Capability.Stop,
+        ],
         android: {
-          appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+          appKilledPlaybackBehavior:
+            AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
         },
       });
 
@@ -83,7 +95,11 @@ export const setupPlayer = async (): Promise<boolean> => {
   return isSetup;
 };
 
-export const playAudio = async (url: string, title: string, artist: string = 'Coran') => {
+export const playAudio = async (
+  url: string,
+  title: string,
+  artist: string = 'Coran',
+) => {
   try {
     await setupPlayer();
 
@@ -140,4 +156,7 @@ export const resetPlayer = async () => {
   } catch {
     // Ignorer si le player n'est pas initialisé
   }
+  // Remettre le flag pour forcer un re-setup au prochain montage
+  isSetup = false;
+  setupPromise = null;
 };

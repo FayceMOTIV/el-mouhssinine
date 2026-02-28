@@ -7,6 +7,7 @@ import firestore from '@react-native-firebase/firestore';
 import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils';
+import { computeMemberStatus } from '../utils/memberStatus';
 
 const AUTH_STORAGE_KEY = '@auth_user_profile';
 
@@ -18,12 +19,20 @@ export interface MemberProfile {
   nom?: string;
   prenom?: string;
   cotisationType: 'mensuel' | 'annuel' | null;
-  cotisationStatus: 'aucun' | 'actif' | 'expire' | 'en_attente_paiement' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' | 'annule';
+  cotisationStatus:
+    | 'aucun'
+    | 'actif'
+    | 'expire'
+    | 'en_attente_paiement'
+    | 'sympathisant'
+    | 'en_attente_validation'
+    | 'en_attente_signature'
+    | 'annule';
   cotisationExpiry?: Date;
   phone?: string;
   address?: string;
   telephone?: string; // Alias français pour phone
-  adresse?: string;   // Alias français pour address
+  adresse?: string; // Alias français pour address
   codePostal?: string;
   ville?: string;
   createdAt: Date;
@@ -48,18 +57,22 @@ const generateMemberId = (): string => {
 // pour éviter l'énumération d'emails (savoir si un email existe ou non)
 const getErrorMessage = (errorCode: string): string => {
   const errorMessages: Record<string, string> = {
-    'auth/invalid-email': 'L\'adresse email n\'est pas valide.',
+    'auth/invalid-email': "L'adresse email n'est pas valide.",
     'auth/user-disabled': 'Ce compte a été désactivé.',
     // SÉCURITÉ: Message générique pour éviter l'énumération d'emails
     'auth/user-not-found': 'Email ou mot de passe incorrect.',
     'auth/wrong-password': 'Email ou mot de passe incorrect.',
     'auth/email-already-in-use': 'Cette adresse email est déjà utilisée.',
-    'auth/weak-password': 'Le mot de passe doit contenir au moins 6 caractères.',
-    'auth/network-request-failed': 'Erreur de connexion. Vérifiez votre connexion internet.',
+    'auth/weak-password':
+      'Le mot de passe doit contenir au moins 6 caractères.',
+    'auth/network-request-failed':
+      'Erreur de connexion. Vérifiez votre connexion internet.',
     'auth/too-many-requests': 'Trop de tentatives. Réessayez plus tard.',
     'auth/invalid-credential': 'Email ou mot de passe incorrect.',
   };
-  return errorMessages[errorCode] || 'Une erreur est survenue. Veuillez réessayer.';
+  return (
+    errorMessages[errorCode] || 'Une erreur est survenue. Veuillez réessayer.'
+  );
 };
 
 export const AuthService = {
@@ -77,13 +90,16 @@ export const AuthService = {
     telephone?: string,
     adresse?: string,
     genre?: 'homme' | 'femme',
-    dateNaissance?: string
+    dateNaissance?: string,
   ): Promise<AuthResult> => {
     let user: FirebaseAuthTypes.User | null = null;
 
     try {
       // Créer l'utilisateur dans Firebase Auth
-      const userCredential = await auth().createUserWithEmailAndPassword(email, password);
+      const userCredential = await auth().createUserWithEmailAndPassword(
+        email,
+        password,
+      );
       user = userCredential.user;
 
       // Mettre à jour le displayName
@@ -118,14 +134,14 @@ export const AuthService = {
           montant: 0,
           dateDebut: null,
           dateFin: null,
-          status: 'sympathisant'
+          status: 'sympathisant',
         },
         status: 'sympathisant', // Nouveau: inscrit sans paiement, accès complet app
         actif: true,
         memberId: memberId,
         uid: user.uid,
         createdAt: firestore.FieldValue.serverTimestamp(),
-        source: 'mobile_app'
+        source: 'mobile_app',
       };
 
       // Retry Firestore document creation (max 3 tentatives)
@@ -135,23 +151,32 @@ export const AuthService = {
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          await firestore().collection('members').doc(user.uid).set(profileData);
+          await firestore()
+            .collection('members')
+            .doc(user.uid)
+            .set(profileData);
           logger.auth('Inscription réussie', email, memberId);
           return { success: true, user };
         } catch (firestoreError) {
           lastError = firestoreError as Error;
-          logger.warn(`[Auth] Firestore attempt ${attempt}/${MAX_RETRIES} failed`);
+          logger.warn(
+            `[Auth] Firestore attempt ${attempt}/${MAX_RETRIES} failed`,
+          );
 
           if (attempt < MAX_RETRIES) {
             // Attendre avant de réessayer
-            await new Promise<void>(resolve => setTimeout(() => resolve(), RETRY_DELAY * attempt));
+            await new Promise<void>(resolve =>
+              setTimeout(() => resolve(), RETRY_DELAY * attempt),
+            );
           }
         }
       }
 
       // Toutes les tentatives Firestore ont échoué
       // Rollback: supprimer le compte Auth pour éviter un état incohérent
-      logger.error('[Auth] Firestore failed after retries, rolling back Auth account');
+      logger.error(
+        '[Auth] Firestore failed after retries, rolling back Auth account',
+      );
       try {
         await user.delete();
         logger.log('[Auth] Auth account rolled back successfully');
@@ -162,14 +187,14 @@ export const AuthService = {
 
       return {
         success: false,
-        error: 'Erreur lors de la création du profil. Veuillez réessayer.'
+        error: 'Erreur lors de la création du profil. Veuillez réessayer.',
       };
     } catch (error) {
       const err = error as { code?: string; message?: string };
       logger.error('[Auth] Erreur inscription', err);
       return {
         success: false,
-        error: getErrorMessage(err.code || '')
+        error: getErrorMessage(err.code || ''),
       };
     }
   },
@@ -179,7 +204,10 @@ export const AuthService = {
    */
   signIn: async (email: string, password: string): Promise<AuthResult> => {
     try {
-      const userCredential = await auth().signInWithEmailAndPassword(email, password);
+      const userCredential = await auth().signInWithEmailAndPassword(
+        email,
+        password,
+      );
       logger.auth('Connexion réussie', email);
       return { success: true, user: userCredential.user };
     } catch (error) {
@@ -187,7 +215,7 @@ export const AuthService = {
       logger.error('[Auth] Erreur connexion', err);
       return {
         success: false,
-        error: getErrorMessage(err.code || '')
+        error: getErrorMessage(err.code || ''),
       };
     }
   },
@@ -207,8 +235,13 @@ export const AuthService = {
 
       // 2. Désouscrire de tous les topics FCM
       const fcmTopics = [
-        'general', 'announcements', 'events', 'janaza',
-        'jumua', 'fajr_reminders', 'members'
+        'general',
+        'announcements',
+        'events',
+        'janaza',
+        'jumua',
+        'fajr_reminders',
+        'members',
       ];
       for (const topic of fcmTopics) {
         try {
@@ -223,7 +256,7 @@ export const AuthService = {
         const uid = auth().currentUser?.uid;
         if (uid) {
           await firestore().collection('members').doc(uid).update({
-            fcmToken: firestore.FieldValue.delete()
+            fcmToken: firestore.FieldValue.delete(),
           });
         }
       } catch (e) {
@@ -252,7 +285,7 @@ export const AuthService = {
       logger.error('[Auth] Erreur reset password', err);
       return {
         success: false,
-        error: getErrorMessage(err.code || '')
+        error: getErrorMessage(err.code || ''),
       };
     }
   },
@@ -261,7 +294,7 @@ export const AuthService = {
    * Écouter les changements d'état d'authentification Firebase
    */
   onAuthStateChanged: (
-    callback: (user: FirebaseAuthTypes.User | null) => void
+    callback: (user: FirebaseAuthTypes.User | null) => void,
   ): (() => void) => {
     return auth().onAuthStateChanged(callback);
   },
@@ -343,7 +376,10 @@ export const AuthService = {
       // Pas de profil trouvé - CRÉER UN PROFIL DE BASE
       // (Cas où le compte Auth existe mais pas le document Firestore)
       if (user) {
-        logger.log('[Auth] Création profil de base pour:', uid.substring(0, 8) + '...');
+        logger.log(
+          '[Auth] Création profil de base pour:',
+          uid.substring(0, 8) + '...',
+        );
         const memberId = generateMemberId();
         const displayName = user.displayName || 'Membre';
         const nameParts = displayName.split(' ');
@@ -358,13 +394,13 @@ export const AuthService = {
             type: 'annuel',
             montant: 0,
             dateDebut: null,
-            dateFin: null
+            dateFin: null,
           },
           actif: true,
           memberId: memberId,
           uid: uid,
           createdAt: firestore.FieldValue.serverTimestamp(),
-          source: 'auto_created'
+          source: 'auto_created',
         };
 
         await firestore().collection('members').doc(uid).set(newProfile);
@@ -382,12 +418,14 @@ export const AuthService = {
           phone: '',
           address: '',
           telephone: '', // Alias français
-          adresse: '',   // Alias français
+          adresse: '', // Alias français
           createdAt: new Date(),
         };
       }
 
-      logger.log('[Auth] Profil membre non trouvé et pas d\'utilisateur connecté');
+      logger.log(
+        "[Auth] Profil membre non trouvé et pas d'utilisateur connecté",
+      );
       return null;
     } catch (error) {
       logger.error('[Auth] Erreur récupération profil', error);
@@ -400,7 +438,7 @@ export const AuthService = {
    */
   updateMemberProfile: async (
     uid: string,
-    updates: Partial<MemberProfile>
+    updates: Partial<MemberProfile>,
   ): Promise<void> => {
     try {
       // Chercher le document par uid
@@ -429,12 +467,13 @@ export const AuthService = {
   updateCotisation: async (
     uid: string,
     type: 'mensuel' | 'annuel',
-    status: 'actif' | 'en_attente_paiement'
+    status: 'actif' | 'en_attente_paiement',
   ): Promise<void> => {
     const now = new Date();
-    const dateFin = type === 'mensuel'
-      ? new Date(now.getFullYear(), now.getMonth() + 1, now.getDate())
-      : new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+    const dateFin =
+      type === 'mensuel'
+        ? new Date(now.getFullYear(), now.getMonth() + 1, now.getDate())
+        : new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
 
     await AuthService.updateMemberProfile(uid, {
       cotisationType: type,
@@ -452,9 +491,10 @@ export const AuthService = {
     }
 
     if (profile.cotisationExpiry) {
-      const expiry = profile.cotisationExpiry instanceof Date
-        ? profile.cotisationExpiry
-        : new Date(profile.cotisationExpiry);
+      const expiry =
+        profile.cotisationExpiry instanceof Date
+          ? profile.cotisationExpiry
+          : new Date(profile.cotisationExpiry);
       return new Date() < expiry;
     }
 
@@ -469,38 +509,25 @@ function mapFirestoreToProfile(uid: string, data: any): MemberProfile {
   const user = auth().currentUser;
   const cotisation = data.cotisation || {};
 
-  // Calculer le statut de cotisation
-  let cotisationStatus: 'aucun' | 'actif' | 'expire' | 'en_attente_paiement' | 'sympathisant' | 'en_attente_validation' | 'en_attente_signature' = 'aucun';
   let cotisationExpiry: Date | undefined;
-
-  // Extraire la date d'expiration si elle existe
   if (cotisation.dateFin) {
-    cotisationExpiry = cotisation.dateFin.toDate ? cotisation.dateFin.toDate() : new Date(cotisation.dateFin);
+    cotisationExpiry = cotisation.dateFin.toDate
+      ? cotisation.dateFin.toDate()
+      : new Date(cotisation.dateFin);
   }
 
-  // Vérifier d'abord le status explicite du document
-  if (data.status === 'sympathisant') {
-    cotisationStatus = 'sympathisant';
-  } else if (data.status === 'en_attente_validation') {
-    cotisationStatus = 'en_attente_validation';
-  } else if (data.status === 'en_attente_signature') {
-    cotisationStatus = 'en_attente_signature';
-  } else if (data.status === 'en_attente_paiement') {
-    cotisationStatus = 'en_attente_paiement';
-  } else if (data.status === 'actif' || cotisationExpiry) {
-    // Si explicitement actif ou si date d'expiration existe
-    if (cotisationExpiry && new Date() < cotisationExpiry) {
-      cotisationStatus = 'actif';
-    } else if (cotisationExpiry) {
-      cotisationStatus = 'expire';
-    } else if (data.status === 'actif') {
-      cotisationStatus = 'actif';
-    }
-  }
+  // Source unique de vérité : computeMemberStatus
+  const cotisationStatus = computeMemberStatus({
+    status: data.status,
+    cotisationDateFin: cotisation.dateFin,
+  });
 
   return {
     uid,
-    name: `${data.prenom || ''} ${data.nom || ''}`.trim() || user?.displayName || 'Membre',
+    name:
+      `${data.prenom || ''} ${data.nom || ''}`.trim() ||
+      user?.displayName ||
+      'Membre',
     email: data.email || user?.email || '',
     memberId: data.memberId || generateMemberId(),
     nom: data.nom,
@@ -511,11 +538,13 @@ function mapFirestoreToProfile(uid: string, data: any): MemberProfile {
     phone: data.telephone || '',
     address: data.adresse || '',
     telephone: data.telephone || '', // Alias français
-    adresse: data.adresse || '',     // Alias français
+    adresse: data.adresse || '', // Alias français
     codePostal: data.codePostal || '',
     ville: data.ville || '',
     createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-    lastLoginAt: data.lastLoginAt?.toDate ? data.lastLoginAt.toDate() : undefined,
+    lastLoginAt: data.lastLoginAt?.toDate
+      ? data.lastLoginAt.toDate()
+      : undefined,
   };
 }
 

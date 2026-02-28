@@ -49,7 +49,7 @@ const getBackgroundColor = (status?: string) => {
     case 'expire':
       return '#991B1B'; // Rouge foncé (expire sans accent)
     case 'sympathisant':
-      return '#065F46'; // Vert (sympathisant considéré actif)
+      return '#1E40AF'; // Bleu (sympathisant, pas encore adhérent)
     case 'unpaid':
     case 'en_attente_paiement':
       return '#92400E'; // Ambre foncé
@@ -62,7 +62,10 @@ const getBackgroundColor = (status?: string) => {
   }
 };
 
-const getStatusText = (status: string | undefined, t: (key: TranslationKey) => string): string => {
+const getStatusText = (
+  status: string | undefined,
+  t: (key: TranslationKey) => string,
+): string => {
   switch (status) {
     case 'active':
     case 'actif':
@@ -82,12 +85,22 @@ const getStatusText = (status: string | undefined, t: (key: TranslationKey) => s
       return t('memberCardPendingPayment');
     case 'sympathisant':
       return t('memberCardSympathisant');
+    case 'expire':
+      return t('memberCardExpired');
+    case 'annule':
+    case 'annulé':
+      return t('memberCardInactive');
+    case 'aucun':
+      return t('memberCardInactive');
     default:
-      return t('memberCardActive');
+      return t('memberCardInactive');
   }
 };
 
-const getPaymentStatusText = (paymentStatus: string | undefined, t: (key: TranslationKey) => string): string | null => {
+const getPaymentStatusText = (
+  paymentStatus: string | undefined,
+  t: (key: TranslationKey) => string,
+): string | null => {
   switch (paymentStatus) {
     case 'paid':
       return t('memberCardPaid');
@@ -115,7 +128,11 @@ const getPaymentStatusColor = (paymentStatus?: string) => {
   }
 };
 
-const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) => {
+const MemberCardFullScreen: React.FC<Props> = ({
+  visible,
+  onClose,
+  members,
+}) => {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -145,15 +162,24 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
         visible={visible}
         animationType="fade"
         onRequestClose={onClose}
-        supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}
+        supportedOrientations={[
+          'portrait',
+          'landscape-left',
+          'landscape-right',
+        ]}
       >
         <View style={[styles.screen, { backgroundColor: '#374151' }]}>
           <StatusBar hidden />
-          <TouchableOpacity style={[styles.closeBtn, { top: insets.top + 16 }]} onPress={onClose}>
+          <TouchableOpacity
+            style={[styles.closeBtn, { top: insets.top + 16 }]}
+            onPress={onClose}
+          >
             <Text style={styles.closeText}>✕</Text>
           </TouchableOpacity>
           <View style={styles.center}>
-            <Text style={[styles.errorText, isRTL && styles.textRTL]}>{t('memberCardNoMember')}</Text>
+            <Text style={[styles.errorText, isRTL && styles.textRTL]}>
+              {t('memberCardNoMember')}
+            </Text>
           </View>
         </View>
       </Modal>
@@ -163,15 +189,21 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
   const renderMemberCard = ({ item: member }: { item: Member }) => {
     const fullName = member.name || 'MEMBRE';
     const memberId = member.memberId || '00000';
-    const digits = memberId.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
+    const digits = memberId
+      .replace(/[^0-9]/g, '')
+      .slice(-5)
+      .padStart(5, '0');
     const statusText = getStatusText(member.status, t);
     const paymentStatusText = getPaymentStatusText(member.paymentStatus, t);
     const paymentStatusColor = getPaymentStatusColor(member.paymentStatus);
 
     // Type d'abonnement (seulement si payé)
-    const subscriptionText = member.paymentStatus === 'paid' && member.subscriptionType
-      ? member.subscriptionType === 'mensuel' ? t('memberCardMonthly') : t('memberCardAnnual')
-      : null;
+    const subscriptionText =
+      member.paymentStatus === 'paid' && member.subscriptionType
+        ? member.subscriptionType === 'mensuel'
+          ? t('memberCardMonthly')
+          : t('memberCardAnnual')
+        : null;
 
     let dateStr = '--/--';
     if (member.membershipExpirationDate) {
@@ -179,7 +211,10 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
         const d = member.membershipExpirationDate.toDate
           ? member.membershipExpirationDate.toDate()
           : new Date(member.membershipExpirationDate);
-        dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+        dateStr = `${String(d.getMonth() + 1).padStart(
+          2,
+          '0',
+        )}/${d.getFullYear()}`;
       } catch (e) {
         dateStr = '--/--';
       }
@@ -187,30 +222,52 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
 
     return (
       <View style={[styles.cardContainer, { width }]}>
-        <View style={[styles.content, { paddingTop: insets.top + 80, paddingBottom: insets.bottom + 80 }]}>
+        <View
+          style={[
+            styles.content,
+            { paddingTop: insets.top + 80, paddingBottom: insets.bottom + 80 },
+          ]}
+        >
           {/* HEADER */}
           <View style={styles.header}>
             <View style={styles.logo}>
               <Text style={styles.logoText}>🕌</Text>
             </View>
-            <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>EL MOHSININE</Text>
-            <Text style={[styles.mosqueCity, isRTL && styles.textRTL]}>{t('memberCardCity')}</Text>
+            <Text style={[styles.mosqueName, isRTL && styles.textRTL]}>
+              EL MOHSININE
+            </Text>
+            <Text style={[styles.mosqueCity, isRTL && styles.textRTL]}>
+              {t('memberCardCity')}
+            </Text>
           </View>
 
           {/* STATUTS (Adhésion + Paiement + Type abonnement) */}
           <View style={styles.statusSection}>
             <View style={styles.statusBadge}>
-              <Text style={[styles.statusText, isRTL && styles.textRTL]}>{statusText}</Text>
+              <Text style={[styles.statusText, isRTL && styles.textRTL]}>
+                {statusText}
+              </Text>
             </View>
             <View style={[styles.statusRow, isRTL && styles.statusRowRTL]}>
               {paymentStatusText && (
-                <View style={[styles.paymentBadge, { backgroundColor: paymentStatusColor }]}>
-                  <Text style={[styles.paymentText, isRTL && styles.textRTL]}>{paymentStatusText}</Text>
+                <View
+                  style={[
+                    styles.paymentBadge,
+                    { backgroundColor: paymentStatusColor },
+                  ]}
+                >
+                  <Text style={[styles.paymentText, isRTL && styles.textRTL]}>
+                    {paymentStatusText}
+                  </Text>
                 </View>
               )}
               {subscriptionText && (
                 <View style={styles.subscriptionBadge}>
-                  <Text style={[styles.subscriptionText, isRTL && styles.textRTL]}>{subscriptionText}</Text>
+                  <Text
+                    style={[styles.subscriptionText, isRTL && styles.textRTL]}
+                  >
+                    {subscriptionText}
+                  </Text>
                 </View>
               )}
             </View>
@@ -218,26 +275,49 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
 
           {/* NUMÉRO */}
           <View style={styles.numberSection}>
-            <Text style={[styles.numberLabel, isRTL && styles.textRTL]}>{t('memberCardNumberFull')}</Text>
+            <Text style={[styles.numberLabel, isRTL && styles.textRTL]}>
+              {t('memberCardNumberFull')}
+            </Text>
             <Text style={styles.number}>{digits}</Text>
           </View>
 
           {/* FOOTER */}
-          <View style={[styles.footer, isLandscape && styles.footerLandscape, isRTL && styles.footerRTL]}>
+          <View
+            style={[
+              styles.footer,
+              isLandscape && styles.footerLandscape,
+              isRTL && styles.footerRTL,
+            ]}
+          >
             <View style={[styles.footerItem, isRTL && styles.footerItemRTL]}>
-              <Text style={[styles.label, isRTL && styles.textRTL]}>{t('memberCardHolder')}</Text>
-              <Text style={[styles.value, isRTL && styles.textRTL]} numberOfLines={2}>{fullName.toUpperCase()}</Text>
+              <Text style={[styles.label, isRTL && styles.textRTL]}>
+                {t('memberCardHolder')}
+              </Text>
+              <Text
+                style={[styles.value, isRTL && styles.textRTL]}
+                numberOfLines={2}
+              >
+                {fullName.toUpperCase()}
+              </Text>
             </View>
             <View style={[styles.footerItem, isRTL && styles.footerItemRTL]}>
-              <Text style={[styles.label, isRTL && styles.textRTL]}>{t('memberCardValidity')}</Text>
-              <Text style={[styles.value, isRTL && styles.textRTL]}>{dateStr}</Text>
+              <Text style={[styles.label, isRTL && styles.textRTL]}>
+                {t('memberCardValidity')}
+              </Text>
+              <Text style={[styles.value, isRTL && styles.textRTL]}>
+                {dateStr}
+              </Text>
             </View>
           </View>
 
           {/* QR CODE SECTION */}
           <View style={styles.qrCodeSection}>
-            <Text style={[styles.qrCodeId, isRTL && styles.textRTL]}>N° {memberId}</Text>
-            <Text style={[styles.qrCodeHint, isRTL && styles.textRTL]}>Scannez pour vérifier</Text>
+            <Text style={[styles.qrCodeId, isRTL && styles.textRTL]}>
+              N° {memberId}
+            </Text>
+            <Text style={[styles.qrCodeHint, isRTL && styles.textRTL]}>
+              Scannez pour vérifier
+            </Text>
           </View>
         </View>
       </View>
@@ -273,7 +353,7 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
           showsHorizontalScrollIndicator={false}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-            { useNativeDriver: false }
+            { useNativeDriver: false },
           )}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
@@ -324,7 +404,9 @@ const MemberCardFullScreen: React.FC<Props> = ({ visible, onClose, members }) =>
         {members.length > 1 && currentIndex === 0 && (
           <View style={[styles.swipeHint, { bottom: insets.bottom + 60 }]}>
             <Text style={[styles.swipeHintText, isRTL && styles.textRTL]}>
-              {isRTL ? `→ ${t('memberCardSwipeHint')} ←` : `← ${t('memberCardSwipeHint')} →`}
+              {isRTL
+                ? `→ ${t('memberCardSwipeHint')} ←`
+                : `← ${t('memberCardSwipeHint')} →`}
             </Text>
           </View>
         )}
