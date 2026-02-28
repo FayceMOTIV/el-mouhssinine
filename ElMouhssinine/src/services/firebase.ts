@@ -1671,7 +1671,7 @@ export const getMyMembership = async (email: string): Promise<MyMembership | nul
 // Listener temps réel pour les adhésions (mise à jour automatique depuis le backoffice)
 export const subscribeToMyMembership = (
   email: string,
-  callback: (membership: MyMembership | null) => void
+  callback: (membership: MyMembership | null, error?: string) => void
 ): (() => void) => {
   if (FORCE_DEMO_MODE || !email) {
     callback(null);
@@ -1723,12 +1723,12 @@ export const subscribeToMyMembership = (
         },
         error => {
           logger.error('[Firebase] subscribeToMyMembership error:', error);
-          callback(null);
+          callback(null, 'firestore_error');
         }
       );
   } catch (error) {
     logger.error('[Firebase] subscribeToMyMembership catch:', error);
-    callback(null);
+    callback(null, 'firestore_error');
     return () => {};
   }
 };

@@ -238,12 +238,6 @@ const QuranScreen: React.FC<QuranScreenProps> = ({ navigation }) => {
         initialNumToRender={15}
         maxToRenderPerBatch={10}
         windowSize={5}
-        removeClippedSubviews={true}
-        getItemLayout={(_, index) => ({
-          length: 76, // Approximate height of each surah card
-          offset: 76 * index,
-          index,
-        })}
       />
     </View>
   );
@@ -283,7 +277,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: 100,
   },
   searchContainer: {
     flexDirection: 'row',

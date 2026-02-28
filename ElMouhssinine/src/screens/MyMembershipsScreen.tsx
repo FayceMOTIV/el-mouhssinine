@@ -79,13 +79,17 @@ const MyMembershipsScreen = () => {
         }, 10000);
 
         // S'abonner aux changements en temps réel de l'adhésion
-        unsubscribeMembership = subscribeToMyMembership(user.email, (membership) => {
+        unsubscribeMembership = subscribeToMyMembership(user.email, (membership, error) => {
           if (timeoutId) {
             clearTimeout(timeoutId);
             timeoutId = null;
           }
-          setDataReceived(true);
-          setConnectionError(false);
+          if (error) {
+            setConnectionError(true);
+          } else {
+            setDataReceived(true);
+            setConnectionError(false);
+          }
           setMyMembership(membership);
           setLoading(false);
           setRefreshing(false);
