@@ -7,9 +7,15 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { arabicAlphabet, letterGroups, specialLetters, ArabicLetter } from '../data/alphabet';
+import {
+  arabicAlphabet,
+  letterGroups,
+  specialLetters,
+  ArabicLetter,
+} from '../data/alphabet';
 import { speakArabic } from '../services/tts';
 import { useLanguage } from '../context/LanguageContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface AlphabetScreenProps {
   navigation: any;
@@ -19,6 +25,7 @@ type ViewMode = 'grid' | 'list' | 'groups';
 
 const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
   const { t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showSpecial, setShowSpecial] = useState(false);
 
@@ -33,7 +40,7 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
 
   const renderGridView = () => (
     <View style={styles.gridContainer}>
-      {arabicAlphabet.map((letter) => (
+      {arabicAlphabet.map(letter => (
         <TouchableOpacity
           key={letter.id}
           style={styles.gridItem}
@@ -59,7 +66,9 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
             <Text style={styles.listLetter}>{letter.isolated}</Text>
             <View style={styles.listInfo}>
               <Text style={styles.listName}>{letter.name}</Text>
-              <Text style={styles.listPronunciation}>/{letter.pronunciation}/</Text>
+              <Text style={styles.listPronunciation}>
+                /{letter.pronunciation}/
+              </Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity
@@ -75,7 +84,7 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
 
   const renderGroupsView = () => (
     <View style={styles.groupsContainer}>
-      {letterGroups.map((group) => (
+      {letterGroups.map(group => (
         <View key={group.id} style={styles.groupCard}>
           <View style={styles.groupHeader}>
             <Text style={styles.groupName}>{group.name}</Text>
@@ -83,8 +92,8 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
           </View>
           <Text style={styles.groupDescription}>{group.description}</Text>
           <View style={styles.groupLetters}>
-            {group.letters.map((letterId) => {
-              const letter = arabicAlphabet.find((l) => l.id === letterId);
+            {group.letters.map(letterId => {
+              const letter = arabicAlphabet.find(l => l.id === letterId);
               if (!letter) return null;
               return (
                 <TouchableOpacity
@@ -103,7 +112,7 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
@@ -111,7 +120,9 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>{'<'} {t('back')}</Text>
+            <Text style={styles.backButtonText}>
+              {'<'} {t('back')}
+            </Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <Text style={styles.title}>{t('alphabet')}</Text>
@@ -129,7 +140,7 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
               { id: 'grid', label: t('gridView') },
               { id: 'list', label: t('listView') },
               { id: 'groups', label: t('groupsView') },
-            ].map((mode) => (
+            ].map(mode => (
               <TouchableOpacity
                 key={mode.id}
                 style={[
@@ -161,19 +172,25 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
               style={styles.sectionHeader}
               onPress={() => setShowSpecial(!showSpecial)}
             >
-              <Text style={styles.sectionTitle}>{t('specialLettersTitle')}</Text>
+              <Text style={styles.sectionTitle}>
+                {t('specialLettersTitle')}
+              </Text>
               <Text style={styles.expandIcon}>{showSpecial ? '−' : '+'}</Text>
             </TouchableOpacity>
 
             {showSpecial && (
               <View style={styles.specialLetters}>
-                {specialLetters.map((letter) => (
+                {specialLetters.map(letter => (
                   <View key={letter.id} style={styles.specialCard}>
                     <View style={styles.specialHeader}>
-                      <Text style={styles.specialLetter}>{letter.isolated}</Text>
+                      <Text style={styles.specialLetter}>
+                        {letter.isolated}
+                      </Text>
                       <View>
                         <Text style={styles.specialName}>{letter.name}</Text>
-                        <Text style={styles.specialNameAr}>{letter.nameAr}</Text>
+                        <Text style={styles.specialNameAr}>
+                          {letter.nameAr}
+                        </Text>
                       </View>
                     </View>
                     <Text style={styles.specialDescription}>
@@ -190,9 +207,7 @@ const AlphabetScreen: React.FC<AlphabetScreenProps> = ({ navigation }) => {
             <Text style={styles.tipsIcon}>💡</Text>
             <View style={styles.tipsContent}>
               <Text style={styles.tipsTitle}>{t('dailyTip')}</Text>
-              <Text style={styles.tipsText}>
-                {t('alphabetTip')}
-              </Text>
+              <Text style={styles.tipsText}>{t('alphabetTip')}</Text>
             </View>
           </View>
         </View>

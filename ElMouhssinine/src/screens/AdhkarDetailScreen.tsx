@@ -13,6 +13,7 @@ import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { AdhkarCategory, Dhikr } from '../data/adhkar';
 import { useLanguage } from '../context/LanguageContext';
 import { speakArabic, stopSpeaking } from '../services/tts';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface AdhkarDetailScreenProps {
   route: any;
@@ -24,6 +25,7 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
   navigation,
 }) => {
   const { t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
   const { category } = route.params as { category: AdhkarCategory };
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
@@ -136,7 +138,7 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>

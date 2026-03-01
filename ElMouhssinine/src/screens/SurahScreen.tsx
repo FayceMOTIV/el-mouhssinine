@@ -24,6 +24,7 @@ import {
 } from '../services/quranApi';
 
 import { useLanguage } from '../context/LanguageContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useQuranPlayer,
   RepeatMode,
@@ -51,6 +52,7 @@ interface Verse {
 
 const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   const { t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
   const surahNumber = route.params?.surahNumber ?? 1; // Fallback sourate Al-Fatiha si params manquant
   const [loading, setLoading] = useState(true);
   const [surahData, setSurahData] = useState<{
@@ -189,10 +191,7 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
       await player.playVerseAtIndex(index);
     } catch (error) {
       console.error('[SurahScreen] Erreur lecture verset:', error);
-      Alert.alert(
-        'Erreur',
-        'Impossible de lire ce verset. Vérifiez votre connexion.',
-      );
+      Alert.alert(t('commonError'), t('audioError'));
     }
   };
 
@@ -610,7 +609,13 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
 
   if (!surahNumber) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
+      <View
+        style={[
+          styles.container,
+          styles.loadingContainer,
+          { paddingBottom: insets.bottom },
+        ]}
+      >
         <Text
           style={{
             color: colors.text,
@@ -631,7 +636,13 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
+      <View
+        style={[
+          styles.container,
+          styles.loadingContainer,
+          { paddingBottom: insets.bottom },
+        ]}
+      >
         <ActivityIndicator size="large" color={colors.accent} />
         <Text style={[styles.loadingText, isRTL && styles.rtlText]}>
           {t('loadingSurah')}
@@ -641,7 +652,7 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <FlatList
         ref={flatListRef}
         data={surahData?.arabic?.ayahs || []}

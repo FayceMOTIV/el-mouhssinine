@@ -6,9 +6,17 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  wp,
+} from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
 import { BackgroundPattern } from '../components/BackgroundPattern';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SpiritualScreenProps {
   navigation: any;
@@ -16,6 +24,7 @@ interface SpiritualScreenProps {
 
 const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
   const { t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
   const modules = [
     {
       id: 'quran',
@@ -64,19 +73,28 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
 
   return (
     <BackgroundPattern>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ paddingBottom: insets.bottom }}
+      >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, isRTL && styles.rtlText]}>{t('islam')}</Text>
+          <Text style={[styles.title, isRTL && styles.rtlText]}>
+            {t('islam')}
+          </Text>
           <Text style={styles.arabicTitle}>{t('islamArabic')}</Text>
-          <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('islamDesc')}</Text>
+          <Text style={[styles.subtitle, isRTL && styles.rtlText]}>
+            {t('islamDesc')}
+          </Text>
         </View>
 
         <View style={styles.content}>
           {/* Main Modules */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('modules')}</Text>
-            {modules.map((module) => (
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+              {t('modules')}
+            </Text>
+            {modules.map(module => (
               <TouchableOpacity
                 key={module.id}
                 style={styles.moduleCard}
@@ -113,8 +131,12 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
 
           {/* Quick Access */}
           <View style={styles.section}>
-            <View style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}>
-              <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('quickAccess')}</Text>
+            <View
+              style={[styles.sectionHeader, isRTL && styles.sectionHeaderRTL]}
+            >
+              <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+                {t('quickAccess')}
+              </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Quran')}>
                 <Text style={styles.seeAllText}>{t('seeAll')}</Text>
               </TouchableOpacity>
@@ -124,12 +146,14 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
               showsHorizontalScrollIndicator={false}
               style={styles.quickAccessScroll}
             >
-              {quickAccess.map((surah) => (
+              {quickAccess.map(surah => (
                 <TouchableOpacity
                   key={surah.id}
                   style={styles.quickAccessCard}
                   onPress={() =>
-                    navigation.navigate('Surah', { surahNumber: surah.surahNumber })
+                    navigation.navigate('Surah', {
+                      surahNumber: surah.surahNumber,
+                    })
                   }
                 >
                   <Text style={styles.quickAccessNumber}>{surah.id}</Text>
@@ -144,14 +168,16 @@ const SpiritualScreen: React.FC<SpiritualScreenProps> = ({ navigation }) => {
           <View style={[styles.reminderCard, isRTL && styles.reminderCardRTL]}>
             <Text style={styles.reminderIcon}>💡</Text>
             <View style={styles.reminderContent}>
-              <Text style={[styles.reminderTitle, isRTL && styles.rtlText]}>{t('dailyReminder')}</Text>
+              <Text style={[styles.reminderTitle, isRTL && styles.rtlText]}>
+                {t('dailyReminder')}
+              </Text>
               <Text style={[styles.reminderText, isRTL && styles.rtlText]}>
                 {isRTL
                   ? '"أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ"'
-                  : '"Certes, c\'est dans l\'évocation d\'Allah que les cœurs se tranquillisent."'}
+                  : "\"Certes, c'est dans l'évocation d'Allah que les cœurs se tranquillisent.\""}
               </Text>
               <Text style={[styles.reminderSource, isRTL && styles.rtlText]}>
-                {isRTL ? 'سورة الرعد، ٢٨' : 'Sourate Ar-Ra\'d, 28'}
+                {isRTL ? 'سورة الرعد، ٢٨' : "Sourate Ar-Ra'd, 28"}
               </Text>
             </View>
           </View>

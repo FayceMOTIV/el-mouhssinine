@@ -7,9 +7,17 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  wp,
+} from '../theme/colors';
 import { adhkarCategories, AdhkarCategory } from '../data/adhkar';
 import { useLanguage } from '../context/LanguageContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface AdhkarScreenProps {
   navigation: any;
@@ -30,38 +38,56 @@ const categoryIcons: Record<string, string> = {
 
 const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
   const { t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
-  const filteredCategories = useMemo(() => adhkarCategories.filter((category) =>
-    category.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-    category.nameAr.includes(deferredSearchQuery) ||
-    category.description?.toLowerCase().includes(deferredSearchQuery.toLowerCase())
-  ), [deferredSearchQuery]);
+  const filteredCategories = useMemo(
+    () =>
+      adhkarCategories.filter(
+        category =>
+          category.name
+            .toLowerCase()
+            .includes(deferredSearchQuery.toLowerCase()) ||
+          category.nameAr.includes(deferredSearchQuery) ||
+          category.description
+            ?.toLowerCase()
+            .includes(deferredSearchQuery.toLowerCase()),
+      ),
+    [deferredSearchQuery],
+  );
 
   const handleCategoryPress = (category: AdhkarCategory) => {
     navigation.navigate('AdhkarDetail', { category });
   };
 
   const getTotalAdhkar = () => {
-    return adhkarCategories.reduce((total, cat) => total + cat.adhkar.length, 0);
+    return adhkarCategories.reduce(
+      (total, cat) => total + cat.adhkar.length,
+      0,
+    );
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, isRTL && styles.rtlText]}>{t('invocations')}</Text>
+          <Text style={[styles.title, isRTL && styles.rtlText]}>
+            {t('invocations')}
+          </Text>
           <Text style={styles.arabicTitle}>{t('invocationsArabic')}</Text>
           <Text style={[styles.subtitle, isRTL && styles.rtlText]}>
-            {adhkarCategories.length} {t('categoriesCount')} - {getTotalAdhkar()} {t('invocationsCount')}
+            {adhkarCategories.length} {t('categoriesCount')} -{' '}
+            {getTotalAdhkar()} {t('invocationsCount')}
           </Text>
         </View>
 
         <View style={styles.content}>
           {/* Barre de recherche */}
-          <View style={[styles.searchContainer, isRTL && styles.searchContainerRTL]}>
+          <View
+            style={[styles.searchContainer, isRTL && styles.searchContainerRTL]}
+          >
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={[styles.searchInput, isRTL && styles.rtlText]}
@@ -84,10 +110,17 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
 
           {/* Acces rapide */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('quickAccess')}</Text>
-            <View style={[styles.quickAccessGrid, isRTL && styles.quickAccessGridRTL]}>
-              {['morning', 'evening', 'afterPrayer', 'sleep'].map((id) => {
-                const category = adhkarCategories.find((c) => c.id === id);
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+              {t('quickAccess')}
+            </Text>
+            <View
+              style={[
+                styles.quickAccessGrid,
+                isRTL && styles.quickAccessGridRTL,
+              ]}
+            >
+              {['morning', 'evening', 'afterPrayer', 'sleep'].map(id => {
+                const category = adhkarCategories.find(c => c.id === id);
                 if (!category) return null;
                 return (
                   <TouchableOpacity
@@ -98,10 +131,14 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
                     <Text style={styles.quickAccessIcon}>
                       {categoryIcons[id]}
                     </Text>
-                    <Text style={[styles.quickAccessName, isRTL && styles.rtlText]}>
+                    <Text
+                      style={[styles.quickAccessName, isRTL && styles.rtlText]}
+                    >
                       {isRTL ? category.nameAr : category.name}
                     </Text>
-                    <Text style={[styles.quickAccessCount, isRTL && styles.rtlText]}>
+                    <Text
+                      style={[styles.quickAccessCount, isRTL && styles.rtlText]}
+                    >
                       {category?.adhkar?.length || 0} {t('invocationsCount')}
                     </Text>
                   </TouchableOpacity>
@@ -116,7 +153,7 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
               {t('allCategories')} ({filteredCategories.length})
             </Text>
 
-            {(filteredCategories || []).map((category) => (
+            {(filteredCategories || []).map(category => (
               <TouchableOpacity
                 key={category.id}
                 style={[styles.categoryCard, isRTL && styles.categoryCardRTL]}
@@ -128,8 +165,15 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
                   </Text>
                 </View>
                 <View style={styles.categoryInfo}>
-                  <View style={[styles.categoryNames, isRTL && styles.categoryNamesRTL]}>
-                    <Text style={[styles.categoryName, isRTL && styles.rtlText]}>
+                  <View
+                    style={[
+                      styles.categoryNames,
+                      isRTL && styles.categoryNamesRTL,
+                    ]}
+                  >
+                    <Text
+                      style={[styles.categoryName, isRTL && styles.rtlText]}
+                    >
                       {isRTL ? category.nameAr : category.name}
                     </Text>
                     <Text style={styles.categoryNameAr}>
@@ -137,7 +181,13 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
                     </Text>
                   </View>
                   {category.description && (
-                    <Text style={[styles.categoryDescription, isRTL && styles.rtlText]} numberOfLines={2}>
+                    <Text
+                      style={[
+                        styles.categoryDescription,
+                        isRTL && styles.rtlText,
+                      ]}
+                      numberOfLines={2}
+                    >
                       {category.description}
                     </Text>
                   )}
@@ -154,11 +204,15 @@ const AdhkarScreen: React.FC<AdhkarScreenProps> = ({ navigation }) => {
           <View style={[styles.infoCard, isRTL && styles.infoCardRTL]}>
             <Text style={styles.infoIcon}>💡</Text>
             <View style={styles.infoContent}>
-              <Text style={[styles.infoTitle, isRTL && styles.rtlText]}>{t('dhikrMerit')}</Text>
+              <Text style={[styles.infoTitle, isRTL && styles.rtlText]}>
+                {t('dhikrMerit')}
+              </Text>
               <Text style={[styles.infoText, isRTL && styles.rtlText]}>
                 {t('dhikrHadith')}
               </Text>
-              <Text style={[styles.infoSource, isRTL && styles.rtlText]}>{t('reportedByMuslim')}</Text>
+              <Text style={[styles.infoSource, isRTL && styles.rtlText]}>
+                {t('reportedByMuslim')}
+              </Text>
             </View>
           </View>
         </View>

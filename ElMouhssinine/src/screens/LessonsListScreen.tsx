@@ -8,16 +8,26 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
-import { lessons, levels, loadUserProgress, UserProgress, Lesson } from '../data/lessons';
+import {
+  lessons,
+  levels,
+  loadUserProgress,
+  UserProgress,
+  Lesson,
+} from '../data/lessons';
 import ProgressBar from '../components/ProgressBar';
 import { useLanguage } from '../context/LanguageContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface LessonsListScreenProps {
   navigation: any;
 }
 
-const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => {
+const LessonsListScreen: React.FC<LessonsListScreenProps> = ({
+  navigation,
+}) => {
   const { t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [userProgress, setUserProgress] = useState<UserProgress>({
     currentLevel: 'debutant',
     totalXP: 0,
@@ -35,7 +45,7 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
         setUserProgress(progress);
       };
       load();
-    }, [])
+    }, []),
   );
 
   const isLessonCompleted = (lessonId: string) => {
@@ -44,18 +54,22 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
 
   const isLessonAvailable = (lesson: Lesson, index: number) => {
     // Premiere lecon toujours disponible
-    if (index === 0 || !lesson.prerequisites || lesson.prerequisites.length === 0) {
+    if (
+      index === 0 ||
+      !lesson.prerequisites ||
+      lesson.prerequisites.length === 0
+    ) {
       return true;
     }
     // Verifier que tous les prerequis sont completes
     return lesson.prerequisites.every(prereq =>
-      userProgress.lessonsCompleted.includes(prereq)
+      userProgress.lessonsCompleted.includes(prereq),
     );
   };
 
   const getFilteredLessons = () => {
     if (!selectedLevel) return lessons;
-    return lessons.filter((lesson) => lesson.level === selectedLevel);
+    return lessons.filter(lesson => lesson.level === selectedLevel);
   };
 
   const handleLessonPress = (lesson: Lesson, index: number) => {
@@ -69,7 +83,7 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
   const overallProgress = (completedCount / totalCount) * 100;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
@@ -77,7 +91,9 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>{'<'} {t('back')}</Text>
+            <Text style={styles.backButtonText}>
+              {'<'} {t('back')}
+            </Text>
           </TouchableOpacity>
           <View style={styles.headerContent}>
             <Text style={styles.title}>{t('lessons')}</Text>
@@ -122,7 +138,7 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
                 {t('allLevels')}
               </Text>
             </TouchableOpacity>
-            {levels.map((level) => (
+            {levels.map(level => (
               <TouchableOpacity
                 key={level.id}
                 style={[
@@ -148,7 +164,7 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
             {getFilteredLessons().map((lesson, index) => {
               const completed = isLessonCompleted(lesson.id);
               const available = isLessonAvailable(lesson, index);
-              const level = levels.find((l) => l.id === lesson.level);
+              const level = levels.find(l => l.id === lesson.level);
 
               return (
                 <TouchableOpacity
@@ -174,7 +190,9 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
                       ) : !available ? (
                         <Text style={styles.lockIcon}>🔒</Text>
                       ) : (
-                        <Text style={styles.lessonNumberText}>{lesson.order}</Text>
+                        <Text style={styles.lessonNumberText}>
+                          {lesson.order}
+                        </Text>
                       )}
                     </View>
                     <View style={styles.lessonInfo}>
@@ -213,12 +231,16 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
                   </Text>
                   {available && !completed && (
                     <View style={styles.startButton}>
-                      <Text style={styles.startButtonText}>{t('startLesson')}</Text>
+                      <Text style={styles.startButtonText}>
+                        {t('startLesson')}
+                      </Text>
                     </View>
                   )}
                   {completed && (
                     <View style={styles.reviewButton}>
-                      <Text style={styles.reviewButtonText}>{t('reviewLesson')}</Text>
+                      <Text style={styles.reviewButtonText}>
+                        {t('reviewLesson')}
+                      </Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -231,9 +253,7 @@ const LessonsListScreen: React.FC<LessonsListScreenProps> = ({ navigation }) => 
             <Text style={styles.infoIcon}>📚</Text>
             <View style={styles.infoContent}>
               <Text style={styles.infoTitle}>{t('progressionInfo')}</Text>
-              <Text style={styles.infoText}>
-                {t('progressionInfoText')}
-              </Text>
+              <Text style={styles.infoText}>{t('progressionInfoText')}</Text>
             </View>
           </View>
         </View>

@@ -34,10 +34,12 @@ import {
 } from '../services/firebase';
 import { clearBadgeCount } from '../services/notifications';
 import { EmptyMessages } from '../components';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MessagesScreen = () => {
   const navigation = useNavigation<any>();
-  const { language, isRTL } = useLanguage();
+  const { t, language, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(
@@ -58,45 +60,33 @@ const MessagesScreen = () => {
 
   // Supprimer un message avec confirmation
   const handleDeleteMessage = (msg: UserMessage) => {
-    Alert.alert(
-      language === 'ar' ? 'حذف الرسالة' : 'Supprimer le message',
-      language === 'ar'
-        ? 'هل أنت متأكد من حذف هذه الرسالة؟'
-        : 'Êtes-vous sûr de vouloir supprimer ce message ?',
-      [
-        {
-          text: language === 'ar' ? 'إلغاء' : 'Annuler',
-          style: 'cancel',
-        },
-        {
-          text: language === 'ar' ? 'حذف' : 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(msg.id);
-            try {
-              // Passer le userId pour vérification d'ownership
-              const result = await deleteMessage(msg.id, memberProfile?.uid);
-              if (result.success) {
-                // Le message sera automatiquement retiré via subscription
-              } else {
-                Alert.alert(
-                  language === 'ar' ? 'خطأ' : 'Erreur',
-                  result.error || 'Une erreur est survenue',
-                );
-              }
-            } catch (error) {
-              const err = error as Error;
-              Alert.alert(
-                language === 'ar' ? 'خطأ' : 'Erreur',
-                err?.message || 'Une erreur est survenue',
-              );
-            } finally {
-              setDeleting(null);
+    Alert.alert(t('deleteMessage'), t('deleteMessageConfirm'), [
+      {
+        text: t('commonCancel'),
+        style: 'cancel',
+      },
+      {
+        text: t('commonDelete'),
+        style: 'destructive',
+        onPress: async () => {
+          setDeleting(msg.id);
+          try {
+            // Passer le userId pour vérification d'ownership
+            const result = await deleteMessage(msg.id, memberProfile?.uid);
+            if (result.success) {
+              // Le message sera automatiquement retiré via subscription
+            } else {
+              Alert.alert(t('commonError'), result.error || t('messageError'));
             }
-          },
+          } catch (error) {
+            const err = error as Error;
+            Alert.alert(t('commonError'), err?.message || t('messageError'));
+          } finally {
+            setDeleting(null);
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   // Effacer le badge quand on ouvre l'écran Messages
@@ -153,28 +143,17 @@ const MessagesScreen = () => {
   // Envoyer un nouveau message
   const handleSendMessage = async () => {
     if (!selectedSubject) {
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar' ? 'اختر موضوعا' : 'Veuillez choisir un sujet',
-      );
+      Alert.alert(t('commonError'), t('subjectRequired'));
       return;
     }
 
     if (messageText.trim().length < 10) {
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar'
-          ? 'الرسالة قصيرة جدا (10 أحرف على الأقل)'
-          : 'Message trop court (10 caractères minimum)',
-      );
+      Alert.alert(t('commonError'), t('messageEmpty'));
       return;
     }
 
     if (!memberProfile) {
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar' ? 'يجب تسجيل الدخول' : 'Vous devez être connecté',
-      );
+      Alert.alert(t('commonError'), t('networkError'));
       return;
     }
 
@@ -201,17 +180,12 @@ const MessagesScreen = () => {
       setSelectedSubject('');
       setMessageText('');
 
-      Alert.alert(
-        language === 'ar' ? 'تم الإرسال' : 'Message envoyé',
-        language === 'ar'
-          ? 'سنرد عليك قريبا إن شاء الله'
-          : "Nous vous répondrons bientôt insha'Allah",
-      );
+      Alert.alert(t('messageSent'), t('messageSentSuccess'));
     } catch (error) {
       const err = error as Error;
-      const errorMsg = err?.message || 'Erreur';
+      const errorMsg = err?.message || t('commonError');
       Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
+        t('commonError'),
         errorMsg.includes('limite')
           ? language === 'ar'
             ? 'وصلت الحد اليومي (5 رسائل)'
@@ -288,7 +262,7 @@ const MessagesScreen = () => {
   // Si en cours de chargement de l'état d'auth, afficher un loader
   if (loading && !memberProfile) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -310,7 +284,7 @@ const MessagesScreen = () => {
   // Si pas connecté (après vérification auth terminée)
   if (!isLoggedIn || !memberProfile) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -350,7 +324,7 @@ const MessagesScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}

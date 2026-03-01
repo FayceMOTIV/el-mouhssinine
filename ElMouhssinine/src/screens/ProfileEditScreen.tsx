@@ -12,10 +12,18 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+} from '../theme/colors';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLanguage } from '../context/LanguageContext';
 
 type ProfileEditRouteParams = {
   ProfileEdit: {
@@ -31,6 +39,8 @@ type ProfileEditRouteParams = {
 const ProfileEditScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<ProfileEditRouteParams, 'ProfileEdit'>>();
+  const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const { uid, nom, prenom, telephone, adresse, email } = route.params;
 
   const [editedNom, setEditedNom] = useState(nom || '');
@@ -42,12 +52,15 @@ const ProfileEditScreen = () => {
   const handleSave = async () => {
     // Validation
     if (!editedPrenom.trim() || !editedNom.trim()) {
-      Alert.alert('Erreur', 'Le prénom et le nom sont obligatoires');
+      Alert.alert(
+        t('commonError'),
+        `${t('firstNameRequired')} / ${t('lastNameRequired')}`,
+      );
       return;
     }
 
     if (!editedTelephone.trim()) {
-      Alert.alert('Erreur', 'Le téléphone est obligatoire');
+      Alert.alert(t('commonError'), t('phoneRequired'));
       return;
     }
 
@@ -55,33 +68,23 @@ const ProfileEditScreen = () => {
 
     try {
       // Mettre à jour dans Firestore
-      await firestore()
-        .collection('members')
-        .doc(uid)
-        .update({
-          nom: editedNom.trim(),
-          prenom: editedPrenom.trim(),
-          telephone: editedTelephone.trim(),
-          adresse: editedAdresse.trim(),
-          updatedAt: firestore.FieldValue.serverTimestamp(),
-        });
+      await firestore().collection('members').doc(uid).update({
+        nom: editedNom.trim(),
+        prenom: editedPrenom.trim(),
+        telephone: editedTelephone.trim(),
+        adresse: editedAdresse.trim(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      });
 
-      Alert.alert(
-        'Succès',
-        'Votre profil a été mis à jour avec succès',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
+      Alert.alert(t('commonSuccess'), t('profileUpdateSuccess'), [
+        {
+          text: t('commonOk'),
+          onPress: () => navigation.goBack(),
+        },
+      ]);
     } catch (error: any) {
       console.error('[ProfileEdit] Error updating profile:', error);
-      Alert.alert(
-        'Erreur',
-        error?.message || 'Une erreur est survenue lors de la mise à jour'
-      );
+      Alert.alert(t('commonError'), error?.message || t('profileUpdateError'));
     } finally {
       setIsSaving(false);
     }
@@ -89,7 +92,7 @@ const ProfileEditScreen = () => {
 
   return (
     <BackgroundPattern>
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -186,7 +189,9 @@ const ProfileEditScreen = () => {
               {isSaving ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+                <Text style={styles.saveButtonText}>
+                  Enregistrer les modifications
+                </Text>
               )}
             </TouchableOpacity>
           </ScrollView>

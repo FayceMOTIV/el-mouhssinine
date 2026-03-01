@@ -78,6 +78,7 @@ import auth from '@react-native-firebase/auth';
 import { logger } from '../utils';
 import { HomeScreenSkeleton } from '../components';
 import { subscribeToUserMessages, UserMessage } from '../services/firebase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getNotificationHistory,
   markAllNotificationsAsRead,
@@ -108,6 +109,7 @@ const mockIslamicDate = {
 const HomeScreen = () => {
   const navigation = useNavigation<any>();
   const { t, isRTL, language } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [prayerTimes, setPrayerTimes] = useState<PrayerTime[]>(mockPrayerTimes);
   const [nextPrayer, setNextPrayer] = useState({
     name: 'Dhuhr',
@@ -1001,7 +1003,7 @@ const HomeScreen = () => {
   // Afficher le skeleton pendant le chargement initial
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <HomeScreenSkeleton />
       </View>
     );
@@ -1449,6 +1451,7 @@ const HomeScreen = () => {
       <BackgroundPattern>
         <ScrollView
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -2005,7 +2008,7 @@ const HomeScreen = () => {
                           `👤 ${nom}\n\n📅 ${dateFormatee}\n⏰ ${heureInfo}\n📍 ${lieu}${
                             adresseCimetiere ? `\n🪦 ${adresseCimetiere}` : ''
                           }\n\n"${isRTL ? phraseAr : phraseFr}"`,
-                          [{ text: 'OK' }],
+                          [{ text: t('commonOk') }],
                         )
                       }
                       activeOpacity={0.7}
@@ -2069,7 +2072,7 @@ const HomeScreen = () => {
                           )} ${announcement.publishedAt?.toLocaleDateString(
                             isRTL ? 'ar-SA' : 'fr-FR',
                           )}`,
-                          [{ text: 'OK' }],
+                          [{ text: t('commonOk') }],
                         )
                       }
                       activeOpacity={0.7}
@@ -2128,7 +2131,7 @@ const HomeScreen = () => {
                           `📅 ${day} ${month}\n⏰ ${event.time}\n📍 ${
                             event.location
                           }${descAffiche ? `\n\n${descAffiche}` : ''}`,
-                          [{ text: 'OK' }],
+                          [{ text: t('commonOk') }],
                         )
                       }
                       activeOpacity={0.7}

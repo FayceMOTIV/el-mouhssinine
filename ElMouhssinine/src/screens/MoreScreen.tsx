@@ -86,10 +86,12 @@ import { PrayerAPI } from '../services/prayerApi';
 // @ts-ignore - Import version from package.json
 import { version as appVersion } from '../../package.json';
 import { BackgroundPattern } from '../components/BackgroundPattern';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MoreScreen = () => {
   const navigation = useNavigation<any>();
   const { language, setLanguage, t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
   // BUG 8 FIX: Pas de faux IBAN/données en fallback - valeurs vides par défaut
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo>({
     name: 'Mosquée El Mohsinine',
@@ -454,17 +456,17 @@ const MoreScreen = () => {
     if (newSettings.enabled && !mosqueProximitySettings.enabled) {
       // Afficher explication avant de demander
       Alert.alert(
-        language === 'ar' ? '📍 الموقع الجغرافي' : '📍 Localisation',
+        `📍 ${t('geolocation')}`,
         language === 'ar'
           ? 'هذه الميزة ترسل لك تذكيرًا عندما تكون على بعد 100 متر من المسجد لوضع هاتفك في الوضع الصامت.\n\n⚠️ تحتاج إلى إذن "دائمًا" للعمل في الخلفية.'
           : 'Cette fonctionnalité vous enverra un rappel quand vous serez à moins de 100m de la mosquée.\n\n⚠️ Nécessite la permission "Toujours" pour fonctionner en arrière-plan.',
         [
           {
-            text: language === 'ar' ? 'إلغاء' : 'Annuler',
+            text: t('commonCancel'),
             style: 'cancel',
           },
           {
-            text: language === 'ar' ? 'تفعيل' : 'Activer',
+            text: t('activated'),
             onPress: async () => {
               const hasPermission = await requestLocationPermission();
               if (hasPermission) {
@@ -473,14 +475,14 @@ const MoreScreen = () => {
                 // IMPORTANT: Démarrer le service de localisation en arrière-plan
                 await initBackgroundLocation();
                 Alert.alert(
-                  language === 'ar' ? '✅ تم التفعيل' : '✅ Activé',
+                  `✅ ${t('activated')}`,
                   language === 'ar'
                     ? 'ستتلقى تذكيرًا عند اقترابك من المسجد (حتى عندما يكون التطبيق مغلقًا)'
                     : 'Vous recevrez un rappel quand vous approcherez de la mosquée (même app fermée)',
                 );
               } else {
                 Alert.alert(
-                  language === 'ar' ? '❌ إذن مرفوض' : '❌ Permission refusée',
+                  `❌ ${t('permissionDenied')}`,
                   language === 'ar'
                     ? 'يرجى تفعيل الموقع "دائمًا" في إعدادات هاتفك لاستخدام هذه الميزة'
                     : 'Veuillez autoriser la localisation "Toujours" dans les paramètres pour utiliser cette fonctionnalité',
@@ -509,14 +511,14 @@ const MoreScreen = () => {
         await scheduleJumuaReminder(language);
         setJumuaReminderEnabled(true);
         Alert.alert(
-          language === 'ar' ? 'تم التفعيل' : 'Activé',
+          t('activated'),
           language === 'ar'
             ? 'ستتلقى تذكيراً كل جمعة الساعة 12:30'
             : 'Vous recevrez un rappel chaque vendredi à 12h30',
         );
       } else {
         Alert.alert(
-          language === 'ar' ? 'الإذن مطلوب' : 'Permission requise',
+          t('permissionRequired'),
           language === 'ar'
             ? 'فعّل الإشعارات في إعدادات هاتفك'
             : 'Activez les notifications dans les réglages de votre téléphone.',
@@ -564,7 +566,10 @@ const MoreScreen = () => {
 
   return (
     <BackgroundPattern>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ paddingBottom: insets.bottom }}
+      >
         <View style={styles.header}>
           <Text style={[styles.title, isRTL && styles.textRTL]}>
             {t('more')}
@@ -1594,7 +1599,7 @@ const MoreScreen = () => {
                   const result = await exportMyData();
                   const data = result.data as any;
                   Alert.alert(
-                    language === 'ar' ? 'تصدير البيانات' : 'Export de données',
+                    t('exportData'),
                     language === 'ar'
                       ? `تم تصدير بياناتك بنجاح:\n\n• ${
                           data.donations?.length || 0
@@ -1615,7 +1620,7 @@ const MoreScreen = () => {
                   );
                 } catch (error) {
                   Alert.alert(
-                    language === 'ar' ? 'خطأ' : 'Erreur',
+                    t('commonError'),
                     language === 'ar'
                       ? 'فشل تصدير البيانات'
                       : "Impossible d'exporter les données",
@@ -1639,73 +1644,58 @@ const MoreScreen = () => {
             <TouchableOpacity
               style={[styles.logoutButton, { marginBottom: spacing.sm }]}
               onPress={() => {
-                Alert.alert(
-                  language === 'ar' ? 'حذف الحساب' : 'Supprimer mon compte',
-                  language === 'ar'
-                    ? 'هل أنت متأكد؟ سيتم حذف جميع بياناتك نهائيًا. لا يمكن التراجع عن هذا الإجراء.'
-                    : 'Êtes-vous sûr ? Toutes vos données seront supprimées définitivement. Cette action est irréversible.',
-                  [
-                    {
-                      text: language === 'ar' ? 'إلغاء' : 'Annuler',
-                      style: 'cancel',
-                    },
-                    {
-                      text: language === 'ar' ? 'حذف' : 'Supprimer',
-                      style: 'destructive',
-                      onPress: () => {
-                        Alert.alert(
-                          language === 'ar'
-                            ? 'تأكيد نهائي'
-                            : 'Confirmation finale',
-                          language === 'ar'
-                            ? 'هذا الإجراء نهائي ولا رجعة فيه.'
-                            : 'Cette action est définitive et irréversible.',
-                          [
-                            {
-                              text: language === 'ar' ? 'إلغاء' : 'Annuler',
-                              style: 'cancel',
-                            },
-                            {
-                              text:
-                                language === 'ar'
-                                  ? 'نعم، حذف حسابي'
-                                  : 'Oui, supprimer mon compte',
-                              style: 'destructive',
-                              onPress: async () => {
-                                try {
-                                  const result = await deleteMyAccount();
-                                  if (result.success) {
-                                    Alert.alert(
-                                      language === 'ar'
-                                        ? 'تم الحذف'
-                                        : 'Compte supprimé',
-                                      language === 'ar'
-                                        ? 'تم حذف حسابك بنجاح.'
-                                        : result.message,
-                                    );
-                                    await AuthService.signOut();
-                                  } else {
-                                    Alert.alert(
-                                      language === 'ar' ? 'خطأ' : 'Erreur',
-                                      result.message,
-                                    );
-                                  }
-                                } catch (error) {
+                Alert.alert(t('deleteAccount'), t('deleteAccountConfirm'), [
+                  {
+                    text: t('commonCancel'),
+                    style: 'cancel',
+                  },
+                  {
+                    text: t('commonDelete'),
+                    style: 'destructive',
+                    onPress: () => {
+                      Alert.alert(
+                        t('commonConfirm'),
+                        t('deleteAccountConfirm'),
+                        [
+                          {
+                            text: t('commonCancel'),
+                            style: 'cancel',
+                          },
+                          {
+                            text:
+                              language === 'ar'
+                                ? 'نعم، حذف حسابي'
+                                : 'Oui, supprimer mon compte',
+                            style: 'destructive',
+                            onPress: async () => {
+                              try {
+                                const result = await deleteMyAccount();
+                                if (result.success) {
                                   Alert.alert(
-                                    language === 'ar' ? 'خطأ' : 'Erreur',
+                                    t('accountDeleted'),
                                     language === 'ar'
-                                      ? 'فشل حذف الحساب'
-                                      : 'Impossible de supprimer le compte',
+                                      ? 'تم حذف حسابك بنجاح.'
+                                      : result.message,
                                   );
+                                  await AuthService.signOut();
+                                } else {
+                                  Alert.alert(t('commonError'), result.message);
                                 }
-                              },
+                              } catch (error) {
+                                Alert.alert(
+                                  t('commonError'),
+                                  language === 'ar'
+                                    ? 'فشل حذف الحساب'
+                                    : 'Impossible de supprimer le compte',
+                                );
+                              }
                             },
-                          ],
-                        );
-                      },
+                          },
+                        ],
+                      );
                     },
-                  ],
-                );
+                  },
+                ]);
               }}
             >
               <View style={[styles.settingRow, { justifyContent: 'center' }]}>
@@ -1731,7 +1721,7 @@ const MoreScreen = () => {
                     : 'Êtes-vous sûr de vouloir vous déconnecter ?',
                   [
                     {
-                      text: language === 'ar' ? 'إلغاء' : 'Annuler',
+                      text: t('commonCancel'),
                       style: 'cancel',
                     },
                     {
@@ -1743,7 +1733,7 @@ const MoreScreen = () => {
                           await AuthService.signOut();
                         } catch (error) {
                           Alert.alert(
-                            language === 'ar' ? 'خطأ' : 'Erreur',
+                            t('commonError'),
                             language === 'ar'
                               ? 'فشل تسجيل الخروج'
                               : 'Impossible de se déconnecter',

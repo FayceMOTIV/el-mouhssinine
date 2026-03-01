@@ -27,11 +27,13 @@ import {
   UserMessage,
 } from '../services/firebase';
 import { clearBadgeCount } from '../services/notifications';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ConversationScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { language, isRTL } = useLanguage();
+  const { t, language, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
 
   const { messageId } = route.params || {};
@@ -72,12 +74,7 @@ const ConversationScreen = () => {
   // Envoyer une réponse
   const handleSendReply = async () => {
     if (replyText.trim().length < 10) {
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar'
-          ? 'الرسالة قصيرة جدا (10 أحرف على الأقل)'
-          : 'Message trop court (10 caractères minimum)',
-      );
+      Alert.alert(t('commonError'), t('messageEmpty'));
       return;
     }
 
@@ -94,17 +91,11 @@ const ConversationScreen = () => {
       if (result.success) {
         setReplyText('');
       } else {
-        Alert.alert(
-          language === 'ar' ? 'خطأ' : 'Erreur',
-          result.error || 'Une erreur est survenue',
-        );
+        Alert.alert(t('commonError'), result.error || t('messageError'));
       }
     } catch (error) {
       const err = error as Error;
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        err?.message || 'Une erreur est survenue',
-      );
+      Alert.alert(t('commonError'), err?.message || t('messageError'));
     } finally {
       setSending(false);
     }
@@ -167,7 +158,7 @@ const ConversationScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -188,7 +179,7 @@ const ConversationScreen = () => {
 
   if (!message) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -212,7 +203,7 @@ const ConversationScreen = () => {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { paddingBottom: insets.bottom }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >

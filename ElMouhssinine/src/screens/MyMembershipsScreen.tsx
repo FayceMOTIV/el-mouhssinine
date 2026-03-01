@@ -32,10 +32,12 @@ import {
   MosqueeInfo,
 } from '../services/firebase';
 import { getStatusBadgeConfig } from '../utils';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MyMembershipsScreen = () => {
   const navigation = useNavigation<any>();
   const { t, language, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -184,14 +186,14 @@ const MyMembershipsScreen = () => {
   // Annuler un abonnement - redirige vers la messagerie
   const handleCancelSubscription = () => {
     Alert.alert(
-      language === 'ar' ? 'إلغاء الاشتراك' : "Résilier l'abonnement",
+      t('cancelSubscriptionConfirm'),
       language === 'ar'
         ? 'لإلغاء اشتراكك، يرجى إرسال طلب عبر الرسائل للتواصل مع المسجد.'
         : 'Pour résilier votre abonnement, veuillez envoyer une demande via la messagerie pour contacter la mosquée.',
       [
-        { text: language === 'ar' ? 'إلغاء' : 'Annuler', style: 'cancel' },
+        { text: t('commonCancel'), style: 'cancel' },
         {
-          text: language === 'ar' ? 'إرسال رسالة' : 'Envoyer un message',
+          text: t('commonSend'),
           onPress: () => navigation.navigate('Member'),
         },
       ],
@@ -200,7 +202,7 @@ const MyMembershipsScreen = () => {
 
   if (loading && !connectionError) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -230,7 +232,7 @@ const MyMembershipsScreen = () => {
 
   if (connectionError && !dataReceived) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -271,7 +273,7 @@ const MyMembershipsScreen = () => {
 
   if (!userEmail) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -304,7 +306,7 @@ const MyMembershipsScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity

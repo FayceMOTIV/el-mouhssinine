@@ -66,6 +66,7 @@ import { logger } from '../utils';
 import { computeMemberStatus } from '../utils/memberStatus';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import firestore from '@react-native-firebase/firestore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ============================================================
 // MEMBER SCREEN - Refonte UX épurée
@@ -75,6 +76,7 @@ import firestore from '@react-native-firebase/firestore';
 const MemberScreen = () => {
   const navigation = useNavigation<any>();
   const { t, isRTL, language } = useLanguage();
+  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
 
   // États principaux
@@ -493,7 +495,7 @@ const MemberScreen = () => {
 
   const handleLogin = async () => {
     if (!loginEmail.trim() || !loginPassword.trim()) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      Alert.alert(t('commonError'), t('fillAllFields'));
       return;
     }
 
@@ -504,11 +506,11 @@ const MemberScreen = () => {
         setShowLoginModal(false);
         resetLoginForm();
       } else {
-        Alert.alert('Erreur', result.error || 'Échec de la connexion');
+        Alert.alert(t('commonError'), result.error || t('networkError'));
       }
     } catch (error) {
       const err = error as Error;
-      Alert.alert('Erreur', err?.message || 'Échec de la connexion');
+      Alert.alert(t('commonError'), err?.message || t('networkError'));
     } finally {
       setAuthLoading(false);
     }
@@ -562,59 +564,47 @@ const MemberScreen = () => {
       !loginEmail.trim() ||
       !loginPassword.trim()
     ) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      Alert.alert(t('commonError'), t('fillAllFields'));
       return;
     }
 
     // 2. Validation format email (B3)
     if (!emailRegex.test(loginEmail.trim())) {
-      Alert.alert('Erreur', 'Veuillez entrer une adresse email valide');
+      Alert.alert(t('commonError'), t('invalidEmail'));
       return;
     }
 
     // 3. Validation format téléphone français (B4)
     const cleanPhone = registerTelephone.replace(/\s/g, '');
     if (!phoneRegex.test(cleanPhone)) {
-      Alert.alert(
-        'Erreur',
-        'Veuillez entrer un numéro de téléphone valide (10 chiffres commençant par 0)',
-      );
+      Alert.alert(t('commonError'), t('phoneRequired'));
       return;
     }
 
     if (!registerGenre) {
-      Alert.alert('Erreur', 'Veuillez sélectionner votre genre');
+      Alert.alert(t('commonError'), t('selectGender'));
       return;
     }
 
     if (!registerDateNaissance.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre date de naissance');
+      Alert.alert(t('commonError'), t('enterBirthdate'));
       return;
     }
 
     // 4. Validation âge minimum 16 ans (B6)
     if (!isAdult(registerDateNaissance)) {
-      Alert.alert(
-        'Erreur',
-        'Vous devez avoir au moins 16 ans pour vous inscrire',
-      );
+      Alert.alert(t('commonError'), t('membershipImpossible'));
       return;
     }
 
     if (loginPassword.length < 6) {
-      Alert.alert(
-        'Erreur',
-        'Le mot de passe doit contenir au moins 6 caractères',
-      );
+      Alert.alert(t('commonError'), t('passwordMinLength'));
       return;
     }
 
     // 5. Validation règlement accepté (B5 - CRITIQUE)
     if (!acceptedRules) {
-      Alert.alert(
-        'Erreur',
-        'Vous devez accepter le règlement intérieur pour vous inscrire',
-      );
+      Alert.alert(t('commonError'), t('mustAcceptRulesMsg'));
       return;
     }
 
@@ -645,31 +635,25 @@ const MemberScreen = () => {
 
         // Bug 19 Fix: Popup bienvenue + vérification email
         if (!result.user.emailVerified) {
-          Alert.alert(
-            'Merci pour votre inscription !',
-            "Vous allez recevoir un email de bienvenue et d'explications.\n\nUn email de vérification a également été envoyé. Veuillez le confirmer.\n\n(Pensez à vérifier vos spams)",
-            [
-              { text: 'OK', style: 'default' },
-              {
-                text: "Renvoyer l'email",
-                onPress: () => result.user?.sendEmailVerification(),
-              },
-            ],
-          );
+          Alert.alert(t('thanksForRegistration'), t('verificationEmailSent'), [
+            { text: t('commonOk'), style: 'default' },
+            {
+              text: t('commonRetry'),
+              onPress: () => result.user?.sendEmailVerification(),
+            },
+          ]);
         } else {
-          Alert.alert(
-            'Merci pour votre inscription !',
-            "Vous allez recevoir un email de bienvenue et d'explications.\n\n(Pensez à vérifier vos spams)",
-            [{ text: 'OK', style: 'default' }],
-          );
+          Alert.alert(t('thanksForRegistration'), t('emailSent'), [
+            { text: t('commonOk'), style: 'default' },
+          ]);
         }
       } else if (!result.success) {
-        Alert.alert('Erreur', result.error || 'Échec de la création du compte');
+        Alert.alert(t('commonError'), result.error || t('networkError'));
       }
     } catch (error) {
       isRegistrationInProgress.current = false; // Réactive le listener auth même en cas d'erreur
       const err = error as Error;
-      Alert.alert('Erreur', err?.message || 'Échec de la création du compte');
+      Alert.alert(t('commonError'), err?.message || t('networkError'));
     } finally {
       setAuthLoading(false);
     }
@@ -677,7 +661,7 @@ const MemberScreen = () => {
 
   const handleForgotPassword = async () => {
     if (!forgotEmail.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre email');
+      Alert.alert(t('commonError'), t('invalidEmail'));
       return;
     }
 
@@ -685,26 +669,23 @@ const MemberScreen = () => {
     try {
       const result = await AuthService.resetPassword(forgotEmail.trim());
       if (result.success) {
-        Alert.alert(
-          'Email envoyé',
-          'Vérifiez votre boîte mail pour réinitialiser votre mot de passe',
-        );
+        Alert.alert(t('emailSent'), t('verificationEmailSent'));
         setShowForgotPassword(false);
         setForgotEmail('');
       } else {
-        Alert.alert('Erreur', result.error || 'Une erreur est survenue');
+        Alert.alert(t('commonError'), result.error || t('networkError'));
       }
     } catch (error) {
       const err = error as Error;
-      Alert.alert('Erreur', err?.message || 'Une erreur est survenue');
+      Alert.alert(t('commonError'), err?.message || t('networkError'));
     } finally {
       setAuthLoading(false);
     }
   };
 
   const handleLogout = async () => {
-    Alert.alert(t('logout'), 'Êtes-vous sûr de vouloir vous déconnecter ?', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('logout'), t('logoutConfirm'), [
+      { text: t('commonCancel'), style: 'cancel' },
       {
         text: t('logout'),
         style: 'destructive',
@@ -724,12 +705,7 @@ const MemberScreen = () => {
   const handleRequestRecuFiscal = async (yearParam?: number) => {
     const year = yearParam ?? selectedRecuYear;
     if (!memberProfile?.email) {
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar'
-          ? 'البريد الإلكتروني غير متوفر'
-          : 'Email non disponible',
-      );
+      Alert.alert(t('commonError'), t('invalidEmail'));
       return;
     }
 
@@ -738,7 +714,7 @@ const MemberScreen = () => {
       const result = await requestRecuFiscal(memberProfile.email, year);
       if (result.success) {
         Alert.alert(
-          language === 'ar' ? 'تم الإرسال' : 'Envoyé !',
+          t('emailSent'),
           language === 'ar'
             ? `تم إرسال إيصالك الضريبي بمبلغ ${result.montantTotal?.toFixed(
                 2,
@@ -748,15 +724,11 @@ const MemberScreen = () => {
               )}€ a été envoyé à ${memberProfile.email}`,
         );
       } else {
-        Alert.alert(language === 'ar' ? 'خطأ' : 'Erreur', result.message);
+        Alert.alert(t('commonError'), result.message);
       }
     } catch (error) {
       const err = error as Error;
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Erreur',
-        err?.message ||
-          (language === 'ar' ? 'حدث خطأ' : 'Une erreur est survenue'),
-      );
+      Alert.alert(t('commonError'), err?.message || t('networkError'));
     } finally {
       setSendingRecuFiscal(false);
     }
@@ -836,8 +808,8 @@ const MemberScreen = () => {
         message += `\nDon: ${breakdown.don}€`;
       }
       message += `\nTotal: ${breakdown.total}€\n\nRéférence: ${reference}\n\nImportant: Indiquez la référence dans le motif du virement.`;
-      Alert.alert('🏦 Virement bancaire', message, [
-        { text: 'Compris', style: 'default' },
+      Alert.alert(t('bankTransferTitle'), message, [
+        { text: t('commonUnderstood'), style: 'default' },
       ]);
       setShowPaymentModal(false);
       setCustomAmount('');
@@ -937,8 +909,8 @@ const MemberScreen = () => {
           ? 'Votre abonnement mensuel est activé ! Vous serez prélevé automatiquement chaque mois. Vous allez recevoir toutes les infos par email.'
           : 'Vous allez recevoir toutes les infos par email.';
 
-        Alert.alert('Merci pour votre adhésion !', message, [
-          { text: 'OK', style: 'default' },
+        Alert.alert(t('congratulations'), message, [
+          { text: t('commonOk'), style: 'default' },
         ]);
 
         // Passer directement en page membre actif (UI optimiste)
@@ -1006,46 +978,27 @@ const MemberScreen = () => {
         !member.telephone.trim() ||
         !member.adresse.trim()
       ) {
-        Alert.alert(
-          'Erreur',
-          'Veuillez remplir tous les champs pour chaque membre',
-        );
+        Alert.alert(t('commonError'), t('fillAllFields'));
         isProcessingRef.current = false;
         return;
       }
       if (!member.genre) {
-        Alert.alert(
-          'Erreur',
-          `Veuillez sélectionner le genre pour ${member.prenom || 'ce membre'}`,
-        );
+        Alert.alert(t('commonError'), t('selectGender'));
         isProcessingRef.current = false;
         return;
       }
       if (!member.dateNaissance.trim()) {
-        Alert.alert(
-          'Erreur',
-          `Veuillez entrer la date de naissance pour ${
-            member.prenom || 'ce membre'
-          }`,
-        );
+        Alert.alert(t('commonError'), t('enterBirthdate'));
         isProcessingRef.current = false;
         return;
       }
       if (!isAdult(member.dateNaissance)) {
-        Alert.alert(
-          'Adhésion impossible',
-          `${
-            member.prenom || 'Ce membre'
-          } doit avoir au moins 16 ans pour devenir adhérent de l'association.`,
-        );
+        Alert.alert(t('membershipImpossible'), t('membershipImpossible'));
         isProcessingRef.current = false;
         return;
       }
       if (!member.accepte) {
-        Alert.alert(
-          'Erreur',
-          `${member.prenom} doit accepter le règlement intérieur`,
-        );
+        Alert.alert(t('commonError'), t('mustAcceptRulesMsg'));
         isProcessingRef.current = false;
         return;
       }
@@ -1088,13 +1041,13 @@ const MemberScreen = () => {
       }
 
       Alert.alert(
-        '🏦 Virement bancaire',
+        t('bankTransferTitle'),
         `Montant total: ${totalAmount}€ (${familyMembers.length} membre${
           familyMembers.length > 1 ? 's' : ''
         } - ${familyFormule})\n\nIBAN: ${
           mosqueeInfo?.iban || 'IBAN indisponible'
         }\nRéférence: ${reference}`,
-        [{ text: 'Compris' }],
+        [{ text: t('commonUnderstood') }],
       );
 
       setShowFamilyModal(false);
@@ -1192,7 +1145,7 @@ const MemberScreen = () => {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
         </View>
@@ -1209,7 +1162,10 @@ const MemberScreen = () => {
       <BackgroundPattern>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(100, insets.bottom) },
+          ]}
         >
           {/* Header */}
           <View style={styles.header}>
@@ -1377,7 +1333,10 @@ const MemberScreen = () => {
     <BackgroundPattern>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(100, insets.bottom) },
+        ]}
       >
         {/* Header avec nom */}
         <View style={styles.header}>
@@ -1798,19 +1757,15 @@ const MemberScreen = () => {
                 ]}
                 onPress={() => {
                   Alert.alert(
-                    language === 'ar'
-                      ? 'إلغاء الاشتراك'
-                      : 'Annuler mon abonnement',
-                    language === 'ar'
-                      ? 'هل أنت متأكد؟ سيتم إيقاف الخصم التلقائي. ستبقى متعاطفاً مع المسجد.'
-                      : 'Êtes-vous sûr ? Cela arrêtera le prélèvement automatique. Vous resterez sympathisant de la mosquée.',
+                    t('cancelSubscription'),
+                    t('cancelSubscriptionQuestion'),
                     [
                       {
-                        text: language === 'ar' ? 'لا' : 'Non',
+                        text: t('commonNo'),
                         style: 'cancel',
                       },
                       {
-                        text: language === 'ar' ? 'نعم، إلغاء' : 'Oui, annuler',
+                        text: t('commonConfirm'),
                         style: 'destructive',
                         onPress: async () => {
                           try {
@@ -1831,9 +1786,7 @@ const MemberScreen = () => {
                               setMemberPage('sympathisant');
 
                               Alert.alert(
-                                language === 'ar'
-                                  ? 'تم الإلغاء'
-                                  : 'Abonnement annulé',
+                                t('subscriptionCancelled'),
                                 result.message,
                               );
 
@@ -1841,18 +1794,12 @@ const MemberScreen = () => {
                               const user = AuthService.getCurrentUser();
                               if (user) loadMemberData(user.uid);
                             } else {
-                              Alert.alert(
-                                language === 'ar' ? 'خطأ' : 'Erreur',
-                                result.message,
-                              );
+                              Alert.alert(t('commonError'), result.message);
                             }
                           } catch (err: any) {
                             Alert.alert(
-                              language === 'ar' ? 'خطأ' : 'Erreur',
-                              err?.message ||
-                                (language === 'ar'
-                                  ? 'حدث خطأ'
-                                  : 'Une erreur est survenue'),
+                              t('commonError'),
+                              err?.message || t('networkError'),
                             );
                           }
                         },
@@ -2384,17 +2331,11 @@ const MemberScreen = () => {
 
     const handleContinueToPayment = () => {
       if (!hasScrolledToEnd) {
-        Alert.alert(
-          'Lecture obligatoire',
-          "Veuillez lire le règlement jusqu'à la fin avant de continuer.",
-        );
+        Alert.alert(t('mustReadRules'), t('mustReadRulesMsg'));
         return;
       }
       if (!acceptedReglement) {
-        Alert.alert(
-          'Acceptation requise',
-          'Veuillez cocher la case pour accepter le règlement.',
-        );
+        Alert.alert(t('mustAcceptRules'), t('mustAcceptRulesMsg'));
         return;
       }
       setShowReglementModal(false);

@@ -1,27 +1,69 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  wp,
+} from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
 import { getTimesForDate, prayerNames } from '../services/prayerApi';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const DAYS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const DAYS_AR = ['إث', 'ثل', 'أر', 'خم', 'جم', 'سب', 'أح'];
 
 const MONTHS_FR = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre',
 ];
 const MONTHS_AR = [
-  'يناير', 'فبراير', 'مارس', 'أبريل', 'ماي', 'يونيو',
-  'يوليوز', 'غشت', 'شتنبر', 'أكتوبر', 'نونبر', 'دجنبر',
+  'يناير',
+  'فبراير',
+  'مارس',
+  'أبريل',
+  'ماي',
+  'يونيو',
+  'يوليوز',
+  'غشت',
+  'شتنبر',
+  'أكتوبر',
+  'نونبر',
+  'دجنبر',
 ];
 
-const PRAYER_KEYS = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
+const PRAYER_KEYS = [
+  'Fajr',
+  'Sunrise',
+  'Dhuhr',
+  'Asr',
+  'Maghrib',
+  'Isha',
+] as const;
 
 const PrayerCalendarScreen: React.FC = () => {
   const navigation = useNavigation();
   const { language, isRTL, t } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   const today = new Date();
   const todayMonth = today.getMonth();
@@ -76,12 +118,16 @@ const PrayerCalendarScreen: React.FC = () => {
   const monthNames = language === 'ar' ? MONTHS_AR : MONTHS_FR;
   const dayNames = language === 'ar' ? DAYS_AR : DAYS_FR;
 
-  const isToday = (day: number) => currentMonth === todayMonth && day === todayDay;
+  const isToday = (day: number) =>
+    currentMonth === todayMonth && day === todayDay;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Text style={styles.backText}>{isRTL ? 'رجوع →' : '← Retour'}</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, isRTL && styles.textRTL]}>
@@ -89,25 +135,44 @@ const PrayerCalendarScreen: React.FC = () => {
         </Text>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Month navigation */}
         <View style={styles.monthNav}>
           <TouchableOpacity
             onPress={isRTL ? nextMonth : prevMonth}
-            style={[styles.navArrow, currentMonth === (isRTL ? 11 : 0) && styles.navDisabled]}
+            style={[
+              styles.navArrow,
+              currentMonth === (isRTL ? 11 : 0) && styles.navDisabled,
+            ]}
             disabled={currentMonth === (isRTL ? 11 : 0)}
           >
-            <Text style={[styles.navArrowText, currentMonth === (isRTL ? 11 : 0) && styles.navArrowDisabled]}>
+            <Text
+              style={[
+                styles.navArrowText,
+                currentMonth === (isRTL ? 11 : 0) && styles.navArrowDisabled,
+              ]}
+            >
               ◀
             </Text>
           </TouchableOpacity>
           <Text style={styles.monthTitle}>{monthNames[currentMonth]} 2026</Text>
           <TouchableOpacity
             onPress={isRTL ? prevMonth : nextMonth}
-            style={[styles.navArrow, currentMonth === (isRTL ? 0 : 11) && styles.navDisabled]}
+            style={[
+              styles.navArrow,
+              currentMonth === (isRTL ? 0 : 11) && styles.navDisabled,
+            ]}
             disabled={currentMonth === (isRTL ? 0 : 11)}
           >
-            <Text style={[styles.navArrowText, currentMonth === (isRTL ? 0 : 11) && styles.navArrowDisabled]}>
+            <Text
+              style={[
+                styles.navArrowText,
+                currentMonth === (isRTL ? 0 : 11) && styles.navArrowDisabled,
+              ]}
+            >
               ▶
             </Text>
           </TouchableOpacity>
@@ -180,7 +245,9 @@ const PrayerCalendarScreen: React.FC = () => {
           ) : (
             <View style={styles.noDataCard}>
               <Text style={styles.noDataText}>
-                {language === 'ar' ? 'لا توجد بيانات لهذا اليوم' : 'Pas de données pour ce jour'}
+                {language === 'ar'
+                  ? 'لا توجد بيانات لهذا اليوم'
+                  : 'Pas de données pour ce jour'}
               </Text>
             </View>
           )}

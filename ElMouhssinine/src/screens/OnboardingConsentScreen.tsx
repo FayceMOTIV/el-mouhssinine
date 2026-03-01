@@ -8,8 +8,15 @@ import {
   Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors, spacing, fontSize, HEADER_PADDING_TOP, borderRadius } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  fontSize,
+  HEADER_PADDING_TOP,
+  borderRadius,
+} from '../theme/colors';
 import PrivacyPolicyScreen from './PrivacyPolicyScreen';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
   onAccept: () => void;
@@ -17,6 +24,7 @@ interface Props {
 
 const OnboardingConsentScreen: React.FC<Props> = ({ onAccept }) => {
   const [showPolicy, setShowPolicy] = useState(false);
+  const insets = useSafeAreaInsets();
 
   if (showPolicy) {
     return <PrivacyPolicyScreen onBack={() => setShowPolicy(false)} />;
@@ -27,36 +35,62 @@ const OnboardingConsentScreen: React.FC<Props> = ({ onAccept }) => {
       await AsyncStorage.setItem('rgpd_accepted', new Date().toISOString());
       onAccept();
     } catch (e) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder votre consentement. Veuillez réessayer.');
+      Alert.alert(
+        'Erreur',
+        'Impossible de sauvegarder votre consentement. Veuillez réessayer.',
+      );
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top, paddingBottom: insets.bottom },
+      ]}
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Bienvenue</Text>
         <Text style={styles.headerSubtitle}>مرحبا بكم</Text>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+      >
         <Text style={styles.title}>Protection de vos données</Text>
         <Text style={styles.description}>
-          L'application El Mouhssinine collecte certaines données personnelles pour fonctionner :
+          L'application El Mouhssinine collecte certaines données personnelles
+          pour fonctionner :
         </Text>
 
         <View style={styles.dataList}>
-          <Text style={styles.dataItem}>• Votre nom et email pour l'adhésion</Text>
-          <Text style={styles.dataItem}>• Votre position pour la Qibla et les horaires de prière</Text>
-          <Text style={styles.dataItem}>• Les notifications pour les rappels de prière</Text>
-          <Text style={styles.dataItem}>• Les paiements sécurisés via Stripe</Text>
+          <Text style={styles.dataItem}>
+            • Votre nom et email pour l'adhésion
+          </Text>
+          <Text style={styles.dataItem}>
+            • Votre position pour la Qibla et les horaires de prière
+          </Text>
+          <Text style={styles.dataItem}>
+            • Les notifications pour les rappels de prière
+          </Text>
+          <Text style={styles.dataItem}>
+            • Les paiements sécurisés via Stripe
+          </Text>
         </View>
 
         <Text style={styles.description}>
-          Vos données ne sont jamais vendues. Vous pouvez supprimer votre compte à tout moment.
+          Vos données ne sont jamais vendues. Vous pouvez supprimer votre compte
+          à tout moment.
         </Text>
 
-        <TouchableOpacity onPress={() => setShowPolicy(true)} style={styles.policyLink}>
-          <Text style={styles.policyLinkText}>Lire la politique de confidentialité complète →</Text>
+        <TouchableOpacity
+          onPress={() => setShowPolicy(true)}
+          style={styles.policyLink}
+        >
+          <Text style={styles.policyLinkText}>
+            Lire la politique de confidentialité complète →
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -65,7 +99,8 @@ const OnboardingConsentScreen: React.FC<Props> = ({ onAccept }) => {
           <Text style={styles.acceptButtonText}>J'accepte et je continue</Text>
         </TouchableOpacity>
         <Text style={styles.footerNote}>
-          En continuant, vous acceptez notre politique de confidentialité conformément au RGPD.
+          En continuant, vous acceptez notre politique de confidentialité
+          conformément au RGPD.
         </Text>
       </View>
     </View>

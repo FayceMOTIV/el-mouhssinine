@@ -7,18 +7,34 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  wp,
+} from '../theme/colors';
 import { arabicAlphabet } from '../data/alphabet';
-import { lessons, levels, loadUserProgress, UserProgress } from '../data/lessons';
+import {
+  lessons,
+  levels,
+  loadUserProgress,
+  UserProgress,
+} from '../data/lessons';
 // vocabulary section removed
 import ProgressBar from '../components/ProgressBar';
 import { useLanguage } from '../context/LanguageContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface LearnArabicScreenProps {
   navigation: any;
 }
 
-const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => {
+const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({
+  navigation,
+}) => {
+  const insets = useSafeAreaInsets();
   const { t, isRTL } = useLanguage();
   const [userProgress, setUserProgress] = useState<UserProgress>({
     currentLevel: 'debutant',
@@ -36,7 +52,7 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
         setUserProgress(progress);
       };
       loadProgress();
-    }, [])
+    }, []),
   );
 
   const modules = [
@@ -47,7 +63,8 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
       descriptionKey: 'alphabetDescription',
       icon: 'ا ب ت',
       count: `${arabicAlphabet.length} ${t('letters')}`,
-      progress: userProgress.lettersLearned.length / arabicAlphabet.length * 100,
+      progress:
+        (userProgress.lettersLearned.length / arabicAlphabet.length) * 100,
       screen: 'Alphabet',
       color: colors.accent,
     },
@@ -58,7 +75,7 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
       descriptionKey: 'lessonsDescription',
       icon: '📚',
       count: `${lessons.length} ${t('lessons')}`,
-      progress: userProgress.lessonsCompleted.length / lessons.length * 100,
+      progress: (userProgress.lessonsCompleted.length / lessons.length) * 100,
       screen: 'LessonsList',
       color: '#27ae60',
     },
@@ -75,14 +92,16 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
     },
   ];
 
-  const currentLevel = levels.find((l) => l.id === userProgress.currentLevel);
+  const currentLevel = levels.find(l => l.id === userProgress.currentLevel);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, isRTL && styles.rtlText]}>{t('learnArabic')}</Text>
+          <Text style={[styles.title, isRTL && styles.rtlText]}>
+            {t('learnArabic')}
+          </Text>
           <Text style={styles.arabicTitle}>{t('learnArabicArabic')}</Text>
           <Text style={[styles.subtitle, isRTL && styles.rtlText]}>
             {t('learnArabicSubtitle')}
@@ -92,9 +111,13 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
         <View style={styles.content}>
           {/* Progress Card */}
           <View style={styles.progressCard}>
-            <View style={[styles.progressHeader, isRTL && styles.progressHeaderRTL]}>
+            <View
+              style={[styles.progressHeader, isRTL && styles.progressHeaderRTL]}
+            >
               <View>
-                <Text style={[styles.progressLabel, isRTL && styles.rtlText]}>{t('yourLevel')}</Text>
+                <Text style={[styles.progressLabel, isRTL && styles.rtlText]}>
+                  {t('yourLevel')}
+                </Text>
                 <Text style={[styles.levelName, isRTL && styles.rtlText]}>
                   {currentLevel?.name || t('beginner')}
                 </Text>
@@ -126,31 +149,44 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
               <Text style={styles.statValue}>
                 {userProgress.lessonsCompleted.length}
               </Text>
-              <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('lessons')}</Text>
+              <Text style={[styles.statLabel, isRTL && styles.rtlText]}>
+                {t('lessons')}
+              </Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>
                 {userProgress.lettersLearned.length}
               </Text>
-              <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('letters')}</Text>
+              <Text style={[styles.statLabel, isRTL && styles.rtlText]}>
+                {t('letters')}
+              </Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statValue}>{userProgress.streak}</Text>
-              <Text style={[styles.statLabel, isRTL && styles.rtlText]}>{t('streak')}</Text>
+              <Text style={[styles.statLabel, isRTL && styles.rtlText]}>
+                {t('streak')}
+              </Text>
             </View>
           </View>
 
           {/* Modules */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('learningModules')}</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+              {t('learningModules')}
+            </Text>
 
-            {modules.map((module) => (
+            {modules.map(module => (
               <TouchableOpacity
                 key={module.id}
                 style={styles.moduleCard}
                 onPress={() => navigation.navigate(module.screen)}
               >
-                <View style={[styles.moduleContent, isRTL && styles.moduleContentRTL]}>
+                <View
+                  style={[
+                    styles.moduleContent,
+                    isRTL && styles.moduleContentRTL,
+                  ]}
+                >
                   <View
                     style={[
                       styles.moduleIcon,
@@ -160,15 +196,40 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
                     <Text style={styles.moduleIconText}>{module.icon}</Text>
                   </View>
                   <View style={styles.moduleInfo}>
-                    <View style={[styles.moduleHeader, isRTL && styles.moduleHeaderRTL]}>
-                      <Text style={[styles.moduleTitle, isRTL && styles.rtlText]}>{t(module.titleKey as any)}</Text>
-                      <Text style={styles.moduleTitleAr}>{t(module.titleArKey as any)}</Text>
+                    <View
+                      style={[
+                        styles.moduleHeader,
+                        isRTL && styles.moduleHeaderRTL,
+                      ]}
+                    >
+                      <Text
+                        style={[styles.moduleTitle, isRTL && styles.rtlText]}
+                      >
+                        {t(module.titleKey as any)}
+                      </Text>
+                      <Text style={styles.moduleTitleAr}>
+                        {t(module.titleArKey as any)}
+                      </Text>
                     </View>
-                    <Text style={[styles.moduleDescription, isRTL && styles.rtlText]}>
+                    <Text
+                      style={[
+                        styles.moduleDescription,
+                        isRTL && styles.rtlText,
+                      ]}
+                    >
                       {t(module.descriptionKey as any)}
                     </Text>
-                    <View style={[styles.moduleFooter, isRTL && styles.moduleFooterRTL]}>
-                      <Text style={[styles.moduleCount, isRTL && styles.rtlText]}>{module.count}</Text>
+                    <View
+                      style={[
+                        styles.moduleFooter,
+                        isRTL && styles.moduleFooterRTL,
+                      ]}
+                    >
+                      <Text
+                        style={[styles.moduleCount, isRTL && styles.rtlText]}
+                      >
+                        {module.count}
+                      </Text>
                       {module.progress > 0 && (
                         <View style={styles.moduleProgress}>
                           <ProgressBar
@@ -188,19 +249,33 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
 
           {/* Quick Start */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t('quickStart')}</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+              {t('quickStart')}
+            </Text>
 
             <TouchableOpacity
               style={styles.quickStartCard}
               onPress={() => navigation.navigate('Alphabet')}
             >
-              <View style={[styles.quickStartContent, isRTL && styles.quickStartContentRTL]}>
+              <View
+                style={[
+                  styles.quickStartContent,
+                  isRTL && styles.quickStartContentRTL,
+                ]}
+              >
                 <Text style={styles.quickStartIcon}>🎯</Text>
                 <View style={styles.quickStartInfo}>
-                  <Text style={[styles.quickStartTitle, isRTL && styles.rtlText]}>
+                  <Text
+                    style={[styles.quickStartTitle, isRTL && styles.rtlText]}
+                  >
                     {t('startWithAlphabet')}
                   </Text>
-                  <Text style={[styles.quickStartDescription, isRTL && styles.rtlText]}>
+                  <Text
+                    style={[
+                      styles.quickStartDescription,
+                      isRTL && styles.rtlText,
+                    ]}
+                  >
                     {t('alphabetBaseInfo')}
                   </Text>
                 </View>
@@ -215,7 +290,9 @@ const LearnArabicScreen: React.FC<LearnArabicScreenProps> = ({ navigation }) => 
           <View style={[styles.tipsCard, isRTL && styles.tipsCardRTL]}>
             <Text style={styles.tipsIcon}>💡</Text>
             <View style={styles.tipsContent}>
-              <Text style={[styles.tipsTitle, isRTL && styles.rtlText]}>{t('dailyTip')}</Text>
+              <Text style={[styles.tipsTitle, isRTL && styles.rtlText]}>
+                {t('dailyTip')}
+              </Text>
               <Text style={[styles.tipsText, isRTL && styles.rtlText]}>
                 {t('dailyTipText')}
               </Text>

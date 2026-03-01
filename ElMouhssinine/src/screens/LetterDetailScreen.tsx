@@ -10,6 +10,7 @@ import { colors, spacing, borderRadius, fontSize } from '../theme/colors';
 import { ArabicLetter, arabicAlphabet } from '../data/alphabet';
 import ArabicLetterComponent from '../components/ArabicLetter';
 import { speakArabic } from '../services/tts';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface LetterDetailScreenProps {
   route: any;
@@ -20,11 +21,13 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
   route,
   navigation,
 }) => {
+  const insets = useSafeAreaInsets();
   const { letter } = route.params as { letter: ArabicLetter };
   const [showExamples, setShowExamples] = useState(true);
 
-  const letterIndex = arabicAlphabet.findIndex((l) => l.id === letter.id);
-  const previousLetter = letterIndex > 0 ? arabicAlphabet[letterIndex - 1] : null;
+  const letterIndex = arabicAlphabet.findIndex(l => l.id === letter.id);
+  const previousLetter =
+    letterIndex > 0 ? arabicAlphabet[letterIndex - 1] : null;
   const nextLetter =
     letterIndex < arabicAlphabet.length - 1
       ? arabicAlphabet[letterIndex + 1]
@@ -43,7 +46,10 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
   };
 
   // Example words for each letter (simplified)
-  const exampleWords: Record<string, Array<{ arabic: string; transliteration: string; translation: string }>> = {
+  const exampleWords: Record<
+    string,
+    Array<{ arabic: string; transliteration: string; translation: string }>
+  > = {
     alif: [
       { arabic: 'أسد', transliteration: 'asad', translation: 'lion' },
       { arabic: 'أب', transliteration: 'ab', translation: 'pere' },
@@ -100,15 +106,11 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
       { arabic: 'صلاة', transliteration: 'salat', translation: 'priere' },
       { arabic: 'صبر', transliteration: 'sabr', translation: 'patience' },
     ],
-    dad: [
-      { arabic: 'ضوء', transliteration: "daw'", translation: 'lumiere' },
-    ],
+    dad: [{ arabic: 'ضوء', transliteration: "daw'", translation: 'lumiere' }],
     taa: [
       { arabic: 'طعام', transliteration: "ta'am", translation: 'nourriture' },
     ],
-    dhaa: [
-      { arabic: 'ظهر', transliteration: 'dhuhr', translation: 'midi' },
-    ],
+    dhaa: [{ arabic: 'ظهر', transliteration: 'dhuhr', translation: 'midi' }],
     ayn: [
       { arabic: 'عين', transliteration: "'ayn", translation: 'oeil' },
       { arabic: 'علم', transliteration: "'ilm", translation: 'science' },
@@ -116,32 +118,20 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
     ghayn: [
       { arabic: 'غفور', transliteration: 'ghafur', translation: 'pardonneur' },
     ],
-    fa: [
-      { arabic: 'فجر', transliteration: 'fajr', translation: 'aube' },
-    ],
+    fa: [{ arabic: 'فجر', transliteration: 'fajr', translation: 'aube' }],
     qaf: [
       { arabic: 'قلب', transliteration: 'qalb', translation: 'coeur' },
       { arabic: 'قرآن', transliteration: "qur'an", translation: 'coran' },
     ],
-    kaf: [
-      { arabic: 'كتاب', transliteration: 'kitab', translation: 'livre' },
-    ],
-    lam: [
-      { arabic: 'ليل', transliteration: 'layl', translation: 'nuit' },
-    ],
+    kaf: [{ arabic: 'كتاب', transliteration: 'kitab', translation: 'livre' }],
+    lam: [{ arabic: 'ليل', transliteration: 'layl', translation: 'nuit' }],
     mim: [
       { arabic: 'ماء', transliteration: "ma'", translation: 'eau' },
       { arabic: 'مسجد', transliteration: 'masjid', translation: 'mosquee' },
     ],
-    nun: [
-      { arabic: 'نور', transliteration: 'nur', translation: 'lumiere' },
-    ],
-    haa: [
-      { arabic: 'هدى', transliteration: 'huda', translation: 'guidance' },
-    ],
-    waw: [
-      { arabic: 'ورد', transliteration: 'ward', translation: 'rose' },
-    ],
+    nun: [{ arabic: 'نور', transliteration: 'nur', translation: 'lumiere' }],
+    haa: [{ arabic: 'هدى', transliteration: 'huda', translation: 'guidance' }],
+    waw: [{ arabic: 'ورد', transliteration: 'ward', translation: 'rose' }],
     ya: [
       { arabic: 'يد', transliteration: 'yad', translation: 'main' },
       { arabic: 'يوم', transliteration: 'yawm', translation: 'jour' },
@@ -151,7 +141,7 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
   const currentExamples = exampleWords[letter.id] || [];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
@@ -229,43 +219,57 @@ const LetterDetailScreen: React.FC<LetterDetailScreenProps> = ({
                     <Text style={styles.exampleTranslation}>
                       {example.translation}
                     </Text>
-                    <Text style={styles.exampleAudioHint}>🔊 Appuyer pour ecouter</Text>
+                    <Text style={styles.exampleAudioHint}>
+                      🔊 Appuyer pour ecouter
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             )}
 
             {showExamples && currentExamples.length === 0 && (
-              <Text style={styles.noExamples}>
-                Exemples a venir...
-              </Text>
+              <Text style={styles.noExamples}>Exemples a venir...</Text>
             )}
           </View>
 
           {/* Navigation between letters */}
           <View style={styles.navigationContainer}>
             <TouchableOpacity
-              style={[styles.navButton, !previousLetter && styles.navButtonDisabled]}
-              onPress={() => previousLetter && handleNavigateLetter(previousLetter)}
+              style={[
+                styles.navButton,
+                !previousLetter && styles.navButtonDisabled,
+              ]}
+              onPress={() =>
+                previousLetter && handleNavigateLetter(previousLetter)
+              }
               disabled={!previousLetter}
             >
               <Text style={styles.navButtonIcon}>{'<'}</Text>
               {previousLetter && (
                 <View style={styles.navButtonContent}>
-                  <Text style={styles.navButtonLetter}>{previousLetter.isolated}</Text>
-                  <Text style={styles.navButtonName}>{previousLetter.name}</Text>
+                  <Text style={styles.navButtonLetter}>
+                    {previousLetter.isolated}
+                  </Text>
+                  <Text style={styles.navButtonName}>
+                    {previousLetter.name}
+                  </Text>
                 </View>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.navButton, !nextLetter && styles.navButtonDisabled]}
+              style={[
+                styles.navButton,
+                !nextLetter && styles.navButtonDisabled,
+              ]}
               onPress={() => nextLetter && handleNavigateLetter(nextLetter)}
               disabled={!nextLetter}
             >
               {nextLetter && (
                 <View style={styles.navButtonContent}>
-                  <Text style={styles.navButtonLetter}>{nextLetter.isolated}</Text>
+                  <Text style={styles.navButtonLetter}>
+                    {nextLetter.isolated}
+                  </Text>
                   <Text style={styles.navButtonName}>{nextLetter.name}</Text>
                 </View>
               )}

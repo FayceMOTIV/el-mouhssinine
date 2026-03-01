@@ -14,6 +14,7 @@ import { vowels } from '../data/vowels';
 import ProgressBar from '../components/ProgressBar';
 import ArabicLetterComponent from '../components/ArabicLetter';
 import { useLanguage } from '../context/LanguageContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface LessonScreenProps {
   route: any;
@@ -22,6 +23,7 @@ interface LessonScreenProps {
 
 const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const { lesson } = route.params as { lesson: Lesson };
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -49,19 +51,22 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
     setSelectedAnswer(answer);
     setShowResult(true);
 
-    if (currentStep.type === 'quiz' && answer === currentStep.content.correctAnswer) {
+    if (
+      currentStep.type === 'quiz' &&
+      answer === currentStep.content.correctAnswer
+    ) {
       setCorrectAnswers(correctAnswers + 1);
     }
   };
 
   const handleFinish = async () => {
-    const quizCount = lesson.steps.filter((s) => s.type === 'quiz').length;
+    const quizCount = lesson.steps.filter(s => s.type === 'quiz').length;
     const score = quizCount > 0 ? (correctAnswers / quizCount) * 100 : 100;
 
     // Extract letters learned from this lesson
     const lettersLearned = lesson.steps
-      .filter((s) => s.type === 'letter' && s.content.letterId)
-      .map((s) => s.content.letterId as string);
+      .filter(s => s.type === 'letter' && s.content.letterId)
+      .map(s => s.content.letterId as string);
 
     // Save progress to AsyncStorage
     await completeLesson(lesson.id, lesson.xp, lettersLearned);
@@ -74,7 +79,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
           text: t('continueButton'),
           onPress: () => navigation.goBack(),
         },
-      ]
+      ],
     );
   };
 
@@ -89,7 +94,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
         );
 
       case 'letter':
-        const letter = arabicAlphabet.find((l) => l.id === step.content.letterId);
+        const letter = arabicAlphabet.find(l => l.id === step.content.letterId);
         if (!letter) return null;
         return (
           <View style={styles.letterContent}>
@@ -101,7 +106,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
         );
 
       case 'vowel':
-        const vowel = vowels.find((v) => v.id === step.content.vowelId);
+        const vowel = vowels.find(v => v.id === step.content.vowelId);
         if (!vowel) return null;
         return (
           <View style={styles.vowelContent}>
@@ -131,15 +136,15 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
         );
 
       case 'exercise':
-        const allRevealed = step.content.items ? revealedItems.size >= step.content.items.length : true;
+        const allRevealed = step.content.items
+          ? revealedItems.size >= step.content.items.length
+          : true;
         return (
           <View style={styles.exerciseContent}>
             <Text style={styles.exerciseInstruction}>
               {step.content.instruction}
             </Text>
-            <Text style={styles.exerciseHint}>
-              {t('tapToCheck')}
-            </Text>
+            <Text style={styles.exerciseHint}>{t('tapToCheck')}</Text>
             {step.content.items && (
               <View style={styles.exerciseItems}>
                 {step.content.items.map((item: any, idx: number) => {
@@ -158,13 +163,17 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.exerciseItemArabic}>{item.arabic}</Text>
+                      <Text style={styles.exerciseItemArabic}>
+                        {item.arabic}
+                      </Text>
                       {isRevealed ? (
                         <Text style={styles.exerciseItemAnswerRevealed}>
                           {item.transliteration}
                         </Text>
                       ) : (
-                        <Text style={styles.exerciseItemTap}>{t('tapToReveal')}</Text>
+                        <Text style={styles.exerciseItemTap}>
+                          {t('tapToReveal')}
+                        </Text>
                       )}
                     </TouchableOpacity>
                   );
@@ -183,7 +192,9 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
           <View style={styles.quizContent}>
             <Text style={styles.quizQuestion}>{step.content.question}</Text>
             {step.content.arabicDisplay && (
-              <Text style={styles.quizArabic}>{step.content.arabicDisplay}</Text>
+              <Text style={styles.quizArabic}>
+                {step.content.arabicDisplay}
+              </Text>
             )}
             <View style={styles.quizOptions}>
               {step.content.options?.map((option: string) => {
@@ -196,7 +207,10 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
                     style={[
                       styles.quizOption,
                       showResult && isCorrectOption && styles.quizOptionCorrect,
-                      showResult && isSelected && !isCorrectOption && styles.quizOptionWrong,
+                      showResult &&
+                        isSelected &&
+                        !isCorrectOption &&
+                        styles.quizOptionWrong,
                       isSelected && !showResult && styles.quizOptionSelected,
                     ]}
                     onPress={() => handleAnswerSelect(option)}
@@ -205,8 +219,13 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
                     <Text
                       style={[
                         styles.quizOptionText,
-                        showResult && isCorrectOption && styles.quizOptionTextCorrect,
-                        showResult && isSelected && !isCorrectOption && styles.quizOptionTextWrong,
+                        showResult &&
+                          isCorrectOption &&
+                          styles.quizOptionTextCorrect,
+                        showResult &&
+                          isSelected &&
+                          !isCorrectOption &&
+                          styles.quizOptionTextWrong,
                       ]}
                     >
                       {option}
@@ -222,7 +241,9 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
                   isCorrect ? styles.resultCorrect : styles.resultWrong,
                 ]}
               >
-                <Text style={styles.resultIcon}>{isCorrect ? t('correct') : t('incorrect')}</Text>
+                <Text style={styles.resultIcon}>
+                  {isCorrect ? t('correct') : t('incorrect')}
+                </Text>
                 {!isCorrect && step.content.explanation && (
                   <Text style={styles.resultExplanation}>
                     {step.content.explanation}
@@ -256,11 +277,11 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
   };
 
   if (completed) {
-    const quizSteps = lesson.steps.filter((s) => s.type === 'quiz').length;
+    const quizSteps = lesson.steps.filter(s => s.type === 'quiz').length;
     const score = quizSteps > 0 ? (correctAnswers / quizSteps) * 100 : 100;
 
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.completedContainer}>
           <Text style={styles.completedIcon}>🎉</Text>
           <Text style={styles.completedTitle}>{t('lessonCompleted')}</Text>
@@ -288,7 +309,7 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -345,7 +366,10 @@ const LessonScreen: React.FC<LessonScreenProps> = ({ route, navigation }) => {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.nextButton, currentStepIndex > 0 && styles.nextButtonFlex]}
+              style={[
+                styles.nextButton,
+                currentStepIndex > 0 && styles.nextButtonFlex,
+              ]}
               onPress={handleNext}
             >
               <Text style={styles.nextButtonText}>
