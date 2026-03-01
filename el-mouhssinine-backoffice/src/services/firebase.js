@@ -15,7 +15,8 @@ import {
   onSnapshot,
   serverTimestamp,
   arrayUnion,
-  arrayRemove
+  arrayRemove,
+  limit
 } from 'firebase/firestore'
 import {
   getAuth,
@@ -509,6 +510,7 @@ export const getAdminByUid = async (uid) => {
 // Notifications
 export const getNotifications = () => getCollection('notifications', [orderBy('createdAt', 'desc')])
 export const subscribeToNotifications = (cb) => subscribeToCollection('notifications', cb, [orderBy('createdAt', 'desc')])
+export const subscribeToNotificationsHistory = (cb) => subscribeToCollection('notifications_history', cb, [orderBy('createdAt', 'desc'), limit(50)])
 
 // Parametres
 export const getSettings = () => getDocument('settings', 'general')
@@ -711,7 +713,7 @@ export const replyToMessage = async (messageId, replyText, adminName = 'Admin') 
 }
 
 /**
- * Supprimer un message (soft delete - reste visible pour l'utilisateur)
+ * Supprimer un message (soft delete - masqué pour admin ET utilisateur)
  */
 export const deleteMessage = async (messageId) => {
   if (isDemoMode) {
@@ -719,10 +721,11 @@ export const deleteMessage = async (messageId) => {
     return
   }
   const messageRef = doc(db, 'messages', messageId)
-  // Soft delete: marquer comme supprimé par l'admin
+  // Soft delete: marquer comme supprimé par l'admin + aussi côté utilisateur
   await updateDoc(messageRef, {
     deletedByAdmin: true,
-    deletedByAdminAt: serverTimestamp()
+    deletedByAdminAt: serverTimestamp(),
+    deletedByUser: true
   })
 }
 

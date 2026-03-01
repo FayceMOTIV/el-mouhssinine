@@ -87,12 +87,17 @@ export interface Rappel {
 export interface Popup {
   id: string;
   titre: string;
+  titreAr?: string;
   contenu: string;
+  contenuAr?: string;
   actif: boolean;
   dateDebut?: string;
   dateFin?: string;
   priorite?: number;
   frequence?: 'always' | 'daily' | 'once' | 'weekly';
+  cible?: string;
+  texteBouton?: string;
+  lienBouton?: string;
 }
 
 export interface DateIslamique {
@@ -339,15 +344,18 @@ export const subscribeToJanaza = (callback: (data: Janaza | null) => void) => {
           const data: Janaza = {
             id: doc.id,
             deceasedName: docData.nomDefunt,
-            deceasedNameAr: docData.nomDefuntAr || docData.phraseAr,
+            deceasedNameAr: docData.nomDefuntAr || '',
             deceasedFirstName: docData.prenomDefunt || '',
             cemeteryAddress: docData.adresseCimetiere || '',
             prayerDate: toDate(docData.date),
             prayerTime: docData.heurePriere,
             location: docData.lieu,
             message: docData.phraseFr,
+            messageAr: docData.phraseAr || '',
             isActive: docData.actif,
             salatApres: docData.salatApres,
+            genre: docData.genre,
+            age: docData.age,
           };
           callback(data);
         },
@@ -396,15 +404,18 @@ export const subscribeToJanazaList = (callback: (data: Janaza[]) => void) => {
             return {
               id: doc.id,
               deceasedName: docData.nomDefunt,
-              deceasedNameAr: docData.nomDefuntAr || docData.phraseAr,
+              deceasedNameAr: docData.nomDefuntAr || '',
               deceasedFirstName: docData.prenomDefunt || '',
               cemeteryAddress: docData.adresseCimetiere || '',
               prayerDate: toDate(docData.date),
               prayerTime: docData.heurePriere,
               location: docData.lieu,
               message: docData.phraseFr,
+              messageAr: docData.phraseAr || '',
               isActive: docData.actif,
               salatApres: docData.salatApres, // "apres_fajr", "apres_dhuhr", etc.
+              genre: docData.genre,
+              age: docData.age,
             };
           });
           // Trier par date (plus récent en premier)
@@ -444,18 +455,22 @@ export const getActiveJanaza = async (): Promise<Janaza | null> => {
       return mockActive ? (mockActive as Janaza) : null;
     }
     const doc = snapshot.docs[0];
+    const docData = doc.data();
     return {
       id: doc.id,
-      deceasedName: doc.data().nomDefunt,
-      deceasedNameAr: doc.data().nomDefuntAr || doc.data().phraseAr,
-      deceasedFirstName: doc.data().prenomDefunt || '',
-      cemeteryAddress: doc.data().adresseCimetiere || '',
-      prayerDate: toDate(doc.data().date),
-      prayerTime: doc.data().heurePriere,
-      location: doc.data().lieu,
-      message: doc.data().phraseFr,
-      isActive: doc.data().actif,
-      salatApres: doc.data().salatApres,
+      deceasedName: docData.nomDefunt,
+      deceasedNameAr: docData.nomDefuntAr || '',
+      deceasedFirstName: docData.prenomDefunt || '',
+      cemeteryAddress: docData.adresseCimetiere || '',
+      prayerDate: toDate(docData.date),
+      prayerTime: docData.heurePriere,
+      location: docData.lieu,
+      message: docData.phraseFr,
+      messageAr: docData.phraseAr || '',
+      isActive: docData.actif,
+      salatApres: docData.salatApres,
+      genre: docData.genre,
+      age: docData.age,
     };
   } catch (error) {
     logger.error('[Firebase] getActiveJanaza error:', error);
@@ -867,12 +882,17 @@ export const subscribeToPopups = (callback: (data: Popup[]) => void) => {
             return {
               id: doc.id,
               titre: d.titre,
+              titreAr: d.titreAr,
               contenu: d.contenu || d.message,
+              contenuAr: d.contenuAr || d.messageAr,
               actif: d.actif,
               dateDebut: d.dateDebut,
               dateFin: d.dateFin,
               priorite: d.priorite || 0,
               frequence: d.frequence,
+              cible: d.cible,
+              texteBouton: d.texteBouton,
+              lienBouton: d.lienBouton,
             };
           });
 
@@ -2186,6 +2206,7 @@ export const sendMessage = async (
   userEmail: string,
   sujet: string,
   message: string,
+  userPhone?: string,
 ): Promise<{ success: boolean; error?: string; messageId?: string }> => {
   if (FORCE_DEMO_MODE) {
     return { success: false, error: 'Mode démo activé' };
@@ -2209,17 +2230,20 @@ export const sendMessage = async (
   }
 
   try {
-    const docRef = await firestore().collection('messages').add({
-      odUserId: userId,
-      userName,
-      userEmail,
-      sujet,
-      message: message.trim(),
-      status: 'non_lu',
-      createdAt: firestore.FieldValue.serverTimestamp(),
-      updatedAt: firestore.FieldValue.serverTimestamp(),
-      reponses: [],
-    });
+    const docRef = await firestore()
+      .collection('messages')
+      .add({
+        odUserId: userId,
+        userName,
+        userEmail,
+        userPhone: userPhone || '',
+        sujet,
+        message: message.trim(),
+        status: 'non_lu',
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+        reponses: [],
+      });
 
     return { success: true, messageId: docRef.id };
   } catch (error) {
@@ -2239,7 +2263,7 @@ export const getUserMessages = async (
     const snapshot = await firestore()
       .collection('messages')
       .where('odUserId', '==', userId)
-      .orderBy('updatedAt', 'desc')
+      .orderBy('createdAt', 'desc')
       .get();
 
     return snapshot.docs.map(doc => {
@@ -2282,7 +2306,7 @@ export const subscribeToUserMessages = (
     return firestore()
       .collection('messages')
       .where('odUserId', '==', userId)
-      .orderBy('updatedAt', 'desc')
+      .orderBy('createdAt', 'desc')
       .limit(50)
       .onSnapshot(
         snapshot => {

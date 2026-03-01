@@ -15,6 +15,7 @@ import {
   AppState,
   AppStateStatus,
   Dimensions,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
@@ -506,6 +507,13 @@ const HomeScreen = () => {
         // Construire la file d'attente des popups a afficher (séquentiel)
         const queue: Popup[] = [];
         for (const popup of popups) {
+          // C5: Filtrage par ciblage — si cible est défini et != 'tous', ignorer
+          if (popup.cible && popup.cible !== 'tous') {
+            logger.log(
+              `[HomeScreen] Popup ${popup.id} (${popup.titre}): ignorée car cible=${popup.cible}`,
+            );
+            continue;
+          }
           const shouldShow = await shouldShowPopup(popup);
           logger.log(
             `[HomeScreen] Popup ${popup.id} (${popup.titre}): shouldShow=${shouldShow}, frequence=${popup.frequence}`,
@@ -1014,17 +1022,55 @@ const HomeScreen = () => {
               style={{ maxHeight: Dimensions.get('window').height * 0.5 }}
               showsVerticalScrollIndicator={true}
             >
-              <Text style={styles.popupTitle}>{activePopup?.titre || ''}</Text>
+              <Text style={styles.popupTitle}>
+                {language === 'ar' && activePopup?.titreAr
+                  ? activePopup.titreAr
+                  : activePopup?.titre || ''}
+              </Text>
               <Text style={styles.popupContent}>
-                {activePopup?.contenu || ''}
+                {language === 'ar' && activePopup?.contenuAr
+                  ? activePopup.contenuAr
+                  : activePopup?.contenu || ''}
               </Text>
             </ScrollView>
+            {activePopup?.texteBouton && activePopup?.lienBouton ? (
+              <TouchableOpacity
+                style={styles.popupButton}
+                onPress={() => {
+                  Linking.openURL(activePopup.lienBouton!).catch(err =>
+                    logger.error(
+                      '[HomeScreen] Erreur ouverture lien popup:',
+                      err,
+                    ),
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.popupButtonText}>
+                  {activePopup.texteBouton}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
-              style={styles.popupButton}
+              style={[
+                styles.popupButton,
+                activePopup?.texteBouton && activePopup?.lienBouton
+                  ? { marginTop: 10, backgroundColor: 'rgba(255,255,255,0.2)' }
+                  : {},
+              ]}
               onPress={closePopup}
               activeOpacity={0.7}
             >
-              <Text style={styles.popupButtonText}>{t('understood')}</Text>
+              <Text
+                style={[
+                  styles.popupButtonText,
+                  activePopup?.texteBouton && activePopup?.lienBouton
+                    ? { color: '#FFFFFF' }
+                    : {},
+                ]}
+              >
+                {t('understood')}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

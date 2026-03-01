@@ -48,8 +48,11 @@ export interface Janaza {
   prayerDate: Date;
   location: string;
   message?: string;
+  messageAr?: string;
   isActive: boolean;
   salatApres?: string; // "apres_fajr", "apres_dhuhr", etc.
+  genre?: string;
+  age?: number;
 }
 
 export interface ProjectFile {
@@ -84,7 +87,15 @@ export interface Member {
   phone?: string;
   memberId: string;
   cotisationType: 'mensuel' | 'annuel' | null;
-  cotisationStatus: 'actif' | 'expire' | 'aucun' | 'annule' | 'en_attente_paiement' | 'en_attente_validation' | 'en_attente_signature' | 'sympathisant';
+  cotisationStatus:
+    | 'actif'
+    | 'expire'
+    | 'aucun'
+    | 'annule'
+    | 'en_attente_paiement'
+    | 'en_attente_validation'
+    | 'en_attente_signature'
+    | 'sympathisant';
   nextPaymentDate?: Date;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
@@ -286,8 +297,8 @@ export type CotisationStatus =
   | 'active'
   | 'expired'
   | 'pending'
-  | 'sympathisant'           // Inscrit sans paiement, accès complet app
-  | 'en_attente_validation'  // A payé, attend validation bureau
+  | 'sympathisant' // Inscrit sans paiement, accès complet app
+  | 'en_attente_validation' // A payé, attend validation bureau
   | 'en_attente_paiement'
   | 'en_attente_signature';
 
@@ -305,7 +316,13 @@ export interface CotisationData {
   montant: number;
   type: CotisationType;
   status?: CotisationStatus;
-  modePaiement?: 'card' | 'virement' | 'especes' | 'cheque' | 'apple_pay' | 'google_pay';
+  modePaiement?:
+    | 'card'
+    | 'virement'
+    | 'especes'
+    | 'cheque'
+    | 'apple_pay'
+    | 'google_pay';
 }
 
 // ==================== PAYMENT METADATA ====================

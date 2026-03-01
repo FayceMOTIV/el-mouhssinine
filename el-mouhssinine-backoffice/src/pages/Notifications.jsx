@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
-import { Bell, Plus, Pencil, Trash2, Send, Clock, Copy } from 'lucide-react'
+import { Bell, Plus, Pencil, Trash2, Send, Clock, Copy, History } from 'lucide-react'
 import {
   Card,
   Button,
@@ -19,6 +19,7 @@ import {
 } from '../components/common'
 import {
   subscribeToNotifications,
+  subscribeToNotificationsHistory,
   addDocument,
   updateDocument,
   deleteDocument
@@ -56,11 +57,21 @@ export default function Notifications() {
   const [formData, setFormData] = useState(defaultNotification)
   const [saving, setSaving] = useState(false)
   const [sendNow, setSendNow] = useState(true)
+  const [notifHistory, setNotifHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(true)
 
   useEffect(() => {
     const unsubscribe = subscribeToNotifications((data) => {
       setNotifications(data)
       setLoading(false)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = subscribeToNotificationsHistory((data) => {
+      setNotifHistory(data)
+      setHistoryLoading(false)
     })
     return () => unsubscribe()
   }, [])
@@ -458,6 +469,81 @@ export default function Notifications() {
           </Button>
         </div>
       </Modal>
+
+      {/* Historique des envois */}
+      <div className="border-t border-white/10 pt-6">
+        <div className="flex items-center gap-2 mb-4">
+          <History className="w-5 h-5 text-white/70" />
+          <h2 className="text-lg font-semibold text-white">Historique des envois</h2>
+          <span className="text-sm text-white/40">({notifHistory.length})</span>
+        </div>
+        {historyLoading ? (
+          <div className="flex items-center justify-center h-32">
+            <Loading size="md" />
+          </div>
+        ) : notifHistory.length === 0 ? (
+          <Card>
+            <p className="text-center text-white/50 py-8">
+              Aucun historique d'envoi
+            </p>
+          </Card>
+        ) : (
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Date</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Titre</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Topic</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-white/50">Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {notifHistory.map((entry) => {
+                    let dateStr = '-'
+                    try {
+                      const d = entry.createdAt?.toDate?.() || new Date(entry.createdAt)
+                      if (!isNaN(d.getTime())) {
+                        dateStr = format(d, 'd MMM yyyy HH:mm', { locale: fr })
+                      }
+                    } catch {}
+                    return (
+                      <tr key={entry.id} className="border-b border-white/5 hover:bg-white/5">
+                        <td className="py-3 px-4 text-sm text-white/70">{dateStr}</td>
+                        <td className="py-3 px-4">
+                          <p className="text-sm font-medium text-white">{entry.title || entry.titre || '-'}</p>
+                          {(entry.body || entry.message) && (
+                            <p className="text-xs text-white/40 line-clamp-1">{entry.body || entry.message}</p>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge variant="info">{entry.topic || '-'}</Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge className={
+                            entry.status === 'success' || entry.statut === 'envoyee'
+                              ? 'bg-green-500/20 text-green-400'
+                              : entry.status === 'error' || entry.statut === 'echouee'
+                                ? 'bg-red-500/20 text-red-400'
+                                : 'bg-white/10 text-white/50'
+                          }>
+                            {entry.status === 'success' || entry.statut === 'envoyee'
+                              ? 'Envoyee'
+                              : entry.status === 'error' || entry.statut === 'echouee'
+                                ? 'Echouee'
+                                : entry.status || entry.statut || '-'}
+                          </Badge>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+      </div>
 
       {/* Delete Confirmation */}
       <ConfirmModal

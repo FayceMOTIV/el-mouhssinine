@@ -33,6 +33,7 @@ const defaultEvenement = {
   date: '',
   heure: '',
   lieu: '',
+  lieuAr: '',
   actif: true
 }
 
@@ -79,6 +80,7 @@ export default function Evenements() {
         date: format(date, 'yyyy-MM-dd'),
         heure: evenement.heure || '',
         lieu: evenement.lieu || '',
+        lieuAr: evenement.lieuAr || '',
         actif: evenement.actif !== false
       })
     } else {
@@ -150,6 +152,7 @@ export default function Evenements() {
       date: '',
       heure: evenement.heure || '',
       lieu: evenement.lieu || '',
+      lieuAr: evenement.lieuAr || '',
       actif: true
     })
     setModalOpen(true)
@@ -458,6 +461,15 @@ export default function Evenements() {
                   onChange={(e) => setFormData({ ...formData, descriptionAr: e.target.value })}
                   placeholder="الوصف بالعربية..."
                   rows={3}
+                  dir="rtl"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white mb-1">المكان (Lieu en arabe)</label>
+                <Input
+                  value={formData.lieuAr}
+                  onChange={(e) => setFormData({ ...formData, lieuAr: e.target.value })}
+                  placeholder="المكان بالعربية"
                   dir="rtl"
                 />
               </div>

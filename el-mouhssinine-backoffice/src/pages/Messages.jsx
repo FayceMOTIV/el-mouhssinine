@@ -231,7 +231,14 @@ export default function Messages() {
       label: 'Sujet',
       render: (row) => (
         <div>
-          <p className="font-medium text-white">{row.sujet}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-white">{row.sujet}</p>
+            {row.deletedByUser && (
+              <span className="text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded">
+                Supprime par l'utilisateur
+              </span>
+            )}
+          </div>
           <p className="text-sm text-white/50 line-clamp-1">{row.message}</p>
         </div>
       )

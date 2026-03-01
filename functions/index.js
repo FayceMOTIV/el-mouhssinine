@@ -421,6 +421,7 @@ exports.onNotificationFromBackoffice = functions
       // Supprimer le mapping FCM pour éviter les doublons.
       // 'prayer_reminders': 'jumua',
       'membres': 'members', // Topic specifique aux adherents
+      'non_membres': 'non_members', // Topic pour les non-adherents
     };
 
     const fcmTopic = topicMapping[notification.topic] || 'general';
@@ -1479,7 +1480,6 @@ exports.createSubscription = functions
         stripeSubscriptionId: subscription.id,
         cotisationType: 'mensuel',
         status: 'en_attente_paiement',
-        statut: 'en_attente_paiement',
       }, { merge: true });
 
       console.log('IDs Stripe sauvegardés dans Firestore');
@@ -1599,6 +1599,11 @@ exports.stripeWebhook = functions
             if (metadata.type === 'cotisation' && metadata.memberId) {
               memberRef = admin.firestore().collection('members').doc(metadata.memberId);
               memberDoc = await transaction.get(memberRef);
+              // Fallback: si le doc n'existe pas, chercher par uid
+              if (!memberDoc.exists && metadata.uid) {
+                memberRef = admin.firestore().collection('members').doc(metadata.uid);
+                memberDoc = await transaction.get(memberRef);
+              }
             }
 
             if (metadata.type !== 'cotisation' && metadata.projectId) {
@@ -1651,7 +1656,6 @@ exports.stripeWebhook = functions
                   montant: montantDon,
                   currency: paymentIntent.currency,
                   status: 'succeeded',
-                  statut: 'completed',
                   type: 'donation',
                   description: 'Don supplémentaire lors de cotisation',
                   metadata: {
@@ -1682,7 +1686,6 @@ exports.stripeWebhook = functions
               if (memberRef && memberDoc && memberDoc.exists) {
                 transaction.update(memberRef, {
                   status: 'actif',
-                  statut: 'actif',
                   aPaye: true,
                   datePaiement: admin.firestore.FieldValue.serverTimestamp(),
                   montantPaye: montantCotisation,
@@ -1699,7 +1702,6 @@ exports.stripeWebhook = functions
                 montant: amountEuros,
                 currency: paymentIntent.currency,
                 status: 'succeeded',
-                statut: 'completed',
                 type: 'donation',
                 description: paymentIntent.description,
                 metadata: metadata,
@@ -1854,7 +1856,6 @@ exports.stripeWebhook = functions
 
             t.update(memberRefTx, {
               status: 'actif',
-              statut: 'actif',
               aPaye: true,
               datePaiement: admin.firestore.FieldValue.serverTimestamp(),
               montantPaye: amountEuros,
@@ -4992,7 +4993,6 @@ exports.refundDonation = functions
 
       const donationUpdate = {
         refundProcessing: false,
-        statut: isPartial ? 'partiellement_remboursé' : 'remboursé',
         status: isPartial ? 'partially_refunded' : 'refunded',
         refundId: refundResult.id,
         refundAmount: refundedAmount,

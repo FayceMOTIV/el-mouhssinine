@@ -183,12 +183,15 @@ const MessagesScreen = () => {
       const userName = memberProfile.name || 'Utilisateur';
       const userEmail = memberProfile.email || '';
 
+      const userPhone = memberProfile.phone || memberProfile.telephone || '';
+
       await sendMessage(
         memberProfile.uid,
         userName,
         userEmail,
         selectedSubject,
         messageText.trim(),
+        userPhone,
       );
 
       // Haptic feedback sur succès

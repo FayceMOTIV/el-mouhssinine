@@ -591,15 +591,24 @@ export default function Dons() {
     },
     {
       key: 'type',
-      label: 'Type',
+      label: 'Type donateur',
       render: (row) => (
-        <span className={`text-xs px-2 py-0.5 rounded-full ${
-          row.donorType === 'entreprise'
-            ? 'bg-blue-500/20 text-blue-300'
-            : 'bg-white/10 text-white/60'
-        }`}>
-          {row.donorType === 'entreprise' ? '🏢 Entreprise' : '👤 Particulier'}
-        </span>
+        <div>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            row.donorType === 'entreprise'
+              ? 'bg-blue-500/20 text-blue-300'
+              : 'bg-white/10 text-white/60'
+          }`}>
+            {row.donorType === 'entreprise' ? '🏢 Entreprise' : '👤 Particulier'}
+          </span>
+          {row.donorType === 'entreprise' && row.donorInfo && (
+            <div className="mt-1 text-xs text-white/40">
+              {row.donorInfo.companyName && <p>{row.donorInfo.companyName}</p>}
+              {row.donorInfo.siret && <p>SIRET: {row.donorInfo.siret}</p>}
+              {row.donorInfo.address && <p>{row.donorInfo.address}</p>}
+            </div>
+          )}
+        </div>
       )
     },
     {

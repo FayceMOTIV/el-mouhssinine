@@ -131,8 +131,12 @@ export default function Revenus() {
     dons.forEach(d => {
       const rawDate = d.date || d.createdAt || d.webhookProcessedAt
       const date = rawDate?.toDate?.() || new Date(rawDate || Date.now())
-      // Éviter les doublons si déjà dans payments
-      if (!revenues.find(r => r.raw?.donId === d.id)) {
+      // Éviter les doublons si déjà dans payments (via stripePaymentIntentId)
+      const alreadyInPayments = revenues.find(r =>
+        r.raw?.stripePaymentIntentId && d.stripePaymentIntentId &&
+        r.raw.stripePaymentIntentId === d.stripePaymentIntentId
+      )
+      if (!alreadyInPayments) {
         revenues.push({
           id: `don-${d.id}`,
           type: 'don',
@@ -152,14 +156,12 @@ export default function Revenus() {
       if (m.datePaiement && m.montant) {
         const date = m.datePaiement?.toDate?.() || new Date(m.datePaiement)
         const montant = m.montant || m.cotisation?.montant || 0
-        // Éviter les doublons - vérifier par ID ou par montant+date similaire
+        // Éviter les doublons - vérifier par stripePaymentId ou metadata.memberId
         const isDuplicate = revenues.find(r => {
-          if (r.raw?.membreId === m.id || r.raw?.paiementId === m.paiementId) return true
-          // Vérifier aussi par montant + date proche (même jour) pour les paiements sans membreId
-          if (r.type === 'cotisation' && r.montant === montant && r.date) {
-            const diff = Math.abs(r.date - date)
-            return diff < 86400000 // 24h
-          }
+          // Match exact par stripePaymentId
+          if (m.stripePaymentId && r.raw?.stripePaymentIntentId === m.stripePaymentId) return true
+          // Match par metadata.memberId dans payments
+          if (r.raw?.metadata?.memberId === m.id) return true
           return false
         })
         if (!isDuplicate) {
@@ -946,7 +948,7 @@ export default function Revenus() {
                       <th className="text-left py-3 px-4 text-white/50 font-medium">Email</th>
                       <th className="text-left py-3 px-4 text-white/50 font-medium">Montant mensuel</th>
                       <th className="text-left py-3 px-4 text-white/50 font-medium">Date début</th>
-                      <th className="text-left py-3 px-4 text-white/50 font-medium">Prochaine échéance</th>
+                      <th className="text-left py-3 px-4 text-white/50 font-medium">Fin du cycle</th>
                       <th className="text-left py-3 px-4 text-white/50 font-medium">Statut</th>
                     </tr>
                   </thead>

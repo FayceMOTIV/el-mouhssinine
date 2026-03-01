@@ -839,7 +839,7 @@ export default function Adherents() {
       key: 'cotisationType',
       label: 'Type',
       render: (row) => {
-        const type = row.cotisationType
+        const type = row.cotisation?.type || row.cotisationType
         if (!type) return <span className="text-white/30">—</span>
         return (
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
