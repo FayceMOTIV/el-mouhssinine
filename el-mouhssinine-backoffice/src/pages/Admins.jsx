@@ -129,6 +129,12 @@ export default function Admins() {
       toast.error('L\'email est requis')
       return
     }
+    // Validation format email basique
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email.trim())) {
+      toast.error('Format d\'email invalide')
+      return
+    }
     if (!editingAdmin && !password) {
       toast.error('Le mot de passe est requis')
       return
@@ -136,6 +142,14 @@ export default function Admins() {
     if (!editingAdmin && password.length < 6) {
       toast.error('Le mot de passe doit contenir au moins 6 caractères')
       return
+    }
+    // Validation UID lors de l'edition (document ID = UID Firebase Auth)
+    if (editingAdmin) {
+      const uid = editingAdmin.id
+      if (!uid || uid.length < 20 || uid.length > 40 || !/^[a-zA-Z0-9]+$/.test(uid)) {
+        toast.error('UID invalide (doit être alphanumérique, 20-40 caractères). Vérifiez l\'identifiant Firebase Auth.')
+        return
+      }
     }
 
     setSaving(true)

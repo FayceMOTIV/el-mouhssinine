@@ -59,7 +59,15 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   } | null>(null);
   const [showTranslation, setShowTranslation] = useState(true);
   const [showReciterModal, setShowReciterModal] = useState(false);
-  const [selectedReciter, setSelectedReciter] = useState(reciters[0]);
+  const [selectedReciter, setSelectedReciter] = useState(
+    reciters[0] ?? {
+      id: 'ar.abdulbasitmurattal',
+      name: 'Abdul Basit',
+      nameAr: 'عبد الباسط',
+      flag: '🇪🇬',
+      country: 'Egypt',
+    },
+  );
   const [selectedAyah, setSelectedAyah] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [showMiniPlayer, setShowMiniPlayer] = useState(false);
@@ -152,7 +160,7 @@ const SurahScreen: React.FC<SurahScreenProps> = ({ route, navigation }) => {
   // Copier le verset
   const handleCopyAyah = (ayahNumber: number) => {
     const ayah = surahData?.arabic.ayahs[ayahNumber - 1];
-    const translationText = surahData?.translation.ayahs[ayahNumber - 1];
+    const translationText = surahData?.translation?.ayahs?.[ayahNumber - 1];
 
     if (ayah) {
       const textToCopy = `${ayah.text}\n\n${

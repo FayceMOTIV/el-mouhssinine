@@ -303,7 +303,7 @@ export default function Revenus() {
       // Filtrer par période (mensuel/annuel)
       if (cotisationPeriodFilter !== 'all') {
         const membre = membres.find(m => m.id === p.membreId)
-        if (!membre || membre.cotisationType !== cotisationPeriodFilter) return false
+        if (!membre || membre.cotisation?.type !== cotisationPeriodFilter) return false
       }
 
       return true
@@ -313,7 +313,7 @@ export default function Revenus() {
   // Abonnements actifs (membres avec cotisation mensuelle)
   const activeSubscriptions = useMemo(() => {
     return membres.filter(m =>
-      m.cotisationType === 'mensuel' &&
+      m.cotisation?.type === 'mensuel' &&
       m.status === 'actif'
     )
   }, [membres])
@@ -354,16 +354,20 @@ export default function Revenus() {
       filteredDons,
       `dons_${format(dateRange.start, 'yyyy-MM-dd')}_${format(dateRange.end, 'yyyy-MM-dd')}.csv`,
       headers,
-      d => [
-        format((d.date || d.createdAt || d.webhookProcessedAt)?.toDate?.() || new Date(d.date || d.createdAt || Date.now()), 'dd/MM/yyyy HH:mm'),
-        d.donateur || 'Anonyme',
-        d.donorInfo?.email || '-',
-        d.montant || 0,
-        d.donorType === 'entreprise' ? 'Entreprise' : 'Particulier',
-        d.projetTitre || 'Don général',
-        d.modePaiement || '-',
-        d.emailConfirmationSent ? 'Oui' : 'Non'
-      ]
+      d => {
+        const rawDate = d.date || d.createdAt || d.webhookProcessedAt
+        const dateStr = rawDate ? format(rawDate?.toDate?.() || new Date(rawDate), 'dd/MM/yyyy HH:mm') : '-'
+        return [
+          dateStr,
+          d.donateur || 'Anonyme',
+          d.donorInfo?.email || '-',
+          d.montant || 0,
+          d.donorType === 'entreprise' ? 'Entreprise' : 'Particulier',
+          d.projetTitre || 'Don général',
+          d.modePaiement || '-',
+          d.emailConfirmationSent ? 'Oui' : 'Non'
+        ]
+      }
     )
   }
 
@@ -375,12 +379,13 @@ export default function Revenus() {
       headers,
       c => {
         const membre = membres.find(m => m.id === c.membreId)
+        const dateStr = c.date ? format(c.date?.toDate?.() || new Date(c.date), 'dd/MM/yyyy HH:mm') : '-'
         return [
-          format(c.date?.toDate?.() || new Date(c.date), 'dd/MM/yyyy HH:mm'),
+          dateStr,
           membre ? `${membre.prenom || ''} ${membre.nom || ''}`.trim() : '-',
           membre?.email || '-',
           c.montant || 0,
-          membre?.cotisationType === 'mensuel' ? 'Mensuel' : 'Annuel',
+          membre?.cotisation?.type === 'mensuel' ? 'Mensuel' : 'Annuel',
           c.status || 'succeeded',
           c.stripePaymentIntentId || '-'
         ]
@@ -394,14 +399,18 @@ export default function Revenus() {
       activeSubscriptions,
       `abonnements_${format(new Date(), 'yyyy-MM-dd')}.csv`,
       headers,
-      m => [
-        `${m.prenom || ''} ${m.nom || ''}`.trim(),
-        m.email || '-',
-        m.montant || m.cotisation?.montant || 0,
-        m.cotisation?.dateDebut ? format(m.cotisation.dateDebut.toDate?.() || new Date(m.cotisation.dateDebut), 'dd/MM/yyyy') : '-',
-        m.cotisation?.dateFin ? format(m.cotisation.dateFin.toDate?.() || new Date(m.cotisation.dateFin), 'dd/MM/yyyy') : '-',
-        m.status || 'actif'
-      ]
+      m => {
+        const dateDebutStr = m.cotisation?.dateDebut ? format(m.cotisation.dateDebut?.toDate?.() || new Date(m.cotisation.dateDebut), 'dd/MM/yyyy') : '-'
+        const dateFinStr = m.cotisation?.dateFin ? format(m.cotisation.dateFin?.toDate?.() || new Date(m.cotisation.dateFin), 'dd/MM/yyyy') : '-'
+        return [
+          `${m.prenom || ''} ${m.nom || ''}`.trim(),
+          m.email || '-',
+          m.montant || m.cotisation?.montant || 0,
+          dateDebutStr,
+          dateFinStr,
+          m.status || 'actif'
+        ]
+      }
     )
   }
 
@@ -762,7 +771,11 @@ export default function Revenus() {
                     {filteredDons.map(d => (
                       <tr key={d.id} className="border-b border-white/5 hover:bg-white/5">
                         <td className="py-3 px-4 text-white/70">
-                          {format((d.date || d.createdAt || d.webhookProcessedAt)?.toDate?.() || new Date(d.date || d.createdAt || Date.now()), 'dd/MM/yyyy', { locale: fr })}
+                          {(() => {
+                            const rawDate = d.date || d.createdAt || d.webhookProcessedAt
+                            if (!rawDate) return '-'
+                            try { return format(rawDate?.toDate?.() || new Date(rawDate), 'dd/MM/yyyy', { locale: fr }) } catch { return '-' }
+                          })()}
                         </td>
                         <td className="py-3 px-4 text-white">
                           {d.donateur || 'Anonyme'}
@@ -872,7 +885,7 @@ export default function Revenus() {
                       return (
                         <tr key={c.id} className="border-b border-white/5 hover:bg-white/5">
                           <td className="py-3 px-4 text-white/70">
-                            {format(c.date?.toDate?.() || new Date(c.date), 'dd/MM/yyyy', { locale: fr })}
+                            {c.date ? format(c.date?.toDate?.() || new Date(c.date), 'dd/MM/yyyy', { locale: fr }) : '-'}
                           </td>
                           <td className="py-3 px-4 text-white">
                             {membre ? `${membre.prenom || ''} ${membre.nom || ''}`.trim() : '-'}
@@ -884,8 +897,8 @@ export default function Revenus() {
                             {(c.montant || 0).toLocaleString()} €
                           </td>
                           <td className="py-3 px-4">
-                            <Badge variant={membre?.cotisationType === 'mensuel' ? 'info' : 'default'}>
-                              {membre?.cotisationType === 'mensuel' ? 'Mensuel' : 'Annuel'}
+                            <Badge variant={membre?.cotisation?.type === 'mensuel' ? 'info' : 'default'}>
+                              {membre?.cotisation?.type === 'mensuel' ? 'Mensuel' : 'Annuel'}
                             </Badge>
                           </td>
                           <td className="py-3 px-4">
@@ -950,10 +963,10 @@ export default function Revenus() {
                           {(m.montant || m.cotisation?.montant || 0).toLocaleString()} €
                         </td>
                         <td className="py-3 px-4 text-white/70">
-                          {m.cotisation?.dateDebut ? format(m.cotisation.dateDebut.toDate?.() || new Date(m.cotisation.dateDebut), 'dd/MM/yyyy', { locale: fr }) : '-'}
+                          {m.cotisation?.dateDebut ? format(m.cotisation.dateDebut?.toDate?.() || new Date(m.cotisation.dateDebut), 'dd/MM/yyyy', { locale: fr }) : '-'}
                         </td>
                         <td className="py-3 px-4 text-white/70">
-                          {m.cotisation?.dateFin ? format(m.cotisation.dateFin.toDate?.() || new Date(m.cotisation.dateFin), 'dd/MM/yyyy', { locale: fr }) : '-'}
+                          {m.cotisation?.dateFin ? format(m.cotisation.dateFin?.toDate?.() || new Date(m.cotisation.dateFin), 'dd/MM/yyyy', { locale: fr }) : '-'}
                         </td>
                         <td className="py-3 px-4">
                           <Badge variant="success">
@@ -999,7 +1012,11 @@ export default function Revenus() {
               </div>
               <div>
                 <p className="text-white/50 text-sm">Date</p>
-                <p className="text-white">{format((selectedDon.date || selectedDon.createdAt || selectedDon.webhookProcessedAt)?.toDate?.() || new Date(selectedDon.date || selectedDon.createdAt || Date.now()), 'dd/MM/yyyy HH:mm', { locale: fr })}</p>
+                <p className="text-white">{(() => {
+                  const rawDate = selectedDon.date || selectedDon.createdAt || selectedDon.webhookProcessedAt
+                  if (!rawDate) return '-'
+                  try { return format(rawDate?.toDate?.() || new Date(rawDate), 'dd/MM/yyyy HH:mm', { locale: fr }) } catch { return '-' }
+                })()}</p>
               </div>
               {selectedDon.donorInfo?.email && (
                 <div>

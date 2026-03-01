@@ -1472,14 +1472,15 @@ exports.createSubscription = functions
       }
 
       // 4. Stocker les IDs dans le document membre
+      // FIX BUG 4: set({merge:true}) au lieu de update() — évite crash si le doc n'existe pas encore
       const memberRef = admin.firestore().collection('members').doc(uid);
-      await memberRef.update({
+      await memberRef.set({
         stripeCustomerId: customer.id,
         stripeSubscriptionId: subscription.id,
         cotisationType: 'mensuel',
         status: 'en_attente_paiement',
         statut: 'en_attente_paiement',
-      });
+      }, { merge: true });
 
       console.log('IDs Stripe sauvegardés dans Firestore');
 
@@ -1544,8 +1545,25 @@ exports.stripeWebhook = functions
             // Tolérance de 1 centime pour les erreurs d'arrondi
             if (Math.abs(declaredTotal - amountEuros) > 0.01) {
               console.error('⚠️ FRAUDE POTENTIELLE: Montant metadata (' + declaredTotal + '€) != montant Stripe (' + amountEuros + '€)');
-              // Utiliser le montant Stripe réel, pas les metadata
-              // On continue quand même le traitement mais avec le montant réel
+              // FIX BUG 3: Créer un document dispute pour investigation admin
+              try {
+                await admin.firestore().collection('disputes').add({
+                  type: 'amount_mismatch',
+                  paymentIntentId: paymentIntentId,
+                  declaredAmount: declaredTotal,
+                  actualAmount: amountEuros,
+                  declaredCotisation: declaredCotisation,
+                  declaredDon: declaredDon,
+                  metadata: metadata,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                  status: 'pending_review',
+                  source: 'webhook_fraud_detection',
+                });
+                console.log('Document dispute créé pour investigation');
+              } catch (disputeErr) {
+                console.error('Erreur création dispute doc:', disputeErr.message);
+              }
+              // Continue processing with ACTUAL Stripe amount (not declared)
             }
           }
 
@@ -1747,14 +1765,6 @@ exports.stripeWebhook = functions
         console.log('Paiement récurrent réussi pour subscription:', subscriptionId);
 
         try {
-          // Bug 3 Fix: Idempotence - vérifier si cet invoice a déjà été traité
-          const invoiceProcessedRef = admin.firestore().collection('processed_payments').doc(invoice.id);
-          const invoiceProcessedDoc = await invoiceProcessedRef.get();
-          if (invoiceProcessedDoc.exists) {
-            console.log('Invoice déjà traitée (idempotent):', invoice.id);
-            break;
-          }
-
           // Récupérer la subscription pour avoir les metadata
           const subscription = await stripe.subscriptions.retrieve(subscriptionId);
           const customerId = subscription.customer;
@@ -1805,10 +1815,19 @@ exports.stripeWebhook = functions
             if (newEndDate.getDate() !== origDay3) newEndDate.setDate(0);
           }
 
-          // Transaction atomique : payment + member update + idempotence
+          // FIX BUG 2: Idempotence check INSIDE transaction (atomique)
+          // Avant: check hors transaction = race condition si 2 webhooks simultanés
+          const invoiceProcessedRef = admin.firestore().collection('processed_payments').doc(invoice.id);
           const paymentRef = admin.firestore().collection('payments').doc(invoice.id);
           const memberRefTx = memberDoc.ref;
           await admin.firestore().runTransaction(async (t) => {
+            // Read idempotence doc INSIDE transaction
+            const invoiceProcessedDoc = await t.get(invoiceProcessedRef);
+            if (invoiceProcessedDoc.exists) {
+              console.log('Invoice déjà traitée (idempotent in-transaction):', invoice.id);
+              throw { alreadyProcessed: true };
+            }
+
             t.set(paymentRef, {
               stripePaymentIntentId: invoice.payment_intent,
               stripeSubscriptionId: subscriptionId,
@@ -1858,6 +1877,11 @@ exports.stripeWebhook = functions
 
           console.log('Cotisation renouvelée jusqu\'au:', newEndDate.toISOString());
         } catch (err) {
+          // Gérer le cas d'idempotence (pas une vraie erreur)
+          if (err && err.alreadyProcessed) {
+            console.log('Invoice déjà traitée, skip');
+            break;
+          }
           console.error('Erreur traitement invoice.payment_succeeded:', err);
         }
         break;
@@ -1989,14 +2013,18 @@ exports.stripeWebhook = functions
                 auth: { user: brevoUser, pass: brevoPass },
               });
 
-              await pfTransporter.sendMail({
-                from: `"${fromName}" <${fromEmail}>`,
-                to: failedEmail,
-                subject: pfSubject,
-                html: pfHtmlBody,
-              });
-
-              console.log('Email échec de paiement envoyé à:', failedEmail.substring(0, 3) + '***');
+              // FIX BUG 6: try-catch local — l'échec email ne doit pas crasher le webhook
+              try {
+                await pfTransporter.sendMail({
+                  from: `"${fromName}" <${fromEmail}>`,
+                  to: failedEmail,
+                  subject: pfSubject,
+                  html: pfHtmlBody,
+                });
+                console.log('Email échec de paiement envoyé à:', failedEmail.substring(0, 3) + '***');
+              } catch (emailErr) {
+                console.error('Email non-bloquant (payment_failed):', emailErr.message);
+              }
             }
           }
         } catch (err) {
@@ -2184,6 +2212,8 @@ exports.stripeWebhook = functions
               ? new Date(dispute.evidence_details.due_by * 1000).toLocaleDateString('fr-FR')
               : 'Non précisé';
 
+            // FIX BUG 6: try-catch local — l'échec email ne doit pas crasher le webhook
+            try {
             await disputeTransporter.sendMail({
               from: `"${fromName}" <${fromEmail}>`,
               to: fromEmail,
@@ -2213,6 +2243,9 @@ exports.stripeWebhook = functions
               `,
             });
             console.log('Email alerte litige envoyé à l\'admin');
+            } catch (emailErr) {
+              console.error('Email non-bloquant (dispute alert):', emailErr.message);
+            }
           }
         } catch (err) {
           console.error('Erreur traitement charge.dispute.created:', err);
@@ -5131,25 +5164,35 @@ exports.checkExpiringCotisations = functions
       const montant = member.cotisation?.montant || member.montantPaye || '';
       const dateFinStr = expiryDate.toLocaleDateString('fr-FR');
 
+      // FIX BUG 5: Plages au lieu d'égalité stricte — le cron peut ne pas tourner pile le bon jour
       let templateId = null;
       let emailType = null;
+      let reminderKey = null;
 
-      if (diffDays === 30) {
+      if (diffDays >= 28 && diffDays <= 32) {
         templateId = 'cotisation_expiring_30';
         emailType = 'remind30';
-      } else if (diffDays === 7) {
+        reminderKey = 'reminder_30d_sent';
+      } else if (diffDays >= 5 && diffDays <= 9) {
         templateId = 'cotisation_expiring_7';
         emailType = 'remind7';
-      } else if (diffDays === 0) {
+        reminderKey = 'reminder_7d_sent';
+      } else if (diffDays >= -1 && diffDays <= 1) {
         templateId = 'cotisation_expired';
         emailType = 'expired';
+        reminderKey = 'reminder_expired_sent';
       } else {
         continue;
       }
 
-      // Vérifier qu'on n'a pas déjà envoyé ce rappel
-      const reminderKey = `${emailType}_${expiryDate.getFullYear()}_${expiryDate.getMonth()}_${expiryDate.getDate()}`;
-      if (member[`reminder_${reminderKey}`]) {
+      // Idempotence: vérifier via flag dédié sur le doc membre
+      if (member[reminderKey]) {
+        continue;
+      }
+
+      // Fallback: vérifier aussi l'ancien format de clé (rétrocompatibilité)
+      const legacyReminderKey = `${emailType}_${expiryDate.getFullYear()}_${expiryDate.getMonth()}_${expiryDate.getDate()}`;
+      if (member[`reminder_${legacyReminderKey}`]) {
         continue;
       }
 
@@ -5163,9 +5206,10 @@ exports.checkExpiringCotisations = functions
 
         let subject, htmlBody;
 
-        if (diffDays === 30) {
+        // FIX BUG 5 (suite): Utiliser emailType au lieu de diffDays exact pour le choix du template
+        if (emailType === 'remind30') {
           subject = template?.subject || 'Votre cotisation expire dans 30 jours - El Mohsinine';
-          const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\nVotre cotisation annuelle auprès de la mosquée **El Mohsinine** expire le **${dateFinStr}**, soit dans **30 jours**.\n\nNous vous invitons à renouveler votre adhésion depuis l'application pour continuer à bénéficier de vos avantages de membre actif :\n\n- ✨ Multiplier vos hassanates\n- 🗳️ Droit de vote en Assemblée Générale\n- 🎫 Carte de membre digitale\n- 📄 Reçu fiscal annuel\n\nPour renouveler, ouvrez l'application El Mohsinine et rendez-vous dans l'onglet **Adhérent**.`;
+          const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\nVotre cotisation annuelle auprès de la mosquée **El Mohsinine** expire le **${dateFinStr}**, soit dans environ **30 jours**.\n\nNous vous invitons à renouveler votre adhésion depuis l'application pour continuer à bénéficier de vos avantages de membre actif :\n\n- ✨ Multiplier vos hassanates\n- 🗳️ Droit de vote en Assemblée Générale\n- 🎫 Carte de membre digitale\n- 📄 Reçu fiscal annuel\n\nPour renouveler, ouvrez l'application El Mohsinine et rendez-vous dans l'onglet **Adhérent**.`;
           htmlBody = textToEmailHtml(body, {
             headerTitle: '📋 Rappel de cotisation',
             headerGradient: '#1565c0, #42a5f5',
@@ -5173,7 +5217,7 @@ exports.checkExpiringCotisations = functions
             footerAdresse: assocData.adresse || '',
             footerTelephone: assocData.telephone || '',
           });
-        } else if (diffDays === 7) {
+        } else if (emailType === 'remind7') {
           subject = template?.subject || 'Votre cotisation expire dans 7 jours - El Mohsinine';
           const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\n⚠️ Votre cotisation annuelle expire le **${dateFinStr}**, soit dans **7 jours** seulement.\n\nSans renouvellement, votre statut passera de **membre actif** à **sympathisant** et vous perdrez vos avantages (vote AG, carte membre, reçu fiscal).\n\n**Renouvelez maintenant** depuis l'application El Mohsinine → onglet **Adhérent**.`;
           htmlBody = textToEmailHtml(body, {
@@ -5209,10 +5253,13 @@ exports.checkExpiringCotisations = functions
           html: htmlBody,
         });
 
-        // Marquer le rappel comme envoyé (idempotence)
+        // Marquer le rappel comme envoyé (idempotence — nouveau format + ancien format)
         await memberDoc.ref.update({
-          [`reminder_${reminderKey}`]: true,
-          [`reminder_${reminderKey}_sentAt`]: admin.firestore.FieldValue.serverTimestamp(),
+          [reminderKey]: true,
+          [`${reminderKey}_sentAt`]: admin.firestore.FieldValue.serverTimestamp(),
+          // Ancien format pour rétrocompatibilité
+          [`reminder_${legacyReminderKey}`]: true,
+          [`reminder_${legacyReminderKey}_sentAt`]: admin.firestore.FieldValue.serverTimestamp(),
         });
 
         emailsSent[emailType]++;

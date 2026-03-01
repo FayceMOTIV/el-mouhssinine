@@ -12,7 +12,14 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, platformShadow } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  platformShadow,
+} from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
 import {
   subscribeToMessage,
@@ -47,7 +54,7 @@ const ConversationScreen = () => {
     }
 
     let timeoutId: ReturnType<typeof setTimeout>;
-    const unsubscribe = subscribeToMessage(messageId, (msg) => {
+    const unsubscribe = subscribeToMessage(messageId, msg => {
       setMessage(msg);
       setLoading(false);
       // Scroll to bottom when new messages arrive
@@ -67,28 +74,36 @@ const ConversationScreen = () => {
     if (replyText.trim().length < 10) {
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar' ? 'الرسالة قصيرة جدا (10 أحرف على الأقل)' : 'Message trop court (10 caractères minimum)'
+        language === 'ar'
+          ? 'الرسالة قصيرة جدا (10 أحرف على الأقل)'
+          : 'Message trop court (10 caractères minimum)',
       );
       return;
     }
 
+    if (!message) return;
+
     setSending(true);
     try {
       // Passer le userId du message pour vérification d'ownership
-      const result = await addUserReplyToMessage(messageId, replyText.trim(), message?.odUserId);
+      const result = await addUserReplyToMessage(
+        messageId,
+        replyText.trim(),
+        message?.odUserId,
+      );
       if (result.success) {
         setReplyText('');
       } else {
         Alert.alert(
           language === 'ar' ? 'خطأ' : 'Erreur',
-          result.error || 'Une erreur est survenue'
+          result.error || 'Une erreur est survenue',
         );
       }
     } catch (error) {
       const err = error as Error;
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
-        err?.message || 'Une erreur est survenue'
+        err?.message || 'Une erreur est survenue',
       );
     } finally {
       setSending(false);
@@ -98,7 +113,13 @@ const ConversationScreen = () => {
   // Formatter la date
   const formatDate = (timestamp: any): string => {
     if (!timestamp) return '';
-    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date =
+      typeof timestamp === 'string'
+        ? new Date(timestamp)
+        : timestamp.toDate
+        ? timestamp.toDate()
+        : new Date(timestamp);
+    if (isNaN(date.getTime())) return '-';
     return date.toLocaleDateString('fr-FR', {
       day: 'numeric',
       month: 'short',
@@ -109,10 +130,28 @@ const ConversationScreen = () => {
 
   // Status badge
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; labelAr: string; color: string; bg: string }> = {
-      non_lu: { label: 'En attente', labelAr: 'في الانتظار', color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
-      en_cours: { label: 'En cours', labelAr: 'قيد المعالجة', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-      resolu: { label: 'Résolu', labelAr: 'تم الحل', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+    const statusConfig: Record<
+      string,
+      { label: string; labelAr: string; color: string; bg: string }
+    > = {
+      non_lu: {
+        label: 'En attente',
+        labelAr: 'في الانتظار',
+        color: '#ef4444',
+        bg: 'rgba(239,68,68,0.15)',
+      },
+      en_cours: {
+        label: 'En cours',
+        labelAr: 'قيد المعالجة',
+        color: '#f59e0b',
+        bg: 'rgba(245,158,11,0.15)',
+      },
+      resolu: {
+        label: 'Résolu',
+        labelAr: 'تم الحل',
+        color: '#22c55e',
+        bg: 'rgba(34,197,94,0.15)',
+      },
     };
 
     const config = statusConfig[status] || statusConfig.non_lu;
@@ -130,10 +169,15 @@ const ConversationScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>{language === 'ar' ? 'محادثة' : 'Conversation'}</Text>
+          <Text style={styles.title}>
+            {language === 'ar' ? 'محادثة' : 'Conversation'}
+          </Text>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
@@ -146,10 +190,15 @@ const ConversationScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>{language === 'ar' ? 'محادثة' : 'Conversation'}</Text>
+          <Text style={styles.title}>
+            {language === 'ar' ? 'محادثة' : 'Conversation'}
+          </Text>
         </View>
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>❌</Text>
@@ -169,11 +218,17 @@ const ConversationScreen = () => {
     >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={[styles.title, isRTL && styles.textRTL]} numberOfLines={1}>
+          <Text
+            style={[styles.title, isRTL && styles.textRTL]}
+            numberOfLines={1}
+          >
             {message.sujet}
           </Text>
           {getStatusBadge(message.status)}
@@ -193,7 +248,9 @@ const ConversationScreen = () => {
             <Text style={[styles.messageText, isRTL && styles.textRTL]}>
               {message.message}
             </Text>
-            <Text style={styles.messageTime}>{formatDate(message.createdAt)}</Text>
+            <Text style={styles.messageTime}>
+              {formatDate(message.createdAt)}
+            </Text>
           </View>
           <Text style={styles.senderLabel}>
             {language === 'ar' ? 'أنت' : 'Vous'}
@@ -201,28 +258,40 @@ const ConversationScreen = () => {
         </View>
 
         {/* Réponses */}
-        {message.reponses && message.reponses.map((rep, index) => (
-          <View key={rep.id || index} style={styles.messageWrapper}>
-            <View style={[
-              styles.messageBubble,
-              rep.createdBy === 'mosquee' ? styles.adminBubble : styles.userBubble
-            ]}>
-              <Text style={[styles.messageText, isRTL && styles.textRTL]}>
-                {rep.message}
+        {message.reponses &&
+          message.reponses.map((rep, index) => (
+            <View key={rep.id || index} style={styles.messageWrapper}>
+              <View
+                style={[
+                  styles.messageBubble,
+                  rep.createdBy === 'mosquee'
+                    ? styles.adminBubble
+                    : styles.userBubble,
+                ]}
+              >
+                <Text style={[styles.messageText, isRTL && styles.textRTL]}>
+                  {rep.message}
+                </Text>
+                <Text style={styles.messageTime}>
+                  {formatDate(rep.createdAt)}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.senderLabel,
+                  rep.createdBy === 'mosquee' && styles.senderLabelAdmin,
+                ]}
+              >
+                {rep.createdBy === 'mosquee'
+                  ? language === 'ar'
+                    ? '🕌 المسجد'
+                    : '🕌 Mosquée'
+                  : language === 'ar'
+                  ? 'أنت'
+                  : 'Vous'}
               </Text>
-              <Text style={styles.messageTime}>{formatDate(rep.createdAt)}</Text>
             </View>
-            <Text style={[
-              styles.senderLabel,
-              rep.createdBy === 'mosquee' && styles.senderLabelAdmin
-            ]}>
-              {rep.createdBy === 'mosquee'
-                ? (language === 'ar' ? '🕌 المسجد' : '🕌 Mosquée')
-                : (language === 'ar' ? 'أنت' : 'Vous')
-              }
-            </Text>
-          </View>
-        ))}
+          ))}
 
         {/* Info si résolu */}
         {message.status === 'resolu' && (
@@ -231,8 +300,7 @@ const ConversationScreen = () => {
             <Text style={styles.resolvedText}>
               {language === 'ar'
                 ? 'تم حل هذا الطلب'
-                : 'Cette demande a été traitée'
-              }
+                : 'Cette demande a été traitée'}
             </Text>
           </View>
         )}
@@ -245,7 +313,9 @@ const ConversationScreen = () => {
             style={[styles.replyInput, isRTL && styles.textRTL]}
             value={replyText}
             onChangeText={setReplyText}
-            placeholder={language === 'ar' ? 'اكتب ردك...' : 'Écrivez votre réponse...'}
+            placeholder={
+              language === 'ar' ? 'اكتب ردك...' : 'Écrivez votre réponse...'
+            }
             placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}

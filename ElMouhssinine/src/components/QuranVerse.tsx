@@ -47,9 +47,12 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
   ]).current;
 
   useEffect(() => {
+    // Stocker les références des loops pour cleanup
+    const activeLoops: Animated.CompositeAnimation[] = [];
+
     if (isActive && isPlaying) {
       // Pulsation douce
-      Animated.loop(
+      const pulseLoop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1.01,
@@ -62,7 +65,9 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
             useNativeDriver: false,
           }),
         ]),
-      ).start();
+      );
+      activeLoops.push(pulseLoop);
+      pulseLoop.start();
 
       // Fond doré
       Animated.timing(bgAnim, {
@@ -73,7 +78,7 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
 
       // Barres de son
       soundBarAnims.forEach((anim, i) => {
-        Animated.loop(
+        const barLoop = Animated.loop(
           Animated.sequence([
             Animated.timing(anim, {
               toValue: Math.random() * 0.5 + 0.5,
@@ -86,7 +91,9 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
               useNativeDriver: false,
             }),
           ]),
-        ).start();
+        );
+        activeLoops.push(barLoop);
+        barLoop.start();
       });
     } else if (isActive && !isPlaying) {
       // Actif mais en pause
@@ -121,6 +128,8 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
     }
 
     return () => {
+      // Stopper les loops explicitement pour éviter memory leaks
+      activeLoops.forEach(loop => loop.stop());
       pulseAnim.stopAnimation();
       bgAnim.stopAnimation();
       soundBarAnims.forEach(anim => anim.stopAnimation());
@@ -172,12 +181,14 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
                   style={[
                     styles.soundBar,
                     {
-                      transform: [{
-                        scaleY: anim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.25, 1],
-                        }),
-                      }],
+                      transform: [
+                        {
+                          scaleY: anim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.25, 1],
+                          }),
+                        },
+                      ],
                     },
                   ]}
                 />
@@ -195,10 +206,7 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
             ]}
           >
             <Text
-              style={[
-                styles.verseNumber,
-                isActive && styles.verseNumberActive,
-              ]}
+              style={[styles.verseNumber, isActive && styles.verseNumberActive]}
             >
               {verse.numberInSurah}
             </Text>
@@ -206,9 +214,7 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
         </View>
 
         {/* Texte arabe */}
-        <Text
-          style={[styles.arabicText, isActive && styles.arabicTextActive]}
-        >
+        <Text style={[styles.arabicText, isActive && styles.arabicTextActive]}>
           {verse.text}
         </Text>
 

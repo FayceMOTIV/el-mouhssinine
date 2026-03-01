@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import TrackPlayer, { State, Event } from 'react-native-track-player';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupPlayer, resetPlayer } from '../services/audioPlayer';
-import { getVerseAudioUrl } from '../services/quranApi';
+import { getVerseAudioUrl, reciters } from '../services/quranApi';
 
 interface Verse {
   number: number;
@@ -294,9 +294,8 @@ export const useQuranPlayer = ({
       const mode = repeatModeRef.current;
       const count = repeatCountRef.current;
       const max = maxRepeatRef.current;
-      const versesArray = versesRef.current;
 
-      if (!versesArray || versesArray.length === 0) return;
+      if (!versesRef.current || versesRef.current.length === 0) return;
 
       console.log(
         `[QuranPlayer] handleTrackEnd idx=${idx} mode=${mode} count=${count} gen=${trackGenRef.current}`,
@@ -334,8 +333,8 @@ export const useQuranPlayer = ({
 
       if (isMountedRef.current) setRepeatCount(0);
 
-      // Passer au verset suivant
-      if (idx < versesArray.length - 1) {
+      // Passer au verset suivant — lire versesRef.current au point d'usage pour eviter stale closure
+      if (idx < versesRef.current.length - 1) {
         await loadAndPlayVerse(idx + 1);
       } else {
         // Fin de sourate
@@ -425,14 +424,17 @@ export const useQuranPlayer = ({
       // Attendre que reset se propage
       await delay(50);
 
-      // Ajouter la piste
+      // Ajouter la piste avec metadata pour le lock screen
+      const reciterInfo = reciters.find(r => r.id === reciterCodeRef.current);
+      const artistName = reciterInfo?.name || reciterCodeRef.current;
       await TrackPlayer.add({
         id: `verse-${verse.number}-${Date.now()}`,
         url: audioUrl,
         title: `${surahNameRef.current || 'Sourate'} - Verset ${
           verse.numberInSurah
         }`,
-        artist: reciterCodeRef.current,
+        artist: artistName,
+        artwork: 'https://cdn.islamic.network/quran/images/logo.png',
       });
 
       // Configurer la vitesse
@@ -459,7 +461,8 @@ export const useQuranPlayer = ({
           title: `${surahNameRef.current || 'Sourate'} - Verset ${
             verse.numberInSurah
           }`,
-          artist: reciterCodeRef.current,
+          artist: artistName,
+          artwork: 'https://cdn.islamic.network/quran/images/logo.png',
         });
         await delay(50);
         await TrackPlayer.play();
@@ -672,15 +675,19 @@ export const useQuranPlayer = ({
     reciterCodeRef.current = newReciterCode;
   }, []);
 
-  // Cleanup on unmount : marquer démonté + reset player + clear timeout
+  // Cleanup on unmount : marquer démonté + clear timeout
+  // Ne PAS reset le player si l'audio joue (permet écoute en arrière-plan)
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
       }
-      // Reset la queue audio (mais ne touche pas isSetup)
-      resetPlayer();
+      // Ne couper l'audio que s'il n'est pas en train de jouer
+      // Cela permet d'écouter le Coran même après avoir quitté l'écran
+      if (!isPlayingRef.current) {
+        resetPlayer();
+      }
     };
   }, []);
 

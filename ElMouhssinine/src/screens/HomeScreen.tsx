@@ -19,7 +19,19 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, shadows, MIN_TOUCH_SIZE, moderateScale, isSmallScreen, isTablet } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  wp,
+  shadows,
+  MIN_TOUCH_SIZE,
+  moderateScale,
+  isSmallScreen,
+  isTablet,
+} from '../theme/colors';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import {
   subscribeToAnnouncements,
@@ -86,7 +98,7 @@ const mockIslamicDate = {
   month: 'Rajab',
   monthAr: 'رجب',
   year: '1447',
-  gregorian: '9 Janvier 2026'
+  gregorian: '9 Janvier 2026',
 };
 
 // Bug 17 Fix: Pas de mock data pour janaza - données sensibles (noms de défunts)
@@ -96,7 +108,12 @@ const HomeScreen = () => {
   const navigation = useNavigation<any>();
   const { t, isRTL, language } = useLanguage();
   const [prayerTimes, setPrayerTimes] = useState<PrayerTime[]>(mockPrayerTimes);
-  const [nextPrayer, setNextPrayer] = useState({ name: 'Dhuhr', time: '13:15', icon: '☀️', isTomorrow: false });
+  const [nextPrayer, setNextPrayer] = useState({
+    name: 'Dhuhr',
+    time: '13:15',
+    icon: '☀️',
+    isTomorrow: false,
+  });
   const [countdown, setCountdown] = useState('01:23:45');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -112,9 +129,30 @@ const HomeScreen = () => {
   // Dates islamiques 2026 selon le calendrier Umm al-Qura (ajustées pour la France)
   // Source: islamicfinder.org / mawaqit.net
   const [islamicEvents, setIslamicEvents] = useState<DateIslamique[]>([
-    { id: '1', nom: 'Ramadan', nomAr: 'رمضان', dateHijri: '1 Ramadan 1447', dateGregorien: '2026-02-18', icon: '🌙' },
-    { id: '2', nom: 'Aïd al-Fitr', nomAr: 'عيد الفطر', dateHijri: '1 Shawwal 1447', dateGregorien: '2026-03-20', icon: '🎉' },
-    { id: '3', nom: 'Aïd al-Adha', nomAr: 'عيد الأضحى', dateHijri: '10 Dhul Hijja 1447', dateGregorien: '2026-05-27', icon: '🐑' },
+    {
+      id: '1',
+      nom: 'Ramadan',
+      nomAr: 'رمضان',
+      dateHijri: '1 Ramadan 1447',
+      dateGregorien: '2026-02-18',
+      icon: '🌙',
+    },
+    {
+      id: '2',
+      nom: 'Aïd al-Fitr',
+      nomAr: 'عيد الفطر',
+      dateHijri: '1 Shawwal 1447',
+      dateGregorien: '2026-03-20',
+      icon: '🎉',
+    },
+    {
+      id: '3',
+      nom: 'Aïd al-Adha',
+      nomAr: 'عيد الأضحى',
+      dateHijri: '10 Dhul Hijja 1447',
+      dateGregorien: '2026-05-27',
+      icon: '🐑',
+    },
   ]);
   const [activePopup, setActivePopup] = useState<Popup | null>(null);
   const [showPopup, setShowPopup] = useState(false);
@@ -125,7 +163,8 @@ const HomeScreen = () => {
   const [showServicesModal, setShowServicesModal] = useState(false);
   const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null);
   const [parisTime, setParisTime] = useState('');
-  const [rawPrayerTimings, setRawPrayerTimings] = useState<PrayerTimings | null>(null);
+  const [rawPrayerTimings, setRawPrayerTimings] =
+    useState<PrayerTimings | null>(null);
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>({
     showIqama: true,
     showSunrise: true,
@@ -133,16 +172,26 @@ const HomeScreen = () => {
   });
 
   // Boost prière
-  const [boostSettings, setBoostSettings] = useState<PrayerBoostSettings | null>(null);
-  const [currentPrayer, setCurrentPrayer] = useState<{ name: string; time: string; nameAr: string } | null>(null);
+  const [boostSettings, setBoostSettings] =
+    useState<PrayerBoostSettings | null>(null);
+  const [currentPrayer, setCurrentPrayer] = useState<{
+    name: string;
+    time: string;
+    nameAr: string;
+  } | null>(null);
   const [hasPrayedCurrentPrayer, setHasPrayedCurrentPrayer] = useState(false);
 
   // Notification in-app
-  const [inAppNotification, setInAppNotification] = useState<{ title: string; body: string } | null>(null);
+  const [inAppNotification, setInAppNotification] = useState<{
+    title: string;
+    body: string;
+  } | null>(null);
 
   // Historique des notifications
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
-  const [notificationHistory, setNotificationHistory] = useState<StoredNotification[]>([]);
+  const [notificationHistory, setNotificationHistory] = useState<
+    StoredNotification[]
+  >([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [expandedNotifId, setExpandedNotifId] = useState<string | null>(null);
 
@@ -150,36 +199,45 @@ const HomeScreen = () => {
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
 
   // Ramadan mode
-  const [ramadanSettings, setRamadanSettings] = useState<RamadanSettings | null>(null);
+  const [ramadanSettings, setRamadanSettings] =
+    useState<RamadanSettings | null>(null);
   const [ramadanDay, setRamadanDay] = useState<number | null>(null);
 
   // Date relative ("Il y a 2h", "Il y a 30min")
-  const getRelativeTime = useCallback((timestamp: number) => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
+  const getRelativeTime = useCallback(
+    (timestamp: number) => {
+      const now = Date.now();
+      const diff = now - timestamp;
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
 
-    if (isRTL) {
-      if (seconds < 60) return 'الآن';
-      if (minutes < 60) return `منذ ${minutes} د`;
-      if (hours < 24) return `منذ ${hours} س`;
-      return `منذ ${days} ي`;
-    }
-    if (seconds < 60) return "A l'instant";
-    if (minutes < 60) return `Il y a ${minutes}min`;
-    if (hours < 24) return `Il y a ${hours}h`;
-    return `Il y a ${days}j`;
-  }, [isRTL]);
+      if (isRTL) {
+        if (seconds < 60) return 'الآن';
+        if (minutes < 60) return `منذ ${minutes} د`;
+        if (hours < 24) return `منذ ${hours} س`;
+        return `منذ ${days} ي`;
+      }
+      if (seconds < 60) return "A l'instant";
+      if (minutes < 60) return `Il y a ${minutes}min`;
+      if (hours < 24) return `Il y a ${hours}h`;
+      return `Il y a ${days}j`;
+    },
+    [isRTL],
+  );
 
   // Traduction des noms de prière
   const getPrayerName = (name: string) => {
     if (name === 'Sunrise' || name === 'Shurûq') {
       return isRTL ? 'الشروق' : 'Shurûq';
     }
-    const prayerKey = name.toLowerCase().replace(' (demain)', '') as 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
+    const prayerKey = name.toLowerCase().replace(' (demain)', '') as
+      | 'fajr'
+      | 'dhuhr'
+      | 'asr'
+      | 'maghrib'
+      | 'isha';
     return t(prayerKey) || name;
   };
 
@@ -201,9 +259,14 @@ const HomeScreen = () => {
   }, [prayerTimes, displaySettings.showSunrise, rawPrayerTimings?.Sunrise]);
 
   // Calculer l'heure d'iqama = Adhan + délai en minutes
-  const getIqamaTime = (prayerName: string, adhanTime: string): string | null => {
+  const getIqamaTime = (
+    prayerName: string,
+    adhanTime: string,
+  ): string | null => {
     if (!iqamaDelays) return null;
-    const key = prayerName.toLowerCase().replace(' (demain)', '') as keyof IqamaDelays;
+    const key = prayerName
+      .toLowerCase()
+      .replace(' (demain)', '') as keyof IqamaDelays;
     const delay = iqamaDelays[key];
     if (!delay) return null;
     return addMinutesToTime(adhanTime, delay);
@@ -213,13 +276,24 @@ const HomeScreen = () => {
   const loadPrayerData = useCallback(async () => {
     try {
       // Horaires de priere depuis l'API
-      const timings = await PrayerAPI.getTimesByCity('Bourg-en-Bresse', 'France');
+      const timings = await PrayerAPI.getTimesByCity(
+        'Bourg-en-Bresse',
+        'France',
+      );
       setRawPrayerTimings(timings); // Stocker pour les notifications locales
       const formattedTimes: PrayerTime[] = [
         { name: 'Fajr', time: PrayerAPI.formatTime(timings.Fajr), icon: '🌅' },
-        { name: 'Dhuhr', time: PrayerAPI.formatTime(timings.Dhuhr), icon: '☀️' },
+        {
+          name: 'Dhuhr',
+          time: PrayerAPI.formatTime(timings.Dhuhr),
+          icon: '☀️',
+        },
         { name: 'Asr', time: PrayerAPI.formatTime(timings.Asr), icon: '🌤️' },
-        { name: 'Maghrib', time: PrayerAPI.formatTime(timings.Maghrib), icon: '🌅' },
+        {
+          name: 'Maghrib',
+          time: PrayerAPI.formatTime(timings.Maghrib),
+          icon: '🌅',
+        },
         { name: 'Isha', time: PrayerAPI.formatTime(timings.Isha), icon: '🌙' },
       ];
       setPrayerTimes(formattedTimes);
@@ -228,29 +302,52 @@ const HomeScreen = () => {
       const next = PrayerAPI.getNextPrayer(timings);
       if (next) {
         const iconMap: Record<string, string> = {
-          Fajr: '🌅', Dhuhr: '☀️', Asr: '🌤️', Maghrib: '🌅', Isha: '🌙'
+          Fajr: '🌅',
+          Dhuhr: '☀️',
+          Asr: '🌤️',
+          Maghrib: '🌅',
+          Isha: '🌙',
         };
-        const isTomorrow = next.name.includes('(demain)') || next.name.includes('(غدا)');
+        const isTomorrow =
+          next.name.includes('(demain)') || next.name.includes('(غدا)');
         setNextPrayer({
           name: next.name,
           time: PrayerAPI.formatTime(next.time),
-          icon: iconMap[next.name.replace(' (demain)', '').replace(' (غدا)', '')] || '🕌',
+          icon:
+            iconMap[next.name.replace(' (demain)', '').replace(' (غدا)', '')] ||
+            '🕌',
           isTomorrow,
         });
       }
 
       // Date hijri depuis l'API
       const hijri = await PrayerAPI.getHijriDate();
-      const todayParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-      const months = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin',
-                      'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
+      const todayParis = new Date(
+        new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }),
+      );
+      const months = [
+        'Janvier',
+        'Fevrier',
+        'Mars',
+        'Avril',
+        'Mai',
+        'Juin',
+        'Juillet',
+        'Aout',
+        'Septembre',
+        'Octobre',
+        'Novembre',
+        'Decembre',
+      ];
       if (hijri && hijri.day && hijri.month && hijri.year) {
         setIslamicDate({
           day: hijri.day,
           month: hijri.month.en,
           monthAr: hijri.month.ar,
           year: hijri.year,
-          gregorian: `${todayParis.getDate()} ${months[todayParis.getMonth()]} ${todayParis.getFullYear()}`
+          gregorian: `${todayParis.getDate()} ${
+            months[todayParis.getMonth()]
+          } ${todayParis.getFullYear()}`,
         });
       }
       setPrayerDataWarning(false);
@@ -270,6 +367,10 @@ const HomeScreen = () => {
     try {
       const parisNow = getParisDate();
 
+      if (!nextPrayer?.time) {
+        setCountdown('00:00:00');
+        return;
+      }
       const [hours, minutes] = nextPrayer.time.split(':').map(Number);
       if (isNaN(hours) || isNaN(minutes)) {
         setCountdown('00:00:00');
@@ -309,7 +410,7 @@ const HomeScreen = () => {
       const parisTimeStr = now.toLocaleTimeString('fr-FR', {
         hour: '2-digit',
         minute: '2-digit',
-        timeZone: 'Europe/Paris'
+        timeZone: 'Europe/Paris',
       });
       setParisTime(parisTimeStr);
     } catch (error) {
@@ -324,10 +425,12 @@ const HomeScreen = () => {
     loadPrayerData();
 
     // Subscriptions Firebase
-    const unsubAnnouncements = subscribeToAnnouncements((data) => setAnnouncements(data || []));
-    const unsubEvents = subscribeToEvents((data) => setEvents(data || []));
+    const unsubAnnouncements = subscribeToAnnouncements(data =>
+      setAnnouncements(data || []),
+    );
+    const unsubEvents = subscribeToEvents(data => setEvents(data || []));
     const unsubJanaza = subscribeToJanazaList(setJanazaList);
-    const unsubIqama = subscribeToIqama((horaires) => {
+    const unsubIqama = subscribeToIqama(horaires => {
       if (horaires?.iqama) {
         setIqamaDelays(horaires.iqama);
       }
@@ -337,14 +440,14 @@ const HomeScreen = () => {
     });
 
     // Subscriptions aux dates islamiques
-    const unsubIslamicDates = subscribeToIslamicDates((dates) => {
+    const unsubIslamicDates = subscribeToIslamicDates(dates => {
       if (dates && dates.length > 0) {
         setIslamicEvents(dates);
       }
     });
 
     // Subscriptions aux rappels du jour
-    const unsubRappels = subscribeToRappels((rappels) => {
+    const unsubRappels = subscribeToRappels(rappels => {
       if (rappels && rappels.length > 0) {
         // Sélectionner un rappel aléatoire pour la journée
         const randomIndex = Math.floor(Math.random() * rappels.length);
@@ -353,30 +456,35 @@ const HomeScreen = () => {
     });
 
     // Subscription aux infos mosquée (pour l'image header)
-    const unsubMosqueeInfo = subscribeToMosqueeInfo((info) => {
-      logger.log('[HomeScreen] MosqueeInfo received:', JSON.stringify({
-        hasInfo: !!info,
-        headerImageUrl: info?.headerImageUrl || 'NOT_SET',
-        name: info?.name
-      }));
+    const unsubMosqueeInfo = subscribeToMosqueeInfo(info => {
+      logger.log(
+        '[HomeScreen] MosqueeInfo received:',
+        JSON.stringify({
+          hasInfo: !!info,
+          headerImageUrl: info?.headerImageUrl || 'NOT_SET',
+          name: info?.name,
+        }),
+      );
       if (info?.headerImageUrl) {
         setHeaderImageUrl(info.headerImageUrl);
       }
     });
 
     // Subscription aux paramètres d'affichage (showIqama, showSunrise)
-    const unsubGeneralSettings = subscribeToGeneralSettings((settings) => {
+    const unsubGeneralSettings = subscribeToGeneralSettings(settings => {
       if (settings?.display) {
         setDisplaySettings(settings.display);
       }
     });
 
     // Subscription aux paramètres Ramadan
-    const unsubRamadan = subscribeToRamadanSettings((settings) => {
+    const unsubRamadan = subscribeToRamadanSettings(settings => {
       setRamadanSettings(settings);
       // Calculer le jour actuel de Ramadan (timezone Paris)
       if (settings.enabled && settings.startDate && settings.endDate) {
-        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const now = new Date(
+          new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }),
+        );
         const start = new Date(settings.startDate);
         const end = new Date(settings.endDate);
         if (now >= start && now <= end) {
@@ -392,14 +500,16 @@ const HomeScreen = () => {
     });
 
     // Subscriptions aux popups Firebase - File d'attente multi-popups
-    const unsubPopups = subscribeToPopups(async (popups) => {
+    const unsubPopups = subscribeToPopups(async popups => {
       logger.log(`[HomeScreen] Popups reçus: ${popups?.length || 0}`);
       if (popups && popups.length > 0) {
         // Construire la file d'attente des popups a afficher (séquentiel)
         const queue: Popup[] = [];
         for (const popup of popups) {
           const shouldShow = await shouldShowPopup(popup);
-          logger.log(`[HomeScreen] Popup ${popup.id} (${popup.titre}): shouldShow=${shouldShow}, frequence=${popup.frequence}`);
+          logger.log(
+            `[HomeScreen] Popup ${popup.id} (${popup.titre}): shouldShow=${shouldShow}, frequence=${popup.frequence}`,
+          );
           if (shouldShow) {
             queue.push(popup);
           }
@@ -415,16 +525,16 @@ const HomeScreen = () => {
     });
 
     return () => {
-      unsubAnnouncements();
-      unsubEvents();
-      unsubJanaza();
-      unsubIqama();
-      unsubIslamicDates();
-      unsubRappels();
-      unsubMosqueeInfo();
-      unsubGeneralSettings();
-      unsubRamadan();
-      unsubPopups();
+      unsubAnnouncements?.();
+      unsubEvents?.();
+      unsubJanaza?.();
+      unsubIqama?.();
+      unsubIslamicDates?.();
+      unsubRappels?.();
+      unsubMosqueeInfo?.();
+      unsubGeneralSettings?.();
+      unsubRamadan?.();
+      unsubPopups?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -446,13 +556,17 @@ const HomeScreen = () => {
         try {
           logger.log('[HomeScreen] Re-scheduling prayer notifications...');
           const settings = await getPrayerNotificationSettings();
-          await schedulePrayerNotifications(rawPrayerTimings, settings, jumuaTimes?.jumua1);
+          await schedulePrayerNotifications(
+            rawPrayerTimings,
+            settings,
+            jumuaTimes?.jumua1,
+          );
         } catch (error) {
           logger.warn('[HomeScreen] Erreur scheduling notifications:', error);
         }
       };
       scheduleNotifications();
-    }, [rawPrayerTimings])
+    }, [rawPrayerTimings]),
   );
 
   // Charger les paramètres boost ET programmer les notifications à chaque focus
@@ -480,15 +594,22 @@ const HomeScreen = () => {
 
           // 3. Charger les prières déjà faites aujourd'hui pour ne pas re-scheduler leurs boost
           const prayedToday = await getPrayedPrayersToday();
-          await scheduleBoostNotifications(rawPrayerTimings, settings, translations, prayedToday);
-          logger.log('[HomeScreen] Boost notifications reprogrammées avec succès');
+          await scheduleBoostNotifications(
+            rawPrayerTimings,
+            settings,
+            translations,
+            prayedToday,
+          );
+          logger.log(
+            '[HomeScreen] Boost notifications reprogrammées avec succès',
+          );
         } catch (error) {
           logger.warn('[HomeScreen] Erreur boost:', error);
         }
       };
 
       loadAndScheduleBoost();
-    }, [rawPrayerTimings, t])
+    }, [rawPrayerTimings, t]),
   );
 
   // Auto-scheduler les notifications Ramadan à chaque focus si Ramadan est actif
@@ -498,25 +619,42 @@ const HomeScreen = () => {
         if (!rawPrayerTimings || !ramadanSettings?.enabled) return;
         try {
           const settings = await getRamadanNotificationSettings();
-          const anyEnabled = settings.suhoor.enabled || settings.iftar.enabled || settings.tarawih.enabled;
+          const anyEnabled =
+            settings.suhoor.enabled ||
+            settings.iftar.enabled ||
+            settings.tarawih.enabled;
           if (!anyEnabled) return;
 
           const translations = {
             suhoorTitle: language === 'ar' ? '🌙 السحور' : '🌙 Suhoor',
-            suhoorBody: language === 'ar' ? 'بقي {minutes} دقيقة على الفجر - استعد للصيام' : 'Plus que {minutes} min avant Fajr - Préparez-vous',
+            suhoorBody:
+              language === 'ar'
+                ? 'بقي {minutes} دقيقة على الفجر - استعد للصيام'
+                : 'Plus que {minutes} min avant Fajr - Préparez-vous',
             iftarTitle: language === 'ar' ? '🌅 الإفطار' : '🌅 Iftar',
-            iftarBody: language === 'ar' ? 'وقت الإفطار في {minutes} دقيقة' : 'Iftar dans {minutes} min',
+            iftarBody:
+              language === 'ar'
+                ? 'وقت الإفطار في {minutes} دقيقة'
+                : 'Iftar dans {minutes} min',
             tarawihTitle: language === 'ar' ? '🕌 التراويح' : '🕌 Tarawih',
-            tarawihBody: language === 'ar' ? 'صلاة التراويح في {minutes} دقيقة' : 'Prière Tarawih dans {minutes} min',
+            tarawihBody:
+              language === 'ar'
+                ? 'صلاة التراويح في {minutes} دقيقة'
+                : 'Prière Tarawih dans {minutes} min',
           };
-          await scheduleRamadanNotifications(rawPrayerTimings, ramadanSettings.tarawihTime, settings, translations);
+          await scheduleRamadanNotifications(
+            rawPrayerTimings,
+            ramadanSettings.tarawihTime,
+            settings,
+            translations,
+          );
           logger.log('[HomeScreen] Ramadan notifications auto-schedulées');
         } catch (error) {
           logger.warn('[HomeScreen] Erreur auto-scheduling Ramadan:', error);
         }
       };
       scheduleRamadan();
-    }, [rawPrayerTimings, ramadanSettings, language])
+    }, [rawPrayerTimings, ramadanSettings, language]),
   );
 
   // Mettre à jour la prière en cours quand les horaires changent
@@ -550,9 +688,11 @@ const HomeScreen = () => {
         if (updated?.name !== prev?.name) {
           // Nouvelle prière : vérifier si elle a déjà été faite aujourd'hui
           if (updated) {
-            getPrayedPrayersToday().then(prayedToday => {
-              setHasPrayedCurrentPrayer(prayedToday.has(updated.name));
-            }).catch(() => setHasPrayedCurrentPrayer(false));
+            getPrayedPrayersToday()
+              .then(prayedToday => {
+                setHasPrayedCurrentPrayer(prayedToday.has(updated.name));
+              })
+              .catch(() => setHasPrayedCurrentPrayer(false));
           } else {
             setHasPrayedCurrentPrayer(false);
           }
@@ -566,7 +706,7 @@ const HomeScreen = () => {
 
   // Configurer le callback pour les notifications in-app
   useEffect(() => {
-    setInAppNotificationCallback((notification) => {
+    setInAppNotificationCallback(notification => {
       setInAppNotification(notification);
     });
 
@@ -585,18 +725,21 @@ const HomeScreen = () => {
           const unread = await getUnreadCount();
           setUnreadNotifCount(unread);
         } catch (error) {
-          logger.warn('[HomeScreen] Erreur chargement historique notifs:', error);
+          logger.warn(
+            '[HomeScreen] Erreur chargement historique notifs:',
+            error,
+          );
         }
       };
       loadNotificationHistory();
-    }, [])
+    }, []),
   );
 
   // Souscrire aux messages de l'utilisateur pour le badge
   useEffect(() => {
     let unsubMessages: (() => void) | null = null;
 
-    const unsubAuth = auth().onAuthStateChanged((user) => {
+    const unsubAuth = auth().onAuthStateChanged(user => {
       // Nettoyer l'ancien listener
       if (unsubMessages) {
         unsubMessages();
@@ -608,23 +751,31 @@ const HomeScreen = () => {
         return;
       }
 
-      unsubMessages = subscribeToUserMessages(user.uid, async (messages: UserMessage[]) => {
-        // Récupérer le timestamp de dernière lecture des messages
-        const lastReadStr = await AsyncStorage.getItem('messages_last_read_at');
-        const lastReadAt = lastReadStr ? new Date(lastReadStr).getTime() : 0;
-        // Compter les messages avec une réponse mosquée APRÈS la dernière lecture
-        const unread = messages.filter(m => {
-          if (!m.reponses || m.reponses.length === 0) return false;
-          const mosqueeReplies = m.reponses.filter(r => r.createdBy === 'mosquee');
-          if (mosqueeReplies.length === 0) return false;
-          const lastMosqueeReply = mosqueeReplies[mosqueeReplies.length - 1];
-          const replyTime = lastMosqueeReply.createdAt instanceof Date
-            ? lastMosqueeReply.createdAt.getTime()
-            : new Date(lastMosqueeReply.createdAt).getTime();
-          return replyTime > lastReadAt;
-        }).length;
-        setUnreadMsgCount(unread);
-      });
+      unsubMessages = subscribeToUserMessages(
+        user.uid,
+        async (messages: UserMessage[]) => {
+          // Récupérer le timestamp de dernière lecture des messages
+          const lastReadStr = await AsyncStorage.getItem(
+            'messages_last_read_at',
+          );
+          const lastReadAt = lastReadStr ? new Date(lastReadStr).getTime() : 0;
+          // Compter les messages avec une réponse mosquée APRÈS la dernière lecture
+          const unread = messages.filter(m => {
+            if (!m.reponses || m.reponses.length === 0) return false;
+            const mosqueeReplies = m.reponses.filter(
+              r => r.createdBy === 'mosquee',
+            );
+            if (mosqueeReplies.length === 0) return false;
+            const lastMosqueeReply = mosqueeReplies[mosqueeReplies.length - 1];
+            const replyTime =
+              lastMosqueeReply.createdAt instanceof Date
+                ? lastMosqueeReply.createdAt.getTime()
+                : new Date(lastMosqueeReply.createdAt).getTime();
+            return replyTime > lastReadAt;
+          }).length;
+          setUnreadMsgCount(unread);
+        },
+      );
     });
 
     return () => {
@@ -658,13 +809,20 @@ const HomeScreen = () => {
       if (!isMounted) return;
 
       try {
-        if (__DEV__) console.log('[HomeScreen] Vérification proximité mosquée (foreground)...');
-        const sent = await checkMosqueProximityForeground(language === 'ar' ? 'ar' : 'fr');
+        if (__DEV__)
+          console.log(
+            '[HomeScreen] Vérification proximité mosquée (foreground)...',
+          );
+        const sent = await checkMosqueProximityForeground(
+          language === 'ar' ? 'ar' : 'fr',
+        );
         if (sent) {
-          if (__DEV__) console.log('[HomeScreen] Notification mode silencieux envoyée !');
+          if (__DEV__)
+            console.log('[HomeScreen] Notification mode silencieux envoyée !');
         }
       } catch (error) {
-        if (__DEV__) console.warn('[HomeScreen] Erreur check proximité:', error);
+        if (__DEV__)
+          console.warn('[HomeScreen] Erreur check proximité:', error);
       }
     };
 
@@ -674,12 +832,18 @@ const HomeScreen = () => {
     // Écouter les changements d'état de l'app (arrière-plan -> premier plan)
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
-        if (__DEV__) console.log('[HomeScreen] App au premier plan, vérification proximité...');
+        if (__DEV__)
+          console.log(
+            '[HomeScreen] App au premier plan, vérification proximité...',
+          );
         checkProximity();
       }
     };
 
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    const subscription = AppState.addEventListener(
+      'change',
+      handleAppStateChange,
+    );
 
     // Cleanup
     return () => {
@@ -713,7 +877,20 @@ const HomeScreen = () => {
 
   const formatDate = (date: Date) => {
     const day = date.getDate();
-    const months = ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUI', 'JUI', 'AOÛ', 'SEP', 'OCT', 'NOV', 'DÉC'];
+    const months = [
+      'JAN',
+      'FÉV',
+      'MAR',
+      'AVR',
+      'MAI',
+      'JUI',
+      'JUI',
+      'AOÛ',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DÉC',
+    ];
     return { day, month: months[date.getMonth()] };
   };
 
@@ -724,14 +901,17 @@ const HomeScreen = () => {
 
     // Si c'est un popup de bienvenue (champ type OU titre contient "bienvenue", "welcome", "مرحبا")
     const titreNormalized = (popup.titre || '').toLowerCase();
-    const isWelcomePopup = (popup as any).type === 'bienvenue' ||
-                           titreNormalized.includes('bienvenue') ||
-                           titreNormalized.includes('welcome') ||
-                           (popup.titre || '').includes('مرحبا');
+    const isWelcomePopup =
+      (popup as any).type === 'bienvenue' ||
+      titreNormalized.includes('bienvenue') ||
+      titreNormalized.includes('welcome') ||
+      (popup.titre || '').includes('مرحبا');
 
     if (isWelcomePopup) {
       // Ne montrer que si c'est la première ouverture de l'app (jamais vue avant)
-      const hasLaunched = await AsyncStorage.getItem('app_has_launched_welcome');
+      const hasLaunched = await AsyncStorage.getItem(
+        'app_has_launched_welcome',
+      );
       if (hasLaunched !== 'true') {
         await AsyncStorage.setItem('app_has_launched_welcome', 'true');
         return true;
@@ -763,7 +943,9 @@ const HomeScreen = () => {
         if (!lastShown) return true;
         const lastDate = new Date(lastShown);
         const now = new Date();
-        const diffDays = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+        const diffDays = Math.floor(
+          (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
+        );
         return diffDays >= 7;
       }
 
@@ -833,7 +1015,9 @@ const HomeScreen = () => {
               showsVerticalScrollIndicator={true}
             >
               <Text style={styles.popupTitle}>{activePopup?.titre || ''}</Text>
-              <Text style={styles.popupContent}>{activePopup?.contenu || ''}</Text>
+              <Text style={styles.popupContent}>
+                {activePopup?.contenu || ''}
+              </Text>
             </ScrollView>
             <TouchableOpacity
               style={styles.popupButton}
@@ -864,41 +1048,67 @@ const HomeScreen = () => {
               <Text style={styles.calendarCloseBtnText}>×</Text>
             </TouchableOpacity>
 
-            <Text style={[styles.calendarModalTitle, isRTL && styles.rtlText]}>📅 {t('hijriCalendar')}</Text>
+            <Text style={[styles.calendarModalTitle, isRTL && styles.rtlText]}>
+              📅 {t('hijriCalendar')}
+            </Text>
 
             <View style={styles.hijriDateCenter}>
-              <Text style={[styles.hijriLabel, isRTL && styles.rtlText]}>{t('todayLabel')}</Text>
-              <Text style={styles.hijriDay}>{islamicDate.day} {isRTL ? islamicDate.monthAr : islamicDate.month}</Text>
+              <Text style={[styles.hijriLabel, isRTL && styles.rtlText]}>
+                {t('todayLabel')}
+              </Text>
+              <Text style={styles.hijriDay}>
+                {islamicDate.day}{' '}
+                {isRTL ? islamicDate.monthAr : islamicDate.month}
+              </Text>
               <Text style={styles.hijriYear}>{islamicDate.year} H</Text>
               <Text style={styles.hijriGregorian}>{islamicDate.gregorian}</Text>
             </View>
 
             <View style={styles.hijriDivider} />
 
-            <Text style={[styles.upcomingLabel, isRTL && styles.rtlText]}>{t('upcomingEvents')}</Text>
-            <Text style={styles.approximatif}>
-              {t('approximateDates')}
+            <Text style={[styles.upcomingLabel, isRTL && styles.rtlText]}>
+              {t('upcomingEvents')}
             </Text>
+            <Text style={styles.approximatif}>{t('approximateDates')}</Text>
 
             {(islamicEvents || []).slice(0, 3).map((event, index) => {
               const eventDate = new Date(event.dateGregorien);
-              const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-              const daysLeft = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+              const today = new Date(
+                new Date().toLocaleString('en-US', {
+                  timeZone: 'Europe/Paris',
+                }),
+              );
+              const daysLeft = Math.ceil(
+                (eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+              );
               if (daysLeft < 0) return null;
-              const formattedDate = eventDate.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+              const formattedDate = eventDate.toLocaleDateString(
+                isRTL ? 'ar-SA' : 'fr-FR',
+                { day: 'numeric', month: 'long', year: 'numeric' },
+              );
               return (
-                <View key={event.id} style={[
-                  styles.calendarEventRow,
-                  isRTL && styles.eventRowRTL,
-                  index === Math.min(islamicEvents.length - 1, 2) && styles.eventRowLast
-                ]}>
+                <View
+                  key={event.id}
+                  style={[
+                    styles.calendarEventRow,
+                    isRTL && styles.eventRowRTL,
+                    index === Math.min(islamicEvents.length - 1, 2) &&
+                      styles.eventRowLast,
+                  ]}
+                >
                   <Text style={styles.eventIcon}>{event.icon}</Text>
                   <View style={styles.eventInfo}>
-                    <Text style={[styles.eventName, isRTL && styles.rtlText]}>{isRTL ? event.nomAr : event.nom}</Text>
-                    <Text style={[styles.eventDate, isRTL && styles.rtlText]}>{formattedDate}</Text>
+                    <Text style={[styles.eventName, isRTL && styles.rtlText]}>
+                      {isRTL ? event.nomAr : event.nom}
+                    </Text>
+                    <Text style={[styles.eventDate, isRTL && styles.rtlText]}>
+                      {formattedDate}
+                    </Text>
                   </View>
                   <View style={styles.daysLeftBadge}>
-                    <Text style={styles.daysLeftText}>{isRTL ? `${daysLeft} يوم` : `J-${daysLeft}`}</Text>
+                    <Text style={styles.daysLeftText}>
+                      {isRTL ? `${daysLeft} يوم` : `J-${daysLeft}`}
+                    </Text>
                   </View>
                 </View>
               );
@@ -986,11 +1196,16 @@ const HomeScreen = () => {
               </TouchableOpacity>
             )}
 
-            <ScrollView style={styles.historyScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.historyScroll}
+              showsVerticalScrollIndicator={false}
+            >
               {notificationHistory.length === 0 ? (
                 <View style={styles.historyEmptyContainer}>
                   <Text style={styles.historyEmptyIcon}>📭</Text>
-                  <Text style={[styles.historyEmptyText, isRTL && styles.rtlText]}>
+                  <Text
+                    style={[styles.historyEmptyText, isRTL && styles.rtlText]}
+                  >
                     {isRTL ? 'لا توجد إشعارات' : 'Aucune notification récente'}
                   </Text>
                 </View>
@@ -1009,27 +1224,55 @@ const HomeScreen = () => {
                     <TouchableOpacity
                       key={notif.id}
                       activeOpacity={0.7}
-                      onPress={() => setExpandedNotifId(isExpanded ? null : notif.id)}
+                      onPress={() =>
+                        setExpandedNotifId(isExpanded ? null : notif.id)
+                      }
                       style={[
                         styles.historyItem,
-                        index === notificationHistory.length - 1 && styles.historyItemLast,
+                        index === notificationHistory.length - 1 &&
+                          styles.historyItemLast,
                         !notif.read && styles.historyItemUnread,
                       ]}
                     >
                       <Text style={styles.historyItemIcon}>{typeIcon}</Text>
                       <View style={styles.historyItemContent}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={[styles.historyItemTitle, isRTL && styles.rtlText, { flex: 1 }]} numberOfLines={isExpanded ? undefined : 1}>
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.historyItemTitle,
+                              isRTL && styles.rtlText,
+                              { flex: 1 },
+                            ]}
+                            numberOfLines={isExpanded ? undefined : 1}
+                          >
                             {notif.title}
                           </Text>
-                          <Text style={styles.historyExpandIcon}>{isExpanded ? '▲' : '▼'}</Text>
+                          <Text style={styles.historyExpandIcon}>
+                            {isExpanded ? '▲' : '▼'}
+                          </Text>
                         </View>
                         {isExpanded && notif.body ? (
-                          <Text style={[styles.historyItemBody, isRTL && styles.rtlText]}>
+                          <Text
+                            style={[
+                              styles.historyItemBody,
+                              isRTL && styles.rtlText,
+                            ]}
+                          >
                             {notif.body}
                           </Text>
                         ) : null}
-                        <Text style={[styles.historyItemTime, isRTL && styles.rtlText]}>
+                        <Text
+                          style={[
+                            styles.historyItemTime,
+                            isRTL && styles.rtlText,
+                          ]}
+                        >
                           {getRelativeTime(notif.timestamp)}
                         </Text>
                       </View>
@@ -1044,7 +1287,9 @@ const HomeScreen = () => {
               onPress={() => setShowNotificationHistory(false)}
               activeOpacity={0.7}
             >
-              <Text style={styles.historyOkBtnText}>{isRTL ? 'إغلاق' : 'Fermer'}</Text>
+              <Text style={styles.historyOkBtnText}>
+                {isRTL ? 'إغلاق' : 'Fermer'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1071,29 +1316,68 @@ const HomeScreen = () => {
             <Text style={[styles.servicesModalTitle, isRTL && styles.rtlText]}>
               🕌 {t('services')}
             </Text>
-            <Text style={[styles.servicesModalSubtitle, isRTL && styles.rtlText]}>
-              {isRTL ? 'جميع الخدمات المتاحة في مسجدنا' : 'Tous les services disponibles dans notre mosquée'}
+            <Text
+              style={[styles.servicesModalSubtitle, isRTL && styles.rtlText]}
+            >
+              {isRTL
+                ? 'جميع الخدمات المتاحة في مسجدنا'
+                : 'Tous les services disponibles dans notre mosquée'}
             </Text>
 
-            <ScrollView style={styles.servicesModalScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.servicesModalScroll}
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.servicesModalGrid}>
                 {[
                   { icon: '🅿️', labelKey: 'parking', descKey: 'parkingDesc' },
-                  { icon: '♿', labelKey: 'accessHandicapes', descKey: 'accessHandicapesDesc' },
-                  { icon: '💧', labelKey: 'salleAblution', descKey: 'salleAblutionDesc' },
-                  { icon: '👩', labelKey: 'espaceFemmes', descKey: 'espaceFemmesDesc' },
-                  { icon: '📚', labelKey: 'coursAdultes', descKey: 'coursAdultesDesc' },
-                  { icon: '👶', labelKey: 'coursEnfants', descKey: 'coursEnfantsDesc' },
+                  {
+                    icon: '♿',
+                    labelKey: 'accessHandicapes',
+                    descKey: 'accessHandicapesDesc',
+                  },
+                  {
+                    icon: '💧',
+                    labelKey: 'salleAblution',
+                    descKey: 'salleAblutionDesc',
+                  },
+                  {
+                    icon: '👩',
+                    labelKey: 'espaceFemmes',
+                    descKey: 'espaceFemmesDesc',
+                  },
+                  {
+                    icon: '📚',
+                    labelKey: 'coursAdultes',
+                    descKey: 'coursAdultesDesc',
+                  },
+                  {
+                    icon: '👶',
+                    labelKey: 'coursEnfants',
+                    descKey: 'coursEnfantsDesc',
+                  },
                 ].map((service, index) => (
                   <View key={index} style={styles.servicesModalItem}>
                     <View style={styles.servicesModalItemIcon}>
-                      <Text style={styles.servicesModalItemIconText}>{service.icon}</Text>
+                      <Text style={styles.servicesModalItemIconText}>
+                        {service.icon}
+                      </Text>
                     </View>
                     <View style={styles.servicesModalItemInfo}>
-                      <Text style={[styles.servicesModalItemLabel, isRTL && styles.rtlText]}>
+                      <Text
+                        style={[
+                          styles.servicesModalItemLabel,
+                          isRTL && styles.rtlText,
+                        ]}
+                      >
                         {t(service.labelKey as any)}
                       </Text>
-                      <Text style={[styles.servicesModalItemDesc, isRTL && styles.rtlText]}>
+                      <Text
+                        style={[
+                          styles.servicesModalItemDesc,
+                          isRTL && styles.rtlText,
+                        ]}
+                      >
                         {isRTL ? 'متوفر' : 'Disponible'}
                       </Text>
                     </View>
@@ -1108,481 +1392,735 @@ const HomeScreen = () => {
               onPress={() => setShowServicesModal(false)}
               activeOpacity={0.7}
             >
-              <Text style={styles.servicesModalOkBtnText}>{isRTL ? 'إغلاق' : 'Fermer'}</Text>
+              <Text style={styles.servicesModalOkBtnText}>
+                {isRTL ? 'إغلاق' : 'Fermer'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-    <BackgroundPattern>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.accent}
-            colors={[colors.accent, '#D4AF37']}
-            progressBackgroundColor="#FFFFFF"
-          />
-        }
-      >
-        {/* Header - Image ou Salam */}
-        {headerImageUrl ? (
-          <Image
-            source={{ uri: headerImageUrl }}
-            style={styles.headerImage}
-            resizeMode="cover"
-            onLoad={() => logger.log('[HomeScreen] Header image loaded successfully')}
-            onError={(e) => logger.error('[HomeScreen] Header image error:', e.nativeEvent.error)}
-          />
-        ) : (
-          <LinearGradient
-            colors={colors.headerGradient}
-            style={styles.salamHeader}
-          >
-            <Text style={styles.salamArabic}>
-              {t('welcome')}
-            </Text>
-            <Text style={[styles.salamTranslation, isRTL && styles.rtlText]}>
-              {t('salamTranslation')}
-            </Text>
-            <View style={styles.salamDivider} />
-          </LinearGradient>
-        )}
-
-        {/* Titre avec icônes cloche + message */}
-        <View style={styles.header}>
-          <View style={styles.headerTitleRow}>
-            <Text style={[styles.title, isRTL && styles.rtlText]}>🕌 {t('mosqueName')}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <TouchableOpacity
-                onPress={async () => { await AsyncStorage.setItem('messages_last_read_at', new Date().toISOString()); setUnreadMsgCount(0); navigation.navigate('Messages'); }}
-                style={styles.bellButton}
-                accessibilityLabel="Messages"
-                accessibilityRole="button"
-              >
-                <Text style={styles.bellIcon}>💬</Text>
-                {unreadMsgCount > 0 && (
-                  <View style={styles.bellBadge}>
-                    <Text style={styles.bellBadgeText}>
-                      {unreadMsgCount > 9 ? '9+' : unreadMsgCount}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={openNotificationHistory}
-                style={styles.bellButton}
-                accessibilityLabel={t('notificationHistory')}
-                accessibilityRole="button"
-              >
-                <Text style={styles.bellIcon}>🔔</Text>
-                {unreadNotifCount > 0 && (
-                  <View style={styles.bellBadge}>
-                    <Text style={styles.bellBadgeText}>
-                      {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-          <Text style={[styles.subtitle, isRTL && styles.rtlText]}>{t('mosqueLocation')}</Text>
-        </View>
-
-        {/* Error Banner */}
-        {loadError && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorBannerText}>{loadError}</Text>
-          </View>
-        )}
-
-        {/* Prayer Data Warning Banner */}
-        {prayerDataWarning && (
-          <View style={styles.warningBanner}>
-            <Text style={styles.warningText}>
-              ⚠️ Horaires estimés — Vérifiez votre connexion
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.content}>
-          {/* Prochaine prière */}
-          <View style={styles.nextPrayerCard}>
-            {/* Heure de Paris */}
-            <Text style={styles.parisTime}>{parisTime}</Text>
-            <Text style={[styles.nextPrayerLabel, isRTL && styles.rtlText]}>{t('nextPrayer')}</Text>
-            <Text style={[styles.nextPrayerName, isRTL && styles.rtlText]}>{nextPrayer.icon} {getPrayerName(nextPrayer.name)}</Text>
-            <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
-            <Text style={styles.countdown}>{countdown}</Text>
-            {/* Dates sous le countdown */}
-            <Text style={styles.dateGregorian}>
-              {new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Paris' })}
-            </Text>
-            <Text style={styles.dateHijri}>
-              {islamicDate.day} {isRTL ? islamicDate.monthAr : islamicDate.month} {islamicDate.year}
-            </Text>
-
-            {/* Bouton J'ai prié - masqué après le clic jusqu'à la prochaine prière */}
-            {boostSettings?.enabled && currentPrayer && !hasPrayedCurrentPrayer && (
-              <TouchableOpacity
-                style={[styles.prayedButton, { marginTop: 12 }]}
-                onPress={handlePrayed}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.prayedButtonText}>
-                  ✅ {isRTL ? `صليت ${currentPrayer.nameAr}` : `J'ai prié ${getPrayerName(currentPrayer.name)}`}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Section Ramadan */}
-          {ramadanSettings?.enabled && ramadanDay && (
-            <View style={styles.ramadanSection}>
-              <LinearGradient
-                colors={['rgba(139,92,246,0.20)', 'rgba(139,92,246,0.05)']}
-                style={styles.ramadanGradient}
-              >
-                {/* Header */}
-                <View style={styles.ramadanHeader}>
-                  <Text style={styles.ramadanMubarak} numberOfLines={1} adjustsFontSizeToFit>
-                    {language === 'ar' ? 'رمضان مبارك 🌙' : 'Ramadan Mubarak 🌙'}
-                  </Text>
-                  <Text style={styles.ramadanDay}>
-                    {language === 'ar' ? `اليوم ${ramadanDay}/30` : `Jour ${ramadanDay}/30`}
-                  </Text>
-                </View>
-
-                {/* 3 colonnes Suhoor / Iftar / Tarawih */}
-                <View style={styles.ramadanTimesRow}>
-
-                  {/* Suhoor */}
-                  <View style={styles.ramadanTimeCard}>
-                    <Text style={styles.ramadanTimeLabel}>
-                      {language === 'ar' ? 'السحور' : 'Suhoor'}
-                    </Text>
-                    <Text style={styles.ramadanTimeIcon}>☀️</Text>
-                    <Text style={styles.ramadanTimeValue}>
-                      {prayerTimes.find(p => p.name === 'Fajr')?.time || '--:--'}
-                    </Text>
-                    <Text style={styles.ramadanTimeSubLabel} numberOfLines={1} adjustsFontSizeToFit>
-                      {language === 'ar' ? 'قبل الفجر' : 'Fin Suhoor'}
-                    </Text>
-                  </View>
-
-                  {/* Séparateur vertical */}
-                  <View style={styles.ramadanDivider} />
-
-                  {/* Iftar */}
-                  <View style={styles.ramadanTimeCard}>
-                    <Text style={styles.ramadanTimeLabel}>
-                      {language === 'ar' ? 'الإفطار' : 'Iftar'}
-                    </Text>
-                    <Text style={styles.ramadanTimeIcon}>🌙</Text>
-                    <Text style={styles.ramadanTimeValue}>
-                      {prayerTimes.find(p => p.name === 'Maghrib')?.time || '--:--'}
-                    </Text>
-                    <Text style={styles.ramadanTimeSubLabel} numberOfLines={1} adjustsFontSizeToFit>
-                      {language === 'ar' ? 'وقت المغرب' : 'Au Maghrib'}
-                    </Text>
-                  </View>
-
-                  {/* Séparateur vertical */}
-                  <View style={styles.ramadanDivider} />
-
-                  {/* Tarawih */}
-                  <View style={styles.ramadanTimeCard}>
-                    <Text style={styles.ramadanTimeLabel}>
-                      {language === 'ar' ? 'التراويح' : 'Tarawih'}
-                    </Text>
-                    <Text style={styles.ramadanTimeIcon}>🕌</Text>
-                    <Text style={styles.ramadanTimeValue}>
-                      {ramadanSettings.tarawihTime || '--:--'}
-                    </Text>
-                    <Text style={styles.ramadanTimeSubLabel} numberOfLines={1} adjustsFontSizeToFit>
-                      {language === 'ar' ? 'بعد العشاء' : 'Après Isha'}
-                    </Text>
-                  </View>
-
-                </View>
-              </LinearGradient>
-            </View>
-          )}
-
-          {/* Rappel du jour */}
-          <View style={styles.rappelContainer}>
-            <Text style={[styles.rappelTitle, isRTL && styles.rtlText]}>📿 {t('dailyReminder')}</Text>
-            <Text style={[styles.rappelText, isRTL && styles.rtlText]}>
-              "{currentRappel
-                ? (isRTL ? currentRappel.texteAr : currentRappel.texteFr)
-                : (isRTL
-                  ? 'إنما الأعمال بالنيات، وإنما لكل امرئ ما نوى'
-                  : 'Les actes ne valent que par leurs intentions, et chacun sera rétribué selon son intention.')}"
-            </Text>
-            <Text style={[styles.rappelSource, isRTL && styles.rtlText]}>
-              - {currentRappel?.source || (isRTL ? 'البخاري ومسلم' : 'Hadith Bukhari & Muslim')}
-            </Text>
-          </View>
-
-          {/* Bouton Nos Services */}
-          <TouchableOpacity
-            style={styles.servicesButton}
-            onPress={() => setShowServicesModal(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.servicesButtonIcon}>🕌</Text>
-            <View style={styles.servicesButtonContent}>
-              <Text style={[styles.servicesButtonText, isRTL && styles.rtlText]}>{t('services')}</Text>
-              <Text style={[styles.servicesButtonSubtext, isRTL && styles.rtlText]}>
-                {isRTL ? 'اكتشف جميع خدماتنا' : 'Découvrir tous nos services'}
-              </Text>
-            </View>
-            <Text style={styles.servicesButtonArrow}>→</Text>
-          </TouchableOpacity>
-
-          {/* Horaires */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>🕐 {t('todaySchedule')}</Text>
-              <TouchableOpacity
-                onPress={() => setShowCalendar(!showCalendar)}
-                style={styles.calendarToggle}
-                accessibilityLabel="Voir le calendrier hégirien"
-                accessibilityRole="button"
-                accessibilityHint="Affiche les dates islamiques importantes"
-              >
-                <Text style={styles.calendarToggleText}>📅</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.prayerCard}>
-              {/* En-tête des colonnes */}
-              <View style={[styles.prayerHeaderRow, isRTL && styles.prayerRowRTL]}>
-                <Text style={[styles.prayerHeaderText, isRTL && styles.rtlText]}>{t('prayer')}</Text>
-                <View style={styles.prayerTimesHeader}>
-                  <Text style={styles.prayerHeaderLabel}>{t('adhan')}</Text>
-                  {displaySettings.showIqama && (
-                    <Text style={styles.prayerHeaderLabel}>{t('iqama')}</Text>
-                  )}
-                </View>
-              </View>
-              {(displayedPrayerTimes || []).map((prayer, index) => {
-                // Pas d'iqama pour Shurûq
-                const iqamaTime = (displaySettings.showIqama && prayer.name !== 'Shurûq')
-                  ? getIqamaTime(prayer.name, prayer.time)
-                  : null;
-                return (
-                  <View
-                    key={prayer.name}
-                    style={[
-                      styles.prayerRow,
-                      isRTL && styles.prayerRowRTL,
-                      index === displayedPrayerTimes.length - 1 && styles.prayerRowLast,
-                      prayer.name === nextPrayer.name && styles.prayerRowActive,
-                    ]}
-                  >
-                    <View style={[styles.prayerName, isRTL && styles.prayerNameRTL]}>
-                      <Text style={styles.prayerIcon}>{prayer.icon}</Text>
-                      <Text style={[styles.prayerNameText, isRTL && styles.rtlText]}>{getPrayerName(prayer.name)}</Text>
-                    </View>
-                    <View style={styles.prayerTimesRow}>
-                      <Text style={styles.prayerTimeAdhan}>{prayer.time}</Text>
-                      {displaySettings.showIqama && (
-                        <Text style={styles.prayerTimeIqama}>{prayer.name === 'Shurûq' ? '-' : (iqamaTime || '-')}</Text>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Bouton calendrier des prières annuel */}
-            <TouchableOpacity
-              onPress={() => navigation.navigate('PrayerCalendar')}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'rgba(201,162,39,0.1)',
-                borderRadius: 12,
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                marginTop: 12,
-                borderWidth: 1,
-                borderColor: 'rgba(201,162,39,0.3)',
-              }}
-              accessibilityLabel="Voir le calendrier annuel des prières"
-              accessibilityRole="button"
+      <BackgroundPattern>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.accent}
+              colors={[colors.accent, '#D4AF37']}
+              progressBackgroundColor="#FFFFFF"
+            />
+          }
+        >
+          {/* Header - Image ou Salam */}
+          {headerImageUrl ? (
+            <Image
+              source={{ uri: headerImageUrl }}
+              style={styles.headerImage}
+              resizeMode="cover"
+              onLoad={() =>
+                logger.log('[HomeScreen] Header image loaded successfully')
+              }
+              onError={e =>
+                logger.error(
+                  '[HomeScreen] Header image error:',
+                  e.nativeEvent.error,
+                )
+              }
+            />
+          ) : (
+            <LinearGradient
+              colors={colors.headerGradient}
+              style={styles.salamHeader}
             >
-              <Text style={{ fontSize: 18, marginRight: 8 }}>📅</Text>
-              <Text style={{ fontSize: 14, color: '#C9A227', fontWeight: '600' }}>
-                {language === 'ar' ? 'تقويم الصلاة السنوي' : 'Calendrier annuel des prières'}
+              <Text style={styles.salamArabic}>{t('welcome')}</Text>
+              <Text style={[styles.salamTranslation, isRTL && styles.rtlText]}>
+                {t('salamTranslation')}
               </Text>
-              <Text style={{ marginLeft: 'auto', fontSize: 16, color: '#C9A227' }}>→</Text>
-            </TouchableOpacity>
+              <View style={styles.salamDivider} />
+            </LinearGradient>
+          )}
+
+          {/* Titre avec icônes cloche + message */}
+          <View style={styles.header}>
+            <View style={styles.headerTitleRow}>
+              <Text style={[styles.title, isRTL && styles.rtlText]}>
+                🕌 {t('mosqueName')}
+              </Text>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+              >
+                <TouchableOpacity
+                  onPress={async () => {
+                    await AsyncStorage.setItem(
+                      'messages_last_read_at',
+                      new Date().toISOString(),
+                    );
+                    setUnreadMsgCount(0);
+                    navigation.navigate('Messages');
+                  }}
+                  style={styles.bellButton}
+                  accessibilityLabel="Messages"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.bellIcon}>💬</Text>
+                  {unreadMsgCount > 0 && (
+                    <View style={styles.bellBadge}>
+                      <Text style={styles.bellBadgeText}>
+                        {unreadMsgCount > 9 ? '9+' : unreadMsgCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={openNotificationHistory}
+                  style={styles.bellButton}
+                  accessibilityLabel={t('notificationHistory')}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.bellIcon}>🔔</Text>
+                  {unreadNotifCount > 0 && (
+                    <View style={styles.bellBadge}>
+                      <Text style={styles.bellBadgeText}>
+                        {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+            <Text style={[styles.subtitle, isRTL && styles.rtlText]}>
+              {t('mosqueLocation')}
+            </Text>
           </View>
 
-          {/* Horaire Jumu'a - Affiché si c'est vendredi ou jeudi */}
-          {jumuaTimes?.jumua1 && (() => { const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' })); return d.getDay() === 5 || d.getDay() === 4; })() && (
-            <View style={styles.jumuaSection}>
-              <View style={styles.jumuaCard}>
-                <Text style={styles.jumuaIcon}>🕌</Text>
-                <View style={styles.jumuaInfo}>
-                  <Text style={[styles.jumuaTitle, isRTL && styles.rtlText]}>
-                    {t('fridayPrayer')}
-                  </Text>
-                  <Text style={[styles.jumuaTime, isRTL && styles.rtlText]}>
-                    {t('sermonStartsAt')} {jumuaTimes.jumua1}
-                  </Text>
-                  <Text style={[styles.jumuaMessage, isRTL && styles.rtlText]}>
-                    📍 {t('arriveEarly')}
-                  </Text>
-                </View>
-              </View>
+          {/* Error Banner */}
+          {loadError && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{loadError}</Text>
             </View>
           )}
 
-          {/* Calendrier Hégirien est maintenant dans une Modal (voir ci-dessous) */}
+          {/* Prayer Data Warning Banner */}
+          {prayerDataWarning && (
+            <View style={styles.warningBanner}>
+              <Text style={styles.warningText}>
+                ⚠️ Horaires estimés — Vérifiez votre connexion
+              </Text>
+            </View>
+          )}
 
-          {/* Salat Janaza - Masqué si aucune donnée Firebase */}
-          {janazaList.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>⚰️ {t('janazaUpcoming')}</Text>
-            {janazaList.map((janazaItem: any) => {
-                // Normaliser les champs (Firebase vs Mock)
-                const dateValue = janazaItem.prayerDate || janazaItem.date;
-                const dateObj = dateValue instanceof Date ? dateValue :
-                  (dateValue ? new Date(dateValue) : new Date());
-                const prenom = janazaItem.deceasedFirstName || janazaItem.prenom || '';
-                const nomBase = janazaItem.deceasedName || janazaItem.nom || '';
-                const nom = prenom ? `${prenom} ${nomBase}`.trim() : nomBase;
-                const lieu = janazaItem.location || janazaItem.lieu;
-                const adresseCimetiere = janazaItem.cemeteryAddress || '';
-                const heure = janazaItem.prayerTime || janazaItem.heure;
-                const phraseAr = janazaItem.deceasedNameAr || janazaItem.phraseAr || 'إِنَّا لِلَّهِ وَإِنَّا إِلَيْهِ رَاجِعُونَ';
-                const phraseFr = janazaItem.message || janazaItem.phraseFr || 'Nous sommes à Allah et vers Lui nous retournons';
+          <View style={styles.content}>
+            {/* Prochaine prière */}
+            <View style={styles.nextPrayerCard}>
+              {/* Heure de Paris */}
+              <Text style={styles.parisTime}>{parisTime}</Text>
+              <Text style={[styles.nextPrayerLabel, isRTL && styles.rtlText]}>
+                {t('nextPrayer')}
+              </Text>
+              <Text style={[styles.nextPrayerName, isRTL && styles.rtlText]}>
+                {nextPrayer.icon} {getPrayerName(nextPrayer.name)}
+              </Text>
+              <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
+              <Text style={styles.countdown}>{countdown}</Text>
+              {/* Dates sous le countdown */}
+              <Text style={styles.dateGregorian}>
+                {new Date().toLocaleDateString('fr-FR', {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                  timeZone: 'Europe/Paris',
+                })}
+              </Text>
+              <Text style={styles.dateHijri}>
+                {islamicDate.day}{' '}
+                {isRTL ? islamicDate.monthAr : islamicDate.month}{' '}
+                {islamicDate.year}
+              </Text>
 
-                const joursSemaineFr = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-                const joursSemaineAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-                const moisFr = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-                const moisAr = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-                const joursSemaine = isRTL ? joursSemaineAr : joursSemaineFr;
-                const mois = isRTL ? moisAr : moisFr;
-                const dateFormatee = `${joursSemaine[dateObj.getDay()]} ${dateObj.getDate()} ${mois[dateObj.getMonth()]}`;
-                // Construire l'info d'heure: soit l'heure exacte, soit "Après [prière]"
-                // Firebase: salatApres avec format "apres_dhuhr", "apres_asr", etc.
-                // Mock: apresSalat avec format "dhuhr", "asr", etc.
-                let heureInfo = heure;
-                const salatValue = janazaItem.salatApres || janazaItem.apresSalat;
-                if (!heureInfo && salatValue) {
-                  // Extraire le nom de la prière (ex: "apres_dhuhr" -> "dhuhr", ou juste "dhuhr")
-                  const prayerKey = salatValue.replace('apres_', '');
-                  heureInfo = `${t('afterPrayerPrefix')} ${getPrayerName(prayerKey)}`;
-                }
-                if (!heureInfo) {
-                  heureInfo = t('timeToConfirm') || 'Heure à confirmer';
-                }
-
-                return (
+              {/* Bouton J'ai prié - masqué après le clic jusqu'à la prochaine prière */}
+              {boostSettings?.enabled &&
+                currentPrayer &&
+                !hasPrayedCurrentPrayer && (
                   <TouchableOpacity
-                    key={janazaItem.id}
-                    style={styles.janazaMockCard}
-                    onPress={() => Alert.alert(
-                      `⚰️ ${t('janazaPrayer')}`,
-                      `👤 ${nom}\n\n📅 ${dateFormatee}\n⏰ ${heureInfo}\n📍 ${lieu}${adresseCimetiere ? `\n🪦 ${adresseCimetiere}` : ''}\n\n"${isRTL ? phraseAr : phraseFr}"`,
-                      [{ text: 'OK' }]
-                    )}
+                    style={[styles.prayedButton, { marginTop: 12 }]}
+                    onPress={handlePrayed}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.janazaCardHeader}>
-                      <Text style={styles.janazaCardTitle}>🕋 {t('janazaPrayer')}</Text>
-                      <Text style={styles.tapIndicator}>ℹ️</Text>
-                    </View>
-                    <View style={styles.janazaMockInfo}>
-                      <Text style={[styles.janazaMockName, isRTL && styles.rtlText]} numberOfLines={1}>
-                        {nom || t('funeralPrayer')}
-                      </Text>
-                      <Text style={[styles.janazaMockDate, isRTL && styles.rtlText]} numberOfLines={1}>
-                        📅 {dateFormatee} - {heureInfo}
-                      </Text>
-                    </View>
+                    <Text style={styles.prayedButtonText}>
+                      ✅{' '}
+                      {isRTL
+                        ? `صليت ${currentPrayer.nameAr}`
+                        : `J'ai prié ${getPrayerName(currentPrayer.name)}`}
+                    </Text>
                   </TouchableOpacity>
-                );
-              })}
-          </View>
-          )}
-
-          {/* Annonces - Masqué si aucune donnée */}
-          {(announcements || []).length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📢 {t('announcements')}</Text>
-            {announcements.map((announcement) => {
-              const titreAffiche = (language === 'ar' && announcement.titleAr) ? announcement.titleAr : announcement.title;
-              const contenuAffiche = (language === 'ar' && announcement.contentAr) ? announcement.contentAr : announcement.content;
-              return (
-              <TouchableOpacity
-                key={announcement.id}
-                style={styles.card}
-                onPress={() => Alert.alert(
-                  `📢 ${titreAffiche}`,
-                  `${contenuAffiche}\n\n📅 ${t('publishedOn')} ${announcement.publishedAt?.toLocaleDateString(isRTL ? 'ar-SA' : 'fr-FR')}`,
-                  [{ text: 'OK' }]
                 )}
-                activeOpacity={0.7}
-              >
-                <View style={styles.announcementHeader}>
-                  <Text style={[styles.announcementTitle, isRTL && styles.rtlText, { flex: 1 }]} numberOfLines={1}>{titreAffiche}</Text>
-                  <Text style={styles.tapIndicator}>ℹ️</Text>
-                </View>
-                <Text style={[styles.announcementContent, isRTL && styles.rtlText]} numberOfLines={2}>{contenuAffiche}</Text>
-              </TouchableOpacity>
-              );
-            })}
-          </View>
-          )}
+            </View>
 
-
-          {/* Événements - Masqué si aucune donnée */}
-          {(events || []).length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>📅 {t('upcomingEvents')}</Text>
-            {events.map((event) => {
-              const { day, month } = formatDate(event.date);
-              const titreAffiche = (language === 'ar' && event.titleAr) ? event.titleAr : event.title;
-              const descAffiche = (language === 'ar' && event.descriptionAr) ? event.descriptionAr : event.description;
-              return (
-                <TouchableOpacity
-                  key={event.id}
-                  style={styles.card}
-                  onPress={() => Alert.alert(
-                    titreAffiche,
-                    `📅 ${day} ${month}\n⏰ ${event.time}\n📍 ${event.location}${descAffiche ? `\n\n${descAffiche}` : ''}`,
-                    [{ text: 'OK' }]
-                  )}
-                  activeOpacity={0.7}
+            {/* Section Ramadan */}
+            {ramadanSettings?.enabled && ramadanDay && (
+              <View style={styles.ramadanSection}>
+                <LinearGradient
+                  colors={['rgba(139,92,246,0.20)', 'rgba(139,92,246,0.05)']}
+                  style={styles.ramadanGradient}
                 >
-                  <View style={[styles.eventItem, isRTL && styles.eventItemRTL]}>
-                    <View style={styles.eventDateBox}>
-                      <Text style={styles.eventDay}>{day}</Text>
-                      <Text style={styles.eventMonth}>{month}</Text>
-                    </View>
-                    <View style={styles.eventDetails}>
-                      <Text style={[styles.eventTitle, isRTL && styles.rtlText]} numberOfLines={1}>{titreAffiche}</Text>
-                      <Text style={[styles.eventSubtitle, isRTL && styles.rtlText]} numberOfLines={1}>
-                        {event.time} • {event.location}
+                  {/* Header */}
+                  <View style={styles.ramadanHeader}>
+                    <Text
+                      style={styles.ramadanMubarak}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
+                      {language === 'ar'
+                        ? 'رمضان مبارك 🌙'
+                        : 'Ramadan Mubarak 🌙'}
+                    </Text>
+                    <Text style={styles.ramadanDay}>
+                      {language === 'ar'
+                        ? `اليوم ${ramadanDay}/30`
+                        : `Jour ${ramadanDay}/30`}
+                    </Text>
+                  </View>
+
+                  {/* 3 colonnes Suhoor / Iftar / Tarawih */}
+                  <View style={styles.ramadanTimesRow}>
+                    {/* Suhoor */}
+                    <View style={styles.ramadanTimeCard}>
+                      <Text style={styles.ramadanTimeLabel}>
+                        {language === 'ar' ? 'السحور' : 'Suhoor'}
+                      </Text>
+                      <Text style={styles.ramadanTimeIcon}>☀️</Text>
+                      <Text style={styles.ramadanTimeValue}>
+                        {prayerTimes.find(p => p.name === 'Fajr')?.time ||
+                          '--:--'}
+                      </Text>
+                      <Text
+                        style={styles.ramadanTimeSubLabel}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                      >
+                        {language === 'ar' ? 'قبل الفجر' : 'Fin Suhoor'}
                       </Text>
                     </View>
-                    <Text style={styles.tapIndicator}>ℹ️</Text>
+
+                    {/* Séparateur vertical */}
+                    <View style={styles.ramadanDivider} />
+
+                    {/* Iftar */}
+                    <View style={styles.ramadanTimeCard}>
+                      <Text style={styles.ramadanTimeLabel}>
+                        {language === 'ar' ? 'الإفطار' : 'Iftar'}
+                      </Text>
+                      <Text style={styles.ramadanTimeIcon}>🌙</Text>
+                      <Text style={styles.ramadanTimeValue}>
+                        {prayerTimes.find(p => p.name === 'Maghrib')?.time ||
+                          '--:--'}
+                      </Text>
+                      <Text
+                        style={styles.ramadanTimeSubLabel}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                      >
+                        {language === 'ar' ? 'وقت المغرب' : 'Au Maghrib'}
+                      </Text>
+                    </View>
+
+                    {/* Séparateur vertical */}
+                    <View style={styles.ramadanDivider} />
+
+                    {/* Tarawih */}
+                    <View style={styles.ramadanTimeCard}>
+                      <Text style={styles.ramadanTimeLabel}>
+                        {language === 'ar' ? 'التراويح' : 'Tarawih'}
+                      </Text>
+                      <Text style={styles.ramadanTimeIcon}>🕌</Text>
+                      <Text style={styles.ramadanTimeValue}>
+                        {ramadanSettings.tarawihTime || '--:--'}
+                      </Text>
+                      <Text
+                        style={styles.ramadanTimeSubLabel}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                      >
+                        {language === 'ar' ? 'بعد العشاء' : 'Après Isha'}
+                      </Text>
+                    </View>
                   </View>
+                </LinearGradient>
+              </View>
+            )}
+
+            {/* Rappel du jour */}
+            <View style={styles.rappelContainer}>
+              <Text style={[styles.rappelTitle, isRTL && styles.rtlText]}>
+                📿 {t('dailyReminder')}
+              </Text>
+              <Text style={[styles.rappelText, isRTL && styles.rtlText]}>
+                "
+                {currentRappel
+                  ? isRTL
+                    ? currentRappel.texteAr
+                    : currentRappel.texteFr
+                  : isRTL
+                  ? 'إنما الأعمال بالنيات، وإنما لكل امرئ ما نوى'
+                  : 'Les actes ne valent que par leurs intentions, et chacun sera rétribué selon son intention.'}
+                "
+              </Text>
+              <Text style={[styles.rappelSource, isRTL && styles.rtlText]}>
+                -{' '}
+                {currentRappel?.source ||
+                  (isRTL ? 'البخاري ومسلم' : 'Hadith Bukhari & Muslim')}
+              </Text>
+            </View>
+
+            {/* Bouton Nos Services */}
+            <TouchableOpacity
+              style={styles.servicesButton}
+              onPress={() => setShowServicesModal(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.servicesButtonIcon}>🕌</Text>
+              <View style={styles.servicesButtonContent}>
+                <Text
+                  style={[styles.servicesButtonText, isRTL && styles.rtlText]}
+                >
+                  {t('services')}
+                </Text>
+                <Text
+                  style={[
+                    styles.servicesButtonSubtext,
+                    isRTL && styles.rtlText,
+                  ]}
+                >
+                  {isRTL ? 'اكتشف جميع خدماتنا' : 'Découvrir tous nos services'}
+                </Text>
+              </View>
+              <Text style={styles.servicesButtonArrow}>→</Text>
+            </TouchableOpacity>
+
+            {/* Horaires */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+                  🕐 {t('todaySchedule')}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowCalendar(!showCalendar)}
+                  style={styles.calendarToggle}
+                  accessibilityLabel="Voir le calendrier hégirien"
+                  accessibilityRole="button"
+                  accessibilityHint="Affiche les dates islamiques importantes"
+                >
+                  <Text style={styles.calendarToggleText}>📅</Text>
                 </TouchableOpacity>
-              );
-            })}
+              </View>
+              <View style={styles.prayerCard}>
+                {/* En-tête des colonnes */}
+                <View
+                  style={[styles.prayerHeaderRow, isRTL && styles.prayerRowRTL]}
+                >
+                  <Text
+                    style={[styles.prayerHeaderText, isRTL && styles.rtlText]}
+                  >
+                    {t('prayer')}
+                  </Text>
+                  <View style={styles.prayerTimesHeader}>
+                    <Text style={styles.prayerHeaderLabel}>{t('adhan')}</Text>
+                    {displaySettings.showIqama && (
+                      <Text style={styles.prayerHeaderLabel}>{t('iqama')}</Text>
+                    )}
+                  </View>
+                </View>
+                {(displayedPrayerTimes || []).map((prayer, index) => {
+                  // Pas d'iqama pour Shurûq
+                  const iqamaTime =
+                    displaySettings.showIqama && prayer.name !== 'Shurûq'
+                      ? getIqamaTime(prayer.name, prayer.time)
+                      : null;
+                  return (
+                    <View
+                      key={prayer.name}
+                      style={[
+                        styles.prayerRow,
+                        isRTL && styles.prayerRowRTL,
+                        index === displayedPrayerTimes.length - 1 &&
+                          styles.prayerRowLast,
+                        prayer.name === nextPrayer.name &&
+                          styles.prayerRowActive,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.prayerName,
+                          isRTL && styles.prayerNameRTL,
+                        ]}
+                      >
+                        <Text style={styles.prayerIcon}>{prayer.icon}</Text>
+                        <Text
+                          style={[
+                            styles.prayerNameText,
+                            isRTL && styles.rtlText,
+                          ]}
+                        >
+                          {getPrayerName(prayer.name)}
+                        </Text>
+                      </View>
+                      <View style={styles.prayerTimesRow}>
+                        <Text style={styles.prayerTimeAdhan}>
+                          {prayer.time}
+                        </Text>
+                        {displaySettings.showIqama && (
+                          <Text style={styles.prayerTimeIqama}>
+                            {prayer.name === 'Shurûq' ? '-' : iqamaTime || '-'}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* Bouton calendrier des prières annuel */}
+              <TouchableOpacity
+                onPress={() => navigation.navigate('PrayerCalendar')}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: 'rgba(201,162,39,0.1)',
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  marginTop: 12,
+                  borderWidth: 1,
+                  borderColor: 'rgba(201,162,39,0.3)',
+                }}
+                accessibilityLabel="Voir le calendrier annuel des prières"
+                accessibilityRole="button"
+              >
+                <Text style={{ fontSize: 18, marginRight: 8 }}>📅</Text>
+                <Text
+                  style={{ fontSize: 14, color: '#C9A227', fontWeight: '600' }}
+                >
+                  {language === 'ar'
+                    ? 'تقويم الصلاة السنوي'
+                    : 'Calendrier annuel des prières'}
+                </Text>
+                <Text
+                  style={{ marginLeft: 'auto', fontSize: 16, color: '#C9A227' }}
+                >
+                  →
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Horaire Jumu'a - Affiché si c'est vendredi ou jeudi */}
+            {jumuaTimes?.jumua1 &&
+              (() => {
+                const d = new Date(
+                  new Date().toLocaleString('en-US', {
+                    timeZone: 'Europe/Paris',
+                  }),
+                );
+                return d.getDay() === 5 || d.getDay() === 4;
+              })() && (
+                <View style={styles.jumuaSection}>
+                  <View style={styles.jumuaCard}>
+                    <Text style={styles.jumuaIcon}>🕌</Text>
+                    <View style={styles.jumuaInfo}>
+                      <Text
+                        style={[styles.jumuaTitle, isRTL && styles.rtlText]}
+                      >
+                        {t('fridayPrayer')}
+                      </Text>
+                      <Text style={[styles.jumuaTime, isRTL && styles.rtlText]}>
+                        {t('sermonStartsAt')} {jumuaTimes.jumua1}
+                      </Text>
+                      <Text
+                        style={[styles.jumuaMessage, isRTL && styles.rtlText]}
+                      >
+                        📍 {t('arriveEarly')}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+            {/* Calendrier Hégirien est maintenant dans une Modal (voir ci-dessous) */}
+
+            {/* Salat Janaza - Masqué si aucune donnée Firebase */}
+            {janazaList.length > 0 && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+                  ⚰️ {t('janazaUpcoming')}
+                </Text>
+                {janazaList.map((janazaItem: any) => {
+                  // Normaliser les champs (Firebase vs Mock)
+                  const dateValue = janazaItem.prayerDate || janazaItem.date;
+                  const dateObj =
+                    dateValue instanceof Date
+                      ? dateValue
+                      : dateValue
+                      ? new Date(dateValue)
+                      : new Date();
+                  const prenom =
+                    janazaItem.deceasedFirstName || janazaItem.prenom || '';
+                  const nomBase =
+                    janazaItem.deceasedName || janazaItem.nom || '';
+                  const nom = prenom ? `${prenom} ${nomBase}`.trim() : nomBase;
+                  const lieu = janazaItem.location || janazaItem.lieu;
+                  const adresseCimetiere = janazaItem.cemeteryAddress || '';
+                  const heure = janazaItem.prayerTime || janazaItem.heure;
+                  const phraseAr =
+                    janazaItem.deceasedNameAr ||
+                    janazaItem.phraseAr ||
+                    'إِنَّا لِلَّهِ وَإِنَّا إِلَيْهِ رَاجِعُونَ';
+                  const phraseFr =
+                    janazaItem.message ||
+                    janazaItem.phraseFr ||
+                    'Nous sommes à Allah et vers Lui nous retournons';
+
+                  const joursSemaineFr = [
+                    'Dimanche',
+                    'Lundi',
+                    'Mardi',
+                    'Mercredi',
+                    'Jeudi',
+                    'Vendredi',
+                    'Samedi',
+                  ];
+                  const joursSemaineAr = [
+                    'الأحد',
+                    'الإثنين',
+                    'الثلاثاء',
+                    'الأربعاء',
+                    'الخميس',
+                    'الجمعة',
+                    'السبت',
+                  ];
+                  const moisFr = [
+                    'Janvier',
+                    'Février',
+                    'Mars',
+                    'Avril',
+                    'Mai',
+                    'Juin',
+                    'Juillet',
+                    'Août',
+                    'Septembre',
+                    'Octobre',
+                    'Novembre',
+                    'Décembre',
+                  ];
+                  const moisAr = [
+                    'يناير',
+                    'فبراير',
+                    'مارس',
+                    'أبريل',
+                    'مايو',
+                    'يونيو',
+                    'يوليو',
+                    'أغسطس',
+                    'سبتمبر',
+                    'أكتوبر',
+                    'نوفمبر',
+                    'ديسمبر',
+                  ];
+                  const joursSemaine = isRTL ? joursSemaineAr : joursSemaineFr;
+                  const mois = isRTL ? moisAr : moisFr;
+                  const dateFormatee = `${
+                    joursSemaine[dateObj.getDay()]
+                  } ${dateObj.getDate()} ${mois[dateObj.getMonth()]}`;
+                  // Construire l'info d'heure: soit l'heure exacte, soit "Après [prière]"
+                  // Firebase: salatApres avec format "apres_dhuhr", "apres_asr", etc.
+                  // Mock: apresSalat avec format "dhuhr", "asr", etc.
+                  let heureInfo = heure;
+                  const salatValue =
+                    janazaItem.salatApres || janazaItem.apresSalat;
+                  if (!heureInfo && salatValue) {
+                    // Extraire le nom de la prière (ex: "apres_dhuhr" -> "dhuhr", ou juste "dhuhr")
+                    const prayerKey = salatValue.replace('apres_', '');
+                    heureInfo = `${t('afterPrayerPrefix')} ${getPrayerName(
+                      prayerKey,
+                    )}`;
+                  }
+                  if (!heureInfo) {
+                    heureInfo = t('timeToConfirm') || 'Heure à confirmer';
+                  }
+
+                  return (
+                    <TouchableOpacity
+                      key={janazaItem.id}
+                      style={styles.janazaMockCard}
+                      onPress={() =>
+                        Alert.alert(
+                          `⚰️ ${t('janazaPrayer')}`,
+                          `👤 ${nom}\n\n📅 ${dateFormatee}\n⏰ ${heureInfo}\n📍 ${lieu}${
+                            adresseCimetiere ? `\n🪦 ${adresseCimetiere}` : ''
+                          }\n\n"${isRTL ? phraseAr : phraseFr}"`,
+                          [{ text: 'OK' }],
+                        )
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.janazaCardHeader}>
+                        <Text style={styles.janazaCardTitle}>
+                          🕋 {t('janazaPrayer')}
+                        </Text>
+                        <Text style={styles.tapIndicator}>ℹ️</Text>
+                      </View>
+                      <View style={styles.janazaMockInfo}>
+                        <Text
+                          style={[
+                            styles.janazaMockName,
+                            isRTL && styles.rtlText,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {nom || t('funeralPrayer')}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.janazaMockDate,
+                            isRTL && styles.rtlText,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          📅 {dateFormatee} - {heureInfo}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Annonces - Masqué si aucune donnée */}
+            {(announcements || []).length > 0 && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+                  📢 {t('announcements')}
+                </Text>
+                {announcements.map(announcement => {
+                  const titreAffiche =
+                    language === 'ar' && announcement.titleAr
+                      ? announcement.titleAr
+                      : announcement.title;
+                  const contenuAffiche =
+                    language === 'ar' && announcement.contentAr
+                      ? announcement.contentAr
+                      : announcement.content;
+                  return (
+                    <TouchableOpacity
+                      key={announcement.id}
+                      style={styles.card}
+                      onPress={() =>
+                        Alert.alert(
+                          `📢 ${titreAffiche}`,
+                          `${contenuAffiche}\n\n📅 ${t(
+                            'publishedOn',
+                          )} ${announcement.publishedAt?.toLocaleDateString(
+                            isRTL ? 'ar-SA' : 'fr-FR',
+                          )}`,
+                          [{ text: 'OK' }],
+                        )
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.announcementHeader}>
+                        <Text
+                          style={[
+                            styles.announcementTitle,
+                            isRTL && styles.rtlText,
+                            { flex: 1 },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {titreAffiche}
+                        </Text>
+                        <Text style={styles.tapIndicator}>ℹ️</Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.announcementContent,
+                          isRTL && styles.rtlText,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {contenuAffiche}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Événements - Masqué si aucune donnée */}
+            {(events || []).length > 0 && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>
+                  📅 {t('upcomingEvents')}
+                </Text>
+                {events.map(event => {
+                  const { day, month } = formatDate(event.date);
+                  const titreAffiche =
+                    language === 'ar' && event.titleAr
+                      ? event.titleAr
+                      : event.title;
+                  const descAffiche =
+                    language === 'ar' && event.descriptionAr
+                      ? event.descriptionAr
+                      : event.description;
+                  return (
+                    <TouchableOpacity
+                      key={event.id}
+                      style={styles.card}
+                      onPress={() =>
+                        Alert.alert(
+                          titreAffiche,
+                          `📅 ${day} ${month}\n⏰ ${event.time}\n📍 ${
+                            event.location
+                          }${descAffiche ? `\n\n${descAffiche}` : ''}`,
+                          [{ text: 'OK' }],
+                        )
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[styles.eventItem, isRTL && styles.eventItemRTL]}
+                      >
+                        <View style={styles.eventDateBox}>
+                          <Text style={styles.eventDay}>{day}</Text>
+                          <Text style={styles.eventMonth}>{month}</Text>
+                        </View>
+                        <View style={styles.eventDetails}>
+                          <Text
+                            style={[styles.eventTitle, isRTL && styles.rtlText]}
+                            numberOfLines={1}
+                          >
+                            {titreAffiche}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.eventSubtitle,
+                              isRTL && styles.rtlText,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {event.time} • {event.location}
+                          </Text>
+                        </View>
+                        <Text style={styles.tapIndicator}>ℹ️</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
-          )}
-        </View>
-      </ScrollView>
-    </BackgroundPattern>
+        </ScrollView>
+      </BackgroundPattern>
     </>
   );
 };

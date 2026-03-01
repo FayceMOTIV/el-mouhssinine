@@ -27,7 +27,9 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
   const { category } = route.params as { category: AdhkarCategory };
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
-  const [repetitionCounts, setRepetitionCounts] = useState<Record<string, number>>({});
+  const [repetitionCounts, setRepetitionCounts] = useState<
+    Record<string, number>
+  >({});
   const [speakingId, setSpeakingId] = useState<string | null>(null);
 
   // Clé de stockage unique par catégorie
@@ -48,6 +50,10 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
       }
     };
     loadProgress();
+
+    return () => {
+      stopSpeaking();
+    };
   }, [storageKey]);
 
   // Sauvegarder la progression à chaque changement
@@ -78,10 +84,10 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
     const newCount = currentCount + 1;
 
     if (newCount >= dhikr.repetitions) {
-      setCompletedIds((prev) => new Set(prev).add(dhikr.id));
-      setRepetitionCounts((prev) => ({ ...prev, [dhikr.id]: 0 }));
+      setCompletedIds(prev => new Set(prev).add(dhikr.id));
+      setRepetitionCounts(prev => ({ ...prev, [dhikr.id]: 0 }));
     } else {
-      setRepetitionCounts((prev) => ({ ...prev, [dhikr.id]: newCount }));
+      setRepetitionCounts(prev => ({ ...prev, [dhikr.id]: newCount }));
     }
   };
 
@@ -97,11 +103,19 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
 
   const handleListen = async (dhikr: Dhikr) => {
     if (speakingId === dhikr.id) {
-      await stopSpeaking();
+      try {
+        await stopSpeaking();
+      } catch (e) {
+        if (__DEV__) console.error('Error stopping TTS:', e);
+      }
       setSpeakingId(null);
     } else {
       setSpeakingId(dhikr.id);
-      await speakArabic(dhikr.arabic);
+      try {
+        await speakArabic(dhikr.arabic);
+      } catch (e) {
+        if (__DEV__) console.error('Error speaking TTS:', e);
+      }
       setSpeakingId(null);
     }
   };
@@ -142,20 +156,26 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
               {isRTL ? category.name : category.nameAr}
             </Text>
             {category.description && (
-              <Text style={[styles.description, isRTL && styles.rtlText]}>{category.description}</Text>
+              <Text style={[styles.description, isRTL && styles.rtlText]}>
+                {category.description}
+              </Text>
             )}
           </View>
         </View>
 
         {/* Progress */}
         <View style={styles.progressSection}>
-          <View style={[styles.progressHeader, isRTL && styles.progressHeaderRTL]}>
+          <View
+            style={[styles.progressHeader, isRTL && styles.progressHeaderRTL]}
+          >
             <Text style={[styles.progressText, isRTL && styles.rtlText]}>
               {completedCount}/{totalCount} {t('completed')}
             </Text>
             {completedCount > 0 && (
               <TouchableOpacity onPress={resetProgress}>
-                <Text style={[styles.resetButton, isRTL && styles.rtlText]}>{t('reset')}</Text>
+                <Text style={[styles.resetButton, isRTL && styles.rtlText]}>
+                  {t('reset')}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -183,11 +203,15 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
                 activeOpacity={0.7}
               >
                 {/* Header */}
-                <View style={[styles.dhikrHeader, isRTL && styles.dhikrHeaderRTL]}>
+                <View
+                  style={[styles.dhikrHeader, isRTL && styles.dhikrHeaderRTL]}
+                >
                   <View style={styles.dhikrNumber}>
                     <Text style={styles.dhikrNumberText}>{index + 1}</Text>
                   </View>
-                  <View style={[styles.dhikrMeta, isRTL && styles.dhikrMetaRTL]}>
+                  <View
+                    style={[styles.dhikrMeta, isRTL && styles.dhikrMetaRTL]}
+                  >
                     <Text style={styles.dhikrRepetitions}>
                       {dhikr.repetitions > 1
                         ? `${dhikr.repetitions} ${t('times')}`
@@ -207,29 +231,59 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
                   <View style={styles.expandedContent}>
                     {/* Transliteration */}
                     <View style={styles.translitSection}>
-                      <Text style={[styles.sectionLabel, isRTL && styles.rtlText]}>{t('transliteration')}</Text>
-                      <Text style={[styles.transliteration, isRTL && styles.rtlText]}>
+                      <Text
+                        style={[styles.sectionLabel, isRTL && styles.rtlText]}
+                      >
+                        {t('transliteration')}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.transliteration,
+                          isRTL && styles.rtlText,
+                        ]}
+                      >
                         {dhikr.transliteration}
                       </Text>
                     </View>
 
                     {/* Translation */}
                     <View style={styles.translationSection}>
-                      <Text style={[styles.sectionLabel, isRTL && styles.rtlText]}>{t('translationLabel')}</Text>
-                      <Text style={[styles.translation, isRTL && styles.rtlText]}>{dhikr.translation}</Text>
+                      <Text
+                        style={[styles.sectionLabel, isRTL && styles.rtlText]}
+                      >
+                        {t('translationLabel')}
+                      </Text>
+                      <Text
+                        style={[styles.translation, isRTL && styles.rtlText]}
+                      >
+                        {dhikr.translation}
+                      </Text>
                     </View>
 
                     {/* Source */}
                     <View style={styles.sourceSection}>
-                      <Text style={[styles.sectionLabel, isRTL && styles.rtlText]}>{t('source')}</Text>
-                      <Text style={[styles.source, isRTL && styles.rtlText]}>{dhikr.source}</Text>
+                      <Text
+                        style={[styles.sectionLabel, isRTL && styles.rtlText]}
+                      >
+                        {t('source')}
+                      </Text>
+                      <Text style={[styles.source, isRTL && styles.rtlText]}>
+                        {dhikr.source}
+                      </Text>
                     </View>
 
                     {/* Benefit */}
                     {dhikr.benefit && (
-                      <View style={[styles.benefitSection, isRTL && styles.benefitSectionRTL]}>
+                      <View
+                        style={[
+                          styles.benefitSection,
+                          isRTL && styles.benefitSectionRTL,
+                        ]}
+                      >
                         <Text style={styles.benefitIcon}>✨</Text>
-                        <Text style={[styles.benefit, isRTL && styles.rtlText]}>{dhikr.benefit}</Text>
+                        <Text style={[styles.benefit, isRTL && styles.rtlText]}>
+                          {dhikr.benefit}
+                        </Text>
                       </View>
                     )}
 
@@ -251,7 +305,10 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.listenButton, speakingId === dhikr.id && styles.listenButtonActive]}
+                        style={[
+                          styles.listenButton,
+                          speakingId === dhikr.id && styles.listenButtonActive,
+                        ]}
                         onPress={() => handleListen(dhikr)}
                       >
                         <Text style={styles.listenButtonIcon}>
@@ -260,7 +317,10 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.shareButton, isRTL && styles.shareButtonRTL]}
+                        style={[
+                          styles.shareButton,
+                          isRTL && styles.shareButtonRTL,
+                        ]}
                         onPress={() => handleShare(dhikr)}
                       >
                         <Text style={styles.shareButtonIcon}>📤</Text>
@@ -272,7 +332,9 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
 
                 {/* Expand indicator */}
                 {!isExpanded && (
-                  <Text style={[styles.expandIndicator, isRTL && styles.rtlText]}>
+                  <Text
+                    style={[styles.expandIndicator, isRTL && styles.rtlText]}
+                  >
                     {t('tapToSeeMore')}
                   </Text>
                 )}
@@ -285,7 +347,9 @@ const AdhkarDetailScreen: React.FC<AdhkarDetailScreenProps> = ({
         {completedCount === totalCount && totalCount > 0 && (
           <View style={styles.completionCard}>
             <Text style={styles.completionIcon}>🎉</Text>
-            <Text style={[styles.completionTitle, isRTL && styles.rtlText]}>{t('congratulations')}</Text>
+            <Text style={[styles.completionTitle, isRTL && styles.rtlText]}>
+              {t('congratulations')}
+            </Text>
             <Text style={[styles.completionText, isRTL && styles.rtlText]}>
               {t('completionMessage')}
             </Text>

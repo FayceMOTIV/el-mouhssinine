@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,14 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, platformShadow } from '../theme/colors';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  platformShadow,
+} from '../theme/colors';
 import { useLanguage } from '../context/LanguageContext';
 import { AuthService, MemberProfile } from '../services/auth';
 import {
@@ -33,11 +40,16 @@ const MessagesScreen = () => {
   const { language, isRTL } = useLanguage();
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(null);
+  const [memberProfile, setMemberProfile] = useState<MemberProfile | null>(
+    null,
+  );
   const [messages, setMessages] = useState<UserMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
   const [sending, setSending] = useState(false);
+
+  // Ref pour stocker l'unsubscribe du listener messages (cleanup explicite au logout)
+  const messagesUnsubRef = useRef<(() => void) | null>(null);
 
   // Formulaire nouveau message
   const [selectedSubject, setSelectedSubject] = useState<string>('');
@@ -48,7 +60,9 @@ const MessagesScreen = () => {
   const handleDeleteMessage = (msg: UserMessage) => {
     Alert.alert(
       language === 'ar' ? 'حذف الرسالة' : 'Supprimer le message',
-      language === 'ar' ? 'هل أنت متأكد من حذف هذه الرسالة؟' : 'Êtes-vous sûr de vouloir supprimer ce message ?',
+      language === 'ar'
+        ? 'هل أنت متأكد من حذف هذه الرسالة؟'
+        : 'Êtes-vous sûr de vouloir supprimer ce message ?',
       [
         {
           text: language === 'ar' ? 'إلغاء' : 'Annuler',
@@ -67,21 +81,21 @@ const MessagesScreen = () => {
               } else {
                 Alert.alert(
                   language === 'ar' ? 'خطأ' : 'Erreur',
-                  result.error || 'Une erreur est survenue'
+                  result.error || 'Une erreur est survenue',
                 );
               }
             } catch (error) {
               const err = error as Error;
               Alert.alert(
                 language === 'ar' ? 'خطأ' : 'Erreur',
-                err?.message || 'Une erreur est survenue'
+                err?.message || 'Une erreur est survenue',
               );
             } finally {
               setDeleting(null);
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -92,7 +106,7 @@ const MessagesScreen = () => {
 
   // Écouter l'état de connexion Firebase
   useEffect(() => {
-    const unsubscribe = AuthService.onAuthStateChanged(async (user) => {
+    const unsubscribe = AuthService.onAuthStateChanged(async user => {
       if (user) {
         setIsLoggedIn(true);
         const profile = await AuthService.getMemberProfile(user.uid);
@@ -102,6 +116,11 @@ const MessagesScreen = () => {
           setLoading(false);
         }
       } else {
+        // Nettoyer le listener messages avant de reset l'etat
+        if (messagesUnsubRef.current) {
+          messagesUnsubRef.current();
+          messagesUnsubRef.current = null;
+        }
         setIsLoggedIn(false);
         setMemberProfile(null);
         setMessages([]);
@@ -119,12 +138,16 @@ const MessagesScreen = () => {
       return;
     }
 
-    const unsubscribe = subscribeToUserMessages(memberProfile.uid, (msgs) => {
+    const unsubscribe = subscribeToUserMessages(memberProfile.uid, msgs => {
       setMessages(msgs);
       setLoading(false);
     });
+    messagesUnsubRef.current = unsubscribe;
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      messagesUnsubRef.current = null;
+    };
   }, [memberProfile?.uid, isLoggedIn]);
 
   // Envoyer un nouveau message
@@ -132,7 +155,7 @@ const MessagesScreen = () => {
     if (!selectedSubject) {
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar' ? 'اختر موضوعا' : 'Veuillez choisir un sujet'
+        language === 'ar' ? 'اختر موضوعا' : 'Veuillez choisir un sujet',
       );
       return;
     }
@@ -140,7 +163,9 @@ const MessagesScreen = () => {
     if (messageText.trim().length < 10) {
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar' ? 'الرسالة قصيرة جدا (10 أحرف على الأقل)' : 'Message trop court (10 caractères minimum)'
+        language === 'ar'
+          ? 'الرسالة قصيرة جدا (10 أحرف على الأقل)'
+          : 'Message trop court (10 caractères minimum)',
       );
       return;
     }
@@ -148,7 +173,7 @@ const MessagesScreen = () => {
     if (!memberProfile) {
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
-        language === 'ar' ? 'يجب تسجيل الدخول' : 'Vous devez être connecté'
+        language === 'ar' ? 'يجب تسجيل الدخول' : 'Vous devez être connecté',
       );
       return;
     }
@@ -158,7 +183,13 @@ const MessagesScreen = () => {
       const userName = memberProfile.name || 'Utilisateur';
       const userEmail = memberProfile.email || '';
 
-      await sendMessage(memberProfile.uid, userName, userEmail, selectedSubject, messageText.trim());
+      await sendMessage(
+        memberProfile.uid,
+        userName,
+        userEmail,
+        selectedSubject,
+        messageText.trim(),
+      );
 
       // Haptic feedback sur succès
       Vibration.vibrate(50);
@@ -169,7 +200,9 @@ const MessagesScreen = () => {
 
       Alert.alert(
         language === 'ar' ? 'تم الإرسال' : 'Message envoyé',
-        language === 'ar' ? 'سنرد عليك قريبا إن شاء الله' : 'Nous vous répondrons bientôt insha\'Allah'
+        language === 'ar'
+          ? 'سنرد عليك قريبا إن شاء الله'
+          : "Nous vous répondrons bientôt insha'Allah",
       );
     } catch (error) {
       const err = error as Error;
@@ -177,8 +210,10 @@ const MessagesScreen = () => {
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Erreur',
         errorMsg.includes('limite')
-          ? (language === 'ar' ? 'وصلت الحد اليومي (5 رسائل)' : 'Limite atteinte (5 messages/jour)')
-          : errorMsg
+          ? language === 'ar'
+            ? 'وصلت الحد اليومي (5 رسائل)'
+            : 'Limite atteinte (5 messages/jour)'
+          : errorMsg,
       );
     } finally {
       setSending(false);
@@ -194,22 +229,46 @@ const MessagesScreen = () => {
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
     if (days === 0) {
-      return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
     } else if (days === 1) {
       return language === 'ar' ? 'أمس' : 'Hier';
     } else if (days < 7) {
       return date.toLocaleDateString('fr-FR', { weekday: 'short' });
     } else {
-      return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      return date.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+      });
     }
   };
 
   // Status badge
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; labelAr: string; color: string; bg: string }> = {
-      non_lu: { label: 'Non lu', labelAr: 'غير مقروء', color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
-      en_cours: { label: 'En cours', labelAr: 'قيد المعالجة', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
-      resolu: { label: 'Résolu', labelAr: 'تم الحل', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+    const statusConfig: Record<
+      string,
+      { label: string; labelAr: string; color: string; bg: string }
+    > = {
+      non_lu: {
+        label: 'Non lu',
+        labelAr: 'غير مقروء',
+        color: '#ef4444',
+        bg: 'rgba(239,68,68,0.15)',
+      },
+      en_cours: {
+        label: 'En cours',
+        labelAr: 'قيد المعالجة',
+        color: '#f59e0b',
+        bg: 'rgba(245,158,11,0.15)',
+      },
+      resolu: {
+        label: 'Résolu',
+        labelAr: 'تم الحل',
+        color: '#22c55e',
+        bg: 'rgba(34,197,94,0.15)',
+      },
     };
 
     const config = statusConfig[status] || statusConfig.non_lu;
@@ -228,7 +287,10 @@ const MessagesScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={[styles.title, isRTL && styles.textRTL]}>
@@ -247,7 +309,10 @@ const MessagesScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={[styles.title, isRTL && styles.textRTL]}>
@@ -262,14 +327,18 @@ const MessagesScreen = () => {
           <Text style={[styles.emptyText, isRTL && styles.textRTL]}>
             {language === 'ar'
               ? 'للوصول إلى الرسائل والتواصل مع المسجد، يرجى تسجيل الدخول أو إنشاء حساب من قسم العضوية.'
-              : 'Pour accéder à la messagerie et contacter la mosquée, veuillez d\'abord vous connecter ou créer un compte depuis l\'onglet Membre.'}
+              : "Pour accéder à la messagerie et contacter la mosquée, veuillez d'abord vous connecter ou créer un compte depuis l'onglet Membre."}
           </Text>
           <TouchableOpacity
             style={styles.goToMemberBtn}
-            onPress={() => navigation.navigate('MainTabs', { screen: 'Member' })}
+            onPress={() =>
+              navigation.navigate('MainTabs', { screen: 'Member' })
+            }
           >
             <Text style={styles.goToMemberBtnText}>
-              {language === 'ar' ? 'الذهاب إلى قسم العضوية' : 'Aller à l\'espace Membre'}
+              {language === 'ar'
+                ? 'الذهاب إلى قسم العضوية'
+                : "Aller à l'espace Membre"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -280,7 +349,10 @@ const MessagesScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={[styles.title, isRTL && styles.textRTL]}>
@@ -302,28 +374,42 @@ const MessagesScreen = () => {
         <EmptyMessages onContact={() => setShowNewMessageModal(true)} />
       ) : (
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {messages.map((msg) => (
+          {messages.map(msg => (
             <View key={msg.id} style={styles.messageCardWrapper}>
               <TouchableOpacity
-                style={[styles.messageCard, deleting === msg.id && styles.messageCardDeleting]}
-                onPress={() => navigation.navigate('Conversation', { messageId: msg.id })}
+                style={[
+                  styles.messageCard,
+                  deleting === msg.id && styles.messageCardDeleting,
+                ]}
+                onPress={() =>
+                  navigation.navigate('Conversation', { messageId: msg.id })
+                }
                 disabled={deleting === msg.id}
               >
                 <View style={styles.messageHeader}>
-                  <Text style={[styles.messageSubject, isRTL && styles.textRTL]} numberOfLines={1}>
+                  <Text
+                    style={[styles.messageSubject, isRTL && styles.textRTL]}
+                    numberOfLines={1}
+                  >
                     {msg.sujet}
                   </Text>
                   {getStatusBadge(msg.status)}
                 </View>
-                <Text style={[styles.messagePreview, isRTL && styles.textRTL]} numberOfLines={2}>
+                <Text
+                  style={[styles.messagePreview, isRTL && styles.textRTL]}
+                  numberOfLines={2}
+                >
                   {msg.message}
                 </Text>
                 <View style={styles.messageFooter}>
-                  <Text style={styles.messageDate}>{formatDate(msg.createdAt)}</Text>
+                  <Text style={styles.messageDate}>
+                    {formatDate(msg.createdAt)}
+                  </Text>
                   {msg.reponses && msg.reponses.length > 0 && (
                     <View style={styles.replyBadge}>
                       <Text style={styles.replyBadgeText}>
-                        {msg.reponses.length} {language === 'ar' ? 'ردود' : 'réponse(s)'}
+                        {msg.reponses.length}{' '}
+                        {language === 'ar' ? 'ردود' : 'réponse(s)'}
                       </Text>
                     </View>
                   )}
@@ -376,19 +462,22 @@ const MessagesScreen = () => {
                 {language === 'ar' ? 'الموضوع' : 'Sujet'}
               </Text>
               <View style={styles.subjectsGrid}>
-                {MESSAGE_SUBJECTS.map((subject) => (
+                {MESSAGE_SUBJECTS.map(subject => (
                   <TouchableOpacity
                     key={subject}
                     style={[
                       styles.subjectOption,
-                      selectedSubject === subject && styles.subjectOptionActive
+                      selectedSubject === subject && styles.subjectOptionActive,
                     ]}
                     onPress={() => setSelectedSubject(subject)}
                   >
-                    <Text style={[
-                      styles.subjectOptionText,
-                      selectedSubject === subject && styles.subjectOptionTextActive
-                    ]}>
+                    <Text
+                      style={[
+                        styles.subjectOptionText,
+                        selectedSubject === subject &&
+                          styles.subjectOptionTextActive,
+                      ]}
+                    >
                       {subject}
                     </Text>
                   </TouchableOpacity>
@@ -403,20 +492,28 @@ const MessagesScreen = () => {
                 style={[styles.textArea, isRTL && styles.textRTL]}
                 value={messageText}
                 onChangeText={setMessageText}
-                placeholder={language === 'ar' ? 'اكتب رسالتك هنا...' : 'Écrivez votre message ici...'}
+                placeholder={
+                  language === 'ar'
+                    ? 'اكتب رسالتك هنا...'
+                    : 'Écrivez votre message ici...'
+                }
                 placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
               />
               <Text style={styles.charCount}>
-                {messageText.length}/500 {language === 'ar' ? 'حرف' : 'caractères'}
+                {messageText.length}/500{' '}
+                {language === 'ar' ? 'حرف' : 'caractères'}
               </Text>
             </ScrollView>
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={[styles.sendButton, sending && styles.sendButtonDisabled]}
+                style={[
+                  styles.sendButton,
+                  sending && styles.sendButtonDisabled,
+                ]}
                 onPress={handleSendMessage}
                 disabled={sending}
               >

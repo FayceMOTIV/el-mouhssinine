@@ -411,8 +411,12 @@ const MemberScreen = () => {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = subscribeToCotisationPrices(setFormulePrices);
-    return () => unsubscribe();
+    const unsubPrices = subscribeToCotisationPrices(prices =>
+      setFormulePrices(prices),
+    );
+    return () => {
+      unsubPrices?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -515,9 +519,9 @@ const MemberScreen = () => {
     const parts = dateNaissance.split('/');
     if (parts.length !== 3) return false;
     const birthDate = new Date(
-      parseInt(parts[2]),
-      parseInt(parts[1]) - 1,
-      parseInt(parts[0]),
+      parseInt(parts[2], 10),
+      parseInt(parts[1], 10) - 1,
+      parseInt(parts[0], 10),
     );
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();

@@ -34,9 +34,9 @@ const statusOptions = [
 // Options de sujets pour le filtre
 const sujetOptions = [
   { value: 'all', label: 'Tous les sujets' },
-  ...Object.entries(MESSAGE_SUBJECTS || {}).map(([key, value]) => ({
-    value: value,
-    label: value
+  ...(MESSAGE_SUBJECTS || []).map(subject => ({
+    value: subject,
+    label: subject
   }))
 ]
 

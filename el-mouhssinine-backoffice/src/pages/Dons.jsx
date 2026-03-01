@@ -341,6 +341,7 @@ export default function Dons() {
     })
   }
 
+  // TODO: La Cloud Function 'refundDonation' doit etre deployee dans functions/index.js
   const handleConfirmRefundDonation = async () => {
     const { donationId, amount } = refundDonationModal
     setRefundDonationModal({ open: false, donationId: null, amount: null, totalAmount: 0 })
@@ -361,7 +362,10 @@ export default function Dons() {
       // Refresh donations list (the subscription will update automatically)
     } catch (err) {
       console.error('Error refunding donation:', err)
-      toast.error(err.message || 'Erreur lors du remboursement')
+      const message = err?.code === 'functions/not-found'
+        ? 'La fonction de remboursement n\'est pas encore disponible. Veuillez effectuer le remboursement depuis le dashboard Stripe.'
+        : err.message || 'Erreur lors du remboursement'
+      toast.error(message)
     }
   }
 
@@ -373,9 +377,19 @@ export default function Dons() {
     const headers = ['Date', 'Donateur', 'Montant (€)', 'Projet', 'Mode de paiement', 'Type', 'Email']
     const rows = filteredDons.map(d => {
       const projet = projets.find(p => p.id === d.projetId)
-      const date = d.createdAt?.toDate
-        ? format(d.createdAt.toDate(), 'dd/MM/yyyy HH:mm', { locale: fr })
-        : d.date || ''
+      let date = ''
+      try {
+        if (d.createdAt?.toDate) {
+          date = format(d.createdAt.toDate(), 'dd/MM/yyyy HH:mm', { locale: fr })
+        } else if (d.createdAt) {
+          date = format(new Date(d.createdAt), 'dd/MM/yyyy HH:mm', { locale: fr })
+        } else if (d.date) {
+          const rawDate = d.date?.toDate?.() || new Date(d.date)
+          date = format(rawDate, 'dd/MM/yyyy HH:mm', { locale: fr })
+        }
+      } catch {
+        date = ''
+      }
       return [
         date,
         d.donateur || 'Anonyme',

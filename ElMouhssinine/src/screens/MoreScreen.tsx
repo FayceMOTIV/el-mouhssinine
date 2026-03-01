@@ -16,8 +16,22 @@ import Geolocation from '@react-native-community/geolocation';
 import { useNavigation } from '@react-navigation/native';
 import CompassHeading from 'react-native-compass-heading';
 import Clipboard from '@react-native-clipboard/clipboard';
-import { colors, spacing, borderRadius, fontSize, HEADER_PADDING_TOP, wp, platformShadow, isSmallScreen } from '../theme/colors';
-import { subscribeToMosqueeInfo, subscribeToRamadanSettings, RamadanSettings, deleteMyAccount } from '../services/firebase';
+import {
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  HEADER_PADDING_TOP,
+  wp,
+  platformShadow,
+  isSmallScreen,
+} from '../theme/colors';
+import {
+  subscribeToMosqueeInfo,
+  subscribeToRamadanSettings,
+  RamadanSettings,
+  deleteMyAccount,
+} from '../services/firebase';
 import { AuthService } from '../services/auth';
 import firebase from '@react-native-firebase/app';
 import '@react-native-firebase/functions';
@@ -93,21 +107,36 @@ const MoreScreen = () => {
 
   const [copied, setCopied] = useState('');
   const [jumuaReminderEnabled, setJumuaReminderEnabled] = useState(false);
-  const [prayerNotifSettings, setPrayerNotifSettings] = useState<PrayerNotificationSettings>({
-    enabled: true,
-    minutesBefore: 15,
-    prayers: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
-  });
+  const [prayerNotifSettings, setPrayerNotifSettings] =
+    useState<PrayerNotificationSettings>({
+      enabled: true,
+      minutesBefore: 15,
+      prayers: {
+        fajr: true,
+        dhuhr: true,
+        asr: true,
+        maghrib: true,
+        isha: true,
+      },
+    });
 
   // Boost Prière (feature optionnelle)
-  const [boostSettings, setBoostSettings] = useState<PrayerBoostSettings>(DEFAULT_PRAYER_BOOST_SETTINGS);
+  const [boostSettings, setBoostSettings] = useState<PrayerBoostSettings>(
+    DEFAULT_PRAYER_BOOST_SETTINGS,
+  );
   // Rappel Coran
-  const [quranReminderSettings, setQuranReminderSettings] = useState<QuranReminderSettings>(DEFAULT_QURAN_REMINDER_SETTINGS);
+  const [quranReminderSettings, setQuranReminderSettings] =
+    useState<QuranReminderSettings>(DEFAULT_QURAN_REMINDER_SETTINGS);
   // Proximité Mosquée (mode silencieux)
-  const [mosqueProximitySettings, setMosqueProximitySettings] = useState<MosqueProximitySettings>(DEFAULT_MOSQUE_PROXIMITY_SETTINGS);
+  const [mosqueProximitySettings, setMosqueProximitySettings] =
+    useState<MosqueProximitySettings>(DEFAULT_MOSQUE_PROXIMITY_SETTINGS);
   // Notifications Ramadan
-  const [ramadanNotifSettings, setRamadanNotifSettings] = useState<RamadanUserNotificationSettings>(DEFAULT_RAMADAN_NOTIFICATION_SETTINGS);
-  const [ramadanSettings, setRamadanSettings] = useState<RamadanSettings | null>(null);
+  const [ramadanNotifSettings, setRamadanNotifSettings] =
+    useState<RamadanUserNotificationSettings>(
+      DEFAULT_RAMADAN_NOTIFICATION_SETTINGS,
+    );
+  const [ramadanSettings, setRamadanSettings] =
+    useState<RamadanSettings | null>(null);
   const [compassHeading, setCompassHeading] = useState(0);
   const [compassError, setCompassError] = useState<string | null>(null);
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -116,7 +145,7 @@ const MoreScreen = () => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = subscribeToMosqueeInfo((info) => {
+    const unsub = subscribeToMosqueeInfo(info => {
       if (info) setMosqueeInfo(info);
     });
     return () => unsub?.();
@@ -124,7 +153,7 @@ const MoreScreen = () => {
 
   // Récupérer l'email de l'utilisateur connecté
   useEffect(() => {
-    const unsubscribe = AuthService.onAuthStateChanged((user) => {
+    const unsubscribe = AuthService.onAuthStateChanged(user => {
       if (user?.email) {
         setUserEmail(user.email);
       }
@@ -136,29 +165,34 @@ const MoreScreen = () => {
   useEffect(() => {
     const degree_update_rate = 3; // Mise à jour toutes les 3 degrés
 
-    CompassHeading.start(degree_update_rate, ({ heading, accuracy }: { heading: number; accuracy: number }) => {
-      setCompassHeading(heading);
-      setCompassError(null);
+    CompassHeading.start(
+      degree_update_rate,
+      ({ heading, accuracy }: { heading: number; accuracy: number }) => {
+        setCompassHeading(heading);
+        setCompassError(null);
 
-      // Calculer la rotation de l'aiguille vers la Qibla
-      // L'aiguille doit pointer vers qiblaDirection depuis le Nord
-      // Donc on soustrait le heading actuel pour compenser l'orientation du téléphone
-      const qiblaRotation = qiblaDirection - heading;
+        // Calculer la rotation de l'aiguille vers la Qibla
+        // L'aiguille doit pointer vers qiblaDirection depuis le Nord
+        // Donc on soustrait le heading actuel pour compenser l'orientation du téléphone
+        const qiblaRotation = qiblaDirection - heading;
 
-      Animated.timing(rotateAnim, {
-        toValue: qiblaRotation,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }).catch((error: any) => {
+        Animated.timing(rotateAnim, {
+          toValue: qiblaRotation,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      },
+    ).catch((error: any) => {
       console.error('Compass error:', error);
-      setCompassError(language === 'ar' ? 'البوصلة غير متوفرة' : 'Boussole non disponible');
+      setCompassError(
+        language === 'ar' ? 'البوصلة غير متوفرة' : 'Boussole non disponible',
+      );
     });
 
     return () => {
       CompassHeading.stop();
     };
-  }, [language, rotateAnim]);
+  }, [rotateAnim]);
 
   // Charger l'état du rappel Jumu'a au démarrage
   useEffect(() => {
@@ -192,14 +226,16 @@ const MoreScreen = () => {
 
   // S'abonner aux settings Ramadan (pour savoir si le mode est actif)
   useEffect(() => {
-    const unsubscribe = subscribeToRamadanSettings((settings) => {
+    const unsubscribe = subscribeToRamadanSettings(settings => {
       setRamadanSettings(settings);
     });
     return () => unsubscribe();
   }, []);
 
   // Mettre a jour les settings de notifications de priere
-  const updatePrayerNotifSettings = async (newSettings: PrayerNotificationSettings) => {
+  const updatePrayerNotifSettings = async (
+    newSettings: PrayerNotificationSettings,
+  ) => {
     setPrayerNotifSettings(newSettings);
     await savePrayerNotificationSettings(newSettings);
 
@@ -208,7 +244,10 @@ const MoreScreen = () => {
       const hasPermission = await requestPrayerNotifPermission();
       if (hasPermission) {
         try {
-          const timings = await PrayerAPI.getTimesByCity('Bourg-en-Bresse', 'France');
+          const timings = await PrayerAPI.getTimesByCity(
+            'Bourg-en-Bresse',
+            'France',
+          );
           await schedulePrayerNotifications(timings, newSettings);
         } catch (error) {
           console.warn('[MoreScreen] Erreur re-scheduling:', error);
@@ -229,7 +268,10 @@ const MoreScreen = () => {
       const hasPermission = await requestPrayerNotifPermission();
       if (hasPermission) {
         try {
-          const timings = await PrayerAPI.getTimesByCity('Bourg-en-Bresse', 'France');
+          const timings = await PrayerAPI.getTimesByCity(
+            'Bourg-en-Bresse',
+            'France',
+          );
           const translations = {
             reminderTitle: t('boostReminderTitle'),
             urgentTitle: t('boostUrgentTitle'),
@@ -248,7 +290,9 @@ const MoreScreen = () => {
   };
 
   // Mettre à jour les settings rappel Coran
-  const updateQuranReminderSettings = async (newSettings: QuranReminderSettings) => {
+  const updateQuranReminderSettings = async (
+    newSettings: QuranReminderSettings,
+  ) => {
     setQuranReminderSettings(newSettings);
     await saveQuranReminderSettings(newSettings);
 
@@ -258,7 +302,10 @@ const MoreScreen = () => {
       if (hasPermission) {
         const translations = {
           title: language === 'ar' ? '📖 وقت القراءة' : '📖 Rappel Coran',
-          body: language === 'ar' ? 'حان وقت قراءة القرآن - ولو صفحة واحدة 🌙' : 'C\'est l\'heure de lire le Coran - même une page 🌙',
+          body:
+            language === 'ar'
+              ? 'حان وقت قراءة القرآن - ولو صفحة واحدة 🌙'
+              : "C'est l'heure de lire le Coran - même une page 🌙",
         };
         await scheduleQuranReminders(newSettings, translations);
       }
@@ -268,27 +315,49 @@ const MoreScreen = () => {
   };
 
   // Mettre à jour les settings notifications Ramadan
-  const updateRamadanNotifSettings = async (newSettings: RamadanUserNotificationSettings) => {
+  const updateRamadanNotifSettings = async (
+    newSettings: RamadanUserNotificationSettings,
+  ) => {
     setRamadanNotifSettings(newSettings);
     await saveRamadanNotificationSettings(newSettings);
 
     // Re-scheduler les notifications si au moins une est activée
-    const anyEnabled = newSettings.suhoor.enabled || newSettings.iftar.enabled || newSettings.tarawih.enabled;
+    const anyEnabled =
+      newSettings.suhoor.enabled ||
+      newSettings.iftar.enabled ||
+      newSettings.tarawih.enabled;
 
     if (anyEnabled && ramadanSettings?.enabled) {
       const hasPermission = await requestPrayerNotifPermission();
       if (hasPermission) {
         try {
-          const timings = await PrayerAPI.getTimesByCity('Bourg-en-Bresse', 'France');
+          const timings = await PrayerAPI.getTimesByCity(
+            'Bourg-en-Bresse',
+            'France',
+          );
           const translations = {
             suhoorTitle: language === 'ar' ? '🌙 السحور' : '🌙 Suhoor',
-            suhoorBody: language === 'ar' ? 'بقي {minutes} دقيقة على الفجر - استعد للصيام' : 'Plus que {minutes} min avant Fajr - Préparez-vous',
+            suhoorBody:
+              language === 'ar'
+                ? 'بقي {minutes} دقيقة على الفجر - استعد للصيام'
+                : 'Plus que {minutes} min avant Fajr - Préparez-vous',
             iftarTitle: language === 'ar' ? '🌅 الإفطار' : '🌅 Iftar',
-            iftarBody: language === 'ar' ? 'وقت الإفطار في {minutes} دقيقة' : 'Iftar dans {minutes} min',
+            iftarBody:
+              language === 'ar'
+                ? 'وقت الإفطار في {minutes} دقيقة'
+                : 'Iftar dans {minutes} min',
             tarawihTitle: language === 'ar' ? '🕌 التراويح' : '🕌 Tarawih',
-            tarawihBody: language === 'ar' ? 'صلاة التراويح في {minutes} دقيقة' : 'Prière Tarawih dans {minutes} min',
+            tarawihBody:
+              language === 'ar'
+                ? 'صلاة التراويح في {minutes} دقيقة'
+                : 'Prière Tarawih dans {minutes} min',
           };
-          await scheduleRamadanNotifications(timings, ramadanSettings.tarawihTime, newSettings, translations);
+          await scheduleRamadanNotifications(
+            timings,
+            ramadanSettings.tarawihTime,
+            newSettings,
+            translations,
+          );
         } catch (error) {
           console.warn('[MoreScreen] Erreur Ramadan scheduling:', error);
         }
@@ -303,24 +372,27 @@ const MoreScreen = () => {
     try {
       if (Platform.OS === 'ios') {
         // iOS - demander l'autorisation "always" pour le background
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
           Geolocation.requestAuthorization(
             () => {},
-            (err) => { if (__DEV__) console.log('[MoreScreen] Auth error:', err); }
+            err => {
+              if (__DEV__) console.log('[MoreScreen] Auth error:', err);
+            },
           );
           // Sur iOS, on teste si la permission est accordée en essayant d'obtenir la position
           setTimeout(() => {
             Geolocation.getCurrentPosition(
               () => resolve(true),
-              (error) => {
+              error => {
                 console.log('[Location] iOS permission error:', error.code);
-                if (error.code === 1) { // PERMISSION_DENIED
+                if (error.code === 1) {
+                  // PERMISSION_DENIED
                   resolve(false);
                 } else {
                   resolve(true); // Autre erreur, mais permission OK
                 }
               },
-              { timeout: 5000, maximumAge: 60000 }
+              { timeout: 5000, maximumAge: 60000 },
             );
           }, 1000); // Attendre 1s que l'utilisateur réponde à la popup iOS
         });
@@ -329,14 +401,16 @@ const MoreScreen = () => {
         const fineGranted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
           {
-            title: language === 'ar' ? 'إذن الموقع' : 'Permission de localisation',
-            message: language === 'ar'
-              ? 'التطبيق يحتاج إلى موقعك لإرسال تذكير عندما تكون قريبًا من المسجد.'
-              : 'L\'application a besoin de votre position pour vous envoyer un rappel quand vous êtes proche de la mosquée.',
+            title:
+              language === 'ar' ? 'إذن الموقع' : 'Permission de localisation',
+            message:
+              language === 'ar'
+                ? 'التطبيق يحتاج إلى موقعك لإرسال تذكير عندما تكون قريبًا من المسجد.'
+                : "L'application a besoin de votre position pour vous envoyer un rappel quand vous êtes proche de la mosquée.",
             buttonNeutral: language === 'ar' ? 'اسألني لاحقًا' : 'Plus tard',
             buttonNegative: language === 'ar' ? 'رفض' : 'Refuser',
             buttonPositive: language === 'ar' ? 'موافق' : 'Autoriser',
-          }
+          },
         );
 
         if (fineGranted !== PermissionsAndroid.RESULTS.GRANTED) {
@@ -348,14 +422,18 @@ const MoreScreen = () => {
           const bgGranted = await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
             {
-              title: language === 'ar' ? 'إذن الموقع في الخلفية' : 'Localisation en arrière-plan',
-              message: language === 'ar'
-                ? 'للحصول على تذكير حتى عندما يكون التطبيق مغلقًا، يرجى السماح بـ "السماح طوال الوقت".'
-                : 'Pour recevoir le rappel même quand l\'app est fermée, veuillez autoriser "Toujours".',
+              title:
+                language === 'ar'
+                  ? 'إذن الموقع في الخلفية'
+                  : 'Localisation en arrière-plan',
+              message:
+                language === 'ar'
+                  ? 'للحصول على تذكير حتى عندما يكون التطبيق مغلقًا، يرجى السماح بـ "السماح طوال الوقت".'
+                  : 'Pour recevoir le rappel même quand l\'app est fermée, veuillez autoriser "Toujours".',
               buttonNeutral: language === 'ar' ? 'اسألني لاحقًا' : 'Plus tard',
               buttonNegative: language === 'ar' ? 'رفض' : 'Refuser',
               buttonPositive: language === 'ar' ? 'موافق' : 'Autoriser',
-            }
+            },
           );
           return bgGranted === PermissionsAndroid.RESULTS.GRANTED;
         }
@@ -369,7 +447,9 @@ const MoreScreen = () => {
   };
 
   // Mettre à jour les settings proximité mosquée avec demande de permission
-  const updateMosqueProximitySettings = async (newSettings: MosqueProximitySettings) => {
+  const updateMosqueProximitySettings = async (
+    newSettings: MosqueProximitySettings,
+  ) => {
     // Si on active la feature, demander la permission d'abord
     if (newSettings.enabled && !mosqueProximitySettings.enabled) {
       // Afficher explication avant de demander
@@ -396,19 +476,19 @@ const MoreScreen = () => {
                   language === 'ar' ? '✅ تم التفعيل' : '✅ Activé',
                   language === 'ar'
                     ? 'ستتلقى تذكيرًا عند اقترابك من المسجد (حتى عندما يكون التطبيق مغلقًا)'
-                    : 'Vous recevrez un rappel quand vous approcherez de la mosquée (même app fermée)'
+                    : 'Vous recevrez un rappel quand vous approcherez de la mosquée (même app fermée)',
                 );
               } else {
                 Alert.alert(
                   language === 'ar' ? '❌ إذن مرفوض' : '❌ Permission refusée',
                   language === 'ar'
                     ? 'يرجى تفعيل الموقع "دائمًا" في إعدادات هاتفك لاستخدام هذه الميزة'
-                    : 'Veuillez autoriser la localisation "Toujours" dans les paramètres pour utiliser cette fonctionnalité'
+                    : 'Veuillez autoriser la localisation "Toujours" dans les paramètres pour utiliser cette fonctionnalité',
                 );
               }
             },
           },
-        ]
+        ],
       );
     } else if (!newSettings.enabled && mosqueProximitySettings.enabled) {
       // Désactivation - arrêter le service background
@@ -432,14 +512,14 @@ const MoreScreen = () => {
           language === 'ar' ? 'تم التفعيل' : 'Activé',
           language === 'ar'
             ? 'ستتلقى تذكيراً كل جمعة الساعة 12:30'
-            : 'Vous recevrez un rappel chaque vendredi à 12h30'
+            : 'Vous recevrez un rappel chaque vendredi à 12h30',
         );
       } else {
         Alert.alert(
           language === 'ar' ? 'الإذن مطلوب' : 'Permission requise',
           language === 'ar'
             ? 'فعّل الإشعارات في إعدادات هاتفك'
-            : 'Activez les notifications dans les réglages de votre téléphone.'
+            : 'Activez les notifications dans les réglages de votre téléphone.',
         );
       }
     } else {
@@ -467,8 +547,13 @@ const MoreScreen = () => {
     Linking.openURL(`https://${mosqueeInfo.website}`);
   };
 
-
-  const Switch = ({ active, onToggle }: { active: boolean; onToggle: () => void }) => (
+  const Switch = ({
+    active,
+    onToggle,
+  }: {
+    active: boolean;
+    onToggle: () => void;
+  }) => (
     <TouchableOpacity
       onPress={onToggle}
       style={[styles.switch, active && styles.switchActive]}
@@ -481,17 +566,23 @@ const MoreScreen = () => {
     <BackgroundPattern>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={[styles.title, isRTL && styles.textRTL]}>{t('more')}</Text>
+          <Text style={[styles.title, isRTL && styles.textRTL]}>
+            {t('more')}
+          </Text>
         </View>
 
         <View style={styles.content}>
           {/* Direction Qibla */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>🧭 {t('qiblaDirection')}</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
+              🧭 {t('qiblaDirection')}
+            </Text>
             <View style={styles.qiblaCard}>
               {/* Titre Direction de La Mecque */}
               <Text style={styles.qiblaMainTitle}>
-                {language === 'ar' ? 'اتجاه مكة المكرمة' : 'Direction de La Mecque'}
+                {language === 'ar'
+                  ? 'اتجاه مكة المكرمة'
+                  : 'Direction de La Mecque'}
               </Text>
               <Text style={styles.kaaba}>🕋</Text>
 
@@ -506,23 +597,35 @@ const MoreScreen = () => {
                   <View style={styles.compass}>
                     <View style={styles.compassRing}>
                       {/* Points cardinaux plus visibles */}
-                      <Text style={[styles.cardinal, styles.cardinalN]}>{isRTL ? 'ش' : 'N'}</Text>
-                      <Text style={[styles.cardinal, styles.cardinalS]}>{isRTL ? 'ج' : 'S'}</Text>
-                      <Text style={[styles.cardinal, styles.cardinalE]}>{isRTL ? 'ق' : 'E'}</Text>
-                      <Text style={[styles.cardinal, styles.cardinalO]}>{isRTL ? 'غ' : 'O'}</Text>
+                      <Text style={[styles.cardinal, styles.cardinalN]}>
+                        {isRTL ? 'ش' : 'N'}
+                      </Text>
+                      <Text style={[styles.cardinal, styles.cardinalS]}>
+                        {isRTL ? 'ج' : 'S'}
+                      </Text>
+                      <Text style={[styles.cardinal, styles.cardinalE]}>
+                        {isRTL ? 'ق' : 'E'}
+                      </Text>
+                      <Text style={[styles.cardinal, styles.cardinalO]}>
+                        {isRTL ? 'غ' : 'O'}
+                      </Text>
 
                       {/* Grande flèche dorée animée vers la Qibla */}
-                      <Animated.View style={[
-                        styles.needle,
-                        {
-                          transform: [{
-                            rotate: rotateAnim.interpolate({
-                              inputRange: [-360, 360],
-                              outputRange: ['-360deg', '360deg'],
-                            })
-                          }]
-                        }
-                      ]}>
+                      <Animated.View
+                        style={[
+                          styles.needle,
+                          {
+                            transform: [
+                              {
+                                rotate: rotateAnim.interpolate({
+                                  inputRange: [-360, 360],
+                                  outputRange: ['-360deg', '360deg'],
+                                }),
+                              },
+                            ],
+                          },
+                        ]}
+                      >
                         <View style={styles.needlePointer}>
                           <Text style={styles.arrowEmoji}>▲</Text>
                         </View>
@@ -535,14 +638,22 @@ const MoreScreen = () => {
                   </View>
 
                   {/* Indicateur d'alignement */}
-                  <View style={[
-                    styles.alignmentIndicator,
-                    Math.abs((compassHeading - qiblaDirection + 360) % 360) < 15 && styles.alignmentIndicatorAligned
-                  ]}>
+                  <View
+                    style={[
+                      styles.alignmentIndicator,
+                      Math.abs((compassHeading - qiblaDirection + 360) % 360) <
+                        15 && styles.alignmentIndicatorAligned,
+                    ]}
+                  >
                     <Text style={styles.alignmentText}>
-                      {Math.abs((compassHeading - qiblaDirection + 360) % 360) < 15
-                        ? (language === 'ar' ? '✓ أنت على القبلة!' : '✓ Vous êtes aligné!')
-                        : (language === 'ar' ? 'وجّه الهاتف نحو القبلة' : 'Tournez vers la Qibla')}
+                      {Math.abs((compassHeading - qiblaDirection + 360) % 360) <
+                      15
+                        ? language === 'ar'
+                          ? '✓ أنت على القبلة!'
+                          : '✓ Vous êtes aligné!'
+                        : language === 'ar'
+                        ? 'وجّه الهاتف نحو القبلة'
+                        : 'Tournez vers la Qibla'}
                     </Text>
                   </View>
                 </>
@@ -562,29 +673,70 @@ const MoreScreen = () => {
 
           {/* Calendrier des prières */}
           <TouchableOpacity
-            style={[styles.card, { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', padding: spacing.lg }]}
+            style={[
+              styles.card,
+              {
+                flexDirection: isRTL ? 'row-reverse' : 'row',
+                alignItems: 'center',
+                padding: spacing.lg,
+              },
+            ]}
             onPress={() => navigation.navigate('PrayerCalendar' as never)}
             activeOpacity={0.7}
           >
-            <Text style={{ fontSize: 28, marginRight: isRTL ? 0 : spacing.md, marginLeft: isRTL ? spacing.md : 0 }}>📅</Text>
+            <Text
+              style={{
+                fontSize: 28,
+                marginRight: isRTL ? 0 : spacing.md,
+                marginLeft: isRTL ? spacing.md : 0,
+              }}
+            >
+              📅
+            </Text>
             <View style={{ flex: 1 }}>
-              <Text style={[{ fontSize: fontSize.lg, fontWeight: '700', color: colors.text }, isRTL && styles.textRTL]}>
+              <Text
+                style={[
+                  {
+                    fontSize: fontSize.lg,
+                    fontWeight: '700',
+                    color: colors.text,
+                  },
+                  isRTL && styles.textRTL,
+                ]}
+              >
                 {t('prayerCalendar')}
               </Text>
-              <Text style={[{ fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 }, isRTL && styles.textRTL]}>
-                {language === 'ar' ? 'اطلع على مواقيت الصلاة لأي يوم' : 'Consultez les horaires pour n\'importe quel jour'}
+              <Text
+                style={[
+                  {
+                    fontSize: fontSize.sm,
+                    color: colors.textSecondary,
+                    marginTop: 2,
+                  },
+                  isRTL && styles.textRTL,
+                ]}
+              >
+                {language === 'ar'
+                  ? 'اطلع على مواقيت الصلاة لأي يوم'
+                  : "Consultez les horaires pour n'importe quel jour"}
               </Text>
             </View>
-            <Text style={{ fontSize: fontSize.lg, color: colors.textMuted }}>{isRTL ? '◀' : '▶'}</Text>
+            <Text style={{ fontSize: fontSize.lg, color: colors.textMuted }}>
+              {isRTL ? '◀' : '▶'}
+            </Text>
           </TouchableOpacity>
 
           {/* RIB Mosquée */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>🏦 {t('bankDetails')}</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
+              🏦 {t('bankDetails')}
+            </Text>
             <View style={styles.card}>
               <View style={styles.ribHeader}>
                 <Text style={styles.ribIcon}>🕌</Text>
-                <Text style={styles.ribTitulaire}>{mosqueeInfo.accountHolder}</Text>
+                <Text style={styles.ribTitulaire}>
+                  {mosqueeInfo.accountHolder}
+                </Text>
                 <Text style={styles.ribBanque}>{mosqueeInfo.bankName}</Text>
               </View>
 
@@ -596,7 +748,9 @@ const MoreScreen = () => {
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.7}
-                  >{mosqueeInfo.iban}</Text>
+                  >
+                    {mosqueeInfo.iban}
+                  </Text>
                 </View>
                 <TouchableOpacity
                   style={styles.copyBtn}
@@ -604,7 +758,9 @@ const MoreScreen = () => {
                   accessibilityLabel="Copier l'IBAN"
                   accessibilityRole="button"
                 >
-                  <Text style={styles.copyBtnText}>{copied === 'iban' ? '✓' : '📋'}</Text>
+                  <Text style={styles.copyBtnText}>
+                    {copied === 'iban' ? '✓' : '📋'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -619,7 +775,9 @@ const MoreScreen = () => {
                   accessibilityLabel="Copier le BIC"
                   accessibilityRole="button"
                 >
-                  <Text style={styles.copyBtnText}>{copied === 'bic' ? '✓' : '📋'}</Text>
+                  <Text style={styles.copyBtnText}>
+                    {copied === 'bic' ? '✓' : '📋'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -627,7 +785,9 @@ const MoreScreen = () => {
 
           {/* Infos Mosquée */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>📍 {t('information')}</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
+              📍 {t('information')}
+            </Text>
             <View style={styles.card}>
               {/* Adresse */}
               <View style={styles.infoRow}>
@@ -636,20 +796,25 @@ const MoreScreen = () => {
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>{t('address')}</Text>
                     <Text style={styles.infoValue}>
-                      {mosqueeInfo.address}, {mosqueeInfo.postalCode} {mosqueeInfo.city}
+                      {mosqueeInfo.address}, {mosqueeInfo.postalCode}{' '}
+                      {mosqueeInfo.city}
                     </Text>
                   </View>
                 </View>
                 <TouchableOpacity
                   style={styles.copyBtnSmall}
-                  onPress={() => copyToClipboard(
-                    `${mosqueeInfo.address}, ${mosqueeInfo.postalCode} ${mosqueeInfo.city}`,
-                    'adresse'
-                  )}
+                  onPress={() =>
+                    copyToClipboard(
+                      `${mosqueeInfo.address}, ${mosqueeInfo.postalCode} ${mosqueeInfo.city}`,
+                      'adresse',
+                    )
+                  }
                   accessibilityLabel="Copier l'adresse"
                   accessibilityRole="button"
                 >
-                  <Text style={styles.copyBtnSmallText}>{copied === 'adresse' ? '✓' : '📋'}</Text>
+                  <Text style={styles.copyBtnSmallText}>
+                    {copied === 'adresse' ? '✓' : '📋'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -659,7 +824,9 @@ const MoreScreen = () => {
                   <Text style={styles.infoIcon}>📞</Text>
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>{t('phone')}</Text>
-                    <Text style={[styles.infoValue, styles.infoValueLink]}>{mosqueeInfo.phone}</Text>
+                    <Text style={[styles.infoValue, styles.infoValueLink]}>
+                      {mosqueeInfo.phone}
+                    </Text>
                   </View>
                 </View>
                 <Text style={styles.infoArrow}>→</Text>
@@ -671,19 +838,26 @@ const MoreScreen = () => {
                   <Text style={styles.infoIcon}>✉️</Text>
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>{t('email')}</Text>
-                    <Text style={[styles.infoValue, styles.infoValueLink]}>{mosqueeInfo.email}</Text>
+                    <Text style={[styles.infoValue, styles.infoValueLink]}>
+                      {mosqueeInfo.email}
+                    </Text>
                   </View>
                 </View>
                 <Text style={styles.infoArrow}>→</Text>
               </TouchableOpacity>
 
               {/* Site web */}
-              <TouchableOpacity style={[styles.infoRow, styles.infoRowLast]} onPress={handleWebsite}>
+              <TouchableOpacity
+                style={[styles.infoRow, styles.infoRowLast]}
+                onPress={handleWebsite}
+              >
                 <View style={styles.infoLeft}>
                   <Text style={styles.infoIcon}>🌐</Text>
                   <View style={styles.infoContent}>
                     <Text style={styles.infoLabel}>{t('website')}</Text>
-                    <Text style={[styles.infoValue, styles.infoValueLink]}>{mosqueeInfo.website}</Text>
+                    <Text style={[styles.infoValue, styles.infoValueLink]}>
+                      {mosqueeInfo.website}
+                    </Text>
                   </View>
                 </View>
                 <Text style={styles.infoArrow}>→</Text>
@@ -693,20 +867,26 @@ const MoreScreen = () => {
 
           {/* Notifications de priere locales */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>🔔 {t('prayerNotifications')}</Text>
+            <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
+              🔔 {t('prayerNotifications')}
+            </Text>
             <View style={styles.card}>
               {/* Toggle principal */}
               <View style={styles.settingRow}>
                 <View style={styles.settingLeft}>
                   <Text style={styles.settingIcon}>🔔</Text>
-                  <Text style={styles.settingLabel} numberOfLines={2}>{t('enableReminders')}</Text>
+                  <Text style={styles.settingLabel} numberOfLines={2}>
+                    {t('enableReminders')}
+                  </Text>
                 </View>
                 <Switch
                   active={prayerNotifSettings.enabled}
-                  onToggle={() => updatePrayerNotifSettings({
-                    ...prayerNotifSettings,
-                    enabled: !prayerNotifSettings.enabled
-                  })}
+                  onToggle={() =>
+                    updatePrayerNotifSettings({
+                      ...prayerNotifSettings,
+                      enabled: !prayerNotifSettings.enabled,
+                    })
+                  }
                 />
               </View>
 
@@ -716,80 +896,110 @@ const MoreScreen = () => {
                   <View style={styles.settingRowVertical}>
                     <View style={styles.settingLabelRow}>
                       <Text style={styles.settingIcon}>⏱️</Text>
-                      <Text style={styles.settingLabel}>{t('reminderBefore')}</Text>
+                      <Text style={styles.settingLabel}>
+                        {t('reminderBefore')}
+                      </Text>
                     </View>
                     <View style={styles.pickerFullWidth}>
-                      {[5, 10, 15, 30].map((min) => (
+                      {[5, 10, 15, 30].map(min => (
                         <TouchableOpacity
                           key={min}
                           style={[
                             styles.pickerOption,
-                            prayerNotifSettings.minutesBefore === min && styles.pickerOptionActive
+                            prayerNotifSettings.minutesBefore === min &&
+                              styles.pickerOptionActive,
                           ]}
-                          onPress={() => updatePrayerNotifSettings({
-                            ...prayerNotifSettings,
-                            minutesBefore: min
-                          })}
+                          onPress={() =>
+                            updatePrayerNotifSettings({
+                              ...prayerNotifSettings,
+                              minutesBefore: min,
+                            })
+                          }
                         >
-                          <Text style={[
-                            styles.pickerOptionText,
-                            prayerNotifSettings.minutesBefore === min && styles.pickerOptionTextActive
-                          ]}>
+                          <Text
+                            style={[
+                              styles.pickerOptionText,
+                              prayerNotifSettings.minutesBefore === min &&
+                                styles.pickerOptionTextActive,
+                            ]}
+                          >
                             {min}
                           </Text>
                         </TouchableOpacity>
                       ))}
-                      <Text style={styles.pickerUnit}>{isRTL ? 'د' : 'min'}</Text>
+                      <Text style={styles.pickerUnit}>
+                        {isRTL ? 'د' : 'min'}
+                      </Text>
                     </View>
                   </View>
 
                   {/* Toggles par priere */}
                   <View style={styles.prayerTogglesSection}>
-                    <Text style={[styles.prayerTogglesTitle, isRTL && styles.textRTL]}>
-                      {language === 'ar' ? 'اختر الصلوات للتذكير' : 'Prieres a rappeler'}
+                    <Text
+                      style={[
+                        styles.prayerTogglesTitle,
+                        isRTL && styles.textRTL,
+                      ]}
+                    >
+                      {language === 'ar'
+                        ? 'اختر الصلوات للتذكير'
+                        : 'Prieres a rappeler'}
                     </Text>
-                    {(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).map((prayer, index, arr) => {
-                      const prayerIcons: Record<string, string> = {
-                        fajr: '🌅',
-                        dhuhr: '☀️',
-                        asr: '🌤️',
-                        maghrib: '🌅',
-                        isha: '🌙',
-                      };
-                      const prayerNames: Record<string, { fr: string; ar: string }> = {
-                        fajr: { fr: 'Fajr', ar: 'الفجر' },
-                        dhuhr: { fr: 'Dhuhr', ar: 'الظهر' },
-                        asr: { fr: 'Asr', ar: 'العصر' },
-                        maghrib: { fr: 'Maghrib', ar: 'المغرب' },
-                        isha: { fr: 'Isha', ar: 'العشاء' },
-                      };
-                      return (
-                        <View
-                          key={prayer}
-                          style={[
-                            styles.prayerToggleRow,
-                            index === arr.length - 1 && styles.prayerToggleRowLast
-                          ]}
-                        >
-                          <View style={styles.settingLeft}>
-                            <Text style={styles.settingIcon}>{prayerIcons[prayer]}</Text>
-                            <Text style={styles.settingLabel}>
-                              {language === 'ar' ? prayerNames[prayer].ar : prayerNames[prayer].fr}
-                            </Text>
-                          </View>
-                          <Switch
-                            active={prayerNotifSettings.prayers[prayer]}
-                            onToggle={() => updatePrayerNotifSettings({
-                              ...prayerNotifSettings,
-                              prayers: {
-                                ...prayerNotifSettings.prayers,
-                                [prayer]: !prayerNotifSettings.prayers[prayer]
+                    {(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).map(
+                      (prayer, index, arr) => {
+                        const prayerIcons: Record<string, string> = {
+                          fajr: '🌅',
+                          dhuhr: '☀️',
+                          asr: '🌤️',
+                          maghrib: '🌅',
+                          isha: '🌙',
+                        };
+                        const prayerNames: Record<
+                          string,
+                          { fr: string; ar: string }
+                        > = {
+                          fajr: { fr: 'Fajr', ar: 'الفجر' },
+                          dhuhr: { fr: 'Dhuhr', ar: 'الظهر' },
+                          asr: { fr: 'Asr', ar: 'العصر' },
+                          maghrib: { fr: 'Maghrib', ar: 'المغرب' },
+                          isha: { fr: 'Isha', ar: 'العشاء' },
+                        };
+                        return (
+                          <View
+                            key={prayer}
+                            style={[
+                              styles.prayerToggleRow,
+                              index === arr.length - 1 &&
+                                styles.prayerToggleRowLast,
+                            ]}
+                          >
+                            <View style={styles.settingLeft}>
+                              <Text style={styles.settingIcon}>
+                                {prayerIcons[prayer]}
+                              </Text>
+                              <Text style={styles.settingLabel}>
+                                {language === 'ar'
+                                  ? prayerNames[prayer].ar
+                                  : prayerNames[prayer].fr}
+                              </Text>
+                            </View>
+                            <Switch
+                              active={prayerNotifSettings.prayers[prayer]}
+                              onToggle={() =>
+                                updatePrayerNotifSettings({
+                                  ...prayerNotifSettings,
+                                  prayers: {
+                                    ...prayerNotifSettings.prayers,
+                                    [prayer]:
+                                      !prayerNotifSettings.prayers[prayer],
+                                  },
+                                })
                               }
-                            })}
-                          />
-                        </View>
-                      );
-                    })}
+                            />
+                          </View>
+                        );
+                      },
+                    )}
                   </View>
 
                   {/* Note explicative */}
@@ -797,7 +1007,7 @@ const MoreScreen = () => {
                     <Text style={styles.prayerNotifNoteText}>
                       {language === 'ar'
                         ? '💡 افتح التطبيق مرة واحدة في الأسبوع لمواصلة تلقي التذكيرات'
-                        : '💡 Ouvrez l\'app au moins 1 fois par semaine pour continuer à recevoir les rappels'}
+                        : "💡 Ouvrez l'app au moins 1 fois par semaine pour continuer à recevoir les rappels"}
                     </Text>
                   </View>
 
@@ -805,7 +1015,9 @@ const MoreScreen = () => {
                   <View style={[styles.settingRow, styles.settingRowLast]}>
                     <View style={styles.settingLeft}>
                       <Text style={styles.settingIcon}>🕌</Text>
-                      <Text style={styles.settingLabel} numberOfLines={2}>{t('jumuaFriday')}</Text>
+                      <Text style={styles.settingLabel} numberOfLines={2}>
+                        {t('jumuaFriday')}
+                      </Text>
                     </View>
                     <Switch
                       active={jumuaReminderEnabled}
@@ -827,40 +1039,63 @@ const MoreScreen = () => {
               <View style={styles.settingRow}>
                 <View style={styles.settingLeft}>
                   <Text style={styles.settingIcon}>🚀</Text>
-                  <Text style={styles.settingLabel} numberOfLines={2}>{t('enableProgressiveReminders')}</Text>
+                  <Text style={styles.settingLabel} numberOfLines={2}>
+                    {t('enableProgressiveReminders')}
+                  </Text>
                 </View>
                 <Switch
                   active={boostSettings.enabled}
-                  onToggle={() => updateBoostSettings({
-                    ...boostSettings,
-                    enabled: !boostSettings.enabled
-                  })}
+                  onToggle={() =>
+                    updateBoostSettings({
+                      ...boostSettings,
+                      enabled: !boostSettings.enabled,
+                    })
+                  }
                 />
               </View>
 
               {/* Détail des rappels par prière (visible si activé) */}
               {boostSettings.enabled && (
                 <View style={styles.prayerNotifNote}>
-                  <Text style={[styles.prayerNotifNoteText, { fontWeight: '600', marginBottom: 8 }]}>
-                    📋 {language === 'ar' ? 'التفاصيل:' : 'Détails des rappels :'}
+                  <Text
+                    style={[
+                      styles.prayerNotifNoteText,
+                      { fontWeight: '600', marginBottom: 8 },
+                    ]}
+                  >
+                    📋{' '}
+                    {language === 'ar' ? 'التفاصيل:' : 'Détails des rappels :'}
                   </Text>
                   <Text style={styles.prayerNotifNoteText}>
-                    🌅 Fajr, Dhuhr, Asr : {language === 'ar' ? '3 تذكيرات' : '3 rappels'}
+                    🌅 Fajr, Dhuhr, Asr :{' '}
+                    {language === 'ar' ? '3 تذكيرات' : '3 rappels'}
                   </Text>
                   <Text style={styles.prayerNotifNoteText}>
-                    {language === 'ar' ? '   • 30 د بعد الأذان' : '   • 30 min après l\'adhan'}
+                    {language === 'ar'
+                      ? '   • 30 د بعد الأذان'
+                      : "   • 30 min après l'adhan"}
                   </Text>
                   <Text style={styles.prayerNotifNoteText}>
-                    {language === 'ar' ? '   • في منتصف الوقت' : '   • À mi-temps'}
+                    {language === 'ar'
+                      ? '   • في منتصف الوقت'
+                      : '   • À mi-temps'}
                   </Text>
                   <Text style={styles.prayerNotifNoteText}>
-                    {language === 'ar' ? '   • 15 د قبل النهاية' : '   • 15 min avant la fin'}
+                    {language === 'ar'
+                      ? '   • 15 د قبل النهاية'
+                      : '   • 15 min avant la fin'}
                   </Text>
                   <Text style={[styles.prayerNotifNoteText, { marginTop: 6 }]}>
-                    🌅 Maghrib : {language === 'ar' ? '1 تذكير عاجل (مالكية)' : '1 rappel urgent (Malikites)'}
+                    🌅 Maghrib :{' '}
+                    {language === 'ar'
+                      ? '1 تذكير عاجل (مالكية)'
+                      : '1 rappel urgent (Malikites)'}
                   </Text>
                   <Text style={[styles.prayerNotifNoteText, { marginTop: 6 }]}>
-                    🌙 Isha : {language === 'ar' ? '1 تذكير (30 د بعد)' : '1 rappel (30 min après)'}
+                    🌙 Isha :{' '}
+                    {language === 'ar'
+                      ? '1 تذكير (30 د بعد)'
+                      : '1 rappel (30 min après)'}
                   </Text>
                 </View>
               )}
@@ -878,15 +1113,19 @@ const MoreScreen = () => {
                 <View style={styles.settingLeft}>
                   <Text style={styles.settingIcon}>📖</Text>
                   <Text style={styles.settingLabel} numberOfLines={2}>
-                    {language === 'ar' ? 'تفعيل التذكير اليومي' : 'Activer le rappel quotidien'}
+                    {language === 'ar'
+                      ? 'تفعيل التذكير اليومي'
+                      : 'Activer le rappel quotidien'}
                   </Text>
                 </View>
                 <Switch
                   active={quranReminderSettings.enabled}
-                  onToggle={() => updateQuranReminderSettings({
-                    ...quranReminderSettings,
-                    enabled: !quranReminderSettings.enabled
-                  })}
+                  onToggle={() =>
+                    updateQuranReminderSettings({
+                      ...quranReminderSettings,
+                      enabled: !quranReminderSettings.enabled,
+                    })
+                  }
                 />
               </View>
 
@@ -901,22 +1140,28 @@ const MoreScreen = () => {
                       </Text>
                     </View>
                     <View style={styles.pickerFullWidth}>
-                      {[8, 12, 18, 20, 22].map((hour) => (
+                      {[8, 12, 18, 20, 22].map(hour => (
                         <TouchableOpacity
                           key={hour}
                           style={[
                             styles.pickerOption,
-                            quranReminderSettings.hour === hour && styles.pickerOptionActive
+                            quranReminderSettings.hour === hour &&
+                              styles.pickerOptionActive,
                           ]}
-                          onPress={() => updateQuranReminderSettings({
-                            ...quranReminderSettings,
-                            hour
-                          })}
+                          onPress={() =>
+                            updateQuranReminderSettings({
+                              ...quranReminderSettings,
+                              hour,
+                            })
+                          }
                         >
-                          <Text style={[
-                            styles.pickerOptionText,
-                            quranReminderSettings.hour === hour && styles.pickerOptionTextActive
-                          ]}>
+                          <Text
+                            style={[
+                              styles.pickerOptionText,
+                              quranReminderSettings.hour === hour &&
+                                styles.pickerOptionTextActive,
+                            ]}
+                          >
                             {hour}h
                           </Text>
                         </TouchableOpacity>
@@ -925,7 +1170,9 @@ const MoreScreen = () => {
                   </View>
 
                   {/* Fréquence */}
-                  <View style={[styles.settingRowVertical, styles.settingRowLast]}>
+                  <View
+                    style={[styles.settingRowVertical, styles.settingRowLast]}
+                  >
                     <View style={styles.settingLabelRow}>
                       <Text style={styles.settingIcon}>📅</Text>
                       <Text style={styles.settingLabel}>
@@ -936,34 +1183,46 @@ const MoreScreen = () => {
                       <TouchableOpacity
                         style={[
                           styles.pickerOption,
-                          quranReminderSettings.frequency === 'daily' && styles.pickerOptionActive
+                          quranReminderSettings.frequency === 'daily' &&
+                            styles.pickerOptionActive,
                         ]}
-                        onPress={() => updateQuranReminderSettings({
-                          ...quranReminderSettings,
-                          frequency: 'daily'
-                        })}
+                        onPress={() =>
+                          updateQuranReminderSettings({
+                            ...quranReminderSettings,
+                            frequency: 'daily',
+                          })
+                        }
                       >
-                        <Text style={[
-                          styles.pickerOptionText,
-                          quranReminderSettings.frequency === 'daily' && styles.pickerOptionTextActive
-                        ]}>
+                        <Text
+                          style={[
+                            styles.pickerOptionText,
+                            quranReminderSettings.frequency === 'daily' &&
+                              styles.pickerOptionTextActive,
+                          ]}
+                        >
                           {language === 'ar' ? 'يومي' : 'Quotidien'}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[
                           styles.pickerOption,
-                          quranReminderSettings.frequency === 'friday' && styles.pickerOptionActive
+                          quranReminderSettings.frequency === 'friday' &&
+                            styles.pickerOptionActive,
                         ]}
-                        onPress={() => updateQuranReminderSettings({
-                          ...quranReminderSettings,
-                          frequency: 'friday'
-                        })}
+                        onPress={() =>
+                          updateQuranReminderSettings({
+                            ...quranReminderSettings,
+                            frequency: 'friday',
+                          })
+                        }
                       >
-                        <Text style={[
-                          styles.pickerOptionText,
-                          quranReminderSettings.frequency === 'friday' && styles.pickerOptionTextActive
-                        ]}>
+                        <Text
+                          style={[
+                            styles.pickerOptionText,
+                            quranReminderSettings.frequency === 'friday' &&
+                              styles.pickerOptionTextActive,
+                          ]}
+                        >
                           {language === 'ar' ? 'الجمعة' : 'Vendredi'}
                         </Text>
                       </TouchableOpacity>
@@ -974,7 +1233,7 @@ const MoreScreen = () => {
                   <View style={styles.prayerNotifNote}>
                     <Text style={styles.prayerNotifNoteText}>
                       {language === 'ar'
-                        ? '💡 \"إِنَّا نَحْنُ نَزَّلْنَا الذِّكْرَ وَإِنَّا لَهُ لَحَافِظُونَ\"'
+                        ? '💡 "إِنَّا نَحْنُ نَزَّلْنَا الذِّكْرَ وَإِنَّا لَهُ لَحَافِظُونَ"'
                         : '💡 "Certes, c\'est Nous qui avons fait descendre le Coran"'}
                     </Text>
                   </View>
@@ -992,14 +1251,18 @@ const MoreScreen = () => {
               <View style={styles.settingRow}>
                 <View style={styles.settingLeft}>
                   <Text style={styles.settingIcon}>🔕</Text>
-                  <Text style={styles.settingLabel} numberOfLines={2}>{t('enableMosqueProximity')}</Text>
+                  <Text style={styles.settingLabel} numberOfLines={2}>
+                    {t('enableMosqueProximity')}
+                  </Text>
                 </View>
                 <Switch
                   active={mosqueProximitySettings.enabled}
-                  onToggle={() => updateMosqueProximitySettings({
-                    ...mosqueProximitySettings,
-                    enabled: !mosqueProximitySettings.enabled
-                  })}
+                  onToggle={() =>
+                    updateMosqueProximitySettings({
+                      ...mosqueProximitySettings,
+                      enabled: !mosqueProximitySettings.enabled,
+                    })
+                  }
                 />
               </View>
 
@@ -1016,7 +1279,8 @@ const MoreScreen = () => {
           {ramadanSettings?.enabled && (
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>
-                🌙 {language === 'ar' ? 'إشعارات رمضان' : 'Notifications Ramadan'}
+                🌙{' '}
+                {language === 'ar' ? 'إشعارات رمضان' : 'Notifications Ramadan'}
               </Text>
               <View style={[styles.card, styles.ramadanCard]}>
                 {/* Toggle Suhoor */}
@@ -1029,10 +1293,15 @@ const MoreScreen = () => {
                   </View>
                   <Switch
                     active={ramadanNotifSettings.suhoor.enabled}
-                    onToggle={() => updateRamadanNotifSettings({
-                      ...ramadanNotifSettings,
-                      suhoor: { ...ramadanNotifSettings.suhoor, enabled: !ramadanNotifSettings.suhoor.enabled }
-                    })}
+                    onToggle={() =>
+                      updateRamadanNotifSettings({
+                        ...ramadanNotifSettings,
+                        suhoor: {
+                          ...ramadanNotifSettings.suhoor,
+                          enabled: !ramadanNotifSettings.suhoor.enabled,
+                        },
+                      })
+                    }
                   />
                 </View>
 
@@ -1046,27 +1315,38 @@ const MoreScreen = () => {
                       </Text>
                     </View>
                     <View style={styles.pickerFullWidth}>
-                      {[15, 30, 45].map((min) => (
+                      {[15, 30, 45].map(min => (
                         <TouchableOpacity
                           key={min}
                           style={[
                             styles.pickerOption,
-                            ramadanNotifSettings.suhoor.minutesBefore === min && styles.pickerOptionActive
+                            ramadanNotifSettings.suhoor.minutesBefore === min &&
+                              styles.pickerOptionActive,
                           ]}
-                          onPress={() => updateRamadanNotifSettings({
-                            ...ramadanNotifSettings,
-                            suhoor: { ...ramadanNotifSettings.suhoor, minutesBefore: min }
-                          })}
+                          onPress={() =>
+                            updateRamadanNotifSettings({
+                              ...ramadanNotifSettings,
+                              suhoor: {
+                                ...ramadanNotifSettings.suhoor,
+                                minutesBefore: min,
+                              },
+                            })
+                          }
                         >
-                          <Text style={[
-                            styles.pickerOptionText,
-                            ramadanNotifSettings.suhoor.minutesBefore === min && styles.pickerOptionTextActive
-                          ]}>
+                          <Text
+                            style={[
+                              styles.pickerOptionText,
+                              ramadanNotifSettings.suhoor.minutesBefore ===
+                                min && styles.pickerOptionTextActive,
+                            ]}
+                          >
                             {min}
                           </Text>
                         </TouchableOpacity>
                       ))}
-                      <Text style={styles.pickerUnit}>{isRTL ? 'د' : 'min'}</Text>
+                      <Text style={styles.pickerUnit}>
+                        {isRTL ? 'د' : 'min'}
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -1081,10 +1361,15 @@ const MoreScreen = () => {
                   </View>
                   <Switch
                     active={ramadanNotifSettings.iftar.enabled}
-                    onToggle={() => updateRamadanNotifSettings({
-                      ...ramadanNotifSettings,
-                      iftar: { ...ramadanNotifSettings.iftar, enabled: !ramadanNotifSettings.iftar.enabled }
-                    })}
+                    onToggle={() =>
+                      updateRamadanNotifSettings({
+                        ...ramadanNotifSettings,
+                        iftar: {
+                          ...ramadanNotifSettings.iftar,
+                          enabled: !ramadanNotifSettings.iftar.enabled,
+                        },
+                      })
+                    }
                   />
                 </View>
 
@@ -1098,28 +1383,43 @@ const MoreScreen = () => {
                       </Text>
                     </View>
                     <View style={styles.pickerFullWidth}>
-                      {[0, 5, 10, 15].map((min) => (
+                      {[0, 5, 10, 15].map(min => (
                         <TouchableOpacity
                           key={min}
                           style={[
                             styles.pickerOption,
-                            ramadanNotifSettings.iftar.minutesBefore === min && styles.pickerOptionActive
+                            ramadanNotifSettings.iftar.minutesBefore === min &&
+                              styles.pickerOptionActive,
                           ]}
-                          onPress={() => updateRamadanNotifSettings({
-                            ...ramadanNotifSettings,
-                            iftar: { ...ramadanNotifSettings.iftar, minutesBefore: min }
-                          })}
+                          onPress={() =>
+                            updateRamadanNotifSettings({
+                              ...ramadanNotifSettings,
+                              iftar: {
+                                ...ramadanNotifSettings.iftar,
+                                minutesBefore: min,
+                              },
+                            })
+                          }
                         >
-                          <Text style={[
-                            styles.pickerOptionText,
-                            ramadanNotifSettings.iftar.minutesBefore === min && styles.pickerOptionTextActive
-                          ]}>
-                            {min === 0 ? (language === 'ar' ? 'الآن' : 'À l\'heure') : min}
+                          <Text
+                            style={[
+                              styles.pickerOptionText,
+                              ramadanNotifSettings.iftar.minutesBefore ===
+                                min && styles.pickerOptionTextActive,
+                            ]}
+                          >
+                            {min === 0
+                              ? language === 'ar'
+                                ? 'الآن'
+                                : "À l'heure"
+                              : min}
                           </Text>
                         </TouchableOpacity>
                       ))}
                       {ramadanNotifSettings.iftar.minutesBefore > 0 && (
-                        <Text style={styles.pickerUnit}>{isRTL ? 'د' : 'min'}</Text>
+                        <Text style={styles.pickerUnit}>
+                          {isRTL ? 'د' : 'min'}
+                        </Text>
                       )}
                     </View>
                   </View>
@@ -1135,44 +1435,64 @@ const MoreScreen = () => {
                   </View>
                   <Switch
                     active={ramadanNotifSettings.tarawih.enabled}
-                    onToggle={() => updateRamadanNotifSettings({
-                      ...ramadanNotifSettings,
-                      tarawih: { ...ramadanNotifSettings.tarawih, enabled: !ramadanNotifSettings.tarawih.enabled }
-                    })}
+                    onToggle={() =>
+                      updateRamadanNotifSettings({
+                        ...ramadanNotifSettings,
+                        tarawih: {
+                          ...ramadanNotifSettings.tarawih,
+                          enabled: !ramadanNotifSettings.tarawih.enabled,
+                        },
+                      })
+                    }
                   />
                 </View>
 
                 {/* Minutes avant Tarawih */}
                 {ramadanNotifSettings.tarawih.enabled && (
-                  <View style={[styles.settingRowVertical, styles.settingRowLast]}>
+                  <View
+                    style={[styles.settingRowVertical, styles.settingRowLast]}
+                  >
                     <View style={styles.settingLabelRow}>
                       <Text style={styles.settingIcon}>⏰</Text>
                       <Text style={styles.settingLabel} numberOfLines={1}>
-                        {language === 'ar' ? 'قبل التراويح بـ' : 'Avant Tarawih'}
+                        {language === 'ar'
+                          ? 'قبل التراويح بـ'
+                          : 'Avant Tarawih'}
                       </Text>
                     </View>
                     <View style={styles.pickerFullWidth}>
-                      {[10, 15, 30].map((min) => (
+                      {[10, 15, 30].map(min => (
                         <TouchableOpacity
                           key={min}
                           style={[
                             styles.pickerOption,
-                            ramadanNotifSettings.tarawih.minutesBefore === min && styles.pickerOptionActive
+                            ramadanNotifSettings.tarawih.minutesBefore ===
+                              min && styles.pickerOptionActive,
                           ]}
-                          onPress={() => updateRamadanNotifSettings({
-                            ...ramadanNotifSettings,
-                            tarawih: { ...ramadanNotifSettings.tarawih, minutesBefore: min }
-                          })}
+                          onPress={() =>
+                            updateRamadanNotifSettings({
+                              ...ramadanNotifSettings,
+                              tarawih: {
+                                ...ramadanNotifSettings.tarawih,
+                                minutesBefore: min,
+                              },
+                            })
+                          }
                         >
-                          <Text style={[
-                            styles.pickerOptionText,
-                            ramadanNotifSettings.tarawih.minutesBefore === min && styles.pickerOptionTextActive
-                          ]}>
+                          <Text
+                            style={[
+                              styles.pickerOptionText,
+                              ramadanNotifSettings.tarawih.minutesBefore ===
+                                min && styles.pickerOptionTextActive,
+                            ]}
+                          >
                             {min}
                           </Text>
                         </TouchableOpacity>
                       ))}
-                      <Text style={styles.pickerUnit}>{isRTL ? 'د' : 'min'}</Text>
+                      <Text style={styles.pickerUnit}>
+                        {isRTL ? 'د' : 'min'}
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -1197,30 +1517,34 @@ const MoreScreen = () => {
                 <TouchableOpacity
                   style={[
                     styles.languageOption,
-                    language === 'fr' && styles.languageOptionActive
+                    language === 'fr' && styles.languageOptionActive,
                   ]}
                   onPress={() => setLanguage('fr')}
                 >
                   <Text style={styles.languageFlag}>🇫🇷</Text>
-                  <Text style={[
-                    styles.languageText,
-                    language === 'fr' && styles.languageTextActive
-                  ]}>
+                  <Text
+                    style={[
+                      styles.languageText,
+                      language === 'fr' && styles.languageTextActive,
+                    ]}
+                  >
                     {t('french')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
                     styles.languageOption,
-                    language === 'ar' && styles.languageOptionActive
+                    language === 'ar' && styles.languageOptionActive,
                   ]}
                   onPress={() => setLanguage('ar')}
                 >
                   <Text style={styles.languageFlag}>🇸🇦</Text>
-                  <Text style={[
-                    styles.languageText,
-                    language === 'ar' && styles.languageTextActive
-                  ]}>
+                  <Text
+                    style={[
+                      styles.languageText,
+                      language === 'ar' && styles.languageTextActive,
+                    ]}
+                  >
                     {t('arabic')}
                   </Text>
                 </TouchableOpacity>
@@ -1228,16 +1552,24 @@ const MoreScreen = () => {
             </View>
           </View>
 
-
           {/* Politique de confidentialité (RGPD) */}
           <TouchableOpacity
-            style={[styles.logoutButton, { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.2)', marginBottom: spacing.sm }]}
+            style={[
+              styles.logoutButton,
+              {
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderColor: 'rgba(59, 130, 246, 0.2)',
+                marginBottom: spacing.sm,
+              },
+            ]}
             onPress={() => navigation.navigate('PrivacyPolicy')}
           >
             <View style={[styles.settingRow, { justifyContent: 'center' }]}>
               <Text style={{ fontSize: 18, marginRight: spacing.sm }}>🔒</Text>
               <Text style={[styles.settingLabel, { color: '#3b82f6' }]}>
-                {language === 'ar' ? 'سياسة الخصوصية' : 'Politique de confidentialité'}
+                {language === 'ar'
+                  ? 'سياسة الخصوصية'
+                  : 'Politique de confidentialité'}
               </Text>
             </View>
           </TouchableOpacity>
@@ -1245,28 +1577,56 @@ const MoreScreen = () => {
           {/* Exporter mes données (RGPD Article 20) */}
           {userEmail && (
             <TouchableOpacity
-              style={[styles.logoutButton, { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: 'rgba(34, 197, 94, 0.2)', marginBottom: spacing.sm }]}
+              style={[
+                styles.logoutButton,
+                {
+                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                  borderColor: 'rgba(34, 197, 94, 0.2)',
+                  marginBottom: spacing.sm,
+                },
+              ]}
               onPress={async () => {
                 try {
-                  const exportMyData = firebase.app().functions('europe-west1').httpsCallable('exportMyData');
+                  const exportMyData = firebase
+                    .app()
+                    .functions('europe-west1')
+                    .httpsCallable('exportMyData');
                   const result = await exportMyData();
                   const data = result.data as any;
                   Alert.alert(
                     language === 'ar' ? 'تصدير البيانات' : 'Export de données',
                     language === 'ar'
-                      ? `تم تصدير بياناتك بنجاح:\n\n• ${data.donations?.length || 0} تبرعات\n• ${data.paiements?.length || 0} مدفوعات\n• ${data.messages?.length || 0} رسائل\n\nتاريخ التصدير: ${new Date(data.exportedAt).toLocaleDateString('ar')}`
-                      : `Vos données ont été exportées avec succès:\n\n• ${data.donations?.length || 0} donations\n• ${data.paiements?.length || 0} paiements\n• ${data.messages?.length || 0} messages\n\nExporté le: ${new Date(data.exportedAt).toLocaleDateString('fr-FR')}`
+                      ? `تم تصدير بياناتك بنجاح:\n\n• ${
+                          data.donations?.length || 0
+                        } تبرعات\n• ${data.paiements?.length || 0} مدفوعات\n• ${
+                          data.messages?.length || 0
+                        } رسائل\n\nتاريخ التصدير: ${new Date(
+                          data.exportedAt,
+                        ).toLocaleDateString('ar')}`
+                      : `Vos données ont été exportées avec succès:\n\n• ${
+                          data.donations?.length || 0
+                        } donations\n• ${
+                          data.paiements?.length || 0
+                        } paiements\n• ${
+                          data.messages?.length || 0
+                        } messages\n\nExporté le: ${new Date(
+                          data.exportedAt,
+                        ).toLocaleDateString('fr-FR')}`,
                   );
                 } catch (error) {
                   Alert.alert(
                     language === 'ar' ? 'خطأ' : 'Erreur',
-                    language === 'ar' ? 'فشل تصدير البيانات' : 'Impossible d\'exporter les données'
+                    language === 'ar'
+                      ? 'فشل تصدير البيانات'
+                      : "Impossible d'exporter les données",
                   );
                 }
               }}
             >
               <View style={[styles.settingRow, { justifyContent: 'center' }]}>
-                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>📥</Text>
+                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>
+                  📥
+                </Text>
                 <Text style={[styles.settingLabel, { color: '#22c55e' }]}>
                   {language === 'ar' ? 'تصدير بياناتي' : 'Exporter mes données'}
                 </Text>
@@ -1285,26 +1645,43 @@ const MoreScreen = () => {
                     ? 'هل أنت متأكد؟ سيتم حذف جميع بياناتك نهائيًا. لا يمكن التراجع عن هذا الإجراء.'
                     : 'Êtes-vous sûr ? Toutes vos données seront supprimées définitivement. Cette action est irréversible.',
                   [
-                    { text: language === 'ar' ? 'إلغاء' : 'Annuler', style: 'cancel' },
+                    {
+                      text: language === 'ar' ? 'إلغاء' : 'Annuler',
+                      style: 'cancel',
+                    },
                     {
                       text: language === 'ar' ? 'حذف' : 'Supprimer',
                       style: 'destructive',
                       onPress: () => {
                         Alert.alert(
-                          language === 'ar' ? 'تأكيد نهائي' : 'Confirmation finale',
-                          language === 'ar' ? 'هذا الإجراء نهائي ولا رجعة فيه.' : 'Cette action est définitive et irréversible.',
+                          language === 'ar'
+                            ? 'تأكيد نهائي'
+                            : 'Confirmation finale',
+                          language === 'ar'
+                            ? 'هذا الإجراء نهائي ولا رجعة فيه.'
+                            : 'Cette action est définitive et irréversible.',
                           [
-                            { text: language === 'ar' ? 'إلغاء' : 'Annuler', style: 'cancel' },
                             {
-                              text: language === 'ar' ? 'نعم، حذف حسابي' : 'Oui, supprimer mon compte',
+                              text: language === 'ar' ? 'إلغاء' : 'Annuler',
+                              style: 'cancel',
+                            },
+                            {
+                              text:
+                                language === 'ar'
+                                  ? 'نعم، حذف حسابي'
+                                  : 'Oui, supprimer mon compte',
                               style: 'destructive',
                               onPress: async () => {
                                 try {
                                   const result = await deleteMyAccount();
                                   if (result.success) {
                                     Alert.alert(
-                                      language === 'ar' ? 'تم الحذف' : 'Compte supprimé',
-                                      language === 'ar' ? 'تم حذف حسابك بنجاح.' : result.message,
+                                      language === 'ar'
+                                        ? 'تم الحذف'
+                                        : 'Compte supprimé',
+                                      language === 'ar'
+                                        ? 'تم حذف حسابك بنجاح.'
+                                        : result.message,
                                     );
                                     await AuthService.signOut();
                                   } else {
@@ -1316,21 +1693,25 @@ const MoreScreen = () => {
                                 } catch (error) {
                                   Alert.alert(
                                     language === 'ar' ? 'خطأ' : 'Erreur',
-                                    language === 'ar' ? 'فشل حذف الحساب' : 'Impossible de supprimer le compte',
+                                    language === 'ar'
+                                      ? 'فشل حذف الحساب'
+                                      : 'Impossible de supprimer le compte',
                                   );
                                 }
                               },
                             },
-                          ]
+                          ],
                         );
                       },
                     },
-                  ]
+                  ],
                 );
               }}
             >
               <View style={[styles.settingRow, { justifyContent: 'center' }]}>
-                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>🗑️</Text>
+                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>
+                  🗑️
+                </Text>
                 <Text style={[styles.settingLabel, { color: '#ef4444' }]}>
                   {language === 'ar' ? 'حذف حسابي' : 'Supprimer mon compte'}
                 </Text>
@@ -1345,11 +1726,17 @@ const MoreScreen = () => {
               onPress={() => {
                 Alert.alert(
                   language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter',
-                  language === 'ar' ? 'هل أنت متأكد؟' : 'Êtes-vous sûr de vouloir vous déconnecter ?',
+                  language === 'ar'
+                    ? 'هل أنت متأكد؟'
+                    : 'Êtes-vous sûr de vouloir vous déconnecter ?',
                   [
-                    { text: language === 'ar' ? 'إلغاء' : 'Annuler', style: 'cancel' },
                     {
-                      text: language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter',
+                      text: language === 'ar' ? 'إلغاء' : 'Annuler',
+                      style: 'cancel',
+                    },
+                    {
+                      text:
+                        language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter',
                       style: 'destructive',
                       onPress: async () => {
                         try {
@@ -1357,17 +1744,21 @@ const MoreScreen = () => {
                         } catch (error) {
                           Alert.alert(
                             language === 'ar' ? 'خطأ' : 'Erreur',
-                            language === 'ar' ? 'فشل تسجيل الخروج' : 'Impossible de se déconnecter'
+                            language === 'ar'
+                              ? 'فشل تسجيل الخروج'
+                              : 'Impossible de se déconnecter',
                           );
                         }
                       },
                     },
-                  ]
+                  ],
                 );
               }}
             >
               <View style={[styles.settingRow, { justifyContent: 'center' }]}>
-                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>🚪</Text>
+                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>
+                  🚪
+                </Text>
                 <Text style={[styles.settingLabel, { color: '#ef4444' }]}>
                   {language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter'}
                 </Text>
@@ -1377,7 +1768,9 @@ const MoreScreen = () => {
 
           {/* Version */}
           <View style={styles.versionContainer}>
-            <Text style={styles.versionText}>{t('version')} {appVersion}</Text>
+            <Text style={styles.versionText}>
+              {t('version')} {appVersion}
+            </Text>
             <Text style={styles.copyrightText}>© 2026 El Mohsinine</Text>
           </View>
         </View>

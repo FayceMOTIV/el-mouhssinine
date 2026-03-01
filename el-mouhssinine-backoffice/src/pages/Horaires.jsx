@@ -113,6 +113,28 @@ export default function Horaires() {
   }
 
   const handleSave = async () => {
+    // Validation HH:MM pour les horaires Jumu'a
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/
+    for (const slot of JUMUAH_SLOTS) {
+      const val = jumuaTimes[slot.id]
+      if (val && !timeRegex.test(val)) {
+        toast.error(`${slot.label} : format invalide. Utilisez HH:MM (ex: 13:00)`)
+        return
+      }
+    }
+
+    // Validation des delais iqama (nombre entre 0 et 60)
+    for (const prayer of PRAYERS.filter(p => p.hasIqama)) {
+      const val = iqamaTimes[prayer.id]
+      if (val !== undefined && val !== '' && val !== null) {
+        const num = parseInt(val)
+        if (isNaN(num) || num < 0 || num > 60) {
+          toast.error(`${prayer.label} : le délai Iqama doit être entre 0 et 60 minutes`)
+          return
+        }
+      }
+    }
+
     setSaving(true)
     try {
       // Only save Iqama and Jumua times (Adhan comes from API)

@@ -381,6 +381,7 @@ export default function Adherents() {
     setRefundConfirmModal({ open: true, membre, message: confirmText })
   }
 
+  // TODO: La Cloud Function 'refundPayment' doit etre deployee dans functions/index.js
   const handleConfirmRefund = async () => {
     const { membre } = refundConfirmModal
     if (!membre) return
@@ -400,7 +401,10 @@ export default function Adherents() {
       setRefundAmount('')
     } catch (err) {
       console.error('Error refunding:', err)
-      toast.error(err.message || 'Erreur lors du remboursement')
+      const message = err?.code === 'functions/not-found'
+        ? 'La fonction de remboursement n\'est pas encore disponible. Veuillez effectuer le remboursement depuis le dashboard Stripe.'
+        : err.message || 'Erreur lors du remboursement'
+      toast.error(message)
     } finally {
       setRefunding(false)
     }
@@ -412,6 +416,7 @@ export default function Adherents() {
     setCancelSubscriptionModal({ open: true, membre })
   }
 
+  // TODO: La Cloud Function 'adminCancelSubscription' doit etre deployee dans functions/index.js
   const handleConfirmCancelSubscription = async () => {
     const { membre } = cancelSubscriptionModal
     if (!membre) return
@@ -429,7 +434,10 @@ export default function Adherents() {
       setCotisationModal({ open: false, membre: null })
     } catch (err) {
       console.error('Error cancelling subscription:', err)
-      toast.error(err.message || 'Erreur lors de l\'annulation')
+      const message = err?.code === 'functions/not-found'
+        ? 'La fonction d\'annulation n\'est pas encore disponible. Veuillez annuler l\'abonnement depuis le dashboard Stripe.'
+        : err.message || 'Erreur lors de l\'annulation'
+      toast.error(message)
     } finally {
       setCancelling(false)
     }
