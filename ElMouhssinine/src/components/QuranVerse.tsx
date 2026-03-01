@@ -63,7 +63,7 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
             duration: 800,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
 
       // Animation du fond - backgroundColor uniquement - useNativeDriver: false requis
@@ -86,7 +86,7 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
             duration: 1500,
             useNativeDriver: false,
           }),
-        ])
+        ]),
       ).start();
 
       // Animation des barres de son - height/transform - useNativeDriver: true
@@ -103,7 +103,7 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
               duration: 200 + i * 50,
               useNativeDriver: true,
             }),
-          ])
+          ]),
         ).start();
       });
     } else if (isActive && !isPlaying) {
@@ -181,6 +181,7 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
       activeOpacity={0.7}
       onLayout={handleLayout}
     >
+      {/* Outer view: JS-driven animations (backgroundColor, shadow) — useNativeDriver: false */}
       <Animated.View
         style={[
           styles.verseContainer,
@@ -188,68 +189,69 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
             backgroundColor,
             borderLeftColor,
             borderLeftWidth: isActive ? 4 : 0,
-            transform: [{ scale: pulseAnim }],
             shadowOpacity: isActive ? shadowOpacity : 0,
           },
         ]}
       >
-        {/* Indicateur de lecture à gauche */}
-        {isActive && isPlaying && (
-          <View style={styles.playingIndicator}>
-            <View style={styles.soundWave}>
-              {soundBarAnims.map((anim, i) => (
-                <Animated.View
-                  key={i}
-                  style={[
-                    styles.soundBar,
-                    {
-                      transform: [{
-                        scaleY: anim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.25, 1],
-                        }),
-                      }],
-                    },
-                  ]}
-                />
-              ))}
+        {/* Inner view: native-driven animations (transform) — useNativeDriver: true */}
+        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+          {/* Indicateur de lecture à gauche */}
+          {isActive && isPlaying && (
+            <View style={styles.playingIndicator}>
+              <View style={styles.soundWave}>
+                {soundBarAnims.map((anim, i) => (
+                  <Animated.View
+                    key={i}
+                    style={[
+                      styles.soundBar,
+                      {
+                        transform: [
+                          {
+                            scaleY: anim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.25, 1],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Numéro du verset */}
-        <View style={styles.verseNumberContainer}>
-          <View
-            style={[
-              styles.verseNumberBadge,
-              isActive && styles.verseNumberBadgeActive,
-            ]}
-          >
-            <Text
+          {/* Numéro du verset */}
+          <View style={styles.verseNumberContainer}>
+            <View
               style={[
-                styles.verseNumber,
-                isActive && styles.verseNumberActive,
+                styles.verseNumberBadge,
+                isActive && styles.verseNumberBadgeActive,
               ]}
             >
-              {verse.numberInSurah}
-            </Text>
+              <Text
+                style={[
+                  styles.verseNumber,
+                  isActive && styles.verseNumberActive,
+                ]}
+              >
+                {verse.numberInSurah}
+              </Text>
+            </View>
           </View>
-        </View>
 
-        {/* Texte arabe */}
-        <Text
-          style={[
-            styles.arabicText,
-            isActive && styles.arabicTextActive,
-          ]}
-        >
-          {verse.text}
-        </Text>
+          {/* Texte arabe */}
+          <Text
+            style={[styles.arabicText, isActive && styles.arabicTextActive]}
+          >
+            {verse.text}
+          </Text>
 
-        {/* Traduction */}
-        {showTranslation && verse.translation && (
-          <Text style={styles.translationText}>{verse.translation}</Text>
-        )}
+          {/* Traduction */}
+          {showTranslation && verse.translation && (
+            <Text style={styles.translationText}>{verse.translation}</Text>
+          )}
+        </Animated.View>
       </Animated.View>
     </TouchableOpacity>
   );
