@@ -52,9 +52,11 @@ import {
   calculateNisab,
   NISAB_INFO,
 } from '../services/goldPrice';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const DonationsScreen = () => {
   const { t, isRTL, language } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectType, setProjectType] = useState<'interne' | 'externe'>(
     'interne',
@@ -116,14 +118,31 @@ const DonationsScreen = () => {
             profile.nom || profile.name?.split(' ').slice(1).join(' ') || '',
           );
           setDonorEmail(profile.email || user.email || '');
-          if (profile.adresse || profile.address) {
-            setDonorAddress(profile.adresse || profile.address || '');
+          const fullAddress = profile.adresse || profile.address || '';
+          if (fullAddress) {
+            setDonorAddress(fullAddress);
           }
           if (profile.codePostal) {
             setDonorPostalCode(profile.codePostal);
           }
           if (profile.ville) {
             setDonorCity(profile.ville);
+          }
+          // BUG 2 FIX: Extraire CP et ville depuis l'adresse complète
+          // si les champs séparés sont absents (membres inscrits avant l'ajout de ces champs)
+          if (!profile.codePostal && !profile.ville && fullAddress) {
+            const cpMatch = fullAddress.match(/\b(\d{5})\b/);
+            if (cpMatch) {
+              setDonorPostalCode(cpMatch[1]);
+              // Extraire la ville : texte après le code postal (nettoyé)
+              const afterCp = fullAddress
+                .substring(fullAddress.indexOf(cpMatch[1]) + 5)
+                .replace(/^[\s,]+/, '')
+                .trim();
+              if (afterCp) {
+                setDonorCity(afterCp.split(/[,\n]/)[0].trim());
+              }
+            }
           }
           setDonorFormFilled(true);
           setMemberProfile(profile);
@@ -160,41 +179,47 @@ const DonationsScreen = () => {
   const validateDonorForm = (): boolean => {
     if (donorType === 'particulier') {
       if (!donorFirstName.trim() || donorFirstName.trim().length < 2) {
-        Alert.alert('Erreur', 'Le prénom doit contenir au moins 2 caractères');
+        Alert.alert(t('commonError') as string, t('firstNameMin') as string);
         return false;
       }
       if (!donorLastName.trim() || donorLastName.trim().length < 2) {
-        Alert.alert('Erreur', 'Le nom doit contenir au moins 2 caractères');
+        Alert.alert(t('commonError') as string, t('lastNameMin') as string);
         return false;
       }
     } else {
       if (!donorCompanyName.trim()) {
-        Alert.alert('Erreur', "Le nom de l'entreprise est requis");
+        Alert.alert(
+          t('commonError') as string,
+          t('companyNameRequired') as string,
+        );
         return false;
       }
       if (!validateSIRET(donorSiret)) {
-        Alert.alert('Erreur', 'Le SIRET doit contenir exactement 14 chiffres');
+        Alert.alert(t('commonError') as string, t('siretInvalid') as string);
         return false;
       }
       if (!donorLegalRep.trim()) {
-        Alert.alert('Erreur', 'Le représentant légal est requis');
+        Alert.alert(
+          t('commonError') as string,
+          t('legalRepRequired') as string,
+        );
         return false;
       }
     }
     if (!donorEmail.trim() || !/\S+@\S+\.\S+/.test(donorEmail)) {
-      Alert.alert('Erreur', 'Veuillez entrer un email valide');
+      Alert.alert(t('commonError') as string, t('invalidEmail') as string);
       return false;
     }
     if (!donorAddress.trim()) {
-      Alert.alert('Erreur', "L'adresse est requise");
+      Alert.alert(t('commonError') as string, t('addressRequired') as string);
       return false;
     }
     if (!donorPostalCode.trim() || !/^\d{5}$/.test(donorPostalCode.trim())) {
-      Alert.alert('Erreur', 'Le code postal doit contenir 5 chiffres');
+      Alert.alert(t('commonError') as string, t('postalCodeInvalid') as string);
       return false;
     }
     if (!donorCity.trim()) {
-      Alert.alert('Erreur', 'La ville est requise');
+      Alert.alert(t('commonError') as string, t('cityRequired') as string);
       return false;
     }
     return true;
@@ -401,7 +426,7 @@ const DonationsScreen = () => {
           "Vous n'êtes pas connecté. Votre don sera enregistré de manière anonyme.\n\nVoulez-vous continuer ?",
           [
             {
-              text: 'Annuler',
+              text: t('commonCancel') as string,
               style: 'cancel',
               onPress: () => resolve(),
             },
@@ -445,6 +470,12 @@ const DonationsScreen = () => {
     const currentUser = AuthService.getCurrentUser();
 
     try {
+      // BUG 3 FIX: Ajouter donorName + userId dans les metadata Stripe
+      // pour que le webhook sauvegarde le nom du donateur (pas "Anonyme")
+      const donorFullName =
+        donorType === 'particulier'
+          ? `${donorFirstName.trim()} ${donorLastName.trim()}`.trim()
+          : donorCompanyName.trim();
       const paymentParams = {
         amount,
         description: `Don - ${project?.name || 'Mosquée El Mohsinine'}`,
@@ -455,6 +486,18 @@ const DonationsScreen = () => {
           isAnonymous: isAnonymous,
           donorEmail: donorEmail || currentUser?.email?.toLowerCase() || '',
           donorUid: currentUser?.uid || '',
+          userId: currentUser?.uid || '',
+          donorName: isAnonymous
+            ? 'Anonyme'
+            : donorFullName || donorEmail || '',
+          donorFirstName: donorFirstName.trim(),
+          donorLastName: donorLastName.trim(),
+          donorType: donorType,
+          // Sérialiser donorInfo pour le webhook (metadata Stripe = strings uniquement)
+          donorInfo:
+            donorFormFilled || donPage === 'formulaire'
+              ? JSON.stringify(getDonorInfo())
+              : undefined,
         },
       };
 
@@ -475,6 +518,9 @@ const DonationsScreen = () => {
           paymentMethod: paymentMethod || 'card',
           isAnonymous: isAnonymous,
           donorEmail: donorEmail || currentUser?.email?.toLowerCase() || '',
+          donorName: isAnonymous
+            ? 'Anonyme'
+            : donorFullName || donorEmail || '',
           donorType:
             donorFormFilled || donPage === 'formulaire' ? donorType : undefined,
           donorInfo:
@@ -499,10 +545,8 @@ const DonationsScreen = () => {
 
         // Message de succès
         Alert.alert(
-          language === 'ar' ? 'شكراً لك!' : 'Merci !',
-          language === 'ar'
-            ? 'تم تسجيل تبرعك بنجاح. جزاك الله خيراً!'
-            : 'Votre don a été enregistré avec succès. Jazak Allah Khayran !',
+          t('commonSuccess') as string,
+          t('paymentSuccess') as string,
         );
 
         // Reset complet et retour page 1
@@ -549,7 +593,7 @@ const DonationsScreen = () => {
   return (
     <BackgroundPattern>
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={{ flex: 1, paddingBottom: insets.bottom }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView

@@ -635,61 +635,44 @@ export const addDonation = async (
     // Si retry, le même document sera réécrit au lieu d'en créer un nouveau
     const docId = params.stripePaymentIntentId || `donation-${Date.now()}`;
     const donationRef = firestore().collection('donations').doc(docId);
-    const projectRef = params.projectId
-      ? firestore().collection('projects').doc(params.projectId)
-      : null;
 
-    // TRANSACTION ATOMIQUE: donation + update projet
+    // BUG 1 FIX: Pas de transaction — écriture simple dans donations uniquement.
+    // La mise à jour du compteur projet est faite par le webhook Stripe (admin SDK)
+    // qui a les droits d'écriture sur la collection projects.
+    // L'ancienne transaction échouait avec permission-denied car les rules projects
+    // n'autorisent que isAdmin() en écriture.
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      throw new Error('Utilisateur non connecté');
+    }
+
+    const donationData: Record<string, any> = {
+      userId: currentUser.uid,
+      donateur: params.isAnonymous
+        ? 'Anonyme'
+        : params.donorName || params.donorEmail || 'Anonyme',
+      donateurEmail: params.isAnonymous ? null : params.donorEmail || null,
+      montant: params.amount,
+      projetId: params.projectId,
+      projetNom: params.projectName,
+      modePaiement: params.paymentMethod,
+      stripePaymentIntentId: params.stripePaymentIntentId,
+      status: 'completed',
+      isAnonymous: params.isAnonymous || false,
+      source: 'app_mobile',
+      date: firestore.FieldValue.serverTimestamp(),
+      createdAt: firestore.FieldValue.serverTimestamp(),
+      // Champs reçu fiscal
+      donorType: params.donorType || 'particulier',
+      recuFiscalGenerated: false,
+      recuFiscalYear: null,
+      recuFiscalUrl: null,
+    };
+    if (params.donorInfo) {
+      donationData.donorInfo = params.donorInfo;
+    }
     // merge: true permet de ne pas écraser les champs déjà écrits par le webhook Stripe
-    // et garantit que donorInfo/donorType sont toujours sauvés même si le webhook est arrivé avant
-    await firestore().runTransaction(async transaction => {
-      // BUG 7 FIX: userId garanti non-vide (évite permission-denied)
-      const currentUser = auth().currentUser;
-      if (!currentUser) {
-        throw new Error('Utilisateur non connecté');
-      }
-
-      // ÉTAPE 1: TOUTES LES LECTURES D'ABORD (Firestore exige reads avant writes)
-      let projectDoc = null;
-      if (projectRef) {
-        projectDoc = await transaction.get(projectRef);
-      }
-
-      // ÉTAPE 2: TOUTES LES ÉCRITURES APRÈS
-      const donationData: Record<string, any> = {
-        userId: currentUser.uid,
-        donateur: params.isAnonymous
-          ? 'Anonyme'
-          : params.donorName || params.donorEmail || 'Anonyme',
-        donateurEmail: params.isAnonymous ? null : params.donorEmail || null,
-        montant: params.amount,
-        projetId: params.projectId,
-        projetNom: params.projectName,
-        modePaiement: params.paymentMethod,
-        stripePaymentIntentId: params.stripePaymentIntentId,
-        status: 'completed',
-        isAnonymous: params.isAnonymous || false,
-        source: 'app_mobile',
-        date: firestore.FieldValue.serverTimestamp(),
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        // Champs reçu fiscal
-        donorType: params.donorType || 'particulier',
-        recuFiscalGenerated: false,
-        recuFiscalYear: null,
-        recuFiscalUrl: null,
-      };
-      if (params.donorInfo) {
-        donationData.donorInfo = params.donorInfo;
-      }
-      transaction.set(donationRef, donationData, { merge: true });
-
-      // Mettre à jour le montant collecté du projet
-      if (projectRef && projectDoc && projectDoc.exists()) {
-        transaction.update(projectRef, {
-          montantActuel: firestore.FieldValue.increment(params.amount),
-        });
-      }
-    });
+    await donationRef.set(donationData, { merge: true });
 
     logger.firebase(' Don enregistré (transaction atomique):', docId);
     return docId;

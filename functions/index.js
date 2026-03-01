@@ -1705,8 +1705,12 @@ exports.stripeWebhook = functions
                 type: 'donation',
                 description: paymentIntent.description,
                 metadata: metadata,
+                // BUG 3 FIX: Sauvegarder nom donateur + userId depuis metadata Stripe
                 donateur: metadata.donorName || metadata.donorEmail || 'Anonyme',
                 donateurEmail: metadata.donorEmail ? metadata.donorEmail.toLowerCase() : null,
+                userId: metadata.userId || metadata.donorUid || '',
+                donorType: metadata.donorType || 'particulier',
+                donorInfo: metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null,
                 projectId: metadata.projectId || null,
                 projectName: metadata.projectName || null,
                 projetId: metadata.projectId || null,
