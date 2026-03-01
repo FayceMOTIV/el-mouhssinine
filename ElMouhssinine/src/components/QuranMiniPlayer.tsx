@@ -63,7 +63,7 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
   useEffect(() => {
     Animated.spring(slideAnim, {
       toValue: 0,
-      useNativeDriver: true,
+      useNativeDriver: false,
       tension: 50,
       friction: 8,
     }).start();
@@ -93,7 +93,7 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
             duration: 800,
             useNativeDriver: false,
           }),
-        ])
+        ]),
       ).start();
     } else {
       loadingAnim.stopAnimation();
@@ -150,12 +150,16 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
     >
       {/* Barre de progression de la sourate */}
       <View style={styles.surahProgressBar}>
-        <View style={[styles.surahProgressFill, { width: `${overallProgress}%` }]} />
+        <View
+          style={[styles.surahProgressFill, { width: `${overallProgress}%` }]}
+        />
       </View>
 
       {/* Barre de progression du verset actuel */}
       <View style={styles.verseProgressBar}>
-        <Animated.View style={[styles.verseProgressFill, { width: progressWidth }]} />
+        <Animated.View
+          style={[styles.verseProgressFill, { width: progressWidth }]}
+        />
       </View>
 
       <View style={styles.content}>
@@ -233,7 +237,9 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
             activeOpacity={0.8}
           >
             {isLoading ? (
-              <Animated.Text style={[styles.playIcon, { opacity: loadingOpacity }]}>
+              <Animated.Text
+                style={[styles.playIcon, { opacity: loadingOpacity }]}
+              >
                 ⏳
               </Animated.Text>
             ) : (

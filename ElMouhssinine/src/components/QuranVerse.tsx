@@ -35,12 +35,10 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
   onPress,
   onLayout,
 }) => {
-  // Animations TRANSFORM (scale) - useNativeDriver: true
+  // TOUTES les animations en useNativeDriver: false
+  // pour éviter le crash "JS driven animation on animated node moved to native"
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  // Animations COULEUR (backgroundColor, borderColor, shadowOpacity) - useNativeDriver: false
   const bgAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-  // Animations TRANSFORM (height) - useNativeDriver: true
   const soundBarAnims = useRef([
     new Animated.Value(0.4),
     new Animated.Value(0.7),
@@ -50,58 +48,42 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
 
   useEffect(() => {
     if (isActive && isPlaying) {
-      // Animation de pulsation douce - TRANSFORM uniquement - useNativeDriver: true
+      // Pulsation douce
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1.01,
             duration: 800,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(pulseAnim, {
             toValue: 1,
             duration: 800,
-            useNativeDriver: true,
-          }),
-        ]),
-      ).start();
-
-      // Animation du fond - backgroundColor uniquement - useNativeDriver: false requis
-      Animated.timing(bgAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: false, // backgroundColor non supporté par native driver
-      }).start();
-
-      // Animation de lueur - shadowOpacity uniquement - useNativeDriver: false requis
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 1,
-            duration: 1500,
-            useNativeDriver: false, // shadowOpacity non supporté par native driver
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0.5,
-            duration: 1500,
             useNativeDriver: false,
           }),
         ]),
       ).start();
 
-      // Animation des barres de son - height/transform - useNativeDriver: true
+      // Fond doré
+      Animated.timing(bgAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+
+      // Barres de son
       soundBarAnims.forEach((anim, i) => {
         Animated.loop(
           Animated.sequence([
             Animated.timing(anim, {
               toValue: Math.random() * 0.5 + 0.5,
               duration: 200 + i * 50,
-              useNativeDriver: true,
+              useNativeDriver: false,
             }),
             Animated.timing(anim, {
               toValue: Math.random() * 0.3 + 0.2,
               duration: 200 + i * 50,
-              useNativeDriver: true,
+              useNativeDriver: false,
             }),
           ]),
         ).start();
@@ -114,29 +96,23 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
       Animated.timing(bgAnim, {
         toValue: 0.7,
         duration: 200,
-        useNativeDriver: false, // backgroundColor
+        useNativeDriver: false,
       }).start();
-
-      glowAnim.stopAnimation();
-      glowAnim.setValue(0.5);
 
       soundBarAnims.forEach(anim => {
         anim.stopAnimation();
         anim.setValue(0.3);
       });
     } else {
-      // Non actif
+      // Non actif — reset tout
       pulseAnim.stopAnimation();
       pulseAnim.setValue(1);
 
       Animated.timing(bgAnim, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: false, // backgroundColor
+        useNativeDriver: false,
       }).start();
-
-      glowAnim.stopAnimation();
-      glowAnim.setValue(0);
 
       soundBarAnims.forEach(anim => {
         anim.stopAnimation();
@@ -147,7 +123,6 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
     return () => {
       pulseAnim.stopAnimation();
       bgAnim.stopAnimation();
-      glowAnim.stopAnimation();
       soundBarAnims.forEach(anim => anim.stopAnimation());
     };
   }, [isActive, isPlaying]);
@@ -166,11 +141,6 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
     outputRange: ['transparent', colors.accent],
   });
 
-  const shadowOpacity = glowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.3],
-  });
-
   const handleLayout = (event: LayoutChangeEvent) => {
     onLayout?.(event, index);
   };
@@ -181,7 +151,6 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
       activeOpacity={0.7}
       onLayout={handleLayout}
     >
-      {/* Outer view: JS-driven animations (backgroundColor, shadow) — useNativeDriver: false */}
       <Animated.View
         style={[
           styles.verseContainer,
@@ -189,69 +158,64 @@ const QuranVerseComponent: React.FC<QuranVerseProps> = ({
             backgroundColor,
             borderLeftColor,
             borderLeftWidth: isActive ? 4 : 0,
-            shadowOpacity: isActive ? shadowOpacity : 0,
+            transform: [{ scale: pulseAnim }],
           },
         ]}
       >
-        {/* Inner view: native-driven animations (transform) — useNativeDriver: true */}
-        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-          {/* Indicateur de lecture à gauche */}
-          {isActive && isPlaying && (
-            <View style={styles.playingIndicator}>
-              <View style={styles.soundWave}>
-                {soundBarAnims.map((anim, i) => (
-                  <Animated.View
-                    key={i}
-                    style={[
-                      styles.soundBar,
-                      {
-                        transform: [
-                          {
-                            scaleY: anim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [0.25, 1],
-                            }),
-                          },
-                        ],
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Numéro du verset */}
-          <View style={styles.verseNumberContainer}>
-            <View
-              style={[
-                styles.verseNumberBadge,
-                isActive && styles.verseNumberBadgeActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.verseNumber,
-                  isActive && styles.verseNumberActive,
-                ]}
-              >
-                {verse.numberInSurah}
-              </Text>
+        {/* Indicateur de lecture à gauche */}
+        {isActive && isPlaying && (
+          <View style={styles.playingIndicator}>
+            <View style={styles.soundWave}>
+              {soundBarAnims.map((anim, i) => (
+                <Animated.View
+                  key={i}
+                  style={[
+                    styles.soundBar,
+                    {
+                      transform: [{
+                        scaleY: anim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.25, 1],
+                        }),
+                      }],
+                    },
+                  ]}
+                />
+              ))}
             </View>
           </View>
+        )}
 
-          {/* Texte arabe */}
-          <Text
-            style={[styles.arabicText, isActive && styles.arabicTextActive]}
+        {/* Numéro du verset */}
+        <View style={styles.verseNumberContainer}>
+          <View
+            style={[
+              styles.verseNumberBadge,
+              isActive && styles.verseNumberBadgeActive,
+            ]}
           >
-            {verse.text}
-          </Text>
+            <Text
+              style={[
+                styles.verseNumber,
+                isActive && styles.verseNumberActive,
+              ]}
+            >
+              {verse.numberInSurah}
+            </Text>
+          </View>
+        </View>
 
-          {/* Traduction */}
-          {showTranslation && verse.translation && (
-            <Text style={styles.translationText}>{verse.translation}</Text>
-          )}
-        </Animated.View>
+        {/* Texte arabe */}
+        <Text
+          style={[styles.arabicText, isActive && styles.arabicTextActive]}
+        >
+          {verse.text}
+        </Text>
+
+        {/* Traduction */}
+        {showTranslation && verse.translation && (
+          <Text style={styles.translationText}>{verse.translation}</Text>
+        )}
       </Animated.View>
     </TouchableOpacity>
   );
