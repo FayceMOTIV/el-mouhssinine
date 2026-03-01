@@ -13,13 +13,14 @@ export const translations = {
 
     // Home Screen
     welcome: 'السلام عليكم ورحمة الله وبركاته',
-    salamTranslation: 'Que la paix, la miséricorde et les bénédictions d\'Allah soient sur vous',
+    salamTranslation:
+      "Que la paix, la miséricorde et les bénédictions d'Allah soient sur vous",
     mosqueName: 'EL MOHSININE',
     mosqueLocation: 'Mosquée - Bourg-en-Bresse',
     nextPrayer: 'Prochaine prière',
     todaySchedule: 'Horaires du jour',
     hijriCalendar: 'Calendrier Hégirien',
-    todayLabel: 'Aujourd\'hui',
+    todayLabel: "Aujourd'hui",
     upcomingEvents: 'Prochains événements',
     daysLeftPrefix: 'J-',
     announcements: 'Annonces',
@@ -37,7 +38,7 @@ export const translations = {
     asr: 'Asr',
     maghrib: 'Maghrib',
     isha: 'Isha',
-    jumua: 'Jumu\'a',
+    jumua: "Jumu'a",
 
     // Member Screen
     memberArea: 'Espace Membre',
@@ -60,14 +61,16 @@ export const translations = {
     perYear: '/an',
     welcomeUser: 'Bienvenue,',
     connectYourself: 'Connectez-vous',
-    accessMemberArea: 'Accédez à votre espace membre pour gérer votre cotisation et voir votre historique.',
+    accessMemberArea:
+      'Accédez à votre espace membre pour gérer votre cotisation et voir votre historique.',
     upToDate: 'À jour',
     expired: 'Expiré',
     memberNumber: 'N° Membre',
     type: 'Type',
     nextPaymentDate: 'Prochain paiement',
     cotisationExpired: 'Cotisation expirée',
-    renewMessage: 'Renouvelez votre adhésion pour continuer à bénéficier des avantages.',
+    renewMessage:
+      'Renouvelez votre adhésion pour continuer à bénéficier des avantages.',
     myCotisation: 'Ma cotisation',
     renew: 'Renouveler',
     payCotisation: 'Payer ma cotisation',
@@ -78,23 +81,25 @@ export const translations = {
     paymentMethod: 'Mode de paiement',
     automaticDebit: 'Prélèvement automatique',
     singlePayment: 'Paiement unique',
-    noCommitment: 'Sans engagement - Annulable à tout moment depuis l\'application',
+    noCommitment:
+      "Sans engagement - Annulable à tout moment depuis l'application",
     bankAccount: 'Compte bancaire',
     fastPayment: 'Paiement rapide',
     cancelAnytime: 'Vous pouvez annuler à tout moment • Reçu fiscal annuel',
-    cancelSubscriptionConfirm: 'Annuler l\'abonnement ?',
-    cancelSubscriptionQuestion: 'Êtes-vous sûr de vouloir annuler votre abonnement mensuel ?',
+    cancelSubscriptionConfirm: "Annuler l'abonnement ?",
+    cancelSubscriptionQuestion:
+      'Êtes-vous sûr de vouloir annuler votre abonnement mensuel ?',
     immediateCancel: 'Annulation effective immédiatement',
     noMoreDebit: 'Plus aucun prélèvement',
-    activeUntil: 'Statut actif jusqu\'au',
+    activeUntil: "Statut actif jusqu'au",
     resubscribePossible: 'Réabonnement possible à tout moment',
-    confirmCancel: 'Confirmer l\'annulation',
+    confirmCancel: "Confirmer l'annulation",
     keepSubscription: 'Garder mon abonnement',
     fullName: 'Nom complet',
     yourName: 'Votre nom',
     password: 'Mot de passe',
     alreadyAccount: 'Déjà un compte ? Se connecter',
-    noAccount: 'Pas de compte ? S\'inscrire',
+    noAccount: "Pas de compte ? S'inscrire",
     fillAllFields: 'Veuillez remplir tous les champs.',
     passwordMinLength: 'Le mot de passe doit contenir au moins 6 caractères.',
     accountCreated: 'Votre compte a été créé avec succès.',
@@ -107,7 +112,7 @@ export const translations = {
     ourMosque: 'Notre Mosquée',
     otherCauses: 'Autres Causes',
     chooseProject: 'Choisir un projet',
-    helpOtherCauses: 'Aider d\'autres causes',
+    helpOtherCauses: "Aider d'autres causes",
     viewProject: 'Voir le projet',
     viewDetails: 'Voir détails',
     remaining: 'restants',
@@ -120,14 +125,17 @@ export const translations = {
     payButton: 'Payer',
     bankTransfer: 'Faire un virement',
     calculateZakat: 'Calculer ma Zakat',
-    donationDisclaimer: 'Les dons sont sécurisés et peuvent être déductibles d\'impôts selon la réglementation en vigueur.',
+    donationDisclaimer:
+      "Les dons sont sécurisés et peuvent être déductibles d'impôts selon la réglementation en vigueur.",
     bankTransferTitle: 'Virement bancaire',
-    taxReceiptNote: 'Indiquez votre email en référence pour recevoir votre reçu fiscal',
+    taxReceiptNote:
+      'Indiquez votre email en référence pour recevoir votre reçu fiscal',
     donationOf: 'Don de',
     cardPayment: 'CB',
     visaMastercard: 'Visa, Mastercard, CB',
     fastSecurePayment: 'Paiement rapide et sécurisé',
-    securePayment: 'Paiement sécurisé par Stripe • Reçu fiscal envoyé par email',
+    securePayment:
+      'Paiement sécurisé par Stripe • Reçu fiscal envoyé par email',
     cashPayment: 'Espèces',
     payAtCounter: 'Payer au comptoir de la mosquée',
     deferredPayment: 'Paiement différé',
@@ -135,17 +143,19 @@ export const translations = {
     close: 'Fermer',
     zakatCalculator: 'Calculateur de Zakat',
     currentNisab: 'Nisab actuel',
-    goldSilverValue: '(Valeur de 85g d\'or)', // Affiché inline maintenant
+    goldSilverValue: "(Valeur de 85g d'or)", // Affiché inline maintenant
     savingsLabel: 'Épargne (comptes bancaires)',
-    goldValueLabel: 'Valeur de l\'or possédé',
+    goldValueLabel: "Valeur de l'or possédé",
     investmentsLabel: 'Investissements (actions, SCPI, parts)',
     cashValueLabel: 'Argent liquide (espèces)',
     totalAssets: 'Total des biens',
     zakatEligible: 'Vous êtes redevable de la Zakat',
-    zakatNotEligible: 'Vos biens n\'atteignent pas le Nisab. La Zakat n\'est pas obligatoire.',
+    zakatNotEligible:
+      "Vos biens n'atteignent pas le Nisab. La Zakat n'est pas obligatoire.",
     ofYourAssets: '(2.5% de vos biens)',
     giveMyZakat: 'Donner ma Zakat',
-    zakatDisclaimer: 'Ce calcul est une estimation. Consultez un savant pour plus de précision.',
+    zakatDisclaimer:
+      'Ce calcul est une estimation. Consultez un savant pour plus de précision.',
     internalProjects: 'Projets internes',
     externalProjects: 'Projets externes',
 
@@ -173,7 +183,8 @@ export const translations = {
     translation: 'Traduction',
     reciter: 'Récitateur',
     listenFullSurah: 'Écouter la sourate complète',
-    bismillahTranslation: 'Au nom d\'Allah, le Tout Miséricordieux, le Très Miséricordieux',
+    bismillahTranslation:
+      "Au nom d'Allah, le Tout Miséricordieux, le Très Miséricordieux",
     previousSurah: 'Sourate précédente',
     nextSurah: 'Sourate suivante',
     chooseReciter: 'Choisir un récitateur',
@@ -185,7 +196,7 @@ export const translations = {
     verseCopied: 'Le verset a été copié dans le presse-papiers',
     audioError: 'Erreur',
     cannotPlaySurah: 'Impossible de lire la sourate',
-    cannotPlayAudio: 'Impossible de lire l\'audio',
+    cannotPlayAudio: "Impossible de lire l'audio",
     verse: 'Verset',
     tapToShowActions: 'Appuyez pour afficher les actions',
     playVerse: 'Écouter le verset',
@@ -215,7 +226,8 @@ export const translations = {
     protection: 'Protection',
     repetitions: 'répétitions',
     dhikrMerit: 'Le mérite du dhikr',
-    dhikrHadith: 'Le Prophète (paix et bénédictions sur lui) a dit : "Les paroles les plus aimées d\'Allah sont quatre : SubhanAllah, Alhamdulillah, La ilaha illa Allah et Allahou Akbar."',
+    dhikrHadith:
+      'Le Prophète (paix et bénédictions sur lui) a dit : "Les paroles les plus aimées d\'Allah sont quatre : SubhanAllah, Alhamdulillah, La ilaha illa Allah et Allahou Akbar."',
     reportedByMuslim: 'Rapporté par Muslim',
     repeat: 'Répéter',
     times: 'fois',
@@ -230,22 +242,23 @@ export const translations = {
     share: 'Partager',
     tapToSeeMore: 'Appuyez pour voir plus',
     congratulations: 'Félicitations !',
-    completionMessage: 'Vous avez complété toutes les invocations de cette catégorie. Qu\'Allah accepte vos invocations.',
+    completionMessage:
+      "Vous avez complété toutes les invocations de cette catégorie. Qu'Allah accepte vos invocations.",
 
     // Learn Arabic
-    learnArabic: 'Apprendre l\'arabe',
+    learnArabic: "Apprendre l'arabe",
     learnArabicArabic: 'تعلم العربية',
-    learnArabicSubtitle: 'De l\'alphabet à la lecture du Coran',
+    learnArabicSubtitle: "De l'alphabet à la lecture du Coran",
     yourLevel: 'Votre niveau',
     beginner: 'Débutant',
     xpForNextLevel: 'XP pour le niveau suivant',
     lessons: 'Leçons',
     letters: 'Lettres',
     streak: 'Série',
-    learningModules: 'Modules d\'apprentissage',
+    learningModules: "Modules d'apprentissage",
     alphabet: 'Alphabet',
     alphabetArabic: 'الحروف العربية',
-    alphabetDescription: 'Apprendre les 28 lettres de l\'alphabet arabe',
+    alphabetDescription: "Apprendre les 28 lettres de l'alphabet arabe",
     lessonsArabic: 'الدروس',
     lessonsDescription: 'Cours structurés pour apprendre à lire et écrire',
     vowels: 'Voyelles',
@@ -257,11 +270,12 @@ export const translations = {
     trainingDescription: 'Exercices de lecture et écriture',
     quizExercises: 'Quiz & Exercices',
     quickStart: 'Démarrage rapide',
-    startWithAlphabet: 'Commencer par l\'alphabet',
-    alphabetBaseInfo: 'La base de tout apprentissage de l\'arabe',
+    startWithAlphabet: "Commencer par l'alphabet",
+    alphabetBaseInfo: "La base de tout apprentissage de l'arabe",
     start: 'Commencer',
     dailyTip: 'Conseil du jour',
-    dailyTipText: 'Pratiquez 10 minutes par jour pour un apprentissage efficace. La régularité est plus importante que la durée !',
+    dailyTipText:
+      'Pratiquez 10 minutes par jour pour un apprentissage efficace. La régularité est plus importante que la durée !',
     words: 'mots',
 
     // Alphabet, Lessons, Lesson screens
@@ -270,14 +284,16 @@ export const translations = {
     groupsView: 'Groupes',
     specialLettersTitle: 'Lettres spéciales',
     fundamentalLetters: 'lettres fondamentales',
-    alphabetTip: 'L\'arabe s\'écrit de droite à gauche. Chaque lettre peut avoir jusqu\'à 4 formes selon sa position dans le mot : isolée, initiale, médiale et finale.',
+    alphabetTip:
+      "L'arabe s'écrit de droite à gauche. Chaque lettre peut avoir jusqu'à 4 formes selon sa position dans le mot : isolée, initiale, médiale et finale.",
     overallProgress: 'Progression globale',
     lessonsAvailable: 'leçons disponibles',
     allLevels: 'Toutes',
     startLesson: 'Commencer',
     reviewLesson: 'Réviser',
     progressionInfo: 'Progression',
-    progressionInfoText: 'Complétez chaque leçon pour débloquer la suivante. Les leçons sont conçues pour être faites dans l\'ordre pour un apprentissage optimal.',
+    progressionInfoText:
+      "Complétez chaque leçon pour débloquer la suivante. Les leçons sont conçues pour être faites dans l'ordre pour un apprentissage optimal.",
     lessonCompleted: 'Leçon terminée !',
     yourScore: 'Votre score',
     correctAnswers: 'bonnes réponses',
@@ -294,7 +310,8 @@ export const translations = {
     // Janaza
     janazaTitle: 'Salat Janaza',
     upcoming: 'À venir',
-    condolences: 'Nous appartenons à Allah et c\'est vers Lui que nous retournerons',
+    condolences:
+      "Nous appartenons à Allah et c'est vers Lui que nous retournerons",
 
     // More Screen
     settings: 'Paramètres',
@@ -306,14 +323,14 @@ export const translations = {
     notifications: 'Notifications',
     prayerReminder: 'Rappel prière',
     adhanSound: 'Son Adhan',
-    jumuaReminder: 'Rappel Jumu\'a',
+    jumuaReminder: "Rappel Jumu'a",
     language: 'Langue',
     french: 'Français',
     arabic: 'العربية',
     version: 'Version',
     enableReminders: 'Activer les rappels',
     reminderBefore: 'Avant prière',
-    jumuaFriday: 'Rappel Jumu\'a (vendredi)',
+    jumuaFriday: "Rappel Jumu'a (vendredi)",
     bankDetails: 'Coordonnées bancaires',
     information: 'Informations',
     prayerNotifications: 'Notifications de prière',
@@ -363,9 +380,11 @@ export const translations = {
     phonePlaceholder: '0612345678',
     addressLabel: 'Adresse',
     addressPlaceholder: 'Votre adresse postale',
-    membershipFormula: 'Formule d\'adhésion',
-    acceptRulesText: 'En devenant membre, j\'accepte le règlement intérieur de l\'association El Mohsinine et m\'engage à le respecter.',
-    paymentNoteMonthly: 'Le paiement mensuel n\'est pas automatique. Le renouvellement sera à effectuer manuellement chaque mois.',
+    membershipFormula: "Formule d'adhésion",
+    acceptRulesText:
+      "En devenant membre, j'accepte le règlement intérieur de l'association El Mohsinine et m'engage à le respecter.",
+    paymentNoteMonthly:
+      "Le paiement mensuel n'est pas automatique. Le renouvellement sera à effectuer manuellement chaque mois.",
 
     // Member screen
     manageMySubscriptions: 'Gérer mes adhésions',
@@ -373,15 +392,16 @@ export const translations = {
     mySubscriptions: 'Mes adhésions',
     statusActive: 'Actif',
     statusPendingSignature: 'En attente sign.',
-    pendingSignatureNote: 'Les membres en attente doivent passer au bureau pour signer leur fiche d\'adhésion.',
+    pendingSignatureNote:
+      "Les membres en attente doivent passer au bureau pour signer leur fiche d'adhésion.",
     registerFamily: 'Inscrire des proches',
-    registerFamilyDesc: 'Payez l\'adhésion pour votre famille ou vos amis',
-    registerOtherMembers: 'Inscrire d\'autres membres',
+    registerFamilyDesc: "Payez l'adhésion pour votre famille ou vos amis",
+    registerOtherMembers: "Inscrire d'autres membres",
     pricePerPerson: 'par personne',
     continueToPayment: 'Continuer → Paiement',
     backButton: '← Retour',
     paySecure: 'Payer',
-    includeMyselfLabel: 'M\'inclure dans l\'inscription',
+    includeMyselfLabel: "M'inclure dans l'inscription",
     choosePaymentMethod: 'Choisissez votre mode de paiement',
     groupRegistration: 'Inscription groupée',
     paymentMode: 'Mode de paiement',
@@ -391,15 +411,19 @@ export const translations = {
     formula: 'Formule',
     myself: 'Moi-même',
     allFieldsRequired: 'Tous les champs sont obligatoires',
-    memberRulesConfirm: 'Je confirme que cette personne souhaite devenir membre et accepte les statuts et le règlement de l\'association. Elle devra passer au bureau signer la fiche d\'adhésion pour finaliser son inscription.',
+    memberRulesConfirm:
+      "Je confirme que cette personne souhaite devenir membre et accepte les statuts et le règlement de l'association. Elle devra passer au bureau signer la fiche d'adhésion pour finaliser son inscription.",
     addMember: 'Ajouter un membre',
-    securePaymentNote: 'Paiement sécurisé • Les membres devront signer au bureau de la mosquée',
-    signatureRequiredNote: 'Les membres inscrits devront passer au bureau de la mosquée pour signer leur fiche d\'adhésion.',
+    securePaymentNote:
+      'Paiement sécurisé • Les membres devront signer au bureau de la mosquée',
+    signatureRequiredNote:
+      "Les membres inscrits devront passer au bureau de la mosquée pour signer leur fiche d'adhésion.",
 
     // Common
     notAvailable: 'Non disponible',
-    contactAdminToCancel: 'Pour annuler votre abonnement, veuillez contacter l\'administration de la mosquée ou vous rendre à l\'accueil.',
-    understood: 'J\'ai compris',
+    contactAdminToCancel:
+      "Pour annuler votre abonnement, veuillez contacter l'administration de la mosquée ou vous rendre à l'accueil.",
+    understood: "J'ai compris",
     retry: 'Réessayer',
 
     // Home Screen - Additional
@@ -431,7 +455,8 @@ export const translations = {
     quizSubtitle: 'Testez vos connaissances',
     chooseLevel: 'Choisissez un niveau',
     tip: 'Conseil',
-    tipText: 'Commencez par le niveau débutant pour consolider vos bases, puis progressez vers les niveaux supérieurs.',
+    tipText:
+      'Commencez par le niveau débutant pour consolider vos bases, puis progressez vers les niveaux supérieurs.',
     beginnerLevel: 'Débutant',
     intermediateLevel: 'Intermédiaire',
     advancedLevel: 'Avancé',
@@ -453,18 +478,20 @@ export const translations = {
     score: 'Score',
 
     // Quran - Additional
-    errorLoadingSurah: 'Impossible de charger cette sourate. Vérifiez votre connexion.',
+    errorLoadingSurah:
+      'Impossible de charger cette sourate. Vérifiez votre connexion.',
 
     // Donations - Additional
     viewTransferInfo: 'Voir les infos de virement',
     acceptedPayments: 'Moyens de paiement acceptés',
     externalTransferOnly: 'Projets externes : virement bancaire uniquement',
-    useProjectIban: 'Utilisez l\'IBAN du projet',
+    useProjectIban: "Utilisez l'IBAN du projet",
     onlinePaymentSoon: 'Paiements sécurisés via Stripe',
     creditCard: 'CB',
-    externalProjectNote: 'Ce projet est externe à notre mosquée. Effectuez votre don directement via virement.',
+    externalProjectNote:
+      'Ce projet est externe à notre mosquée. Effectuez votre don directement via virement.',
     transferReference: 'Référence à indiquer',
-    cannotOpenFile: 'Impossible d\'ouvrir ce fichier',
+    cannotOpenFile: "Impossible d'ouvrir ce fichier",
 
     // Errors
     loadingFailed: 'Erreur de chargement. Tirez pour actualiser.',
@@ -476,28 +503,32 @@ export const translations = {
     boostPrayer: 'Boost Prière',
     enableProgressiveReminders: 'Activer les rappels progressifs',
     reminderTypes: 'Types de rappels',
-    after30minAdhan: '30 min après l\'Adhan',
+    after30minAdhan: "30 min après l'Adhan",
     atMidTime: 'À mi-temps',
     before15minEnd: '15 min avant la fin',
-    boostNote: 'Les rappels s\'arrêtent au début de la prière suivante',
+    boostNote: "Les rappels s'arrêtent au début de la prière suivante",
     boostReminderTitle: 'Rappel de prière',
     boostUrgentTitle: 'URGENT - Prière',
-    boostAfter30min: 'N\'oublie pas {prayer} 🕌',
-    boostMidTime: 'Tu as un RDV important qui t\'attend ! 🤝',
+    boostAfter30min: "N'oublie pas {prayer} 🕌",
+    boostMidTime: "Tu as un RDV important qui t'attend ! 🤝",
     boostBefore15min: 'Plus que 15 min pour {prayer} ! ⏰',
 
     // Mode Silencieux Mosquée (Géolocalisation)
     mosqueSilentMode: 'Mode Silencieux Mosquée',
     enableMosqueProximity: 'Rappel à 100m de la mosquée',
-    mosqueSilentModeDescription: '📍 Quand vous êtes à moins de 100m de la mosquée, vous recevrez un rappel pour mettre votre téléphone en silencieux.',
+    mosqueSilentModeDescription:
+      '📍 Quand vous êtes à moins de 100m de la mosquée, vous recevrez un rappel pour mettre votre téléphone en silencieux.',
     mosqueSilentModeTitle: 'Vous êtes à la mosquée',
-    mosqueSilentModeBody: 'N\'oubliez pas de mettre votre téléphone en mode silencieux 🔕',
+    mosqueSilentModeBody:
+      "N'oubliez pas de mettre votre téléphone en mode silencieux 🔕",
 
     // Permission localisation (premier lancement)
     locationFeatureTitle: 'Rappel Mosquée',
-    locationFeatureExplanation: 'Souhaitez-vous recevoir un rappel automatique pour mettre votre téléphone en silencieux quand vous arrivez à la mosquée ?\n\nCette fonctionnalité utilise votre position GPS (uniquement quand l\'app est ouverte) pour détecter quand vous êtes à moins de 100m de la mosquée.',
+    locationFeatureExplanation:
+      "Souhaitez-vous recevoir un rappel automatique pour mettre votre téléphone en silencieux quand vous arrivez à la mosquée ?\n\nCette fonctionnalité utilise votre position GPS (uniquement quand l'app est ouverte) pour détecter quand vous êtes à moins de 100m de la mosquée.",
     locationPermissionTitle: 'Permission de localisation',
-    locationPermissionMessage: 'L\'application a besoin de votre position pour vous envoyer un rappel quand vous êtes proche de la mosquée (100m) afin de mettre votre téléphone en silencieux.',
+    locationPermissionMessage:
+      "L'application a besoin de votre position pour vous envoyer un rappel quand vous êtes proche de la mosquée (100m) afin de mettre votre téléphone en silencieux.",
     notNow: 'Pas maintenant',
     enable: 'Activer',
     later: 'Plus tard',
@@ -544,8 +575,45 @@ export const translations = {
     beforeFajr: 'Avant Fajr',
     beforeMaghrib: 'Avant Maghrib',
     beforeTarawih: 'Avant Tarawih',
-    atTime: 'À l\'heure',
-    ramadanMubarakNote: 'Ramadan Mubarak ! Vous recevrez les rappels aux heures choisies',
+    atTime: "À l'heure",
+    ramadanMubarakNote:
+      'Ramadan Mubarak ! Vous recevrez les rappels aux heures choisies',
+
+    // QuranHomeScreen
+    readQuran: 'Lire le Coran',
+    readQuranAr: 'قراءة القرآن',
+    readQuranSubtitle: 'Page par page',
+    listenQuran: 'Écouter le Coran',
+    listenQuranAr: 'الاستماع للقرآن',
+    listenQuranSubtitle: 'Récitation audio',
+    quranFooter: '114 sourates • 6236 versets',
+    quranQuoteFr:
+      '"C\'est Nous qui avons fait descendre le Rappel, et c\'est Nous qui en sommes gardien"',
+    quranQuoteRef: '- Sourate Al-Hijr, verset 9',
+
+    // QuranReadScreen
+    saved: 'Sauvé',
+    saveBookmark: 'Sauver',
+    page: 'Page',
+    savedPages: 'Mes pages sauvegardées',
+    noSavedPages: 'Aucune page sauvegardée',
+    saveHint: 'Appuyez sur "Sauver" en haut pour mémoriser une page',
+    goToPage: 'Aller à la page',
+    pageInvalid: 'Page invalide (1-604)',
+    juz: "Juz'",
+    surahs: 'Sourates',
+    search: 'Rechercher',
+    loadingPage: 'Chargement de la page...',
+    errorLoadingPage:
+      'Impossible de charger cette page. Vérifiez votre connexion.',
+    translationTab: 'Traduction',
+    fontSize: 'Taille',
+
+    // QuranMiniPlayer
+    miniPlayerVerse: 'Verset',
+    miniPlayerSurah: 'Sourate',
+    miniPlayerRange: 'Plage',
+    miniPlayerOff: 'Off',
   },
 
   ar: {
@@ -665,7 +733,8 @@ export const translations = {
     payButton: 'ادفع',
     bankTransfer: 'تحويل بنكي',
     calculateZakat: 'احسب زكاتي',
-    donationDisclaimer: 'التبرعات آمنة ويمكن خصمها من الضرائب وفقاً للوائح المعمول بها.',
+    donationDisclaimer:
+      'التبرعات آمنة ويمكن خصمها من الضرائب وفقاً للوائح المعمول بها.',
     bankTransferTitle: 'تحويل بنكي',
     taxReceiptNote: 'أدخل بريدك الإلكتروني كمرجع لاستلام إيصال الضريبة',
     donationOf: 'تبرع بمبلغ',
@@ -760,7 +829,8 @@ export const translations = {
     protection: 'الحماية',
     repetitions: 'مرات',
     dhikrMerit: 'فضل الذكر',
-    dhikrHadith: 'قال النبي صلى الله عليه وسلم: "أحب الكلام إلى الله أربع: سبحان الله، والحمد لله، ولا إله إلا الله، والله أكبر."',
+    dhikrHadith:
+      'قال النبي صلى الله عليه وسلم: "أحب الكلام إلى الله أربع: سبحان الله، والحمد لله، ولا إله إلا الله، والله أكبر."',
     reportedByMuslim: 'رواه مسلم',
     repeat: 'كرر',
     times: 'مرات',
@@ -806,7 +876,8 @@ export const translations = {
     alphabetBaseInfo: 'أساس تعلم اللغة العربية',
     start: 'ابدأ',
     dailyTip: 'نصيحة اليوم',
-    dailyTipText: 'تدرب 10 دقائق يومياً للتعلم الفعال. الاستمرارية أهم من المدة!',
+    dailyTipText:
+      'تدرب 10 دقائق يومياً للتعلم الفعال. الاستمرارية أهم من المدة!',
     words: 'كلمات',
 
     // Alphabet, Lessons, Lesson screens
@@ -815,14 +886,16 @@ export const translations = {
     groupsView: 'مجموعات',
     specialLettersTitle: 'حروف خاصة',
     fundamentalLetters: 'حرفاً أساسياً',
-    alphabetTip: 'تُكتب العربية من اليمين إلى اليسار. لكل حرف حتى 4 أشكال حسب موقعه في الكلمة: منفصل، أول، وسط، وآخر.',
+    alphabetTip:
+      'تُكتب العربية من اليمين إلى اليسار. لكل حرف حتى 4 أشكال حسب موقعه في الكلمة: منفصل، أول، وسط، وآخر.',
     overallProgress: 'التقدم العام',
     lessonsAvailable: 'دروس متاحة',
     allLevels: 'الكل',
     startLesson: 'ابدأ',
     reviewLesson: 'مراجعة',
     progressionInfo: 'التقدم',
-    progressionInfoText: 'أكمل كل درس لفتح الدرس التالي. الدروس مصممة لتُتبع بالترتيب لتعلم مثالي.',
+    progressionInfoText:
+      'أكمل كل درس لفتح الدرس التالي. الدروس مصممة لتُتبع بالترتيب لتعلم مثالي.',
     lessonCompleted: 'انتهى الدرس!',
     yourScore: 'نتيجتك',
     correctAnswers: 'إجابات صحيحة',
@@ -917,7 +990,8 @@ export const translations = {
     addressLabel: 'العنوان',
     addressPlaceholder: 'عنوانك البريدي',
     membershipFormula: 'صيغة العضوية',
-    acceptRulesText: 'بصفتي عضواً، أوافق على النظام الداخلي لجمعية المحسنين وأتعهد باحترامه.',
+    acceptRulesText:
+      'بصفتي عضواً، أوافق على النظام الداخلي لجمعية المحسنين وأتعهد باحترامه.',
     paymentNoteMonthly: 'الدفع الشهري ليس تلقائياً. يجب تجديده يدوياً كل شهر.',
 
     // Member screen
@@ -926,7 +1000,8 @@ export const translations = {
     mySubscriptions: 'عضوياتي',
     statusActive: 'نشط',
     statusPendingSignature: 'في انتظار التوقيع',
-    pendingSignatureNote: 'يجب على الأعضاء المنتظرين المرور بالمكتب لتوقيع بطاقة العضوية.',
+    pendingSignatureNote:
+      'يجب على الأعضاء المنتظرين المرور بالمكتب لتوقيع بطاقة العضوية.',
     registerFamily: 'تسجيل الأقارب',
     registerFamilyDesc: 'ادفع العضوية لعائلتك أو أصدقائك',
     registerOtherMembers: 'تسجيل أعضاء آخرين',
@@ -944,14 +1019,17 @@ export const translations = {
     formula: 'الصيغة',
     myself: 'أنا نفسي',
     allFieldsRequired: 'جميع الحقول مطلوبة',
-    memberRulesConfirm: 'أؤكد أن هذا الشخص يرغب في أن يصبح عضواً ويوافق على النظام الأساسي ولوائح الجمعية. يجب عليه المرور بالمكتب لتوقيع بطاقة العضوية.',
+    memberRulesConfirm:
+      'أؤكد أن هذا الشخص يرغب في أن يصبح عضواً ويوافق على النظام الأساسي ولوائح الجمعية. يجب عليه المرور بالمكتب لتوقيع بطاقة العضوية.',
     addMember: 'إضافة عضو',
     securePaymentNote: 'دفع آمن • يجب على الأعضاء التوقيع في مكتب المسجد',
-    signatureRequiredNote: 'يجب على الأعضاء المسجلين المرور بمكتب المسجد لتوقيع بطاقة العضوية.',
+    signatureRequiredNote:
+      'يجب على الأعضاء المسجلين المرور بمكتب المسجد لتوقيع بطاقة العضوية.',
 
     // Common
     notAvailable: 'غير متاح',
-    contactAdminToCancel: 'لإلغاء اشتراكك، يرجى الاتصال بإدارة المسجد أو زيارة مكتب الاستقبال.',
+    contactAdminToCancel:
+      'لإلغاء اشتراكك، يرجى الاتصال بإدارة المسجد أو زيارة مكتب الاستقبال.',
     understood: 'حسناً',
     retry: 'إعادة المحاولة',
 
@@ -984,7 +1062,8 @@ export const translations = {
     quizSubtitle: 'اختبر معلوماتك',
     chooseLevel: 'اختر المستوى',
     tip: 'نصيحة',
-    tipText: 'ابدأ بالمستوى المبتدئ لتعزيز أساسياتك، ثم تقدم نحو المستويات الأعلى.',
+    tipText:
+      'ابدأ بالمستوى المبتدئ لتعزيز أساسياتك، ثم تقدم نحو المستويات الأعلى.',
     beginnerLevel: 'مبتدئ',
     intermediateLevel: 'متوسط',
     advancedLevel: 'متقدم',
@@ -1015,7 +1094,8 @@ export const translations = {
     useProjectIban: 'استخدم IBAN المشروع',
     onlinePaymentSoon: 'دفع آمن عبر Stripe',
     creditCard: 'بطاقة ائتمان',
-    externalProjectNote: 'هذا المشروع خارجي عن مسجدنا. قم بالتبرع مباشرة عبر التحويل البنكي.',
+    externalProjectNote:
+      'هذا المشروع خارجي عن مسجدنا. قم بالتبرع مباشرة عبر التحويل البنكي.',
     transferReference: 'المرجع المطلوب',
     cannotOpenFile: 'تعذر فتح هذا الملف',
 
@@ -1042,15 +1122,18 @@ export const translations = {
     // Mode Silencieux Mosquée (Géolocalisation)
     mosqueSilentMode: 'وضع الصمت في المسجد',
     enableMosqueProximity: 'تذكير على بعد 100م من المسجد',
-    mosqueSilentModeDescription: '📍 عندما تكون على بعد أقل من 100 متر من المسجد، ستتلقى تذكيراً لوضع هاتفك على الصامت.',
+    mosqueSilentModeDescription:
+      '📍 عندما تكون على بعد أقل من 100 متر من المسجد، ستتلقى تذكيراً لوضع هاتفك على الصامت.',
     mosqueSilentModeTitle: 'أنت في المسجد',
     mosqueSilentModeBody: 'لا تنسَ وضع هاتفك على الصامت 🔕',
 
     // Permission localisation (premier lancement)
     locationFeatureTitle: 'تذكير المسجد',
-    locationFeatureExplanation: 'هل تريد تلقي تذكير تلقائي لوضع هاتفك على الصامت عند وصولك إلى المسجد؟\n\nهذه الميزة تستخدم موقعك GPS (فقط عندما يكون التطبيق مفتوحًا) للكشف عندما تكون على بعد أقل من 100 متر من المسجد.',
+    locationFeatureExplanation:
+      'هل تريد تلقي تذكير تلقائي لوضع هاتفك على الصامت عند وصولك إلى المسجد؟\n\nهذه الميزة تستخدم موقعك GPS (فقط عندما يكون التطبيق مفتوحًا) للكشف عندما تكون على بعد أقل من 100 متر من المسجد.',
     locationPermissionTitle: 'إذن الموقع',
-    locationPermissionMessage: 'يحتاج التطبيق إلى موقعك لإرسال تذكير عندما تكون قريبًا من المسجد (100م) لوضع هاتفك على الصامت.',
+    locationPermissionMessage:
+      'يحتاج التطبيق إلى موقعك لإرسال تذكير عندما تكون قريبًا من المسجد (100م) لوضع هاتفك على الصامت.',
     notNow: 'ليس الآن',
     enable: 'تفعيل',
     later: 'لاحقاً',
@@ -1099,11 +1182,45 @@ export const translations = {
     beforeTarawih: 'قبل التراويح',
     atTime: 'في الوقت',
     ramadanMubarakNote: 'رمضان مبارك! ستتلقى التذكيرات في الأوقات المختارة',
+
+    // QuranHomeScreen
+    readQuran: 'قراءة القرآن',
+    readQuranAr: 'قراءة القرآن',
+    readQuranSubtitle: 'صفحة بصفحة',
+    listenQuran: 'الاستماع للقرآن',
+    listenQuranAr: 'الاستماع للقرآن',
+    listenQuranSubtitle: 'تلاوة صوتية',
+    quranFooter: '١١٤ سورة • ٦٢٣٦ آية',
+    quranQuoteFr: '"إنا نحن نزلنا الذكر وإنا له لحافظون"',
+    quranQuoteRef: '- سورة الحجر، الآية ٩',
+
+    // QuranReadScreen
+    saved: 'محفوظ',
+    saveBookmark: 'حفظ',
+    page: 'صفحة',
+    savedPages: 'صفحاتي المحفوظة',
+    noSavedPages: 'لا توجد صفحات محفوظة',
+    saveHint: 'اضغط على "حفظ" في الأعلى لحفظ صفحة',
+    goToPage: 'الذهاب للصفحة',
+    pageInvalid: 'صفحة غير صالحة (١-٦٠٤)',
+    juz: 'جزء',
+    surahs: 'السور',
+    search: 'بحث',
+    loadingPage: 'جاري تحميل الصفحة...',
+    errorLoadingPage: 'تعذر تحميل هذه الصفحة. تحقق من اتصالك.',
+    translationTab: 'ترجمة',
+    fontSize: 'الحجم',
+
+    // QuranMiniPlayer
+    miniPlayerVerse: 'آية',
+    miniPlayerSurah: 'سورة',
+    miniPlayerRange: 'نطاق',
+    miniPlayerOff: 'إيقاف',
   },
 };
 
 // Type for translation keys
-export type TranslationKey = keyof typeof translations['fr'];
+export type TranslationKey = keyof (typeof translations)['fr'];
 
 // Sauvegarder la langue
 export const setLanguage = async (lang: Language): Promise<void> => {

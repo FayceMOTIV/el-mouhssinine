@@ -56,11 +56,13 @@ export const setupPlayer = async (): Promise<boolean> => {
           Capability.Pause,
           Capability.Stop,
           Capability.SeekTo,
+          Capability.SkipToNext,
+          Capability.SkipToPrevious,
         ],
         compactCapabilities: [
           Capability.Play,
           Capability.Pause,
-          Capability.Stop,
+          Capability.SkipToNext,
         ],
         android: {
           appKilledPlaybackBehavior:

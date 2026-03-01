@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { RepeatMode, PlaybackSpeed } from '../hooks/useQuranPlayer';
+import { useLanguage } from '../context/LanguageContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const isSmallScreen = SCREEN_WIDTH < 375;
@@ -55,6 +56,7 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
   onStop,
   onClose,
 }) => {
+  const { t } = useLanguage();
   const slideAnim = useRef(new Animated.Value(100)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const loadingAnim = useRef(new Animated.Value(0)).current;
@@ -81,7 +83,7 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
   // Animation de chargement
   useEffect(() => {
     if (isLoading) {
-      Animated.loop(
+      const loopAnim = Animated.loop(
         Animated.sequence([
           Animated.timing(loadingAnim, {
             toValue: 1,
@@ -94,7 +96,9 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
             useNativeDriver: false,
           }),
         ]),
-      ).start();
+      );
+      loopAnim.start();
+      return () => loopAnim.stop();
     } else {
       loadingAnim.stopAnimation();
       loadingAnim.setValue(0);
@@ -121,11 +125,11 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
       case 'verse':
         return `${repeatCount + 1}/${maxRepeat}`;
       case 'surah':
-        return 'Sourate';
+        return t('miniPlayerSurah');
       case 'range':
-        return 'Plage';
+        return t('miniPlayerRange');
       default:
-        return 'Off';
+        return t('miniPlayerOff');
     }
   };
 
@@ -176,7 +180,7 @@ export const QuranMiniPlayer: React.FC<QuranMiniPlayerProps> = ({
             )}
           </View>
           <Text style={styles.verseInfo}>
-            Verset {currentVerse + 1} / {totalVerses}
+            {t('miniPlayerVerse')} {currentVerse + 1} / {totalVerses}
           </Text>
         </View>
 

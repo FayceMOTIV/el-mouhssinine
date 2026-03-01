@@ -52,7 +52,8 @@ const QuranHomeScreen: React.FC = () => {
             إِنَّا نَحْنُ نَزَّلْنَا الذِّكْرَ وَإِنَّا لَهُ لَحَافِظُونَ
           </Text>
           <Text style={styles.quoteFr}>
-            "C'est Nous qui avons fait descendre le Rappel, et c'est Nous qui en sommes gardien"
+            "C'est Nous qui avons fait descendre le Rappel, et c'est Nous qui en
+            sommes gardien"
           </Text>
           <Text style={styles.quoteRef}>- Sourate Al-Hijr, verset 9</Text>
         </View>
@@ -66,9 +67,11 @@ const QuranHomeScreen: React.FC = () => {
           >
             <Text style={styles.buttonIcon}>📖</Text>
             <View style={styles.buttonTextContainer}>
-              <Text style={styles.buttonTitle}>Lire le Coran</Text>
-              <Text style={styles.buttonTitleAr}>قراءة القرآن</Text>
-              <Text style={styles.buttonSubtitle}>Page par page</Text>
+              <Text style={styles.buttonTitle}>{t('readQuran')}</Text>
+              <Text style={styles.buttonTitleAr}>{t('readQuranAr')}</Text>
+              <Text style={styles.buttonSubtitle}>
+                {t('readQuranSubtitle')}
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -79,16 +82,18 @@ const QuranHomeScreen: React.FC = () => {
           >
             <Text style={styles.buttonIcon}>🎧</Text>
             <View style={styles.buttonTextContainer}>
-              <Text style={styles.buttonTitle}>Écouter le Coran</Text>
-              <Text style={styles.buttonTitleAr}>الاستماع للقرآن</Text>
-              <Text style={styles.buttonSubtitle}>Récitation audio</Text>
+              <Text style={styles.buttonTitle}>{t('listenQuran')}</Text>
+              <Text style={styles.buttonTitleAr}>{t('listenQuranAr')}</Text>
+              <Text style={styles.buttonSubtitle}>
+                {t('listenQuranSubtitle')}
+              </Text>
             </View>
           </TouchableOpacity>
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>114 sourates • 6236 versets</Text>
+          <Text style={styles.footerText}>{t('quranFooter')}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

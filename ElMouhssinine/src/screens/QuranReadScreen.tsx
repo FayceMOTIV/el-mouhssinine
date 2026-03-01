@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useLayoutEffect,
+} from 'react';
 import {
   View,
   Text,
@@ -31,15 +37,15 @@ const surahsInfo = [
   { number: 2, name: 'Al-Baqarah', nameAr: 'البقرة', startPage: 2 },
   { number: 3, name: 'Aal-Imran', nameAr: 'آل عمران', startPage: 50 },
   { number: 4, name: 'An-Nisa', nameAr: 'النساء', startPage: 77 },
-  { number: 5, name: 'Al-Ma\'idah', nameAr: 'المائدة', startPage: 106 },
-  { number: 6, name: 'Al-An\'am', nameAr: 'الأنعام', startPage: 128 },
-  { number: 7, name: 'Al-A\'raf', nameAr: 'الأعراف', startPage: 151 },
+  { number: 5, name: "Al-Ma'idah", nameAr: 'المائدة', startPage: 106 },
+  { number: 6, name: "Al-An'am", nameAr: 'الأنعام', startPage: 128 },
+  { number: 7, name: "Al-A'raf", nameAr: 'الأعراف', startPage: 151 },
   { number: 8, name: 'Al-Anfal', nameAr: 'الأنفال', startPage: 177 },
   { number: 9, name: 'At-Tawbah', nameAr: 'التوبة', startPage: 187 },
   { number: 10, name: 'Yunus', nameAr: 'يونس', startPage: 208 },
   { number: 11, name: 'Hud', nameAr: 'هود', startPage: 221 },
   { number: 12, name: 'Yusuf', nameAr: 'يوسف', startPage: 235 },
-  { number: 13, name: 'Ar-Ra\'d', nameAr: 'الرعد', startPage: 249 },
+  { number: 13, name: "Ar-Ra'd", nameAr: 'الرعد', startPage: 249 },
   { number: 14, name: 'Ibrahim', nameAr: 'إبراهيم', startPage: 255 },
   { number: 15, name: 'Al-Hijr', nameAr: 'الحجر', startPage: 262 },
   { number: 16, name: 'An-Nahl', nameAr: 'النحل', startPage: 267 },
@@ -49,10 +55,10 @@ const surahsInfo = [
   { number: 20, name: 'Ta-Ha', nameAr: 'طه', startPage: 312 },
   { number: 21, name: 'Al-Anbiya', nameAr: 'الأنبياء', startPage: 322 },
   { number: 22, name: 'Al-Hajj', nameAr: 'الحج', startPage: 332 },
-  { number: 23, name: 'Al-Mu\'minun', nameAr: 'المؤمنون', startPage: 342 },
+  { number: 23, name: "Al-Mu'minun", nameAr: 'المؤمنون', startPage: 342 },
   { number: 24, name: 'An-Nur', nameAr: 'النور', startPage: 350 },
   { number: 25, name: 'Al-Furqan', nameAr: 'الفرقان', startPage: 359 },
-  { number: 26, name: 'Ash-Shu\'ara', nameAr: 'الشعراء', startPage: 367 },
+  { number: 26, name: "Ash-Shu'ara", nameAr: 'الشعراء', startPage: 367 },
   { number: 27, name: 'An-Naml', nameAr: 'النمل', startPage: 377 },
   { number: 28, name: 'Al-Qasas', nameAr: 'القصص', startPage: 385 },
   { number: 29, name: 'Al-Ankabut', nameAr: 'العنكبوت', startPage: 396 },
@@ -82,13 +88,13 @@ const surahsInfo = [
   { number: 53, name: 'An-Najm', nameAr: 'النجم', startPage: 526 },
   { number: 54, name: 'Al-Qamar', nameAr: 'القمر', startPage: 528 },
   { number: 55, name: 'Ar-Rahman', nameAr: 'الرحمن', startPage: 531 },
-  { number: 56, name: 'Al-Waqi\'ah', nameAr: 'الواقعة', startPage: 534 },
+  { number: 56, name: "Al-Waqi'ah", nameAr: 'الواقعة', startPage: 534 },
   { number: 57, name: 'Al-Hadid', nameAr: 'الحديد', startPage: 537 },
   { number: 58, name: 'Al-Mujadila', nameAr: 'المجادلة', startPage: 542 },
   { number: 59, name: 'Al-Hashr', nameAr: 'الحشر', startPage: 545 },
   { number: 60, name: 'Al-Mumtahanah', nameAr: 'الممتحنة', startPage: 549 },
   { number: 61, name: 'As-Saff', nameAr: 'الصف', startPage: 551 },
-  { number: 62, name: 'Al-Jumu\'ah', nameAr: 'الجمعة', startPage: 553 },
+  { number: 62, name: "Al-Jumu'ah", nameAr: 'الجمعة', startPage: 553 },
   { number: 63, name: 'Al-Munafiqun', nameAr: 'المنافقون', startPage: 554 },
   { number: 64, name: 'At-Taghabun', nameAr: 'التغابن', startPage: 556 },
   { number: 65, name: 'At-Talaq', nameAr: 'الطلاق', startPage: 558 },
@@ -96,7 +102,7 @@ const surahsInfo = [
   { number: 67, name: 'Al-Mulk', nameAr: 'الملك', startPage: 562 },
   { number: 68, name: 'Al-Qalam', nameAr: 'القلم', startPage: 564 },
   { number: 69, name: 'Al-Haqqah', nameAr: 'الحاقة', startPage: 566 },
-  { number: 70, name: 'Al-Ma\'arij', nameAr: 'المعارج', startPage: 568 },
+  { number: 70, name: "Al-Ma'arij", nameAr: 'المعارج', startPage: 568 },
   { number: 71, name: 'Nuh', nameAr: 'نوح', startPage: 570 },
   { number: 72, name: 'Al-Jinn', nameAr: 'الجن', startPage: 572 },
   { number: 73, name: 'Al-Muzzammil', nameAr: 'المزمل', startPage: 574 },
@@ -105,7 +111,7 @@ const surahsInfo = [
   { number: 76, name: 'Al-Insan', nameAr: 'الإنسان', startPage: 578 },
   { number: 77, name: 'Al-Mursalat', nameAr: 'المرسلات', startPage: 580 },
   { number: 78, name: 'An-Naba', nameAr: 'النبأ', startPage: 582 },
-  { number: 79, name: 'An-Nazi\'at', nameAr: 'النازعات', startPage: 583 },
+  { number: 79, name: "An-Nazi'at", nameAr: 'النازعات', startPage: 583 },
   { number: 80, name: 'Abasa', nameAr: 'عبس', startPage: 585 },
   { number: 81, name: 'At-Takwir', nameAr: 'التكوير', startPage: 586 },
   { number: 82, name: 'Al-Infitar', nameAr: 'الانفطار', startPage: 587 },
@@ -113,7 +119,7 @@ const surahsInfo = [
   { number: 84, name: 'Al-Inshiqaq', nameAr: 'الانشقاق', startPage: 589 },
   { number: 85, name: 'Al-Buruj', nameAr: 'البروج', startPage: 590 },
   { number: 86, name: 'At-Tariq', nameAr: 'الطارق', startPage: 591 },
-  { number: 87, name: 'Al-A\'la', nameAr: 'الأعلى', startPage: 591 },
+  { number: 87, name: "Al-A'la", nameAr: 'الأعلى', startPage: 591 },
   { number: 88, name: 'Al-Ghashiyah', nameAr: 'الغاشية', startPage: 592 },
   { number: 89, name: 'Al-Fajr', nameAr: 'الفجر', startPage: 593 },
   { number: 90, name: 'Al-Balad', nameAr: 'البلد', startPage: 594 },
@@ -127,13 +133,13 @@ const surahsInfo = [
   { number: 98, name: 'Al-Bayyinah', nameAr: 'البينة', startPage: 598 },
   { number: 99, name: 'Az-Zalzalah', nameAr: 'الزلزلة', startPage: 599 },
   { number: 100, name: 'Al-Adiyat', nameAr: 'العاديات', startPage: 599 },
-  { number: 101, name: 'Al-Qari\'ah', nameAr: 'القارعة', startPage: 600 },
+  { number: 101, name: "Al-Qari'ah", nameAr: 'القارعة', startPage: 600 },
   { number: 102, name: 'At-Takathur', nameAr: 'التكاثر', startPage: 600 },
   { number: 103, name: 'Al-Asr', nameAr: 'العصر', startPage: 601 },
   { number: 104, name: 'Al-Humazah', nameAr: 'الهمزة', startPage: 601 },
   { number: 105, name: 'Al-Fil', nameAr: 'الفيل', startPage: 601 },
   { number: 106, name: 'Quraysh', nameAr: 'قريش', startPage: 602 },
-  { number: 107, name: 'Al-Ma\'un', nameAr: 'الماعون', startPage: 602 },
+  { number: 107, name: "Al-Ma'un", nameAr: 'الماعون', startPage: 602 },
   { number: 108, name: 'Al-Kawthar', nameAr: 'الكوثر', startPage: 602 },
   { number: 109, name: 'Al-Kafirun', nameAr: 'الكافرون', startPage: 603 },
   { number: 110, name: 'An-Nasr', nameAr: 'النصر', startPage: 603 },
@@ -143,11 +149,15 @@ const surahsInfo = [
   { number: 114, name: 'An-Nas', nameAr: 'الناس', startPage: 604 },
 ];
 
-// Juz info
-const juzInfo = Array.from({ length: 30 }, (_, i) => ({
+// Juz info — pages de début réelles du Mushaf (Madina Mushaf)
+const JUZ_START_PAGES = [
+  1, 22, 42, 62, 82, 102, 121, 142, 162, 182, 201, 222, 242, 262, 282, 302, 322,
+  342, 362, 382, 402, 422, 442, 462, 482, 502, 522, 542, 562, 582,
+];
+const juzInfo = JUZ_START_PAGES.map((startPage, i) => ({
   number: i + 1,
   name: `Juz ${i + 1}`,
-  startPage: Math.floor(1 + (i * 604) / 30),
+  startPage,
 }));
 
 interface Ayah {
@@ -182,6 +192,8 @@ const QuranReadScreen: React.FC = () => {
   const [textFontSize, setTextFontSize] = useState(DEFAULT_FONT_SIZE);
 
   const isMountedRef = useRef(true);
+  const currentPageRef = useRef(currentPage);
+  currentPageRef.current = currentPage;
   const translateX = useRef(new Animated.Value(0)).current;
 
   // Masquer la tab bar quand cet écran est affiché
@@ -213,12 +225,13 @@ const QuranReadScreen: React.FC = () => {
   useEffect(() => {
     const loadSavedData = async () => {
       try {
-        const [savedPage, savedBookmarks, savedLang, savedFontSize] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEY_PAGE),
-          AsyncStorage.getItem(STORAGE_KEY_BOOKMARKS),
-          AsyncStorage.getItem(STORAGE_KEY_LANG),
-          AsyncStorage.getItem(STORAGE_KEY_FONTSIZE),
-        ]);
+        const [savedPage, savedBookmarks, savedLang, savedFontSize] =
+          await Promise.all([
+            AsyncStorage.getItem(STORAGE_KEY_PAGE),
+            AsyncStorage.getItem(STORAGE_KEY_BOOKMARKS),
+            AsyncStorage.getItem(STORAGE_KEY_LANG),
+            AsyncStorage.getItem(STORAGE_KEY_FONTSIZE),
+          ]);
 
         if (savedPage) setCurrentPage(parseInt(savedPage, 10));
         if (savedBookmarks) setBookmarks(JSON.parse(savedBookmarks));
@@ -284,8 +297,12 @@ const QuranReadScreen: React.FC = () => {
         try {
           const { arabic, french } = JSON.parse(cached);
           // Valider que le cache contient des données valides
-          if (Array.isArray(arabic) && arabic.length > 0 &&
-              Array.isArray(french) && french.length > 0) {
+          if (
+            Array.isArray(arabic) &&
+            arabic.length > 0 &&
+            Array.isArray(french) &&
+            french.length > 0
+          ) {
             if (!isMountedRef.current) return;
             setArabicAyahs(arabic);
             setFrenchAyahs(french);
@@ -367,14 +384,15 @@ const QuranReadScreen: React.FC = () => {
       onMoveShouldSetPanResponder: (_, gestureState) => {
         // Capturer SEULEMENT si swipe horizontal significatif ET > vertical
         // Cela permet au ScrollView de gérer le scroll vertical normalement
-        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
+        const isHorizontalSwipe =
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
         return isHorizontalSwipe && Math.abs(gestureState.dx) > 30;
       },
       onPanResponderMove: (_, gestureState) => {
         translateX.setValue(gestureState.dx);
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -100 && currentPage < TOTAL_PAGES) {
+        if (gestureState.dx < -100 && currentPageRef.current < TOTAL_PAGES) {
           // Swipe gauche = page suivante (comme tourner une page de Mushaf)
           Animated.timing(translateX, {
             toValue: -300,
@@ -384,7 +402,7 @@ const QuranReadScreen: React.FC = () => {
             setCurrentPage(prev => prev + 1);
             translateX.setValue(0);
           });
-        } else if (gestureState.dx > 100 && currentPage > 1) {
+        } else if (gestureState.dx > 100 && currentPageRef.current > 1) {
           // Swipe droite = page précédente (retour en arrière)
           Animated.timing(translateX, {
             toValue: 300,
@@ -401,7 +419,7 @@ const QuranReadScreen: React.FC = () => {
           }).start();
         }
       },
-    })
+    }),
   ).current;
 
   // Bookmarks
@@ -443,7 +461,10 @@ const QuranReadScreen: React.FC = () => {
       return (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => loadPage(currentPage)}>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => loadPage(currentPage)}
+          >
             <Text style={styles.retryButtonText}>Réessayer</Text>
           </TouchableOpacity>
         </View>
@@ -459,12 +480,19 @@ const QuranReadScreen: React.FC = () => {
     }
 
     return (
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.pageContent}>
           {/* Bismillah pour début de sourate */}
-          {ayahs[0]?.numberInSurah === 1 && ayahs[0]?.surah?.number !== 9 && ayahs[0]?.surah?.number !== 1 && (
-            <Text style={styles.bismillah}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</Text>
-          )}
+          {ayahs[0]?.numberInSurah === 1 &&
+            ayahs[0]?.surah?.number !== 9 &&
+            ayahs[0]?.surah?.number !== 1 && (
+              <Text style={styles.bismillah}>
+                بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+              </Text>
+            )}
 
           {/* Nom de la sourate si début */}
           {ayahs[0]?.numberInSurah === 1 && (
@@ -475,15 +503,25 @@ const QuranReadScreen: React.FC = () => {
           )}
 
           {/* Ayahs */}
-          <Text style={[
-            styles.ayahsText,
-            showArabic && styles.arabicText,
-            { fontSize: textFontSize, lineHeight: textFontSize * (showArabic ? 2 : 1.8) }
-          ]}>
+          <Text
+            style={[
+              styles.ayahsText,
+              showArabic && styles.arabicText,
+              {
+                fontSize: textFontSize,
+                lineHeight: textFontSize * (showArabic ? 2 : 1.8),
+              },
+            ]}
+          >
             {ayahs.map((ayah, index) => (
               <Text key={index}>
                 {ayah.text}
-                <Text style={[styles.ayahNumber, { fontSize: textFontSize * 0.6 }]}> ﴿{ayah.numberInSurah}﴾ </Text>
+                <Text
+                  style={[styles.ayahNumber, { fontSize: textFontSize * 0.6 }]}
+                >
+                  {' '}
+                  ﴿{ayah.numberInSurah}﴾{' '}
+                </Text>
               </Text>
             ))}
           </Text>
@@ -516,8 +554,17 @@ const QuranReadScreen: React.FC = () => {
                   style={[styles.tab, searchTab === tab && styles.activeTab]}
                   onPress={() => setSearchTab(tab)}
                 >
-                  <Text style={[styles.tabText, searchTab === tab && styles.activeTabText]}>
-                    {tab === 'surah' ? 'Sourate' : tab === 'page' ? 'Page' : 'Juz'}
+                  <Text
+                    style={[
+                      styles.tabText,
+                      searchTab === tab && styles.activeTabText,
+                    ]}
+                  >
+                    {tab === 'surah'
+                      ? 'Sourate'
+                      : tab === 'page'
+                      ? 'Page'
+                      : 'Juz'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -539,7 +586,9 @@ const QuranReadScreen: React.FC = () => {
                     <Text style={styles.listItemNumber}>{item.number}</Text>
                     <View style={styles.listItemText}>
                       <Text style={styles.listItemTitle}>{item.nameAr}</Text>
-                      <Text style={styles.listItemSubtitle}>{item.name} - Page {item.startPage}</Text>
+                      <Text style={styles.listItemSubtitle}>
+                        {item.name} - Page {item.startPage}
+                      </Text>
                     </View>
                   </TouchableOpacity>
                 )}
@@ -550,7 +599,9 @@ const QuranReadScreen: React.FC = () => {
 
             {searchTab === 'page' && (
               <View style={styles.pageInputContainer}>
-                <Text style={styles.pageInputLabel}>Numéro de page (1-604)</Text>
+                <Text style={styles.pageInputLabel}>
+                  Numéro de page (1-604)
+                </Text>
                 <TextInput
                   style={styles.pageInput}
                   keyboardType="number-pad"
@@ -573,7 +624,10 @@ const QuranReadScreen: React.FC = () => {
                 <TouchableOpacity
                   style={[
                     styles.goButton,
-                    (!pageInput || parseInt(pageInput, 10) < 1 || parseInt(pageInput, 10) > TOTAL_PAGES) && styles.goButtonDisabled
+                    (!pageInput ||
+                      parseInt(pageInput, 10) < 1 ||
+                      parseInt(pageInput, 10) > TOTAL_PAGES) &&
+                      styles.goButtonDisabled,
                   ]}
                   onPress={() => {
                     const page = parseInt(pageInput, 10);
@@ -584,13 +638,21 @@ const QuranReadScreen: React.FC = () => {
                       setPageInput('');
                     }
                   }}
-                  disabled={!pageInput || parseInt(pageInput, 10) < 1 || parseInt(pageInput, 10) > TOTAL_PAGES}
+                  disabled={
+                    !pageInput ||
+                    parseInt(pageInput, 10) < 1 ||
+                    parseInt(pageInput, 10) > TOTAL_PAGES
+                  }
                 >
                   <Text style={styles.goButtonText}>Aller à la page</Text>
                 </TouchableOpacity>
-                {pageInput && (parseInt(pageInput, 10) < 1 || parseInt(pageInput, 10) > TOTAL_PAGES) && (
-                  <Text style={styles.pageInputError}>Page invalide (1-604)</Text>
-                )}
+                {pageInput &&
+                  (parseInt(pageInput, 10) < 1 ||
+                    parseInt(pageInput, 10) > TOTAL_PAGES) && (
+                    <Text style={styles.pageInputError}>
+                      Page invalide (1-604)
+                    </Text>
+                  )}
               </View>
             )}
 
@@ -608,8 +670,12 @@ const QuranReadScreen: React.FC = () => {
                   >
                     <Text style={styles.listItemNumber}>{item.number}</Text>
                     <View style={styles.listItemText}>
-                      <Text style={styles.listItemTitle}>Juz' {item.number}</Text>
-                      <Text style={styles.listItemSubtitle}>Page {item.startPage}</Text>
+                      <Text style={styles.listItemTitle}>
+                        Juz' {item.number}
+                      </Text>
+                      <Text style={styles.listItemSubtitle}>
+                        Page {item.startPage}
+                      </Text>
                     </View>
                   </TouchableOpacity>
                 )}
@@ -637,7 +703,9 @@ const QuranReadScreen: React.FC = () => {
 
           {bookmarks.length === 0 ? (
             <View style={styles.emptyBookmarks}>
-              <Text style={styles.emptyBookmarksText}>Aucune page sauvegardée</Text>
+              <Text style={styles.emptyBookmarksText}>
+                Aucune page sauvegardée
+              </Text>
               <Text style={styles.emptyBookmarksHint}>
                 Appuyez sur "Sauver" en haut pour mémoriser une page
               </Text>
@@ -647,7 +715,13 @@ const QuranReadScreen: React.FC = () => {
               data={bookmarks}
               keyExtractor={item => item.toString()}
               renderItem={({ item }) => {
-                const surah = surahsInfo.find(s => s.startPage <= item) || surahsInfo[0];
+                let surah = surahsInfo[0];
+                for (let i = surahsInfo.length - 1; i >= 0; i--) {
+                  if (surahsInfo[i].startPage <= item) {
+                    surah = surahsInfo[i];
+                    break;
+                  }
+                }
                 return (
                   <TouchableOpacity
                     style={styles.bookmarkItem}
@@ -658,10 +732,14 @@ const QuranReadScreen: React.FC = () => {
                   >
                     <View>
                       <Text style={styles.bookmarkPage}>Page {item}</Text>
-                      <Text style={styles.bookmarkSurah}>{surah.nameAr} - {surah.name}</Text>
+                      <Text style={styles.bookmarkSurah}>
+                        {surah.nameAr} - {surah.name}
+                      </Text>
                     </View>
                     <TouchableOpacity
-                      onPress={() => setBookmarks(bookmarks.filter(b => b !== item))}
+                      onPress={() =>
+                        setBookmarks(bookmarks.filter(b => b !== item))
+                      }
                       style={styles.deleteBookmark}
                       accessibilityLabel="Supprimer le marque-page"
                       accessibilityRole="button"
@@ -687,25 +765,42 @@ const QuranReadScreen: React.FC = () => {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           {/* Bouton retour */}
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.headerButton}
+          >
             <Text style={styles.backButtonText}>← Retour</Text>
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
             <Text style={styles.surahTitle}>{currentSurah.nameAr}</Text>
-            <Text style={styles.pageNumber}>Page {currentPage} / {TOTAL_PAGES}</Text>
+            <Text style={styles.pageNumber}>
+              Page {currentPage} / {TOTAL_PAGES}
+            </Text>
           </View>
 
           {/* Marque-page avec label */}
-          <TouchableOpacity onPress={toggleBookmark} style={styles.bookmarkButton}>
-            <Text style={styles.bookmarkIcon}>{isBookmarked ? '🔖' : '📑'}</Text>
-            <Text style={styles.bookmarkLabel}>{isBookmarked ? 'Sauvé' : 'Sauver'}</Text>
+          <TouchableOpacity
+            onPress={toggleBookmark}
+            style={styles.bookmarkButton}
+          >
+            <Text style={styles.bookmarkIcon}>
+              {isBookmarked ? '🔖' : '📑'}
+            </Text>
+            <Text style={styles.bookmarkLabel}>
+              {isBookmarked ? 'Sauvé' : 'Sauver'}
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Progress bar */}
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${(currentPage / TOTAL_PAGES) * 100}%` }]} />
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${(currentPage / TOTAL_PAGES) * 100}%` },
+            ]}
+          />
         </View>
       </View>
 
@@ -721,21 +816,37 @@ const QuranReadScreen: React.FC = () => {
       <View style={styles.footer}>
         {/* Flèche précédent */}
         <TouchableOpacity
-          style={[styles.navArrow, currentPage === 1 && styles.navArrowDisabled]}
+          style={[
+            styles.navArrow,
+            currentPage === 1 && styles.navArrowDisabled,
+          ]}
           onPress={goToPrevPage}
           disabled={currentPage === 1}
         >
-          <Text style={[styles.navArrowText, currentPage === 1 && styles.navArrowTextDisabled]}>◀</Text>
+          <Text
+            style={[
+              styles.navArrowText,
+              currentPage === 1 && styles.navArrowTextDisabled,
+            ]}
+          >
+            ◀
+          </Text>
         </TouchableOpacity>
 
         {/* Mes marque-pages */}
-        <TouchableOpacity style={styles.footerButton} onPress={() => setShowBookmarksModal(true)}>
+        <TouchableOpacity
+          style={styles.footerButton}
+          onPress={() => setShowBookmarksModal(true)}
+        >
           <Text style={styles.footerButtonIcon}>🔖</Text>
           <Text style={styles.footerButtonLabel}>Mes pages</Text>
         </TouchableOpacity>
 
         {/* Recherche */}
-        <TouchableOpacity style={styles.footerButton} onPress={() => setShowSearchModal(true)}>
+        <TouchableOpacity
+          style={styles.footerButton}
+          onPress={() => setShowSearchModal(true)}
+        >
           <Text style={styles.footerButtonIcon}>🔍</Text>
           <Text style={styles.footerButtonLabel}>Recherche</Text>
         </TouchableOpacity>
@@ -743,14 +854,20 @@ const QuranReadScreen: React.FC = () => {
         {/* Taille de police */}
         <View style={styles.fontSizeControls}>
           <TouchableOpacity
-            style={[styles.fontSizeBtn, textFontSize <= MIN_FONT_SIZE && styles.fontSizeBtnDisabled]}
+            style={[
+              styles.fontSizeBtn,
+              textFontSize <= MIN_FONT_SIZE && styles.fontSizeBtnDisabled,
+            ]}
             onPress={decreaseFontSize}
             disabled={textFontSize <= MIN_FONT_SIZE}
           >
             <Text style={styles.fontSizeBtnText}>A-</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.fontSizeBtn, textFontSize >= MAX_FONT_SIZE && styles.fontSizeBtnDisabled]}
+            style={[
+              styles.fontSizeBtn,
+              textFontSize >= MAX_FONT_SIZE && styles.fontSizeBtnDisabled,
+            ]}
             onPress={increaseFontSize}
             disabled={textFontSize >= MAX_FONT_SIZE}
           >
@@ -760,20 +877,36 @@ const QuranReadScreen: React.FC = () => {
 
         {/* Toggle Langue */}
         <TouchableOpacity
-          style={[styles.footerButton, styles.langToggle, !showArabic && styles.langToggleFr]}
+          style={[
+            styles.footerButton,
+            styles.langToggle,
+            !showArabic && styles.langToggleFr,
+          ]}
           onPress={() => setShowArabic(!showArabic)}
         >
           <Text style={styles.footerButtonIcon}>{showArabic ? 'ع' : 'Fr'}</Text>
-          <Text style={styles.footerButtonLabel}>{showArabic ? 'Arabe' : 'Français'}</Text>
+          <Text style={styles.footerButtonLabel}>
+            {showArabic ? 'Arabe' : 'Français'}
+          </Text>
         </TouchableOpacity>
 
         {/* Flèche suivant */}
         <TouchableOpacity
-          style={[styles.navArrow, currentPage === TOTAL_PAGES && styles.navArrowDisabled]}
+          style={[
+            styles.navArrow,
+            currentPage === TOTAL_PAGES && styles.navArrowDisabled,
+          ]}
           onPress={goToNextPage}
           disabled={currentPage === TOTAL_PAGES}
         >
-          <Text style={[styles.navArrowText, currentPage === TOTAL_PAGES && styles.navArrowTextDisabled]}>▶</Text>
+          <Text
+            style={[
+              styles.navArrowText,
+              currentPage === TOTAL_PAGES && styles.navArrowTextDisabled,
+            ]}
+          >
+            ▶
+          </Text>
         </TouchableOpacity>
       </View>
 
