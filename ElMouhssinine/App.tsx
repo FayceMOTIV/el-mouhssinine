@@ -1,4 +1,10 @@
-import React, { Component, ErrorInfo, ReactNode, useEffect, useState } from 'react';
+import React, {
+  Component,
+  ErrorInfo,
+  ReactNode,
+  useEffect,
+  useState,
+} from 'react';
 import { StatusBar, View, Text, StyleSheet, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StripeProvider } from '@stripe/stripe-react-native';
@@ -7,10 +13,20 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { colors } from './src/theme/colors';
 import { LanguageProvider } from './src/context/LanguageContext';
 import { initTTS } from './src/services/tts';
-import { initializeFCM, setupForegroundHandler, clearBadgeCount } from './src/services/notifications';
-import { subscribeToGeneralSettings, MaintenanceSettings } from './src/services/firebase';
+import {
+  initializeFCM,
+  setupForegroundHandler,
+  clearBadgeCount,
+} from './src/services/notifications';
+import {
+  subscribeToGeneralSettings,
+  MaintenanceSettings,
+} from './src/services/firebase';
 import { initBackgroundLocation } from './src/services/backgroundLocation';
-import { addNotificationToHistory, detectNotificationType } from './src/services/notificationHistory';
+import {
+  addNotificationToHistory,
+  detectNotificationType,
+} from './src/services/notificationHistory';
 import { initSentry, captureError } from './src/services/sentry';
 
 // =============================================================================
@@ -24,7 +40,8 @@ import { initSentry, captureError } from './src/services/sentry';
 // NOTE: Les clés publishable sont conçues pour être dans le code client.
 // La clé secrète (sk_) est dans Firebase Functions config (ne jamais la mettre ici!)
 // =============================================================================
-const STRIPE_PUBLISHABLE_KEY = 'pk_live_51SzXh73gslOPb7CbYOlhID74OLIqS8OSJUuSAbrQKzi5iftBbKM1LxnpOISC2iA86pFL7vSyW2z4cxh8fnysIxC3009Tc5PF80';
+const STRIPE_PUBLISHABLE_KEY =
+  'pk_live_51SzXh73gslOPb7CbYOlhID74OLIqS8OSJUuSAbrQKzi5iftBbKM1LxnpOISC2iA86pFL7vSyW2z4cxh8fnysIxC3009Tc5PF80';
 
 // Error Boundary pour capturer les crashes
 interface ErrorBoundaryState {
@@ -32,7 +49,10 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  ErrorBoundaryState
+> {
   constructor(props: { children: ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -43,10 +63,17 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log uniquement en dev pour éviter d'exposer des infos sensibles en prod
-    if (__DEV__) {
-      console.error('App crash:', error, errorInfo);
-    }
+    // TOUJOURS logger le crash (visible dans Xcode console / Console.app)
+    // Sans ça on ne sait jamais quelle erreur cause l'écran marron
+    console.error(
+      '[ErrorBoundary] CRASH:',
+      error?.message,
+      error?.stack?.slice(0, 300),
+    );
+    console.error(
+      '[ErrorBoundary] Component:',
+      errorInfo?.componentStack?.slice(0, 300),
+    );
     // Envoyer à Sentry en production
     captureError(error, { componentStack: errorInfo.componentStack });
   }
@@ -57,11 +84,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>Erreur</Text>
           <Text style={styles.errorMessage}>
-            {__DEV__ ? this.state.error?.message : "Une erreur est survenue. Veuillez redémarrer l'application."}
+            {this.state.error?.message ||
+              "Une erreur est survenue. Veuillez redémarrer l'application."}
           </Text>
-          {__DEV__ && (
-            <Text style={styles.errorStack}>{this.state.error?.stack?.slice(0, 500)}</Text>
-          )}
+          <Text style={styles.errorStack}>
+            {this.state.error?.stack?.slice(0, 500)}
+          </Text>
         </View>
       );
     }
@@ -83,10 +111,26 @@ const App: React.FC = () => {
       initSentry();
 
       // Bug 14 Fix: try/catch individuel pour éviter splash infinie si un service échoue
-      try { await initTTS(); } catch (e) { console.warn('[App] TTS init failed:', e); }
-      try { await initializeFCM(); } catch (e) { console.warn('[App] FCM init failed:', e); }
-      try { await initBackgroundLocation(); } catch (e) { console.warn('[App] BackgroundLocation init failed:', e); }
-      try { await clearBadgeCount(); } catch (e) { console.warn('[App] clearBadge failed:', e); }
+      try {
+        await initTTS();
+      } catch (e) {
+        console.warn('[App] TTS init failed:', e);
+      }
+      try {
+        await initializeFCM();
+      } catch (e) {
+        console.warn('[App] FCM init failed:', e);
+      }
+      try {
+        await initBackgroundLocation();
+      } catch (e) {
+        console.warn('[App] BackgroundLocation init failed:', e);
+      }
+      try {
+        await clearBadgeCount();
+      } catch (e) {
+        console.warn('[App] clearBadge failed:', e);
+      }
 
       // Attendre 2 secondes pour garder la splash visible
       await new Promise<void>(resolve => setTimeout(resolve, 2000));
@@ -114,7 +158,11 @@ const App: React.FC = () => {
         if (title && body) {
           const notifType = detectNotificationType(title, body);
           await addNotificationToHistory(title, body, notifType);
-          if (__DEV__) console.log('[App] Notification locale ajoutée à l\'historique:', title);
+          if (__DEV__)
+            console.log(
+              "[App] Notification locale ajoutée à l'historique:",
+              title,
+            );
         }
       }
     });
@@ -123,7 +171,7 @@ const App: React.FC = () => {
 
   // Écouter le mode maintenance
   useEffect(() => {
-    const unsubscribe = subscribeToGeneralSettings((settings) => {
+    const unsubscribe = subscribeToGeneralSettings(settings => {
       if (settings?.maintenance) {
         setMaintenance(settings.maintenance);
       }
@@ -135,7 +183,11 @@ const App: React.FC = () => {
   if (!appReady) {
     return (
       <View style={styles.splashContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#5c3a1a" translucent />
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="#5c3a1a"
+          translucent
+        />
         <Image
           source={require('./src/assets/splash.png')}
           style={styles.splashImage}
@@ -149,11 +201,15 @@ const App: React.FC = () => {
   if (maintenance.enabled) {
     return (
       <View style={styles.maintenanceContainer}>
-        <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor={colors.background}
+        />
         <Text style={styles.maintenanceIcon}>🛠️</Text>
         <Text style={styles.maintenanceTitle}>Maintenance en cours</Text>
         <Text style={styles.maintenanceMessage}>
-          {maintenance.message || "L'application est temporairement indisponible. Veuillez réessayer plus tard."}
+          {maintenance.message ||
+            "L'application est temporairement indisponible. Veuillez réessayer plus tard."}
         </Text>
         <Text style={styles.maintenanceArabic}>
           التطبيق قيد الصيانة حاليًا. يرجى المحاولة لاحقًا.
@@ -171,7 +227,10 @@ const App: React.FC = () => {
       >
         <LanguageProvider>
           <SafeAreaProvider>
-            <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+            <StatusBar
+              barStyle="light-content"
+              backgroundColor={colors.background}
+            />
             <AppNavigator />
           </SafeAreaProvider>
         </LanguageProvider>

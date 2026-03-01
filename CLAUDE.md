@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 252
+- **Build actuel** : 255
 - **Version marketing** : Geree dans project.pbxproj (MARKETING_VERSION)
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
@@ -714,6 +714,43 @@ useEffect(() => {
 - [x] Info.plist CFBundleVersion : 251 → 252
 - [x] project.pbxproj CURRENT_PROJECT_VERSION : 250 → 252 (2 occurrences)
 
+## Corrige (28 Fev 2026 - Build 253-254)
+
+### Fix crash Fabric setState sur composant demonte
+- [x] useQuranPlayer.ts : Ajout `isMountedRef` pattern pour empecher setState apres unmount
+- [x] Correction partielle : guards ajoutes dans handleTrackEnd et certains callbacks
+- [x] Build bump 252 → 253 → 254
+
+## Corrige (1 Mar 2026 - Build 255)
+
+### Fix Mes Adhesions — donnees incoherentes avec carte membre
+- [x] Symptome : Carte membre affiche ACTIF/PAYE/ANNUEL, mais Mes Adhesions affiche "En attente signature"/Non paye/Montant: -
+- [x] Cause racine : `subscribeToMyMembership` cherchait par `where('uid', '==', uid)` (champ), alors que `getMemberProfile` (auth.ts) et `addCotisation` (paiement) utilisent `doc(uid)` (ID document). Si le champ `uid` est absent du document, la requete `where` retourne vide et le fallback email trouve un AUTRE document
+- [x] Fix : Alignement de `subscribeToMyMembership` sur `getMemberProfile` — recherche par doc ID d'abord (`doc(uid).onSnapshot()`), puis champ uid, puis email
+- [x] Listener temps reel maintenant sur `doc(uid)` = meme document que le paiement Stripe met a jour
+
+### Fix Coran Karaoke — crash ErrorBoundary (ecran marron)
+- [x] Symptome : Ecran marron "Erreur — Une erreur est survenue" au lieu du player Coran
+- [x] Cause racine : setState apres unmount sous Fabric/New Architecture dans useQuranPlayer.ts
+- [x] Fix : Guards `isMountedRef.current` ajoutes sur TOUS les setState apres await/setTimeout :
+  - `forceUnlockLoading()` — `setIsLoading(false)`
+  - `loadAndPlayVerse()` — `setIsLoading(true)`, `setVerseProgress(0)`, `setIsPlayerReady(true)`
+  - Timeout securite 8s — `setIsLoading(false)`
+  - `play()` callback — `setIsPlaying(true)`
+  - Polling interval — guards au debut + apres chaque await
+  - Event listeners (PlaybackQueueEnded, PlaybackState, PlaybackError)
+  - `handleTrackEnd` — guard en entree + avant chaque setState
+
+### Fichiers modifies
+- ElMouhssinine/src/services/firebase.ts : `subscribeToMyMembership` reecrit (doc ID d'abord)
+- ElMouhssinine/src/hooks/useQuranPlayer.ts : guards isMountedRef exhaustifs
+- ElMouhssinine/ios/ElMouhssinine/Info.plist : CFBundleVersion 254 → 255
+- ElMouhssinine/ios/ElMouhssinine.xcodeproj/project.pbxproj : CURRENT_PROJECT_VERSION 254 → 255
+
+### Version
+- [x] Info.plist CFBundleVersion : 254 → 255
+- [x] project.pbxproj CURRENT_PROJECT_VERSION : 254 → 255 (2 occurrences)
+
 ## Bugs connus / Pieges
 
 ### FlatList + getItemLayout + ListHeaderComponent
@@ -725,10 +762,14 @@ useEffect(() => {
 ### Firebase onSnapshot error handling
 Toujours passer un parametre d'erreur dans les callbacks `onSnapshot` pour distinguer "pas de donnees" de "erreur Firestore". Sinon l'app affiche "pas connecte" au lieu d'un message d'erreur.
 
+### subscribeToMyMembership vs getMemberProfile
+Ces deux fonctions DOIVENT chercher dans le meme ordre : `doc(uid)` d'abord (ID document), puis `where('uid', '==', uid)` (champ), puis `where('email', '==', email)`. Si l'ordre differe, elles peuvent trouver des documents Firestore differents et afficher des statuts incoherents.
+
 ### useQuranPlayer (react-native-track-player)
 - Ne PAS utiliser `useProgress()` ou `useTrackPlayerEvents()` avant que le player soit initialise (crash)
 - Utiliser `TrackPlayer.addEventListener()` manuellement conditionne sur `isPlayerReady`
 - Polling manuel de la progression avec `setInterval` (200ms)
+- **TOUJOURS** garder les setState avec `isMountedRef.current` dans les callbacks async, timeouts et event listeners (crash Fabric/New Architecture)
 
 ### Statuts membres
 Les statuts doivent etre en francais minuscule : `actif`, `expire`, `sympathisant`, `annule`, `en_attente`. Le backoffice et l'app doivent utiliser les memes valeurs (definies dans `types.js`).

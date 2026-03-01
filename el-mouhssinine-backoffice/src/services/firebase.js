@@ -219,6 +219,21 @@ export const addDocument = async (collectionName, data) => {
   return docRef.id
 }
 
+// Anti-doublon : vérifie si un membre avec cet email existe déjà
+export const checkDuplicateMemberEmail = async (email) => {
+  if (!email || isDemoMode) return null
+  const emailNormalise = email.trim().toLowerCase()
+  const q = query(
+    collection(db, 'members'),
+    where('email', '==', emailNormalise)
+  )
+  const snap = await getDocs(q)
+  if (!snap.empty) {
+    return { id: snap.docs[0].id, ...snap.docs[0].data() }
+  }
+  return null
+}
+
 export const updateDocument = async (collectionName, docId, data) => {
   if (isDemoMode) {
     const items = mockData[collectionName] || []

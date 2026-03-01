@@ -101,7 +101,9 @@ export const useQuranPlayer = ({
       loadingTimeoutRef.current = null;
     }
     isLoadingTrackRef.current = false;
-    setIsLoading(false);
+    if (isMountedRef.current) {
+      setIsLoading(false);
+    }
   }, []);
 
   // === Init player ===
@@ -152,6 +154,7 @@ export const useQuranPlayer = ({
       // Primaire : PlaybackQueueEnded — fiable sur iOS & Android
       subs.push(
         TrackPlayer.addEventListener(Event.PlaybackQueueEnded, async () => {
+          if (!isMountedRef.current) return;
           const gen = trackGenRef.current;
           console.log(`[QuranPlayer] PlaybackQueueEnded fired (gen=${gen})`);
           if (!isLoadingTrackRef.current) {
@@ -162,6 +165,7 @@ export const useQuranPlayer = ({
       // Fallback : PlaybackState.Ended — certaines versions Android l'utilisent
       subs.push(
         TrackPlayer.addEventListener(Event.PlaybackState, async event => {
+          if (!isMountedRef.current) return;
           if (event.state === State.Ended && !isLoadingTrackRef.current) {
             const gen = trackGenRef.current;
             console.log(`[QuranPlayer] PlaybackState.Ended fired (gen=${gen})`);
@@ -174,7 +178,7 @@ export const useQuranPlayer = ({
         TrackPlayer.addEventListener(Event.PlaybackError, error => {
           console.error('[QuranPlayer] PlaybackError:', error);
           forceUnlockLoading();
-          setIsPlaying(false);
+          if (isMountedRef.current) setIsPlaying(false);
         }),
       );
     } catch (e) {
@@ -198,6 +202,8 @@ export const useQuranPlayer = ({
     if (!isPlayerReady) return;
 
     const pollInterval = setInterval(async () => {
+      // Ne rien faire si le composant est démonté (crash Fabric)
+      if (!isMountedRef.current) return;
       if (isLoadingTrackRef.current) {
         stoppedCountRef.current = 0;
         return;
@@ -205,6 +211,7 @@ export const useQuranPlayer = ({
 
       try {
         const state = await TrackPlayer.getPlaybackState();
+        if (!isMountedRef.current) return;
         const currentState = state.state;
 
         if (currentState === State.Playing) {
@@ -217,7 +224,7 @@ export const useQuranPlayer = ({
           const position = await TrackPlayer.getPosition();
           const duration = await TrackPlayer.getDuration();
 
-          if (duration > 0) {
+          if (duration > 0 && isMountedRef.current) {
             setVerseProgress(position / duration);
           }
         } else if (currentState === State.Paused) {
@@ -231,14 +238,15 @@ export const useQuranPlayer = ({
           currentState === State.None ||
           currentState === State.Ended
         ) {
+          // Si on est en train de charger une piste, ne rien faire :
+          // l'état Stopped/None est transitoire (reset → add → play)
+          if (isLoadingTrackRef.current) {
+            stoppedCountRef.current = 0;
+            return;
+          }
           // Attendre 3 polls consécutifs (~600ms) avant de couper isPlaying
-          // pour éviter les faux négatifs sur les états transitoires (reset → add → play)
           stoppedCountRef.current++;
-          if (
-            stoppedCountRef.current >= 3 &&
-            isPlayingRef.current &&
-            !isLoadingTrackRef.current
-          ) {
+          if (stoppedCountRef.current >= 3 && isPlayingRef.current) {
             setIsPlaying(false);
           }
           setIsLoading(false);
@@ -265,6 +273,7 @@ export const useQuranPlayer = ({
 
   // === Gestion fin de piste ===
   const handleTrackEnd = async (triggerGen?: number) => {
+    if (!isMountedRef.current) return;
     if (isLoadingTrackRef.current) return;
     if (isHandlingEndRef.current) return;
 
@@ -287,6 +296,8 @@ export const useQuranPlayer = ({
       const max = maxRepeatRef.current;
       const versesArray = versesRef.current;
 
+      if (!versesArray || versesArray.length === 0) return;
+
       console.log(
         `[QuranPlayer] handleTrackEnd idx=${idx} mode=${mode} count=${count} gen=${trackGenRef.current}`,
       );
@@ -303,7 +314,7 @@ export const useQuranPlayer = ({
 
       // Mode répétition verset
       if (mode === 'verse' && count < max) {
-        setRepeatCount(count + 1);
+        if (isMountedRef.current) setRepeatCount(count + 1);
         await loadAndPlayVerse(idx);
         lastHandledEndForVerseRef.current = -1; // Reset APRÈS chargement pour permettre re-lecture
         return;
@@ -315,13 +326,13 @@ export const useQuranPlayer = ({
           await loadAndPlayVerse(idx + 1);
           return;
         } else if (count < max - 1) {
-          setRepeatCount(count + 1);
+          if (isMountedRef.current) setRepeatCount(count + 1);
           await loadAndPlayVerse(rangeStartRef.current);
           return;
         }
       }
 
-      setRepeatCount(0);
+      if (isMountedRef.current) setRepeatCount(0);
 
       // Passer au verset suivant
       if (idx < versesArray.length - 1) {
@@ -372,8 +383,10 @@ export const useQuranPlayer = ({
     // Marquer qu'on charge - synchrone AVANT toute opération async
     isLoadingTrackRef.current = true;
     currentVerseIndexRef.current = index;
-    setIsLoading(true);
-    setVerseProgress(0);
+    if (isMountedRef.current) {
+      setIsLoading(true);
+      setVerseProgress(0);
+    }
 
     // Timer de sécurité : si loadAndPlayVerse ne se termine pas en 8s,
     // forcer le déblocage pour permettre un nouvel appel
@@ -386,7 +399,9 @@ export const useQuranPlayer = ({
           '[QuranPlayer] TIMEOUT: forceUnlock isLoadingTrackRef après 8s',
         );
         isLoadingTrackRef.current = false;
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     }, LOADING_TIMEOUT_MS);
 
@@ -400,7 +415,7 @@ export const useQuranPlayer = ({
       // S'assurer que le player est initialisé AVANT toute opération
       await setupPlayer();
       // Si le player n'était pas marqué prêt (init effect a échoué), le marquer maintenant
-      if (!isPlayerReady) {
+      if (!isPlayerReady && isMountedRef.current) {
         setIsPlayerReady(true);
       }
 
@@ -537,7 +552,7 @@ export const useQuranPlayer = ({
       const state = await TrackPlayer.getPlaybackState();
       if (state.state === State.Paused) {
         await TrackPlayer.play();
-        setIsPlaying(true);
+        if (isMountedRef.current) setIsPlaying(true);
       } else {
         await loadAndPlayVerse(currentVerseIndexRef.current);
       }

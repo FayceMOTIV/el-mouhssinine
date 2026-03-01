@@ -3,7 +3,9 @@
  * Utilise Firebase Auth pour l'authentification réelle
  */
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
+import firestore, {
+  FirebaseFirestoreTypes,
+} from '@react-native-firebase/firestore';
 import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils';
@@ -307,12 +309,169 @@ export const AuthService = {
   },
 
   /**
+   * Build 255 — Fusionne les doublons backoffice au login.
+   * Si un doc members/{uid} existe ET qu'il y a d'autres docs
+   * avec le même email (créés par le backoffice avec addDoc),
+   * on fusionne les champs non-vides des doublons dans le principal
+   * puis on supprime les doublons.
+   * Si doc(uid) n'existe PAS mais un doc backoffice existe,
+   * on migre le doc backoffice vers doc(uid).
+   */
+  fusionnerDoublonBackoffice: async (
+    user: FirebaseAuthTypes.User,
+  ): Promise<void> => {
+    try {
+      const uid = user.uid;
+      const email = user.email?.toLowerCase()?.trim();
+      if (!email) return;
+
+      // Chercher TOUS les docs avec cet email
+      const emailQuery = await firestore()
+        .collection('members')
+        .where('email', '==', email)
+        .get();
+
+      if (emailQuery.empty || emailQuery.size <= 1) {
+        // 0 ou 1 doc → pas de doublon, rien à faire
+        // Mais vérifier si le doc unique n'est PAS doc(uid) → migration nécessaire
+        if (emailQuery.size === 1) {
+          const singleDoc = emailQuery.docs[0];
+          if (singleDoc.id !== uid) {
+            // Doc backoffice trouvé mais PAS doc(uid) → migrer vers doc(uid)
+            const data = singleDoc.data();
+            logger.log(
+              '[Auth] Migration doc backoffice vers doc(uid):',
+              singleDoc.id,
+              '→',
+              uid,
+            );
+            await firestore()
+              .collection('members')
+              .doc(uid)
+              .set({
+                ...data,
+                uid: uid,
+                mergedFrom: [singleDoc.id],
+                mergedAt: firestore.FieldValue.serverTimestamp(),
+              });
+            await firestore().collection('members').doc(singleDoc.id).delete();
+            logger.log('[Auth] Migration terminée, ancien doc supprimé');
+          }
+        }
+        return;
+      }
+
+      // 2+ docs avec le même email → fusion nécessaire
+      logger.log(
+        '[Auth] Doublons détectés pour',
+        email,
+        ':',
+        emailQuery.size,
+        'docs',
+      );
+
+      // Chercher le doc principal = doc(uid) ou celui avec le bon uid
+      let principal: FirebaseFirestoreTypes.QueryDocumentSnapshot | null = null;
+      const doublons: FirebaseFirestoreTypes.QueryDocumentSnapshot[] = [];
+
+      emailQuery.docs.forEach(doc => {
+        if (doc.id === uid || doc.data().uid === uid) {
+          if (!principal) {
+            principal = doc;
+          } else {
+            doublons.push(doc);
+          }
+        } else {
+          doublons.push(doc);
+        }
+      });
+
+      // Si aucun doc n'a l'uid actuel, prendre le plus récent comme principal
+      if (!principal) {
+        const sorted = [...emailQuery.docs].sort((a, b) => {
+          const aDate = a.data().createdAt?.toDate?.() || new Date(0);
+          const bDate = b.data().createdAt?.toDate?.() || new Date(0);
+          return bDate.getTime() - aDate.getTime();
+        });
+        principal = sorted[0];
+        doublons.length = 0;
+        sorted.slice(1).forEach(d => doublons.push(d));
+      }
+
+      if (doublons.length === 0) return;
+
+      // Fusionner les champs non-vides des doublons dans le principal
+      const principalData = { ...principal.data() };
+      const champsFusionnes: string[] = [];
+
+      doublons.forEach(doublon => {
+        const doublonData = doublon.data();
+        Object.keys(doublonData).forEach(key => {
+          const valPrincipal = principalData[key];
+          const valDoublon = doublonData[key];
+          const principalVide =
+            valPrincipal === undefined ||
+            valPrincipal === null ||
+            valPrincipal === '';
+          const doublonNonVide =
+            valDoublon !== undefined &&
+            valDoublon !== null &&
+            valDoublon !== '';
+          if (principalVide && doublonNonVide) {
+            principalData[key] = valDoublon;
+            champsFusionnes.push(key);
+          }
+        });
+      });
+
+      // Écrire le doc fusionné dans doc(uid)
+      await firestore()
+        .collection('members')
+        .doc(uid)
+        .set({
+          ...principalData,
+          uid: uid,
+          mergedFrom: doublons.map(d => d.id),
+          mergedAt: firestore.FieldValue.serverTimestamp(),
+        });
+
+      // Supprimer les doublons
+      for (const doublon of doublons) {
+        await firestore().collection('members').doc(doublon.id).delete();
+        logger.log('[Auth] Doublon supprimé:', doublon.id);
+      }
+
+      // Si le principal n'était pas doc(uid), supprimer l'ancien aussi
+      if (principal.id !== uid) {
+        await firestore().collection('members').doc(principal.id).delete();
+        logger.log('[Auth] Ancien principal migré et supprimé:', principal.id);
+      }
+
+      logger.log(
+        '[Auth] Fusion terminée:',
+        champsFusionnes.length,
+        'champs récupérés,',
+        doublons.length,
+        'doublons supprimés',
+      );
+    } catch (error) {
+      // Non bloquant — on log l'erreur mais on ne bloque pas le login
+      logger.error('[Auth] Erreur fusion doublons (non bloquant):', error);
+    }
+  },
+
+  /**
    * Obtenir le profil membre depuis Firestore
    */
   getMemberProfile: async (uid: string): Promise<MemberProfile | null> => {
     try {
       const user = auth().currentUser;
       const userEmail = user?.email?.toLowerCase();
+
+      // Build 255 — Fusionner les doublons backoffice AVANT le chargement du profil
+      if (user) {
+        await AuthService.fusionnerDoublonBackoffice(user);
+      }
 
       // Helper pour mettre à jour les champs manquants et retourner le profil
       const processAndReturnProfile = async (memberDoc: any, docData: any) => {

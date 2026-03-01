@@ -23,7 +23,8 @@ import {
   subscribeToPayments,
   getPaymentStats,
   PaymentType,
-  subscribeToMessages
+  subscribeToMessages,
+  checkDuplicateMemberEmail
 } from '../services/firebase'
 import { useAuth } from '../context/AuthContext'
 import { getFunctions, httpsCallable } from 'firebase/functions'
@@ -620,6 +621,7 @@ export default function Adherents() {
     try {
       const data = {
         ...formData,
+        email: (formData.email || '').trim().toLowerCase(),
         cotisation: {
           ...formData.cotisation,
           dateDebut: formData.cotisation.dateDebut ? new Date(formData.cotisation.dateDebut) : null,
@@ -631,6 +633,29 @@ export default function Adherents() {
         await updateDocument('members', editingMembre.id, data)
         toast.success('Membre mis à jour')
       } else {
+        // Anti-doublon : vérifier si un membre avec cet email existe déjà
+        if (data.email) {
+          const existant = await checkDuplicateMemberEmail(data.email)
+          if (existant) {
+            const confirmer = window.confirm(
+              `⚠️ Un membre avec l'email ${data.email} existe déjà.\n\n` +
+              `Nom : ${existant.prenom || ''} ${existant.nom || ''}\n` +
+              `Statut : ${existant.status || 'inconnu'}\n` +
+              `ID : ${existant.id}\n\n` +
+              `Voulez-vous ouvrir sa fiche pour la modifier ?`
+            )
+            if (confirmer) {
+              setEditingMembre(existant)
+              setFormData({
+                ...defaultMembre,
+                ...existant,
+                cotisation: { ...defaultMembre.cotisation, ...(existant.cotisation || {}) }
+              })
+            }
+            setSaving(false)
+            return
+          }
+        }
         await addDocument('members', data)
         toast.success('Membre créé')
       }

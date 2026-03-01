@@ -1789,8 +1789,8 @@ export const getMyMembership = async (
 };
 
 // Listener temps réel pour les adhésions (mise à jour automatique depuis le backoffice)
-// Build 254 Fix: requête par UID d'abord (comme subscribeToMemberProfile)
-// pour trouver le MÊME document que la carte membre et éviter les incohérences.
+// Build 255 Fix: recherche par doc ID = uid d'abord (comme getMemberProfile dans auth.ts)
+// puis champ uid, puis email. Garantit de trouver le MÊME document que la carte membre.
 export const subscribeToMyMembership = (
   email: string,
   callback: (membership: MyMembership | null, error?: string) => void,
@@ -1836,59 +1836,84 @@ export const subscribeToMyMembership = (
   };
 
   try {
-    // Stratégie : UID d'abord (même document que la carte membre),
-    // fallback email pour les membres créés depuis le backoffice.
+    // Stratégie ALIGNÉE sur getMemberProfile (auth.ts) :
+    // 1. doc(uid) — doc ID = uid (créé par signup app)
+    // 2. where('uid', '==', uid) — champ uid (créé par backoffice puis lié)
+    // 3. where('email', '==', email) — fallback email
+    // Ceci garantit que MemberCardFullScreen et MyMembershipsScreen trouvent le MÊME document.
     const currentUser = auth().currentUser;
     const uid = currentUser?.uid;
 
     if (uid) {
-      // Écouter par UID d'abord
-      return firestore()
-        .collection('members')
-        .where('uid', '==', uid)
-        .limit(1)
-        .onSnapshot(
-          async snapshot => {
-            if (!snapshot.empty) {
-              const doc = snapshot.docs[0];
-              callback(mapDocToMembership(doc, doc.data()));
+      // Phase 1 : vérifier si doc(uid) existe (doc ID = uid, créé par signup)
+      // Si oui, écouter CE document en temps réel
+      // Si non, fallback sur where('uid', '==', uid) puis email
+      const docRef = firestore().collection('members').doc(uid);
+
+      return docRef.onSnapshot(
+        async docSnapshot => {
+          if (docSnapshot.exists()) {
+            // Document trouvé par doc ID = uid (cas principal)
+            const data = docSnapshot.data();
+            // S'assurer que le champ uid est présent pour cohérence
+            if (data && !data.uid) {
+              try {
+                await docRef.update({ uid });
+              } catch {}
+            }
+            callback(mapDocToMembership(docSnapshot, data));
+            return;
+          }
+
+          // Doc ID = uid n'existe pas → chercher par champ uid
+          try {
+            const uidSnapshot = await firestore()
+              .collection('members')
+              .where('uid', '==', uid)
+              .limit(1)
+              .get();
+
+            if (!uidSnapshot.empty) {
+              const uidDoc = uidSnapshot.docs[0];
+              callback(mapDocToMembership(uidDoc, uidDoc.data()));
               return;
             }
 
             // Fallback : chercher par email (membre créé depuis backoffice sans uid)
-            try {
-              const emailSnapshot = await firestore()
-                .collection('members')
-                .where('email', '==', email.toLowerCase())
-                .limit(1)
-                .get();
+            const emailSnapshot = await firestore()
+              .collection('members')
+              .where('email', '==', email.toLowerCase())
+              .limit(1)
+              .get();
 
-              if (!emailSnapshot.empty) {
-                const doc = emailSnapshot.docs[0];
-                const data = doc.data();
+            if (!emailSnapshot.empty) {
+              const emailDoc = emailSnapshot.docs[0];
+              const data = emailDoc.data();
 
-                // Lier le UID au document pour les prochaines requêtes
-                if (!data.uid) {
-                  await doc.ref.update({ uid });
-                }
-
-                callback(mapDocToMembership(doc, data));
-              } else {
-                callback(null);
+              // Lier le UID au document pour les prochaines requêtes
+              if (data && !data.uid) {
+                try {
+                  await emailDoc.ref.update({ uid });
+                } catch {}
               }
-            } catch (emailError) {
-              logger.error(
-                '[Firebase] subscribeToMyMembership email fallback error:',
-                emailError,
-              );
+
+              callback(mapDocToMembership(emailDoc, data));
+            } else {
               callback(null);
             }
-          },
-          error => {
-            logger.error('[Firebase] subscribeToMyMembership error:', error);
-            callback(null, 'firestore_error');
-          },
-        );
+          } catch (fallbackError) {
+            logger.error(
+              '[Firebase] subscribeToMyMembership fallback error:',
+              fallbackError,
+            );
+            callback(null);
+          }
+        },
+        error => {
+          logger.error('[Firebase] subscribeToMyMembership error:', error);
+          callback(null, 'firestore_error');
+        },
+      );
     }
 
     // Pas d'UID : écouter par email directement
