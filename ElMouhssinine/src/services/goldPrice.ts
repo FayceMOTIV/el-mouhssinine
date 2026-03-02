@@ -2,17 +2,19 @@
  * Service pour le calcul du Nisab basé sur le cours de l'or
  * Nisab = 85 grammes d'or
  *
- * Utilise l'API gratuite goldprice.org (pas de clé requise)
+ * Stratégie API :
+ * 1. NBP (Banque Nationale de Pologne) → prix or en PLN/gramme (gratuit, sans clé)
+ * 2. Frankfurter → taux EUR/PLN (gratuit, sans clé)
+ * 3. Fallback → prix statique 141€/g (mars 2026)
  */
 
 const GOLD_GRAMS_NISAB = 85;
-const DEFAULT_GOLD_PRICE = 135; // €/gramme (fallback - cours approximatif février 2026)
-const TROY_OUNCE_TO_GRAMS = 31.1035; // 1 once troy = 31.1035 grammes
+const DEFAULT_GOLD_PRICE = 141; // €/gramme (fallback - cours mars 2026)
 
-// Cache pour éviter trop de requêtes (durée: 1 heure)
+// Cache pour éviter trop de requêtes (durée: 6 heures)
 let cachedPrice: number | null = null;
 let cacheTimestamp: number = 0;
-const CACHE_DURATION = 60 * 60 * 1000; // 1 heure en ms
+const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 heures en ms
 
 export interface GoldPriceResult {
   pricePerGram: number;
@@ -21,7 +23,7 @@ export interface GoldPriceResult {
 }
 
 /**
- * Récupère le prix de l'or au gramme depuis l'API goldprice.org
+ * Récupère le prix de l'or au gramme en EUR via NBP + Frankfurter
  * @returns Prix en €/gramme et indicateur temps réel
  */
 export const getGoldPricePerGram = async (): Promise<GoldPriceResult> => {
@@ -36,41 +38,46 @@ export const getGoldPricePerGram = async (): Promise<GoldPriceResult> => {
   }
 
   try {
-    // API goldprice.org - gratuite, pas de clé requise
-    const response = await fetch('https://data-asg.goldprice.org/dbXRates/EUR', {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+    // Étape 1 : Prix or en PLN/gramme (NBP - gratuit, sans clé)
+    const [goldRes, fxRes] = await Promise.all([
+      fetch('https://api.nbp.pl/api/cenyzlota?format=json', {
+        headers: { 'Accept': 'application/json' },
+      }),
+      // Étape 2 : Taux EUR/PLN (Frankfurter - gratuit, sans clé)
+      fetch('https://api.frankfurter.app/latest?from=EUR&to=PLN', {
+        headers: { 'Accept': 'application/json' },
+      }),
+    ]);
 
-    if (!response.ok) {
-      throw new Error('API response not ok');
+    if (!goldRes.ok || !fxRes.ok) {
+      throw new Error(`API response not ok: gold=${goldRes.status} fx=${fxRes.status}`);
     }
 
-    const data = await response.json();
+    const goldData = await goldRes.json();
+    const fxData = await fxRes.json();
 
-    // xauPrice = prix par once troy en EUR
-    if (data.items && data.items[0] && data.items[0].xauPrice) {
-      const pricePerOunce = data.items[0].xauPrice;
-      const pricePerGram = Math.round(pricePerOunce / TROY_OUNCE_TO_GRAMS);
+    const goldPricePLN = goldData?.[0]?.cena;
+    const eurToPln = fxData?.rates?.PLN;
 
-      // Mettre en cache
-      cachedPrice = pricePerGram;
-      cacheTimestamp = now;
-
-      return {
-        pricePerGram,
-        isRealTime: true,
-        timestamp: new Date(),
-      };
+    if (!goldPricePLN || !eurToPln || eurToPln === 0) {
+      throw new Error('Invalid API data');
     }
 
-    throw new Error('Invalid API response format');
+    const pricePerGram = Math.round(goldPricePLN / eurToPln);
+
+    // Mettre en cache
+    cachedPrice = pricePerGram;
+    cacheTimestamp = now;
+
+    return {
+      pricePerGram,
+      isRealTime: true,
+      timestamp: new Date(),
+    };
   } catch (error) {
-    console.log('[GoldPrice] API failed, using fallback price:', error);
+    console.log('[GoldPrice] APIs failed, using fallback price:', error);
 
-    // Fallback si l'API échoue
+    // Fallback si les APIs échouent
     return {
       pricePerGram: DEFAULT_GOLD_PRICE,
       isRealTime: false,

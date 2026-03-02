@@ -255,8 +255,8 @@ const DonationsScreen = () => {
   const [zakatInvestissements, setZakatInvestissements] = useState(''); // Actions, SCPI, parts sociales
 
   // Nisab dynamique basé sur le cours de l'or
-  const [nisab, setNisab] = useState(5950); // 85g × 70€ (valeur par défaut)
-  const [goldPrice, setGoldPrice] = useState(70);
+  const [nisab, setNisab] = useState(11985); // 85g × 141€ (fallback mars 2026)
+  const [goldPrice, setGoldPrice] = useState(141);
   const [isGoldPriceRealTime, setIsGoldPriceRealTime] = useState(false);
 
   const amounts = [10, 20, 50, 100, 200, 500];

@@ -207,9 +207,11 @@ const MemberScreen = () => {
   const memberProfileUnsubscribeRef = useRef<(() => void) | null>(null);
   const paymentHistoryUnsubscribeRef = useRef<(() => void) | null>(null);
   const donationHistoryUnsubscribeRef = useRef<(() => void) | null>(null);
+  const donationByEmailUnsubscribeRef = useRef<(() => void) | null>(null);
   // Build 249 - Refs pour fusionner payments + donations en temps réel
   const paymentsRef = React.useRef<any[]>([]);
   const donationsRef = React.useRef<any[]>([]);
+  const donationsByEmailRef = React.useRef<any[]>([]);
 
   useEffect(() => {
     const unsubscribe = AuthService.onAuthStateChanged(async user => {
@@ -232,6 +234,10 @@ const MemberScreen = () => {
       if (donationHistoryUnsubscribeRef.current) {
         donationHistoryUnsubscribeRef.current();
         donationHistoryUnsubscribeRef.current = null;
+      }
+      if (donationByEmailUnsubscribeRef.current) {
+        donationByEmailUnsubscribeRef.current();
+        donationByEmailUnsubscribeRef.current = null;
       }
 
       if (user) {
@@ -316,9 +322,18 @@ const MemberScreen = () => {
         // Build 249 - Historique paiements + dons fusionnés en temps réel
         setLoadingHistory(true);
 
-        // Fonction de fusion payments + donations, triés par date
+        // Fonction de fusion payments + donations (par uid + par email), triés par date, dédupliqués
         const mergeAndSetHistory = () => {
-          const all = [...paymentsRef.current, ...donationsRef.current];
+          // Fusionner donations par uid + par email, dédupliquer par id
+          const donationsMap = new Map<string, any>();
+          donationsRef.current.forEach((d: any) => donationsMap.set(d.id, d));
+          donationsByEmailRef.current.forEach((d: any) => {
+            if (!donationsMap.has(d.id)) donationsMap.set(d.id, d);
+          });
+          const all = [
+            ...paymentsRef.current,
+            ...Array.from(donationsMap.values()),
+          ];
           all.sort((a: any, b: any) => {
             const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
             const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
@@ -348,10 +363,14 @@ const MemberScreen = () => {
               }));
               mergeAndSetHistory();
             },
-            error => {
-              if (__DEV__)
-                console.error('Error loading payment history:', error);
-              setLoadingHistory(false);
+            (error: any) => {
+              console.warn(
+                '[MemberScreen] payments query error:',
+                error?.code,
+                error?.message,
+              );
+              paymentsRef.current = [];
+              mergeAndSetHistory();
             },
           );
         paymentHistoryUnsubscribeRef.current = unsubHistory;
@@ -376,6 +395,29 @@ const MemberScreen = () => {
           );
         donationHistoryUnsubscribeRef.current = unsubDonations;
 
+        // Build 261 - Second listener donations par email (attrape les dons sans userId)
+        const userEmail = user.email?.toLowerCase();
+        if (userEmail) {
+          const unsubDonationsByEmail = firestore()
+            .collection('donations')
+            .where('donateurEmail', '==', userEmail)
+            .onSnapshot(
+              snapshot => {
+                donationsByEmailRef.current = snapshot.docs.map(doc => ({
+                  id: doc.id,
+                  _type: 'donation',
+                  ...doc.data(),
+                }));
+                mergeAndSetHistory();
+              },
+              error => {
+                if (__DEV__)
+                  console.error('Error loading donations by email:', error);
+              },
+            );
+          donationByEmailUnsubscribeRef.current = unsubDonationsByEmail;
+        }
+
         // S'abonner aux notifications et sauvegarder le token
         await subscribeToMembersTopic();
         await saveFCMTokenToFirestore(user.uid);
@@ -383,6 +425,7 @@ const MemberScreen = () => {
         // Listeners déjà nettoyés en haut du callback (lignes 163-174)
         paymentsRef.current = [];
         donationsRef.current = [];
+        donationsByEmailRef.current = [];
         setIsLoggedIn(false);
         setMemberProfile(null);
         setIsPaid(false);
@@ -407,6 +450,9 @@ const MemberScreen = () => {
       }
       if (donationHistoryUnsubscribeRef.current) {
         donationHistoryUnsubscribeRef.current();
+      }
+      if (donationByEmailUnsubscribeRef.current) {
+        donationByEmailUnsubscribeRef.current();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Runs once on mount, cleanup handled internally
@@ -1848,7 +1894,11 @@ const MemberScreen = () => {
                       onPress={() => setShowPaymentModal(true)}
                     >
                       <Text style={styles.renewButtonText}>
-                        ⚠️ Expire dans {daysLeft} jours - Renouveler
+                        {'⚠️ ' +
+                          t('expiresInDays').replace(
+                            '{days}',
+                            String(daysLeft),
+                          )}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1859,7 +1909,7 @@ const MemberScreen = () => {
             {/* Build 249 - Historique paiements + dons par année */}
             <View style={styles.card}>
               <Text style={[styles.cardTitle, { marginBottom: 16 }]}>
-                💳 Historique des paiements et dons
+                {'💳 ' + t('paymentHistoryTitle')}
               </Text>
 
               {/* Boutons années */}
@@ -1926,7 +1976,10 @@ const MemberScreen = () => {
                           { textAlign: 'center', paddingVertical: 16 },
                         ]}
                       >
-                        Aucun paiement en {historyYear}
+                        {t('noPaymentsInYear').replace(
+                          '{year}',
+                          String(historyYear),
+                        )}
                       </Text>
                     );
                   }
@@ -1946,34 +1999,45 @@ const MemberScreen = () => {
                         const date =
                           payment.createdAt?.toDate?.() ||
                           new Date(payment.createdAt);
-                        const dateStr = date.toLocaleDateString('fr-FR', {
+                        const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
+                        const dateStr = date.toLocaleDateString(locale, {
                           day: '2-digit',
                           month: 'short',
                           year: 'numeric',
                         });
+                        const timeStr = date.toLocaleTimeString(locale, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        });
+                        const fullDateStr = `${dateStr} ${t(
+                          'atTimeShort',
+                        )} ${timeStr}`;
 
-                        // Build 249 - Affichage différencié dons vs cotisations
+                        // Build 261 - Affichage différencié dons vs cotisations avec emojis + i18n
                         const isDonation = payment._type === 'donation';
                         const type = isDonation
-                          ? `Don${
+                          ? `🤲 ${t('paymentTypeDonation')}${
                               payment.projetNom ? ' — ' + payment.projetNom : ''
                             }`
                           : payment.metadata?.period === 'mensuel'
-                          ? 'Cotisation Mensuel'
-                          : 'Cotisation Annuel';
+                          ? `🔄 ${t('paymentTypeCotisationMensuel')}`
+                          : `📋 ${t('paymentTypeCotisationAnnuel')}`;
 
-                        let status = 'payé';
+                        const paymentMethod =
+                          payment.modePaiement || payment.paymentMethod;
+
+                        let status = t('statusPaid');
                         let statusColor = colors.accent;
                         if (isDonation) {
                           if (payment.statut === 'refunded') {
-                            status = 'remboursé';
+                            status = t('statusRefunded');
                             statusColor = '#f97316';
                           }
                         } else if (payment.status === 'refunded') {
-                          status = 'remboursé';
+                          status = t('statusRefunded');
                           statusColor = '#f97316';
                         } else if (payment.status === 'failed') {
-                          status = 'échoué';
+                          status = t('statusFailed');
                           statusColor = '#ef4444';
                         }
 
@@ -1988,11 +2052,24 @@ const MemberScreen = () => {
                           >
                             <View style={{ flex: 1 }}>
                               <Text style={styles.paymentHistoryDate}>
-                                {dateStr}
+                                {fullDateStr}
                               </Text>
                               <Text style={styles.paymentHistoryType}>
                                 {type}
                               </Text>
+                              {paymentMethod ? (
+                                <Text
+                                  style={[
+                                    styles.paymentHistoryType,
+                                    { fontSize: 11, opacity: 0.6 },
+                                  ]}
+                                >
+                                  {t('paymentMethodLabel')} :{' '}
+                                  {paymentMethod === 'card'
+                                    ? t('paymentMethodCB')
+                                    : paymentMethod}
+                                </Text>
+                              ) : null}
                             </View>
                             <View style={{ alignItems: 'flex-end' }}>
                               <Text style={styles.paymentHistoryAmount}>
