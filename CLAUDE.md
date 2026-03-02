@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 255
+- **Build actuel** : 261
 - **Version marketing** : Geree dans project.pbxproj (MARKETING_VERSION)
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
@@ -751,6 +751,96 @@ useEffect(() => {
 - [x] Info.plist CFBundleVersion : 254 → 255
 - [x] project.pbxproj CURRENT_PROJECT_VERSION : 254 → 255 (2 occurrences)
 
+## Corrige (2 Mar 2026 - Build 261)
+
+### Historique paiements — i18n + date/heure + emojis
+- [x] i18n/index.ts : 12 cles FR + 12 cles AR ajoutees (paymentHistoryTitle, statusPaid, etc.)
+- [x] MemberScreen.tsx : Date + heure affichees (ex: "15 janv. 2026 a 14:30")
+- [x] MemberScreen.tsx : Emojis differencies (🤲 Don, 🔄 Cotisation mensuelle, 📋 Cotisation annuelle)
+- [x] MemberScreen.tsx : Statuts traduits i18n (paye/rembourse/echoue)
+- [x] MemberScreen.tsx : Mode de paiement affiche si disponible
+- [x] MemberScreen.tsx : Textes hardcodes remplaces par t() (titre, aucun paiement, expire dans X jours)
+- [x] MemberScreen.tsx : Support locale arabe (ar-SA) pour les dates
+
+### Fix cotisations manquantes dans historique
+- [x] MemberScreen.tsx : Error handler payments ameliore (console.warn toujours actif, reset paymentsRef + mergeAndSetHistory au lieu de juste setLoadingHistory)
+- [x] functions/index.js : Ajout `createdAt` dans le webhook payment_intent.succeeded (merge: true) pour garantir la date meme si l'app n'a pas ecrit en premier
+
+### Email annulation cotisation immediate
+- [x] functions/index.js : Email envoye immediatement dans cancelSubscription() (avant le return)
+- [x] Template cotisation_cancel_pending avec fallback hardcode
+- [x] Header gradient orange (#f57c00, #ffb74d) pour distinguer de l'email final (gris)
+- [x] Contenu : confirmation prise en compte, acces maintenu jusqu'a fin de periode, possibilite reabonnement
+- [x] L'email existant du webhook customer.subscription.deleted reste intact (second email a expiration reelle)
+
+### Fix bouton Zakat (DonationsScreen)
+- [x] DonationsScreen.tsx : Bouton "Donner ma Zakat" navigue vers la page formulaire (setDonPage('formulaire'))
+- [x] Montant Zakat affiche dans le champ "Autre montant" (setCustomAmount au lieu de setSelectedAmount)
+- [x] Cause 1 : le bouton restait sur page 'choix' sans selectedProject → paiement impossible
+- [x] Cause 2 : le montant calcule (ex: 148€) etait dans selectedAmount mais invisible (aucun bouton predefini ne matchait)
+- [x] Fix : setCustomAmount(String(zakatInt)) + setSelectedAmount(null) + setDonPage('formulaire')
+
+### Fichiers modifies
+- ElMouhssinine/src/i18n/index.ts
+- ElMouhssinine/src/screens/MemberScreen.tsx
+- ElMouhssinine/src/screens/DonationsScreen.tsx
+- functions/index.js
+
+## Corrige (2 Mar 2026 - Build 260)
+
+### 6 Bugs corriges + Popup ciblage
+
+#### App mobile (MemberScreen.tsx)
+- [x] Bug 1 : Zakat montant non pre-rempli — setCustomAmount + setSelectedAmount(null) + setDonPage
+- [x] Bug 2 : showPaymentModal fermait puis rouvrait immediatement (double setState)
+- [x] Bug 3 : Zakat modal triple TouchableWithoutFeedback bloquait tous les taps
+- [x] Bug 4 : Texte renouvellement affichait 0 jours quand date fin = aujourd'hui
+
+#### App mobile (DonationsScreen.tsx)
+- [x] Bug 5 : Formulaire donateur gardait le code postal/ville du precedent donateur
+- [x] Bug 6 : Donateur anonyme — nom "Anonyme" pas envoye dans metadata Stripe
+
+#### Cloud Functions (functions/index.js)
+- [x] Permission Firestore manquante pour lecture donations par email (firestore.rules)
+
+#### Backoffice (Popups.jsx)
+- [x] Ajout options ciblage iOS/Android dans le formulaire de creation de popup
+- [x] Affichage iOS/Android dans la colonne Cible du tableau
+
+#### i18n
+- [x] 14 nouvelles cles FR/AR (paymentHistoryTitle, paymentTypeDonation, paymentTypeCotisationMensuel, etc.)
+
+### Fichiers modifies
+- ElMouhssinine/src/screens/MemberScreen.tsx
+- ElMouhssinine/src/screens/DonationsScreen.tsx
+- ElMouhssinine/src/i18n/index.ts
+- functions/index.js
+- el-mouhssinine-backoffice/src/pages/Popups.jsx
+
+## Corrige (2 Mar 2026 - Build 261)
+
+### Gold Price API — remplacement complet
+- [x] goldprice.org renvoyait "Forbidden" — API morte
+- [x] Nouveau service : NBP (Banque Nationale Pologne, PLN/g) + Frankfurter (EUR/PLN)
+- [x] Les deux APIs sont gratuites, sans cle, fiables
+- [x] Calcul : goldPricePLN / eurToPln = EUR/gramme (~140€/g en mars 2026)
+- [x] Cache augmente de 1h a 6h
+- [x] Fallback mis a jour : 141€/g (au lieu de 135€/g)
+- [x] DonationsScreen.tsx : nisab initial corrige de 5950€ (70€/g) a 11985€ (141€/g)
+
+### Historique dons invisible — fix requete Firestore
+- [x] Probleme : 12 dons crees par webhook Stripe n'avaient pas de userId → invisibles dans l'historique
+- [x] Cause : webhook ligne 1713 `userId: metadata.userId || metadata.donorUid || ''` met vide si pas dans metadata
+- [x] Fix : 2e listener `where('donateurEmail', '==', userEmail)` dans MemberScreen.tsx
+- [x] Deduplication par Map<docId, data> pour eviter les doublons (meme don trouve par uid ET email)
+- [x] Cleanup du 2e listener sur auth change + unmount
+- [x] Firestore rules deja OK (ligne 127 : `donateurEmail == request.auth.token.email`)
+
+### Fichiers modifies
+- ElMouhssinine/src/services/goldPrice.ts : remplacement complet API
+- ElMouhssinine/src/screens/DonationsScreen.tsx : nisab initial 141€/g
+- ElMouhssinine/src/screens/MemberScreen.tsx : 2e listener donations par email + dedup
+
 ## Bugs connus / Pieges
 
 ### FlatList + getItemLayout + ListHeaderComponent
@@ -773,6 +863,19 @@ Ces deux fonctions DOIVENT chercher dans le meme ordre : `doc(uid)` d'abord (ID 
 
 ### Statuts membres
 Les statuts doivent etre en francais minuscule : `actif`, `expire`, `sympathisant`, `annule`, `en_attente`. Le backoffice et l'app doivent utiliser les memes valeurs (definies dans `types.js`).
+
+### Gold Price API
+Ne PAS utiliser goldprice.org (renvoie Forbidden depuis mars 2026). Utiliser NBP + Frankfurter :
+- `https://api.nbp.pl/api/cenyzlota?format=json` → `[0].cena` (PLN/gramme)
+- `https://api.frankfurter.app/latest?from=EUR&to=PLN` → `.rates.PLN`
+- EUR/gramme = cena / rates.PLN
+- Cache 6h, fallback 141€/g
+
+### TouchableWithoutFeedback nesting (React Native)
+Ne PAS imbriquer 3+ niveaux de `TouchableWithoutFeedback`. Le wrapper externe capture tous les taps avant qu'ils atteignent les enfants. Maximum 2 niveaux : overlay (ferme le modal) → contenu (bloque la propagation avec `onPress={() => {}}`).
+
+### Historique dons — double query
+La requete `where('userId', '==', uid)` ne suffit pas : les dons crees par le webhook Stripe n'ont souvent pas de userId. Toujours combiner avec `where('donateurEmail', '==', email)` et dedupliquer par doc.id via Map.
 
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
