@@ -16,6 +16,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import {
   colors,
@@ -2015,187 +2017,220 @@ const DonationsScreen = () => {
 
       {/* Modal Zakat */}
       <Modal visible={showZakatModal} transparent animationType="fade">
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={20}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.zakatModalContainer}>
-              <ScrollView
-                style={{ flex: 1 }}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={true}
-                bounces={false}
-              >
-                <View style={styles.zakatModalContent}>
-                  <TouchableOpacity
-                    style={styles.closeBtn}
-                    onPress={() => setShowZakatModal(false)}
-                  >
-                    <Text style={styles.closeBtnText}>×</Text>
-                  </TouchableOpacity>
-                  <Text style={[styles.modalTitle, isRTL && styles.rtlText]}>
-                    🧮 {t('zakatCalculator')}
-                  </Text>
-
-                  <View style={styles.nisabInfo}>
-                    <Text style={[styles.nisabText, isRTL && styles.rtlText]}>
-                      <Text style={styles.nisabBold}>
-                        📌 {t('currentNisab')} :{' '}
-                      </Text>
-                      ~{nisab.toLocaleString()}€
-                    </Text>
-                    <Text
-                      style={[styles.nisabSubtext, isRTL && styles.rtlText]}
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={20}
+          >
+            <TouchableWithoutFeedback onPress={() => setShowZakatModal(false)}>
+              <View style={styles.modalOverlay}>
+                <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
+                  <View style={styles.zakatModalContainer}>
+                    <ScrollView
+                      style={{ flex: 1 }}
+                      keyboardShouldPersistTaps="handled"
+                      showsVerticalScrollIndicator={true}
+                      bounces={false}
                     >
-                      {language === 'ar'
-                        ? `(قيمة 85 غرام ذهب بسعر ${goldPrice}€/غ)`
-                        : `(Valeur de 85g d'or à ${goldPrice}€/g)`}
-                    </Text>
-                    <View
-                      style={[
-                        styles.goldPriceIndicator,
-                        isGoldPriceRealTime
-                          ? styles.goldPriceRealTime
-                          : styles.goldPriceApprox,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.goldPriceIndicatorText,
-                          isGoldPriceRealTime
-                            ? styles.goldPriceRealTimeText
-                            : styles.goldPriceApproxText,
-                        ]}
-                      >
-                        {isGoldPriceRealTime
-                          ? language === 'ar'
-                            ? '✓ سعر الذهب في الوقت الفعلي'
-                            : "✓ Cours de l'or en temps réel"
-                          : language === 'ar'
-                          ? '⚠️ سعر تقريبي'
-                          : '⚠️ Cours approximatif'}
-                      </Text>
-                    </View>
-                  </View>
+                      <View style={styles.zakatModalContent}>
+                        <TouchableOpacity
+                          style={styles.closeBtn}
+                          onPress={() => setShowZakatModal(false)}
+                        >
+                          <Text style={styles.closeBtnText}>×</Text>
+                        </TouchableOpacity>
+                        <Text
+                          style={[styles.modalTitle, isRTL && styles.rtlText]}
+                        >
+                          🧮 {t('zakatCalculator')}
+                        </Text>
 
-                  <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>
-                    💰 {t('savingsLabel')}
-                  </Text>
-                  <TextInput
-                    style={[styles.zakatInput, isRTL && styles.rtlText]}
-                    placeholder="0"
-                    keyboardType="numeric"
-                    value={zakatEpargne}
-                    onChangeText={setZakatEpargne}
-                  />
+                        <View style={styles.nisabInfo}>
+                          <Text
+                            style={[styles.nisabText, isRTL && styles.rtlText]}
+                          >
+                            <Text style={styles.nisabBold}>
+                              📌 {t('currentNisab')} :{' '}
+                            </Text>
+                            ~{nisab.toLocaleString()}€
+                          </Text>
+                          <Text
+                            style={[
+                              styles.nisabSubtext,
+                              isRTL && styles.rtlText,
+                            ]}
+                          >
+                            {language === 'ar'
+                              ? `(قيمة 85 غرام ذهب بسعر ${goldPrice}€/غ)`
+                              : `(Valeur de 85g d'or à ${goldPrice}€/g)`}
+                          </Text>
+                          <View
+                            style={[
+                              styles.goldPriceIndicator,
+                              isGoldPriceRealTime
+                                ? styles.goldPriceRealTime
+                                : styles.goldPriceApprox,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.goldPriceIndicatorText,
+                                isGoldPriceRealTime
+                                  ? styles.goldPriceRealTimeText
+                                  : styles.goldPriceApproxText,
+                              ]}
+                            >
+                              {isGoldPriceRealTime
+                                ? language === 'ar'
+                                  ? '✓ سعر الذهب في الوقت الفعلي'
+                                  : "✓ Cours de l'or en temps réel"
+                                : language === 'ar'
+                                ? '⚠️ سعر تقريبي'
+                                : '⚠️ Cours approximatif'}
+                            </Text>
+                          </View>
+                        </View>
 
-                  <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>
-                    🥇 {t('goldValueLabel')}
-                  </Text>
-                  <TextInput
-                    style={[styles.zakatInput, isRTL && styles.rtlText]}
-                    placeholder="0"
-                    keyboardType="numeric"
-                    value={zakatOr}
-                    onChangeText={setZakatOr}
-                  />
+                        <Text
+                          style={[styles.inputLabel, isRTL && styles.rtlText]}
+                        >
+                          💰 {t('savingsLabel')}
+                        </Text>
+                        <TextInput
+                          style={[styles.zakatInput, isRTL && styles.rtlText]}
+                          placeholder="0"
+                          keyboardType="numeric"
+                          value={zakatEpargne}
+                          onChangeText={setZakatEpargne}
+                        />
 
-                  <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>
-                    📈 {t('investmentsLabel')}
-                  </Text>
-                  <TextInput
-                    style={[styles.zakatInput, isRTL && styles.rtlText]}
-                    placeholder={
-                      language === 'ar'
-                        ? 'أسهم، عقارات...'
-                        : 'Actions, SCPI, parts...'
-                    }
-                    keyboardType="numeric"
-                    value={zakatInvestissements}
-                    onChangeText={setZakatInvestissements}
-                  />
+                        <Text
+                          style={[styles.inputLabel, isRTL && styles.rtlText]}
+                        >
+                          🥇 {t('goldValueLabel')}
+                        </Text>
+                        <TextInput
+                          style={[styles.zakatInput, isRTL && styles.rtlText]}
+                          placeholder="0"
+                          keyboardType="numeric"
+                          value={zakatOr}
+                          onChangeText={setZakatOr}
+                        />
 
-                  <Text style={[styles.inputLabel, isRTL && styles.rtlText]}>
-                    💵 {t('cashValueLabel')}
-                  </Text>
-                  <TextInput
-                    style={[styles.zakatInput, isRTL && styles.rtlText]}
-                    placeholder="0"
-                    keyboardType="numeric"
-                    value={zakatCash}
-                    onChangeText={setZakatCash}
-                  />
+                        <Text
+                          style={[styles.inputLabel, isRTL && styles.rtlText]}
+                        >
+                          📈 {t('investmentsLabel')}
+                        </Text>
+                        <TextInput
+                          style={[styles.zakatInput, isRTL && styles.rtlText]}
+                          placeholder={
+                            language === 'ar'
+                              ? 'أسهم، عقارات...'
+                              : 'Actions, SCPI, parts...'
+                          }
+                          keyboardType="numeric"
+                          value={zakatInvestissements}
+                          onChangeText={setZakatInvestissements}
+                        />
 
-                  <View
-                    style={[
-                      styles.zakatResult,
-                      isZakatEligible && styles.zakatResultEligible,
-                    ]}
-                  >
-                    <Text
-                      style={[styles.zakatTotalLabel, isRTL && styles.rtlText]}
-                    >
-                      {t('totalAssets')} : {totalWealth.toLocaleString()}€
-                    </Text>
-                    {isZakatEligible ? (
-                      <>
+                        <Text
+                          style={[styles.inputLabel, isRTL && styles.rtlText]}
+                        >
+                          💵 {t('cashValueLabel')}
+                        </Text>
+                        <TextInput
+                          style={[styles.zakatInput, isRTL && styles.rtlText]}
+                          placeholder="0"
+                          keyboardType="numeric"
+                          value={zakatCash}
+                          onChangeText={setZakatCash}
+                        />
+
+                        <View
+                          style={[
+                            styles.zakatResult,
+                            isZakatEligible && styles.zakatResultEligible,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.zakatTotalLabel,
+                              isRTL && styles.rtlText,
+                            ]}
+                          >
+                            {t('totalAssets')} : {totalWealth.toLocaleString()}€
+                          </Text>
+                          {isZakatEligible ? (
+                            <>
+                              <Text
+                                style={[
+                                  styles.zakatEligibleText,
+                                  isRTL && styles.rtlText,
+                                ]}
+                              >
+                                ✓ {t('zakatEligible')}
+                              </Text>
+                              <Text style={styles.zakatAmountText}>
+                                {zakatAmount.toFixed(2)}€
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.zakatPercent,
+                                  isRTL && styles.rtlText,
+                                ]}
+                              >
+                                {t('ofYourAssets')}
+                              </Text>
+                            </>
+                          ) : (
+                            <Text
+                              style={[
+                                styles.zakatNotEligible,
+                                isRTL && styles.rtlText,
+                              ]}
+                            >
+                              {t('zakatNotEligible')}
+                            </Text>
+                          )}
+                        </View>
+
+                        {isZakatEligible && (
+                          <TouchableOpacity
+                            style={styles.primaryBtn}
+                            onPress={() => {
+                              setSelectedAmount(Math.ceil(zakatAmount));
+                              setShowZakatModal(false);
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.primaryBtnText,
+                                isRTL && styles.rtlText,
+                              ]}
+                            >
+                              💝 {t('giveMyZakat')} ({zakatAmount.toFixed(0)}€)
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+
                         <Text
                           style={[
-                            styles.zakatEligibleText,
+                            styles.modalDisclaimer,
                             isRTL && styles.rtlText,
                           ]}
                         >
-                          ✓ {t('zakatEligible')}
+                          {t('zakatDisclaimer')}
                         </Text>
-                        <Text style={styles.zakatAmountText}>
-                          {zakatAmount.toFixed(2)}€
-                        </Text>
-                        <Text
-                          style={[styles.zakatPercent, isRTL && styles.rtlText]}
-                        >
-                          {t('ofYourAssets')}
-                        </Text>
-                      </>
-                    ) : (
-                      <Text
-                        style={[
-                          styles.zakatNotEligible,
-                          isRTL && styles.rtlText,
-                        ]}
-                      >
-                        {t('zakatNotEligible')}
-                      </Text>
-                    )}
+                      </View>
+                    </ScrollView>
                   </View>
-
-                  {isZakatEligible && (
-                    <TouchableOpacity
-                      style={styles.primaryBtn}
-                      onPress={() => {
-                        setSelectedAmount(Math.ceil(zakatAmount));
-                        setShowZakatModal(false);
-                      }}
-                    >
-                      <Text
-                        style={[styles.primaryBtnText, isRTL && styles.rtlText]}
-                      >
-                        💝 {t('giveMyZakat')} ({zakatAmount.toFixed(0)}€)
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-
-                  <Text
-                    style={[styles.modalDisclaimer, isRTL && styles.rtlText]}
-                  >
-                    {t('zakatDisclaimer')}
-                  </Text>
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+                </TouchableWithoutFeedback>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Modal Détails du projet */}
@@ -2934,7 +2969,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     width: '100%',
     maxWidth: 380,
-    maxHeight: Dimensions.get('window').height * 0.75,
+    maxHeight: Dimensions.get('window').height * 0.85,
     alignSelf: 'center',
     overflow: 'hidden',
   },

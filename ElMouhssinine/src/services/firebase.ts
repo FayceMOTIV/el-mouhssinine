@@ -1975,58 +1975,79 @@ export const subscribeToMemberProfile = (
     return () => {};
   }
 
+  // Aligné avec getMemberProfile : doc(uid) d'abord, puis where('uid'), puis email
+  const unsubscribers: (() => void)[] = [];
+
   try {
-    // Chercher par UID d'abord, puis par email
-    const query = uid
-      ? firestore().collection('members').where('uid', '==', uid).limit(1)
-      : firestore()
-          .collection('members')
-          .where('email', '==', email.toLowerCase())
-          .limit(1);
-
-    return query.onSnapshot(
-      async snapshot => {
-        // Si pas trouvé par UID, essayer par email
-        if (snapshot.empty && uid && email) {
-          const emailSnapshot = await firestore()
-            .collection('members')
-            .where('email', '==', email.toLowerCase())
-            .limit(1)
-            .get();
-
-          if (!emailSnapshot.empty) {
-            const doc = emailSnapshot.docs[0];
-            const data = doc.data();
-
-            // Lier le UID au document si pas encore fait
-            if (!data.uid) {
-              await doc.ref.update({ uid });
-              // Après update, le listener parent (par UID) captera ce document automatiquement
+    // 1. Écouter doc(uid) en temps réel — source de vérité principale
+    const docUnsub = firestore()
+      .collection('members')
+      .doc(uid)
+      .onSnapshot(
+        async docSnap => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            // Ajouter uid si manquant
+            if (data && !data.uid) {
+              await docSnap.ref.update({ uid });
             }
-
-            // Bug 15 Fix: Pas de onSnapshot imbriqué (memory leak)
-            // On envoie les données immédiatement, le listener parent se mettra à jour
-            callback(buildMemberProfile(doc.id, data));
+            callback(buildMemberProfile(docSnap.id, data || {}));
             return;
           }
-          callback(null);
-          return;
-        }
 
-        if (snapshot.empty) {
-          callback(null);
-          return;
-        }
+          // 2. Fallback : chercher par champ uid (ancien format)
+          try {
+            const uidSnap = await firestore()
+              .collection('members')
+              .where('uid', '==', uid)
+              .limit(1)
+              .get();
 
-        const doc = snapshot.docs[0];
-        const data = doc.data();
-        callback(buildMemberProfile(doc.id, data));
-      },
-      error => {
-        logger.error('[Firebase] subscribeToMemberProfile error:', error);
-        callback(null);
-      },
-    );
+            if (!uidSnap.empty) {
+              const doc = uidSnap.docs[0];
+              callback(buildMemberProfile(doc.id, doc.data()));
+              return;
+            }
+
+            // 3. Fallback : chercher par email (membres créés via backoffice)
+            if (email) {
+              const emailSnap = await firestore()
+                .collection('members')
+                .where('email', '==', email.toLowerCase())
+                .limit(1)
+                .get();
+
+              if (!emailSnap.empty) {
+                const doc = emailSnap.docs[0];
+                const data = doc.data();
+                // Lier le UID au document
+                if (!data.uid) {
+                  await doc.ref.update({ uid });
+                }
+                callback(buildMemberProfile(doc.id, data));
+                return;
+              }
+            }
+          } catch (fallbackError) {
+            logger.error(
+              '[Firebase] subscribeToMemberProfile fallback error:',
+              fallbackError,
+            );
+          }
+
+          callback(null);
+        },
+        error => {
+          logger.error('[Firebase] subscribeToMemberProfile error:', error);
+          callback(null);
+        },
+      );
+
+    unsubscribers.push(docUnsub);
+
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+    };
   } catch (error) {
     logger.error('[Firebase] subscribeToMemberProfile catch:', error);
     callback(null);

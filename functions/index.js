@@ -1683,9 +1683,10 @@ exports.stripeWebhook = functions
               }
 
               // Mettre à jour le membre (déjà lu en phase 1)
+              // Status → en_attente_validation (l'admin valide via backoffice → actif)
               if (memberRef && memberDoc && memberDoc.exists) {
                 transaction.update(memberRef, {
-                  status: 'actif',
+                  status: 'en_attente_validation',
                   aPaye: true,
                   datePaiement: admin.firestore.FieldValue.serverTimestamp(),
                   montantPaye: montantCotisation,
@@ -1734,6 +1735,59 @@ exports.stripeWebhook = functions
           });
 
           console.log('Paiement enregistré dans Firestore (transaction atomique)');
+
+          // Email A : "Demande d'adhésion reçue" pour les cotisations
+          if (metadata.type === 'cotisation' && metadata.memberId) {
+            try {
+              const memberSnap = await admin.firestore().collection('members').doc(metadata.memberId).get();
+              const memberData = memberSnap.exists ? memberSnap.data() : {};
+              const memberEmail = (memberData.email || metadata.email || '').toLowerCase();
+              const memberPrenom = memberData.prenom || metadata.memberName || 'Membre';
+
+              if (memberEmail) {
+                const brevoUser = BREVO_SMTP_USER.value();
+                const brevoPass = BREVO_SMTP_PASS.value();
+                const fromEmail = BREVO_FROM_EMAIL.value();
+                const fromName = BREVO_FROM_NAME.value() || 'Mosquée El Mouhssinine';
+
+                if (brevoUser && brevoPass && fromEmail) {
+                  const transporter = nodemailer.createTransport({
+                    host: 'smtp-relay.brevo.com',
+                    port: 587,
+                    secure: false,
+                    auth: { user: brevoUser, pass: brevoPass },
+                  });
+
+                  await transporter.sendMail({
+                    from: `"${fromName}" <${fromEmail}>`,
+                    to: memberEmail,
+                    subject: `✅ Votre demande d'adhésion a bien été reçue`,
+                    html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                      <div style="background: linear-gradient(135deg, #1a5276 0%, #2e86c1 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                        <h1 style="color: white; margin: 0;">✅ Demande reçue</h1>
+                      </div>
+                      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                        <p style="font-size: 16px;">Assalamu alaykum <strong>${escapeHtml(memberPrenom)}</strong>,</p>
+                        <p style="font-size: 16px;">Nous avons bien reçu votre paiement de cotisation de <strong>${amountEuros}€</strong>.</p>
+                        <div style="background: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2e86c1;">
+                          <p style="margin: 0; font-size: 16px;">Votre demande d'adhésion est <strong>en cours de traitement</strong> par le bureau de la mosquée.</p>
+                        </div>
+                        <p style="font-size: 16px;">Vous recevrez un email de confirmation dès validation de votre dossier.</p>
+                        <p style="font-size: 16px; color: #444;">Barakallahu fik,<br><strong>L'équipe El Mouhssinine</strong></p>
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
+                          <p style="color: #aaa; font-size: 11px;">Mosquée El Mouhssinine - Bourg-en-Bresse</p>
+                        </div>
+                      </div>
+                    </div>`,
+                  });
+                  console.log('📧 Email "demande adhésion reçue" envoyé à', memberEmail.substring(0, 3) + '***');
+                }
+              }
+            } catch (emailErr) {
+              console.error('[EMAIL ERROR] Email demande adhésion reçue échoué:', emailErr.message);
+            }
+          }
         } catch (dbError) {
           // Gérer le cas d'idempotence (pas une vraie erreur)
           if (dbError && dbError.alreadyProcessed) {

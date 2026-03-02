@@ -509,12 +509,21 @@ const HomeScreen = () => {
         // Construire la file d'attente des popups a afficher (séquentiel)
         const queue: Popup[] = [];
         for (const popup of popups) {
-          // C5: Filtrage par ciblage — si cible est défini et != 'tous', ignorer
+          // C5: Filtrage par ciblage
           if (popup.cible && popup.cible !== 'tous') {
-            logger.log(
-              `[HomeScreen] Popup ${popup.id} (${popup.titre}): ignorée car cible=${popup.cible}`,
-            );
-            continue;
+            const isIOS = Platform.OS === 'ios';
+            const isLoggedIn = !!auth().currentUser;
+            const cibleMatch =
+              (popup.cible === 'ios' && isIOS) ||
+              (popup.cible === 'android' && !isIOS) ||
+              (popup.cible === 'membres' && isLoggedIn) ||
+              (popup.cible === 'non_membres' && !isLoggedIn);
+            if (!cibleMatch) {
+              logger.log(
+                `[HomeScreen] Popup ${popup.id} (${popup.titre}): ignorée car cible=${popup.cible} ne correspond pas`,
+              );
+              continue;
+            }
           }
           const shouldShow = await shouldShowPopup(popup);
           logger.log(
@@ -769,19 +778,34 @@ const HomeScreen = () => {
             'messages_last_read_at',
           );
           const lastReadAt = lastReadStr ? new Date(lastReadStr).getTime() : 0;
-          // Compter les messages avec une réponse mosquée APRÈS la dernière lecture
+          // Compter les messages non lus :
+          // 1. Messages avec une réponse mosquée APRÈS la dernière lecture
+          // 2. Messages système (status 'non_lu') créés APRÈS la dernière lecture
           const unread = messages.filter(m => {
-            if (!m.reponses || m.reponses.length === 0) return false;
-            const mosqueeReplies = m.reponses.filter(
-              r => r.createdBy === 'mosquee',
-            );
-            if (mosqueeReplies.length === 0) return false;
-            const lastMosqueeReply = mosqueeReplies[mosqueeReplies.length - 1];
-            const replyTime =
-              lastMosqueeReply.createdAt instanceof Date
-                ? lastMosqueeReply.createdAt.getTime()
-                : new Date(lastMosqueeReply.createdAt).getTime();
-            return replyTime > lastReadAt;
+            // Cas 1 : Réponse mosquée récente
+            if (m.reponses && m.reponses.length > 0) {
+              const mosqueeReplies = m.reponses.filter(
+                r => r.createdBy === 'mosquee',
+              );
+              if (mosqueeReplies.length > 0) {
+                const lastMosqueeReply =
+                  mosqueeReplies[mosqueeReplies.length - 1];
+                const replyTime =
+                  lastMosqueeReply.createdAt instanceof Date
+                    ? lastMosqueeReply.createdAt.getTime()
+                    : new Date(lastMosqueeReply.createdAt).getTime();
+                if (replyTime > lastReadAt) return true;
+              }
+            }
+            // Cas 2 : Message système non lu (adhésion validée, refusée, etc.)
+            if (m.status === 'non_lu') {
+              const msgTime =
+                m.createdAt instanceof Date
+                  ? m.createdAt.getTime()
+                  : new Date(m.createdAt).getTime();
+              if (msgTime > lastReadAt) return true;
+            }
+            return false;
           }).length;
           setUnreadMsgCount(unread);
         },

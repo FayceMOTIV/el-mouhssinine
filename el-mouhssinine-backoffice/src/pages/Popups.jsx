@@ -49,6 +49,8 @@ const prioriteOptions = [
 
 const cibleOptions = [
   { value: PopupCible.TOUS, label: 'Tous les utilisateurs' },
+  { value: PopupCible.IOS, label: 'iOS uniquement' },
+  { value: PopupCible.ANDROID, label: 'Android uniquement' },
   { value: PopupCible.MEMBRES, label: 'Membres uniquement' },
   { value: PopupCible.NON_MEMBRES, label: 'Non-membres uniquement' }
 ]
@@ -222,7 +224,9 @@ export default function Popups() {
       label: 'Cible',
       render: (row) => (
         <span className="text-white/70 capitalize">
-          {row.cible === PopupCible.MEMBRES ? 'Membres' :
+          {row.cible === PopupCible.IOS ? 'iOS' :
+           row.cible === PopupCible.ANDROID ? 'Android' :
+           row.cible === PopupCible.MEMBRES ? 'Membres' :
            row.cible === PopupCible.NON_MEMBRES ? 'Non-membres' : 'Tous'}
         </span>
       )
