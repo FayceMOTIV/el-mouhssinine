@@ -1906,205 +1906,6 @@ const MemberScreen = () => {
                 return null;
               })()}
 
-            {/* Build 249 - Historique paiements + dons par année */}
-            <View style={styles.card}>
-              <Text style={[styles.cardTitle, { marginBottom: 16 }]}>
-                {'💳 ' + t('paymentHistoryTitle')}
-              </Text>
-
-              {/* Boutons années */}
-              <FlatList
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                data={availableYears}
-                keyExtractor={item => item.toString()}
-                style={{ marginBottom: 16 }}
-                contentContainerStyle={
-                  isTablet
-                    ? {
-                        alignItems: 'center',
-                        width: '100%',
-                        justifyContent: 'center',
-                      }
-                    : undefined
-                }
-                renderItem={({ item: year }) => (
-                  <TouchableOpacity
-                    onPress={() => setHistoryYear(year)}
-                    style={[
-                      styles.yearButton,
-                      historyYear === year
-                        ? styles.yearButtonActive
-                        : styles.yearButtonInactive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.yearButtonText,
-                        historyYear === year
-                          ? styles.yearButtonTextActive
-                          : styles.yearButtonTextInactive,
-                      ]}
-                    >
-                      {year}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
-
-              {loadingHistory ? (
-                <ActivityIndicator size="small" color={colors.accent} />
-              ) : (
-                (() => {
-                  const filteredHistory = paymentHistory.filter(
-                    (payment: any) => {
-                      const date =
-                        payment.createdAt?.toDate?.() ||
-                        new Date(payment.createdAt);
-                      return (
-                        date &&
-                        !isNaN(date.getTime()) &&
-                        date.getFullYear() === historyYear
-                      );
-                    },
-                  );
-                  if (filteredHistory.length === 0) {
-                    return (
-                      <Text
-                        style={[
-                          styles.cardSubtitle,
-                          { textAlign: 'center', paddingVertical: 16 },
-                        ]}
-                      >
-                        {t('noPaymentsInYear').replace(
-                          '{year}',
-                          String(historyYear),
-                        )}
-                      </Text>
-                    );
-                  }
-                  return (
-                    <View
-                      style={
-                        isTablet
-                          ? {
-                              maxWidth: 700,
-                              alignSelf: 'center',
-                              width: '100%',
-                            }
-                          : undefined
-                      }
-                    >
-                      {filteredHistory.map((payment: any, index: number) => {
-                        const date =
-                          payment.createdAt?.toDate?.() ||
-                          new Date(payment.createdAt);
-                        const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
-                        const dateStr = date.toLocaleDateString(locale, {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        });
-                        const timeStr = date.toLocaleTimeString(locale, {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        });
-                        const fullDateStr = `${dateStr} ${t(
-                          'atTimeShort',
-                        )} ${timeStr}`;
-
-                        // Build 261 - Affichage différencié dons vs cotisations avec emojis + i18n
-                        const isDonation = payment._type === 'donation';
-                        const type = isDonation
-                          ? `🤲 ${t('paymentTypeDonation')}${
-                              payment.projetNom ? ' — ' + payment.projetNom : ''
-                            }`
-                          : payment.metadata?.period === 'mensuel'
-                          ? `🔄 ${t('paymentTypeCotisationMensuel')}`
-                          : `📋 ${t('paymentTypeCotisationAnnuel')}`;
-
-                        const paymentMethod =
-                          payment.modePaiement || payment.paymentMethod;
-
-                        let status = t('statusPaid');
-                        let statusColor = colors.accent;
-                        if (isDonation) {
-                          if (payment.statut === 'refunded') {
-                            status = t('statusRefunded');
-                            statusColor = '#f97316';
-                          }
-                        } else if (payment.status === 'refunded') {
-                          status = t('statusRefunded');
-                          statusColor = '#f97316';
-                        } else if (payment.status === 'failed') {
-                          status = t('statusFailed');
-                          statusColor = '#ef4444';
-                        }
-
-                        return (
-                          <View
-                            key={payment.id}
-                            style={[
-                              styles.paymentHistoryItem,
-                              index !== filteredHistory.length - 1 &&
-                                styles.paymentHistoryItemBorder,
-                            ]}
-                          >
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.paymentHistoryDate}>
-                                {fullDateStr}
-                              </Text>
-                              <Text style={styles.paymentHistoryType}>
-                                {type}
-                              </Text>
-                              {paymentMethod ? (
-                                <Text
-                                  style={[
-                                    styles.paymentHistoryType,
-                                    { fontSize: 11, opacity: 0.6 },
-                                  ]}
-                                >
-                                  {t('paymentMethodLabel')} :{' '}
-                                  {paymentMethod === 'card'
-                                    ? t('paymentMethodCB')
-                                    : paymentMethod}
-                                </Text>
-                              ) : null}
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                              <Text style={styles.paymentHistoryAmount}>
-                                {(
-                                  payment.amount ||
-                                  payment.montant ||
-                                  0
-                                ).toFixed(2)}{' '}
-                                €
-                              </Text>
-                              <View
-                                style={[
-                                  styles.paymentHistoryStatusBadge,
-                                  { backgroundColor: statusColor + '20' },
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.paymentHistoryStatusText,
-                                    { color: statusColor },
-                                  ]}
-                                >
-                                  {status}
-                                </Text>
-                              </View>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  );
-                })()
-              )}
-            </View>
-
             {/* Déconnexion */}
             <TouchableOpacity
               style={styles.logoutButton}
@@ -2113,6 +1914,205 @@ const MemberScreen = () => {
               <Text style={styles.logoutButtonText}>{t('logout')}</Text>
             </TouchableOpacity>
           </>
+        )}
+
+        {/* Build 261 - Historique visible sur TOUTES les pages (sympathisant, devenir_adherent, membre_actif) */}
+        {isLoggedIn && (
+          <View style={styles.card}>
+            <Text style={[styles.cardTitle, { marginBottom: 16 }]}>
+              {'💳 ' + t('paymentHistoryTitle')}
+            </Text>
+
+            {/* Boutons années */}
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={availableYears}
+              keyExtractor={item => item.toString()}
+              style={{ marginBottom: 16 }}
+              contentContainerStyle={
+                isTablet
+                  ? {
+                      alignItems: 'center',
+                      width: '100%',
+                      justifyContent: 'center',
+                    }
+                  : undefined
+              }
+              renderItem={({ item: year }) => (
+                <TouchableOpacity
+                  onPress={() => setHistoryYear(year)}
+                  style={[
+                    styles.yearButton,
+                    historyYear === year
+                      ? styles.yearButtonActive
+                      : styles.yearButtonInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.yearButtonText,
+                      historyYear === year
+                        ? styles.yearButtonTextActive
+                        : styles.yearButtonTextInactive,
+                    ]}
+                  >
+                    {year}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+
+            {loadingHistory ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              (() => {
+                const filteredHistory = paymentHistory.filter(
+                  (payment: any) => {
+                    const date =
+                      payment.createdAt?.toDate?.() ||
+                      new Date(payment.createdAt);
+                    return (
+                      date &&
+                      !isNaN(date.getTime()) &&
+                      date.getFullYear() === historyYear
+                    );
+                  },
+                );
+                if (filteredHistory.length === 0) {
+                  return (
+                    <Text
+                      style={[
+                        styles.cardSubtitle,
+                        { textAlign: 'center', paddingVertical: 16 },
+                      ]}
+                    >
+                      {t('noPaymentsInYear').replace(
+                        '{year}',
+                        String(historyYear),
+                      )}
+                    </Text>
+                  );
+                }
+                return (
+                  <View
+                    style={
+                      isTablet
+                        ? {
+                            maxWidth: 700,
+                            alignSelf: 'center',
+                            width: '100%',
+                          }
+                        : undefined
+                    }
+                  >
+                    {filteredHistory.map((payment: any, index: number) => {
+                      const date =
+                        payment.createdAt?.toDate?.() ||
+                        new Date(payment.createdAt);
+                      const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
+                      const dateStr = date.toLocaleDateString(locale, {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      });
+                      const timeStr = date.toLocaleTimeString(locale, {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                      const fullDateStr = `${dateStr} ${t(
+                        'atTimeShort',
+                      )} ${timeStr}`;
+
+                      // Build 261 - Affichage différencié dons vs cotisations avec emojis + i18n
+                      const isDonation = payment._type === 'donation';
+                      const type = isDonation
+                        ? `🤲 ${t('paymentTypeDonation')}${
+                            payment.projetNom ? ' — ' + payment.projetNom : ''
+                          }`
+                        : payment.metadata?.period === 'mensuel'
+                        ? `🔄 ${t('paymentTypeCotisationMensuel')}`
+                        : `📋 ${t('paymentTypeCotisationAnnuel')}`;
+
+                      const paymentMethod =
+                        payment.modePaiement || payment.paymentMethod;
+
+                      let status = t('statusPaid');
+                      let statusColor = colors.accent;
+                      if (isDonation) {
+                        if (payment.statut === 'refunded') {
+                          status = t('statusRefunded');
+                          statusColor = '#f97316';
+                        }
+                      } else if (payment.status === 'refunded') {
+                        status = t('statusRefunded');
+                        statusColor = '#f97316';
+                      } else if (payment.status === 'failed') {
+                        status = t('statusFailed');
+                        statusColor = '#ef4444';
+                      }
+
+                      return (
+                        <View
+                          key={payment.id}
+                          style={[
+                            styles.paymentHistoryItem,
+                            index !== filteredHistory.length - 1 &&
+                              styles.paymentHistoryItemBorder,
+                          ]}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.paymentHistoryDate}>
+                              {fullDateStr}
+                            </Text>
+                            <Text style={styles.paymentHistoryType}>
+                              {type}
+                            </Text>
+                            {paymentMethod ? (
+                              <Text
+                                style={[
+                                  styles.paymentHistoryType,
+                                  { fontSize: 11, opacity: 0.6 },
+                                ]}
+                              >
+                                {t('paymentMethodLabel')} :{' '}
+                                {paymentMethod === 'card'
+                                  ? t('paymentMethodCB')
+                                  : paymentMethod}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.paymentHistoryAmount}>
+                              {(payment.amount || payment.montant || 0).toFixed(
+                                2,
+                              )}{' '}
+                              €
+                            </Text>
+                            <View
+                              style={[
+                                styles.paymentHistoryStatusBadge,
+                                { backgroundColor: statusColor + '20' },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.paymentHistoryStatusText,
+                                  { color: statusColor },
+                                ]}
+                              >
+                                {status}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })()
+            )}
+          </View>
         )}
       </ScrollView>
 
