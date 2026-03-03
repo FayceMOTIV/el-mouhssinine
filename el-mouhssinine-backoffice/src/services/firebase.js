@@ -389,6 +389,7 @@ export const PaymentType = {
 export const subscribeToPayments = (cb) => subscribeToCollection('payments', cb, [orderBy('createdAt', 'desc')])
 
 // S'abonner aux paiements d'un membre spécifique
+// Cherche par membreId (UID Firebase) — écrit par app, webhook, et backoffice
 export const subscribeToMemberPayments = (membreId, cb) => {
   if (isDemoMode) {
     setTimeout(() => cb([]), 100)
@@ -397,7 +398,7 @@ export const subscribeToMemberPayments = (membreId, cb) => {
   const q = query(
     collection(db, 'payments'),
     where('membreId', '==', membreId),
-    orderBy('date', 'desc')
+    orderBy('createdAt', 'desc')
   )
   return onSnapshot(q, (snapshot) => {
     const payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))

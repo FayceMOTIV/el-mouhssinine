@@ -112,9 +112,14 @@ export default function Revenus() {
   const allRevenues = useMemo(() => {
     const revenues = []
 
+    // Helper : récupère l'UID Firebase du membre (champ BO ou metadata app)
+    const getMembreUid = (p) => p.membreId || p.metadata?.memberId || null
+
     // 1. Paiements de la collection payments
     payments.forEach(p => {
       const date = p.date?.toDate?.() || new Date(p.date)
+      const membreUid = getMembreUid(p)
+      const displayId = p.memberId || p.metadata?.memberIdDisplay || ''
       revenues.push({
         id: `payment-${p.id}`,
         type: p.type || 'don',
@@ -122,7 +127,7 @@ export default function Revenus() {
         date,
         source: 'app',
         modePaiement: p.modePaiement || 'cb',
-        details: p.membreId ? `Membre #${p.membreId.slice(0, 8)}` : (p.projetTitre || 'Don'),
+        details: membreUid ? `Membre #${(displayId || membreUid).slice(0, 8)}` : (p.projetTitre || 'Don'),
         raw: p
       })
     })
@@ -294,7 +299,8 @@ export default function Revenus() {
       // Filtrer par recherche
       if (cotisationSearchQuery) {
         const query = cotisationSearchQuery.toLowerCase()
-        const membre = membres.find(m => m.id === p.membreId)
+        const membreUid = p.membreId || p.metadata?.memberId
+        const membre = membres.find(m => m.id === membreUid)
         if (membre) {
           const nom = `${membre.prenom || ''} ${membre.nom || ''}`.toLowerCase()
           const email = membre.email?.toLowerCase() || ''
@@ -304,7 +310,8 @@ export default function Revenus() {
 
       // Filtrer par période (mensuel/annuel)
       if (cotisationPeriodFilter !== 'all') {
-        const membre = membres.find(m => m.id === p.membreId)
+        const membreUid = p.membreId || p.metadata?.memberId
+        const membre = membres.find(m => m.id === membreUid)
         if (!membre || membre.cotisation?.type !== cotisationPeriodFilter) return false
       }
 
@@ -380,7 +387,8 @@ export default function Revenus() {
       `cotisations_${format(dateRange.start, 'yyyy-MM-dd')}_${format(dateRange.end, 'yyyy-MM-dd')}.csv`,
       headers,
       c => {
-        const membre = membres.find(m => m.id === c.membreId)
+        const membreUid = c.membreId || c.metadata?.memberId
+        const membre = membres.find(m => m.id === membreUid)
         const dateStr = c.date ? format(c.date?.toDate?.() || new Date(c.date), 'dd/MM/yyyy HH:mm') : '-'
         return [
           dateStr,
@@ -883,7 +891,8 @@ export default function Revenus() {
                   </thead>
                   <tbody>
                     {filteredCotisations.map(c => {
-                      const membre = membres.find(m => m.id === c.membreId)
+                      const membreUid = c.membreId || c.metadata?.memberId
+                      const membre = membres.find(m => m.id === membreUid)
                       return (
                         <tr key={c.id} className="border-b border-white/5 hover:bg-white/5">
                           <td className="py-3 px-4 text-white/70">

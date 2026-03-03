@@ -1655,6 +1655,7 @@ exports.stripeWebhook = functions
                 status: metadata._montantSuspect ? 'montant_suspect' : 'succeeded',
                 type: 'cotisation',
                 description: paymentIntent.description,
+                membreId: metadata.memberId || null,
                 metadata: metadata,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1912,8 +1913,10 @@ exports.stripeWebhook = functions
               type: 'cotisation',
               description: 'Renouvellement cotisation mensuelle',
               memberId: metadata.memberIdDisplay || '',
+              membreId: memberId || null,
               memberName: memberData.prenom + ' ' + memberData.nom,
               period: 'mensuel',
+              modePaiement: 'carte',
               source: 'stripe_subscription',
               metadata: {
                 memberId: memberId,

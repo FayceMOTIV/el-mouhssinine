@@ -767,6 +767,7 @@ export const addCotisation = async (
       // 1. Créer la cotisation
       const paymentData: any = {
         memberId: params.memberId,
+        membreId: params.memberUid || '',
         memberName: params.memberName,
         montant: params.amount,
         modePaiement: params.paymentMethod,
