@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 261
+- **Build actuel** : 266
 - **Version marketing** : Geree dans project.pbxproj (MARKETING_VERSION)
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
@@ -841,7 +841,73 @@ useEffect(() => {
 - ElMouhssinine/src/screens/DonationsScreen.tsx : nisab initial 141€/g
 - ElMouhssinine/src/screens/MemberScreen.tsx : 2e listener donations par email + dedup
 
+## Corrige (3 Mar 2026 - Build 262-265)
+
+### Audit complet paiements — 8 bugs corriges
+
+#### Securite webhook (2 bugs)
+- [x] Bug 1 : `JSON.parse(metadata.donorInfo)` sans try-catch dans webhook → crash si JSON invalide (2 endroits dans functions/index.js)
+- [x] Bug 2 : `subscription.latest_invoice` pouvait etre null dans createSubscription → crash "Cannot read property 'payment_intent' of null"
+
+#### Apple Pay guard (1 bug)
+- [x] Bug 3 : Bouton Apple Pay affiche sans verifier `isPlatformPaySupported()` → corrige dans DonationsScreen + MemberScreen (3 boutons)
+
+#### Performance Stripe (1 bug)
+- [x] Bug 4 : Nouveau Stripe Price cree a chaque abonnement → accumulation prix orphelins. Fix : `lookup_key` pour reutiliser les prix existants
+
+#### Metadata nettoyees (1 bug)
+- [x] Bug 5 : Champs redondants `donorUid`, `donorFirstName`, `donorLastName` supprimes (garder `userId` + `donorInfo` JSON)
+
+#### UX paiement (3 bugs)
+- [x] Bug 6 : `processingRef` bloque si donateur anonyme annule ou choisit "Me connecter" → reset dans les 2 handlers Alert
+- [x] Bug 7 : Pas de `showPaymentError` si paiement echoue (non annule) dans MemberScreen handlePayment
+- [x] Bug 8 : Meme feedback erreur manquant dans handlePayFamily
+
+### Fichiers modifies
+- functions/index.js : Bugs 1, 2, 4
+- ElMouhssinine/src/screens/DonationsScreen.tsx : Bugs 3, 5, 6
+- ElMouhssinine/src/screens/MemberScreen.tsx : Bugs 3, 7, 8
+
+### Deployements
+- [x] Cloud Functions : 33 fonctions deployees
+- [x] Git : 2 commits pushes sur main
+
+## Corrige (3 Mar 2026 - Build 266)
+
+### Fix membreId vs memberId — cotisations visibles dans backoffice
+
+#### Probleme
+Le backoffice utilisait `p.membreId` (francais) pour identifier le membre dans les documents payments, mais l'app et le webhook ecrivaient `memberId` (anglais) et `metadata.memberId` (UID Firebase). Resultat :
+- Onglet Cotisations de Revenus.jsx : colonnes Membre et Email affichaient "-"
+- Export CSV cotisations : noms et emails vides
+- Vue d'ensemble : details affichaient "Don" au lieu du membre
+
+#### Corrections
+- [x] Revenus.jsx : fallback `p.membreId || p.metadata?.memberId` sur 6 endroits (helper getMembreUid, filtres, CSV, table)
+- [x] functions/index.js : ajout `membreId` (UID Firebase) dans webhook payment_intent.succeeded + invoice.payment_succeeded
+- [x] functions/index.js : ajout `modePaiement: 'carte'` pour renouvellements mensuels webhook
+- [x] firebase.ts : ajout `membreId: params.memberUid` dans addCotisation
+- [x] firebase.js (BO) : fix `subscribeToMemberPayments` orderBy `createdAt` (coherent avec writes)
+
+### Fichiers modifies
+- el-mouhssinine-backoffice/src/pages/Revenus.jsx
+- el-mouhssinine-backoffice/src/services/firebase.js
+- functions/index.js
+- ElMouhssinine/src/services/firebase.ts
+
+### Deployements
+- [x] Cloud Functions : 33 fonctions deployees
+- [x] Backoffice : https://el-mouhssinine.web.app deploye
+- [x] Git : commit bfe3bb3 push sur main
+
 ## Bugs connus / Pieges
+
+### membreId vs memberId (payments collection)
+Les documents `payments` Firestore contiennent DEUX champs de reference membre :
+- `memberId` : format ELM-XXXX (affichage)
+- `membreId` : UID Firebase (lookup membre)
+- `metadata.memberId` : UID Firebase (backup, retrocompatibilite anciens docs)
+Le BO doit TOUJOURS utiliser `p.membreId || p.metadata?.memberId` pour trouver le membre.
 
 ### FlatList + getItemLayout + ListHeaderComponent
 **NE JAMAIS** utiliser `getItemLayout` sur une FlatList qui a un `ListHeaderComponent`. Les offsets calcules ne tiennent pas compte de la hauteur du header, ce qui cause des items invisibles. Combine avec `removeClippedSubviews={true}`, tous les items sont clippes.
@@ -881,7 +947,7 @@ La requete `where('userId', '==', uid)` ne suffit pas : les dons crees par le we
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
 - Mock data janaza supprime (donnees sensibles)
 - Sections vides masquees sur HomeScreen (annonces, evenements, janaza)
-- Cloud Functions bien structurees, 32 fonctions deployees
+- Cloud Functions bien structurees, 33 fonctions deployees
 - Score audit securite : 9/10 (apres corrections Build 228)
 - Score audit i18n : 9/10 (apres corrections Build 98)
 - App iOS uniquement en production (Android non deploye)
