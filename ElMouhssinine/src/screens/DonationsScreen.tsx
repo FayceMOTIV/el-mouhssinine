@@ -18,7 +18,6 @@ import {
   Dimensions,
   Keyboard,
   TouchableWithoutFeedback,
-  Pressable,
 } from 'react-native';
 import {
   colors,
@@ -47,6 +46,7 @@ import {
   showPaymentError,
   showPaymentSuccess,
 } from '../services/stripe';
+import { isPlatformPaySupported } from '@stripe/stripe-react-native';
 import { EmptyProjects } from '../components';
 import { AuthService, MemberProfile } from '../services/auth';
 import { BackgroundPattern } from '../components/BackgroundPattern';
@@ -83,6 +83,7 @@ const DonationsScreen = () => {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const processingRef = useRef(false); // Guard supplémentaire contre double paiement
   const [refreshing, setRefreshing] = useState(false);
+  const [isApplePayAvailable, setIsApplePayAvailable] = useState(false);
 
   // 3 pages : choix → formulaire identité → projets (existant)
   const [donPage, setDonPage] = useState<'choix' | 'formulaire' | 'projets'>(
@@ -172,6 +173,17 @@ const DonationsScreen = () => {
       }
     });
     return () => unsubAuth();
+  }, []);
+
+  // Vérifier disponibilité Apple Pay au mount
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      isPlatformPaySupported()
+        .then(supported => {
+          setIsApplePayAvailable(supported);
+        })
+        .catch(() => setIsApplePayAvailable(false));
+    }
   }, []);
 
   const validateSIRET = (siret: string): boolean => {
@@ -488,13 +500,10 @@ const DonationsScreen = () => {
           projectName: project?.name || '',
           isAnonymous: isAnonymous,
           donorEmail: donorEmail || currentUser?.email?.toLowerCase() || '',
-          donorUid: currentUser?.uid || '',
           userId: currentUser?.uid || '',
           donorName: isAnonymous
             ? 'Anonyme'
             : donorFullName || donorEmail || '',
-          donorFirstName: donorFirstName.trim(),
-          donorLastName: donorLastName.trim(),
           donorType: donorType,
           // Sérialiser donorInfo pour le webhook (metadata Stripe = strings uniquement)
           donorInfo:
@@ -1857,9 +1866,11 @@ const DonationsScreen = () => {
                 );
               }
 
-              // Projets internes : tous les modes de paiement
+              // Projets internes : CB + Apple Pay si disponible
               const paymentMethods =
-                Platform.OS === 'ios' ? ['card', 'apple'] : ['card', 'google'];
+                Platform.OS === 'ios'
+                  ? ['card', ...(isApplePayAvailable ? ['apple'] : [])]
+                  : ['card'];
               return paymentMethods.map(method => (
                 <TouchableOpacity
                   key={method}
@@ -2016,26 +2027,15 @@ const DonationsScreen = () => {
         </View>
       </Modal>
 
-      {/* Modal Zakat */}
+      {/* Modal Zakat — même pattern que les autres modaux + KAV pour le clavier */}
       <Modal visible={showZakatModal} transparent animationType="fade">
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={20}
         >
           <View style={styles.modalOverlay}>
-            {/* Fond cliquable pour fermer — positionné derrière le contenu */}
-            <Pressable
-              style={StyleSheet.absoluteFill}
-              onPress={() => {
-                Keyboard.dismiss();
-                setShowZakatModal(false);
-              }}
-            />
-            {/* Contenu du modal — PAS wrappé dans un Touchable */}
             <View style={styles.zakatModalContainer}>
               <ScrollView
-                style={{ flex: 1 }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={true}
                 bounces={false}

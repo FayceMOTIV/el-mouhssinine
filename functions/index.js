@@ -1431,16 +1431,25 @@ exports.createSubscription = functions
         console.log('Nouveau Customer Stripe créé:', customer.id);
       }
 
-      // 2. Créer un Price Stripe pour le montant de l'abonnement
-      const price = await stripe.prices.create({
-        unit_amount: amount,
-        currency: 'eur',
-        recurring: { interval: 'month' },
-        product_data: {
-          name: description || 'Cotisation mensuelle - El Mohsinine',
-        },
-      });
-      console.log('Price créé:', price.id);
+      // 2. Chercher ou créer un Price Stripe pour le montant de l'abonnement
+      const lookupKey = `cotisation_mensuelle_${amount}_eur`;
+      let price;
+      const existingPrices = await stripe.prices.list({ lookup_keys: [lookupKey], limit: 1 });
+      if (existingPrices.data.length > 0) {
+        price = existingPrices.data[0];
+        console.log('Price Stripe réutilisé:', price.id);
+      } else {
+        price = await stripe.prices.create({
+          unit_amount: amount,
+          currency: 'eur',
+          recurring: { interval: 'month' },
+          lookup_key: lookupKey,
+          product_data: {
+            name: description || 'Cotisation mensuelle - El Mohsinine',
+          },
+        });
+        console.log('Nouveau Price Stripe créé:', price.id);
+      }
 
       // 3. Créer la Subscription avec payment_behavior 'default_incomplete'
       // Cela permet de récupérer le payment_intent pour Payment Sheet
@@ -1466,10 +1475,13 @@ exports.createSubscription = functions
 
       // Récupérer le PaymentIntent de la première invoice
       const invoice = subscription.latest_invoice;
+      if (!invoice) {
+        throw new functions.https.HttpsError('internal', 'Invoice non créée par Stripe. Veuillez réessayer.');
+      }
       const paymentIntent = invoice.payment_intent;
 
       if (!paymentIntent || !paymentIntent.client_secret) {
-        throw new Error('Impossible de récupérer le client_secret du PaymentIntent');
+        throw new functions.https.HttpsError('internal', 'Impossible de récupérer le client_secret du PaymentIntent');
       }
 
       // 4. Stocker les IDs dans le document membre
@@ -1644,6 +1656,7 @@ exports.stripeWebhook = functions
                 type: 'cotisation',
                 description: paymentIntent.description,
                 metadata: metadata,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
               }, { merge: true });
 
@@ -1666,7 +1679,7 @@ exports.stripeWebhook = functions
                   donateurEmail: (metadata.email || metadata.donorEmail || '').toLowerCase() || null,
                   userId: metadata.memberId || metadata.userId || '',
                   donorType: metadata.donorType || 'particulier',
-                  donorInfo: metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null,
+                  donorInfo: (() => { try { return metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null; } catch (e) { console.warn('donorInfo JSON invalide (cotisation don):', e.message); return null; } })(),
                   projectId: null,
                   projectName: 'Don général',
                   projetId: null,
@@ -1711,7 +1724,7 @@ exports.stripeWebhook = functions
                 donateurEmail: metadata.donorEmail ? metadata.donorEmail.toLowerCase() : null,
                 userId: metadata.userId || metadata.donorUid || '',
                 donorType: metadata.donorType || 'particulier',
-                donorInfo: metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null,
+                donorInfo: (() => { try { return metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null; } catch (e) { console.warn('donorInfo JSON invalide (donation):', e.message); return null; } })(),
                 projectId: metadata.projectId || null,
                 projectName: metadata.projectName || null,
                 projetId: metadata.projectId || null,
@@ -4895,6 +4908,74 @@ exports.cancelSubscription = functions
       });
 
       console.log(`✅ Abonnement mensuel annulé (fin de période) pour ${uid}`);
+
+      // Envoyer email de confirmation d'annulation programmée immédiatement
+      const cancelEmail = memberData.email;
+      const cancelPrenom = memberData.prenom || memberData.nom || 'Membre';
+      if (cancelEmail) {
+        try {
+          const brevoUser = BREVO_SMTP_USER.value();
+          const brevoPass = BREVO_SMTP_PASS.value();
+          const fromEmail = BREVO_FROM_EMAIL.value();
+          const fromName = BREVO_FROM_NAME.value();
+
+          if (brevoUser && brevoPass && fromEmail) {
+            const cancelSettingsDoc = await admin.firestore().collection('settings').doc('association').get();
+            const cancelAssocData = cancelSettingsDoc.exists ? cancelSettingsDoc.data() : {};
+            const nomAssociation = cancelAssocData.nom || 'Mosquée El Mohsinine';
+
+            const cancelTemplate = await loadEmailTemplate('cotisation_cancel_pending', {
+              prenom: cancelPrenom,
+              nom_association: nomAssociation,
+              date: new Date().toLocaleDateString('fr-FR'),
+            });
+
+            let cancelSubject, cancelHtmlBody;
+            if (cancelTemplate) {
+              cancelSubject = cancelTemplate.subject;
+              cancelHtmlBody = textToEmailHtml(cancelTemplate.body, {
+                headerTitle: '🔔 Annulation programmée',
+                headerGradient: '#f57c00, #ffb74d',
+                footerAssociation: nomAssociation,
+                footerAdresse: cancelAssocData.adresse ? `${cancelAssocData.adresse}, ${cancelAssocData.codePostal || ''} ${cancelAssocData.ville || ''}` : '',
+                footerTelephone: cancelAssocData.telephone || '',
+              });
+            } else {
+              cancelSubject = 'Confirmation d\'annulation programmée - ' + nomAssociation;
+              cancelHtmlBody = textToEmailHtml(
+                `Salam alaykoum ${cancelPrenom},\n\nNous vous confirmons que votre demande d'annulation de cotisation mensuelle a bien été prise en compte.\n\nVotre accès membre reste actif jusqu'à la fin de votre période en cours. Vous ne serez plus prélevé automatiquement après cette date.\n\nSi vous changez d'avis, vous pouvez à tout moment vous réabonner depuis l'application dans l'onglet "Adhérent".\n\nBaraka Allahou fikoum,\nL'équipe ${nomAssociation}`,
+                {
+                  headerTitle: '🔔 Annulation programmée',
+                  headerGradient: '#f57c00, #ffb74d',
+                  footerAssociation: nomAssociation,
+                  footerAdresse: cancelAssocData.adresse ? `${cancelAssocData.adresse}, ${cancelAssocData.codePostal || ''} ${cancelAssocData.ville || ''}` : '',
+                  footerTelephone: cancelAssocData.telephone || '',
+                }
+              );
+            }
+
+            const cancelTransporter = nodemailer.createTransport({
+              host: 'smtp-relay.brevo.com',
+              port: 587,
+              secure: false,
+              auth: { user: brevoUser, pass: brevoPass },
+            });
+
+            await cancelTransporter.sendMail({
+              from: `"${fromName}" <${fromEmail}>`,
+              to: cancelEmail,
+              subject: cancelSubject,
+              html: cancelHtmlBody,
+            });
+
+            console.log(`✅ Email annulation programmée envoyé à ${cancelEmail.substring(0, 3)}***`);
+          }
+        } catch (emailErr) {
+          console.error('Erreur envoi email annulation programmée:', emailErr);
+          // Ne pas bloquer le flux principal si l'email échoue
+        }
+      }
+
       return {
         success: true,
         message: 'Votre abonnement mensuel sera annulé à la fin de la période en cours. Vous gardez votre accès membre actif jusque-là.',

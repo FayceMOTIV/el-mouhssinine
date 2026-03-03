@@ -54,6 +54,7 @@ import {
   showPaymentError,
   showPaymentSuccess,
 } from '../services/stripe';
+import { isPlatformPaySupported } from '@stripe/stripe-react-native';
 import {
   subscribeToMembersTopic,
   saveFCMTokenToFirestore,
@@ -91,9 +92,6 @@ const MemberScreen = () => {
   );
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(
-    null,
-  );
   // 3 pages : 'sympathisant' | 'devenir_adherent' | 'membre_actif'
   const [memberPage, setMemberPage] = useState<
     'sympathisant' | 'devenir_adherent' | 'membre_actif'
@@ -147,6 +145,7 @@ const MemberScreen = () => {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const isProcessingRef = useRef(false); // BUG 7 FIX: Verrou synchrone anti-double tap
   const [customAmount, setCustomAmount] = useState<string>('');
+  const [isApplePayAvailable, setIsApplePayAvailable] = useState(false);
 
   // Reçu fiscal
   const [selectedRecuYear, setSelectedRecuYear] = useState(
@@ -360,9 +359,9 @@ const MemberScreen = () => {
           .onSnapshot(
             snapshot => {
               paymentsRef.current = snapshot.docs.map(doc => ({
+                ...doc.data(),
                 id: doc.id,
                 _type: 'cotisation',
-                ...doc.data(),
               }));
               mergeAndSetHistory();
             },
@@ -385,15 +384,17 @@ const MemberScreen = () => {
           .onSnapshot(
             snapshot => {
               donationsRef.current = snapshot.docs.map(doc => ({
+                ...doc.data(),
                 id: doc.id,
                 _type: 'donation',
-                ...doc.data(),
               }));
               mergeAndSetHistory();
             },
             error => {
               if (__DEV__)
                 console.error('Error loading donation history:', error);
+              donationsRef.current = [];
+              mergeAndSetHistory();
             },
           );
         donationHistoryUnsubscribeRef.current = unsubDonations;
@@ -407,15 +408,17 @@ const MemberScreen = () => {
             .onSnapshot(
               snapshot => {
                 donationsByEmailRef.current = snapshot.docs.map(doc => ({
+                  ...doc.data(),
                   id: doc.id,
                   _type: 'donation',
-                  ...doc.data(),
                 }));
                 mergeAndSetHistory();
               },
               error => {
                 if (__DEV__)
                   console.error('Error loading donations by email:', error);
+                donationsByEmailRef.current = [];
+                mergeAndSetHistory();
               },
             );
           donationByEmailUnsubscribeRef.current = unsubDonationsByEmail;
@@ -472,6 +475,17 @@ const MemberScreen = () => {
 
   useEffect(() => {
     getMosqueeInfo().then(setMosqueeInfo);
+  }, []);
+
+  // Vérifier disponibilité Apple Pay au mount
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      isPlatformPaySupported()
+        .then(supported => {
+          setIsApplePayAvailable(supported);
+        })
+        .catch(() => setIsApplePayAvailable(false));
+    }
   }, []);
 
   // Charger le règlement
@@ -1919,9 +1933,9 @@ const MemberScreen = () => {
           </>
         )}
 
-        {/* Build 261 - Historique visible sur TOUTES les pages (sympathisant, devenir_adherent, membre_actif) */}
+        {/* Build 264 - Historique visible sur TOUTES les pages */}
         {isLoggedIn && (
-          <View style={styles.card}>
+          <View style={[styles.card, { alignItems: 'stretch' }]}>
             <Text style={[styles.cardTitle, { marginBottom: 16 }]}>
               {'💳 ' + t('paymentHistoryTitle')}
             </Text>
@@ -2003,10 +2017,10 @@ const MemberScreen = () => {
                       isTablet
                         ? {
                             maxWidth: 700,
-                            alignSelf: 'center',
+                            alignSelf: 'stretch',
                             width: '100%',
                           }
-                        : undefined
+                        : { alignSelf: 'stretch', width: '100%' }
                     }
                   >
                     {filteredHistory.map((payment: any, index: number) => {
@@ -2055,14 +2069,9 @@ const MemberScreen = () => {
                         statusColor = '#ef4444';
                       }
 
-                      const isExpanded = expandedPaymentId === payment.id;
                       return (
-                        <TouchableOpacity
+                        <View
                           key={payment.id}
-                          activeOpacity={0.7}
-                          onPress={() =>
-                            setExpandedPaymentId(isExpanded ? null : payment.id)
-                          }
                           style={[
                             styles.paymentHistoryItem,
                             index !== filteredHistory.length - 1 &&
@@ -2073,31 +2082,27 @@ const MemberScreen = () => {
                             <Text style={styles.paymentHistoryType}>
                               {type}
                             </Text>
-                            {isExpanded && (
-                              <>
-                                <Text
-                                  style={[
-                                    styles.paymentHistoryDate,
-                                    { marginTop: 4 },
-                                  ]}
-                                >
-                                  {fullDateStr}
-                                </Text>
-                                {paymentMethod ? (
-                                  <Text
-                                    style={[
-                                      styles.paymentHistoryType,
-                                      { fontSize: 11, opacity: 0.6 },
-                                    ]}
-                                  >
-                                    {t('paymentMethodLabel')} :{' '}
-                                    {paymentMethod === 'card'
-                                      ? t('paymentMethodCB')
-                                      : paymentMethod}
-                                  </Text>
-                                ) : null}
-                              </>
-                            )}
+                            <Text
+                              style={[
+                                styles.paymentHistoryDate,
+                                { marginTop: 2 },
+                              ]}
+                            >
+                              {fullDateStr}
+                            </Text>
+                            {paymentMethod ? (
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  color: colors.textMuted,
+                                  marginTop: 1,
+                                }}
+                              >
+                                {paymentMethod === 'card'
+                                  ? t('paymentMethodCB')
+                                  : paymentMethod}
+                              </Text>
+                            ) : null}
                           </View>
                           <View style={{ alignItems: 'flex-end' }}>
                             <Text style={styles.paymentHistoryAmount}>
@@ -2122,7 +2127,7 @@ const MemberScreen = () => {
                               </Text>
                             </View>
                           </View>
-                        </TouchableOpacity>
+                        </View>
                       );
                     })}
                   </View>
@@ -2643,7 +2648,7 @@ const MemberScreen = () => {
               )}
             </TouchableOpacity>
 
-            {Platform.OS === 'ios' && (
+            {Platform.OS === 'ios' && isApplePayAvailable && (
               <TouchableOpacity
                 style={[styles.paymentMethod, styles.applePayMethod]}
                 onPress={() => handlePayment('apple')}
@@ -2984,13 +2989,15 @@ const MemberScreen = () => {
                 </TouchableOpacity>
 
                 <View style={styles.familyPaymentOptions}>
-                  <TouchableOpacity
-                    style={styles.familyPayOptionButton}
-                    onPress={() => handlePayFamily('apple')}
-                    disabled={isProcessingPayment}
-                  >
-                    <Text style={styles.familyPayOptionText}> Pay</Text>
-                  </TouchableOpacity>
+                  {isApplePayAvailable && (
+                    <TouchableOpacity
+                      style={styles.familyPayOptionButton}
+                      onPress={() => handlePayFamily('apple')}
+                      disabled={isProcessingPayment}
+                    >
+                      <Text style={styles.familyPayOptionText}> Pay</Text>
+                    </TouchableOpacity>
+                  )}
 
                   <TouchableOpacity
                     style={styles.familyPayOptionButton}

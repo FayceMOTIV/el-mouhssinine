@@ -90,6 +90,8 @@ export const translations = {
     todaySchedule: 'Horaires du jour',
     hijriCalendar: 'Calendrier Hégirien',
     todayLabel: "Aujourd'hui",
+    today: "Aujourd'hui",
+    after: 'Après',
     upcomingEvents: 'Prochains événements',
     daysLeftPrefix: 'J-',
     announcements: 'Annonces',
@@ -679,6 +681,20 @@ export const translations = {
     miniPlayerSurah: 'Sourate',
     miniPlayerRange: 'Plage',
     miniPlayerOff: 'Off',
+
+    // Historique paiements
+    paymentHistoryTitle: 'Historique des paiements et dons',
+    noPaymentsInYear: 'Aucun paiement en {year}',
+    expiresInDays: 'Expire dans {days} jours - Renouveler',
+    paymentTypeDonation: 'Don',
+    paymentTypeCotisationMensuel: 'Cotisation mensuelle',
+    paymentTypeCotisationAnnuel: 'Cotisation annuelle',
+    statusPaid: 'payé',
+    statusRefunded: 'remboursé',
+    statusFailed: 'échoué',
+    atTimeShort: 'à',
+    paymentMethodLabel: 'Mode de paiement',
+    paymentMethodCB: 'CB',
   },
 
   ar: {
@@ -1342,6 +1358,20 @@ export const translations = {
     miniPlayerSurah: 'سورة',
     miniPlayerRange: 'نطاق',
     miniPlayerOff: 'إيقاف',
+
+    // Historique paiements
+    paymentHistoryTitle: 'سجل المدفوعات والتبرعات',
+    noPaymentsInYear: 'لا توجد مدفوعات في {year}',
+    expiresInDays: 'ينتهي خلال {days} يوم - التجديد',
+    paymentTypeDonation: 'تبرع',
+    paymentTypeCotisationMensuel: 'اشتراك شهري',
+    paymentTypeCotisationAnnuel: 'اشتراك سنوي',
+    statusPaid: 'مدفوع',
+    statusRefunded: 'مسترد',
+    statusFailed: 'فشل',
+    atTimeShort: 'في',
+    paymentMethodLabel: 'طريقة الدفع',
+    paymentMethodCB: 'بطاقة',
   },
 };
 

@@ -22,10 +22,12 @@ jest.mock('@react-native-firebase/auth', () => {
 
   return () => ({
     signInWithEmailAndPassword: jest.fn().mockResolvedValue({ user: mockUser }),
-    createUserWithEmailAndPassword: jest.fn().mockResolvedValue({ user: mockUser }),
+    createUserWithEmailAndPassword: jest
+      .fn()
+      .mockResolvedValue({ user: mockUser }),
     sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
     signOut: jest.fn().mockResolvedValue(undefined),
-    onAuthStateChanged: jest.fn((callback) => {
+    onAuthStateChanged: jest.fn(callback => {
       callback(null);
       return jest.fn(); // unsubscribe
     }),
@@ -41,7 +43,7 @@ jest.mock('@react-native-firebase/firestore', () => {
     where: jest.fn(() => mockCollection),
     orderBy: jest.fn(() => mockCollection),
     limit: jest.fn(() => mockCollection),
-    onSnapshot: jest.fn((callback) => {
+    onSnapshot: jest.fn(callback => {
       callback({ docs: [], empty: true });
       return jest.fn(); // unsubscribe
     }),
@@ -59,7 +61,7 @@ jest.mock('@react-native-firebase/firestore', () => {
     doc: jest.fn(() => mockDoc),
     FieldValue: {
       serverTimestamp: jest.fn(() => new Date()),
-      increment: jest.fn((n) => n),
+      increment: jest.fn(n => n),
     },
   });
 });
@@ -122,11 +124,28 @@ jest.mock('@notifee/react-native', () => ({
 
 // Mock Geolocation
 jest.mock('@react-native-community/geolocation', () => ({
-  getCurrentPosition: jest.fn((success) => success({
-    coords: { latitude: 48.8566, longitude: 2.3522 },
-  })),
-  watchPosition: jest.fn(),
+  default: {
+    setRNConfiguration: jest.fn(),
+    getCurrentPosition: jest.fn(success =>
+      success({
+        coords: { latitude: 48.8566, longitude: 2.3522, accuracy: 10 },
+      }),
+    ),
+    watchPosition: jest.fn(() => 1),
+    clearWatch: jest.fn(),
+    requestAuthorization: jest.fn(),
+    stopObserving: jest.fn(),
+  },
+  setRNConfiguration: jest.fn(),
+  getCurrentPosition: jest.fn(success =>
+    success({
+      coords: { latitude: 48.8566, longitude: 2.3522, accuracy: 10 },
+    }),
+  ),
+  watchPosition: jest.fn(() => 1),
   clearWatch: jest.fn(),
+  requestAuthorization: jest.fn(),
+  stopObserving: jest.fn(),
 }));
 
 // Mock NetInfo - via moduleNameMapper dans jest.config.js
