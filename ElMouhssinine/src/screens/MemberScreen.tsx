@@ -983,6 +983,11 @@ const MemberScreen = () => {
         setContextMessage(null);
         setIsPaid(true);
         setIsExpired(false);
+      } else if (
+        paymentResult.error &&
+        paymentResult.error !== 'Paiement annulé'
+      ) {
+        showPaymentError(paymentResult.error);
       }
     } catch (error) {
       const err = error as Error;
@@ -1192,6 +1197,11 @@ const MemberScreen = () => {
 
         const user = AuthService.getCurrentUser();
         if (user) await loadMemberData(user.uid);
+      } else if (
+        paymentResult.error &&
+        paymentResult.error !== 'Paiement annulé'
+      ) {
+        showPaymentError(paymentResult.error);
       }
     } catch (error) {
       const err = error as Error;

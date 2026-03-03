@@ -443,7 +443,10 @@ const DonationsScreen = () => {
             {
               text: t('commonCancel') as string,
               style: 'cancel',
-              onPress: () => resolve(),
+              onPress: () => {
+                processingRef.current = false;
+                resolve();
+              },
             },
             {
               text: 'Continuer',
@@ -455,8 +458,8 @@ const DonationsScreen = () => {
             {
               text: 'Me connecter',
               onPress: () => {
+                processingRef.current = false;
                 setShowPaymentModal(false);
-                // L'utilisateur devra naviguer vers la page membre pour se connecter
                 Alert.alert(
                   'Connexion requise',
                   'Rendez-vous dans l\'onglet "Membre" pour vous connecter, puis revenez faire votre don.',
