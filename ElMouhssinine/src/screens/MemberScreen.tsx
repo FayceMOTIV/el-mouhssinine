@@ -91,6 +91,9 @@ const MemberScreen = () => {
   );
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(
+    null,
+  );
   // 3 pages : 'sympathisant' | 'devenir_adherent' | 'membre_actif'
   const [memberPage, setMemberPage] = useState<
     'sympathisant' | 'devenir_adherent' | 'membre_actif'
@@ -2052,9 +2055,14 @@ const MemberScreen = () => {
                         statusColor = '#ef4444';
                       }
 
+                      const isExpanded = expandedPaymentId === payment.id;
                       return (
-                        <View
+                        <TouchableOpacity
                           key={payment.id}
+                          activeOpacity={0.7}
+                          onPress={() =>
+                            setExpandedPaymentId(isExpanded ? null : payment.id)
+                          }
                           style={[
                             styles.paymentHistoryItem,
                             index !== filteredHistory.length - 1 &&
@@ -2062,25 +2070,34 @@ const MemberScreen = () => {
                           ]}
                         >
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.paymentHistoryDate}>
-                              {fullDateStr}
-                            </Text>
                             <Text style={styles.paymentHistoryType}>
                               {type}
                             </Text>
-                            {paymentMethod ? (
-                              <Text
-                                style={[
-                                  styles.paymentHistoryType,
-                                  { fontSize: 11, opacity: 0.6 },
-                                ]}
-                              >
-                                {t('paymentMethodLabel')} :{' '}
-                                {paymentMethod === 'card'
-                                  ? t('paymentMethodCB')
-                                  : paymentMethod}
-                              </Text>
-                            ) : null}
+                            {isExpanded && (
+                              <>
+                                <Text
+                                  style={[
+                                    styles.paymentHistoryDate,
+                                    { marginTop: 4 },
+                                  ]}
+                                >
+                                  {fullDateStr}
+                                </Text>
+                                {paymentMethod ? (
+                                  <Text
+                                    style={[
+                                      styles.paymentHistoryType,
+                                      { fontSize: 11, opacity: 0.6 },
+                                    ]}
+                                  >
+                                    {t('paymentMethodLabel')} :{' '}
+                                    {paymentMethod === 'card'
+                                      ? t('paymentMethodCB')
+                                      : paymentMethod}
+                                  </Text>
+                                ) : null}
+                              </>
+                            )}
                           </View>
                           <View style={{ alignItems: 'flex-end' }}>
                             <Text style={styles.paymentHistoryAmount}>
@@ -2105,7 +2122,7 @@ const MemberScreen = () => {
                               </Text>
                             </View>
                           </View>
-                        </View>
+                        </TouchableOpacity>
                       );
                     })}
                   </View>
