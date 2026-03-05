@@ -2233,13 +2233,18 @@ exports.stripeWebhook = functions
 
           if (!updatedSubMembersSnapshot.empty) {
             const updatedSubMemberDoc = updatedSubMembersSnapshot.docs[0];
+            const updatedSubMemberData = updatedSubMemberDoc.data();
             const updateData = {};
 
-            // Mettre à jour le statut selon le statut Stripe
-            if (updatedSubscription.status === 'active') {
+            // Si annulation programmée (cancel_at_period_end), ne PAS toucher au statut
+            // Le webhook customer.subscription.deleted gèrera le passage en sympathisant
+            if (updatedSubMemberData.subscriptionCancelPending) {
+              console.log('Annulation programmée détectée, statut non modifié par subscription.updated');
+            } else if (updatedSubscription.status === 'active') {
               updateData.status = 'actif';
             } else if (updatedSubscription.status === 'canceled' || updatedSubscription.status === 'unpaid') {
-              updateData.status = 'expire';
+              updateData.status = 'sympathisant';
+              updateData.statut = 'sympathisant';
             }
 
             if (Object.keys(updateData).length > 0) {

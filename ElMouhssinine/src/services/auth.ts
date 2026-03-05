@@ -37,6 +37,7 @@ export interface MemberProfile {
   adresse?: string; // Alias français pour address
   codePostal?: string;
   ville?: string;
+  subscriptionCancelPending?: boolean;
   createdAt: Date;
   lastLoginAt?: Date;
 }
@@ -700,6 +701,7 @@ function mapFirestoreToProfile(uid: string, data: any): MemberProfile {
     adresse: data.adresse || '', // Alias français
     codePostal: data.codePostal || '',
     ville: data.ville || '',
+    subscriptionCancelPending: data.subscriptionCancelPending || false,
     createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
     lastLoginAt: data.lastLoginAt?.toDate
       ? data.lastLoginAt.toDate()
