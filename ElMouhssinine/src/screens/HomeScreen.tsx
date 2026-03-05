@@ -19,7 +19,11 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import {
   colors,
   spacing,
@@ -108,6 +112,7 @@ const mockIslamicDate = {
 
 const HomeScreen = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { t, isRTL, language } = useLanguage();
   const insets = useSafeAreaInsets();
   const [prayerTimes, setPrayerTimes] = useState<PrayerTime[]>(mockPrayerTimes);
@@ -792,6 +797,15 @@ const HomeScreen = () => {
     setShowNotificationHistory(true);
     setExpandedNotifId(null);
   }, []);
+
+  // Ouvrir automatiquement l'historique quand on arrive depuis un clic sur notification
+  useEffect(() => {
+    if (route.params?.openNotifications) {
+      openNotificationHistory();
+      // Reset le param pour éviter de re-ouvrir à chaque focus
+      navigation.setParams({ openNotifications: undefined });
+    }
+  }, [route.params?.openNotifications]);
 
   // Marquer toutes les notifications comme lues
   const handleMarkAllRead = useCallback(async () => {

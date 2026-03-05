@@ -2,7 +2,10 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Text, I18nManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import OnboardingConsentScreen from '../screens/OnboardingConsentScreen';
-import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  NavigationContainerRef,
+} from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { colors } from '../theme/colors';
@@ -123,7 +126,7 @@ const SpiritualStack = () => {
       <Stack.Screen
         name="LearnArabic"
         component={LearnArabicScreen}
-        options={{ title: 'Apprendre l\'Arabe' }}
+        options={{ title: "Apprendre l'Arabe" }}
       />
       <Stack.Screen
         name="Alphabet"
@@ -187,9 +190,7 @@ const TabNavigatorComponent = () => {
         component={HomeScreen}
         options={{
           tabBarLabel: t('home'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 24 }}>🕌</Text>
-          ),
+          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 24 }}>🕌</Text>,
         }}
       />
       <Tab.Screen
@@ -197,9 +198,7 @@ const TabNavigatorComponent = () => {
         component={DonationsScreen}
         options={{
           tabBarLabel: t('donations'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 24 }}>💝</Text>
-          ),
+          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 24 }}>💝</Text>,
         }}
       />
       <Tab.Screen
@@ -207,9 +206,7 @@ const TabNavigatorComponent = () => {
         component={MemberScreen}
         options={{
           tabBarLabel: t('member'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 24 }}>👤</Text>
-          ),
+          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 24 }}>👤</Text>,
         }}
       />
       <Tab.Screen
@@ -217,9 +214,7 @@ const TabNavigatorComponent = () => {
         component={SpiritualStack}
         options={{
           tabBarLabel: t('quran'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 24 }}>📖</Text>
-          ),
+          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 24 }}>📖</Text>,
         }}
       />
       <Tab.Screen
@@ -227,9 +222,7 @@ const TabNavigatorComponent = () => {
         component={MoreScreen}
         options={{
           tabBarLabel: t('more'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 24 }}>☰</Text>
-          ),
+          tabBarIcon: ({ focused }) => <Text style={{ fontSize: 24 }}>☰</Text>,
         }}
       />
     </Tab.Navigator>
@@ -243,20 +236,30 @@ const AppNavigator = () => {
 
   // Vérifier le consentement RGPD au démarrage
   useEffect(() => {
-    AsyncStorage.getItem('rgpd_accepted').then((value) => {
-      setConsentAccepted(!!value);
-      setConsentChecked(true);
-    }).catch(() => {
-      setConsentChecked(true);
-    });
+    AsyncStorage.getItem('rgpd_accepted')
+      .then(value => {
+        setConsentAccepted(!!value);
+        setConsentChecked(true);
+      })
+      .catch(() => {
+        setConsentChecked(true);
+      });
   }, []);
 
   // Gérer le clic sur les notifications pour naviguer vers le bon écran
   useEffect(() => {
-    setupNotificationOpenedHandler((data) => {
+    setupNotificationOpenedHandler(data => {
       if (data.type === 'message_reply' && data.messageId) {
         // Naviguer vers la conversation du message
-        navigationRef.current?.navigate('Conversation', { messageId: data.messageId });
+        navigationRef.current?.navigate('Conversation', {
+          messageId: data.messageId,
+        });
+      } else {
+        // Toute autre notification → ouvrir l'historique notifications sur Home
+        navigationRef.current?.navigate('MainTabs', {
+          screen: 'Home',
+          params: { openNotifications: true },
+        });
       }
     });
   }, []);
@@ -264,7 +267,9 @@ const AppNavigator = () => {
   if (!consentChecked) return null;
 
   if (!consentAccepted) {
-    return <OnboardingConsentScreen onAccept={() => setConsentAccepted(true)} />;
+    return (
+      <OnboardingConsentScreen onAccept={() => setConsentAccepted(true)} />
+    );
   }
 
   return (
@@ -277,10 +282,23 @@ const AppNavigator = () => {
         <RootStack.Screen name="MainTabs" component={TabNavigatorComponent} />
         <RootStack.Screen name="Messages" component={MessagesScreen} />
         <RootStack.Screen name="Conversation" component={ConversationScreen} />
-        <RootStack.Screen name="MyMemberships" component={MyMembershipsScreen} />
-        <RootStack.Screen name="ProfileEdit" component={ProfileEditScreen} options={{ title: 'Modifier mon profil' }} />
-        <RootStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-        <RootStack.Screen name="PrayerCalendar" component={PrayerCalendarScreen} />
+        <RootStack.Screen
+          name="MyMemberships"
+          component={MyMembershipsScreen}
+        />
+        <RootStack.Screen
+          name="ProfileEdit"
+          component={ProfileEditScreen}
+          options={{ title: 'Modifier mon profil' }}
+        />
+        <RootStack.Screen
+          name="PrivacyPolicy"
+          component={PrivacyPolicyScreen}
+        />
+        <RootStack.Screen
+          name="PrayerCalendar"
+          component={PrayerCalendarScreen}
+        />
       </RootStack.Navigator>
     </NavigationContainer>
   );
