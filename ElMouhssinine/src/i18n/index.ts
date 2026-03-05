@@ -683,7 +683,11 @@ export const translations = {
     miniPlayerOff: 'Off',
 
     // Historique paiements
-    paymentHistoryTitle: 'Historique des paiements et dons',
+    paymentHistoryTitle: 'Mes paiements',
+    myDonations: 'Mes dons',
+    myAdhesions: 'Mes adhésions',
+    noDonationsYet: 'Aucun don enregistré',
+    noAdhesionsYet: 'Aucune adhésion enregistrée',
     noPaymentsInYear: 'Aucun paiement en {year}',
     expiresInDays: 'Expire dans {days} jours - Renouveler',
     paymentTypeDonation: 'Don',
@@ -695,6 +699,10 @@ export const translations = {
     atTimeShort: 'à',
     paymentMethodLabel: 'Mode de paiement',
     paymentMethodCB: 'CB',
+    donationProject: 'Projet',
+    donationDonor: 'Donateur',
+    adhesionPeriod: 'Période',
+    adhesionMember: 'Adhérent',
   },
 
   ar: {
@@ -1360,7 +1368,11 @@ export const translations = {
     miniPlayerOff: 'إيقاف',
 
     // Historique paiements
-    paymentHistoryTitle: 'سجل المدفوعات والتبرعات',
+    paymentHistoryTitle: 'مدفوعاتي',
+    myDonations: 'تبرعاتي',
+    myAdhesions: 'اشتراكاتي',
+    noDonationsYet: 'لا توجد تبرعات مسجلة',
+    noAdhesionsYet: 'لا توجد اشتراكات مسجلة',
     noPaymentsInYear: 'لا توجد مدفوعات في {year}',
     expiresInDays: 'ينتهي خلال {days} يوم - التجديد',
     paymentTypeDonation: 'تبرع',
@@ -1372,6 +1384,10 @@ export const translations = {
     atTimeShort: 'في',
     paymentMethodLabel: 'طريقة الدفع',
     paymentMethodCB: 'بطاقة',
+    donationProject: 'المشروع',
+    donationDonor: 'المتبرع',
+    adhesionPeriod: 'الفترة',
+    adhesionMember: 'العضو',
   },
 };
 

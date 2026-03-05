@@ -158,6 +158,8 @@ const MemberScreen = () => {
   const [availableYears, setAvailableYears] = useState<number[]>([
     new Date().getFullYear(),
   ]);
+  const [showDonationsModal, setShowDonationsModal] = useState(false);
+  const [showAdhesionsModal, setShowAdhesionsModal] = useState(false);
 
   // Calculer cotisation (fixe) et don (surplus)
   // Utilise les prix de Firebase (formulePrices) pour respecter les prix configurés dans le backoffice
@@ -1943,210 +1945,489 @@ const MemberScreen = () => {
           </>
         )}
 
-        {/* Build 264 - Historique visible sur TOUTES les pages */}
+        {/* Build 266 - Historique séparé : deux boutons Dons / Adhésions */}
         {isLoggedIn && (
           <View style={[styles.card, { alignItems: 'stretch' }]}>
             <Text style={[styles.cardTitle, { marginBottom: 16 }]}>
               {'💳 ' + t('paymentHistoryTitle')}
             </Text>
 
-            {/* Boutons années */}
-            <FlatList
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              data={availableYears}
-              keyExtractor={item => item.toString()}
-              style={{ marginBottom: 16 }}
-              contentContainerStyle={
-                isTablet
-                  ? {
-                      alignItems: 'center',
-                      width: '100%',
-                      justifyContent: 'center',
-                    }
-                  : undefined
-              }
-              renderItem={({ item: year }) => (
-                <TouchableOpacity
-                  onPress={() => setHistoryYear(year)}
-                  style={[
-                    styles.yearButton,
-                    historyYear === year
-                      ? styles.yearButtonActive
-                      : styles.yearButtonInactive,
-                  ]}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setShowDonationsModal(true)}
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.accent + '15',
+                  borderRadius: 12,
+                  padding: 16,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: colors.accent + '30',
+                }}
+              >
+                <Text style={{ fontSize: 28, marginBottom: 6 }}>🤲</Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: colors.text,
+                  }}
                 >
-                  <Text
-                    style={[
-                      styles.yearButtonText,
-                      historyYear === year
-                        ? styles.yearButtonTextActive
-                        : styles.yearButtonTextInactive,
-                    ]}
-                  >
-                    {year}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
+                  {t('myDonations')}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: colors.textMuted,
+                    marginTop: 2,
+                  }}
+                >
+                  {
+                    paymentHistory.filter((p: any) => p._type === 'donation')
+                      .length
+                  }{' '}
+                  {t('paymentTypeDonation').toLowerCase()}(s)
+                </Text>
+              </TouchableOpacity>
 
-            {loadingHistory ? (
-              <ActivityIndicator size="small" color={colors.accent} />
-            ) : (
-              (() => {
-                const filteredHistory = paymentHistory.filter(
-                  (payment: any) => {
-                    const date =
-                      payment.createdAt?.toDate?.() ||
-                      new Date(payment.createdAt);
-                    return (
-                      date &&
-                      !isNaN(date.getTime()) &&
-                      date.getFullYear() === historyYear
-                    );
-                  },
-                );
-                if (filteredHistory.length === 0) {
-                  return (
-                    <Text
-                      style={[
-                        styles.cardSubtitle,
-                        { textAlign: 'center', paddingVertical: 16 },
-                      ]}
-                    >
-                      {t('noPaymentsInYear').replace(
-                        '{year}',
-                        String(historyYear),
-                      )}
-                    </Text>
-                  );
-                }
-                return (
-                  <View
-                    style={
-                      isTablet
-                        ? {
-                            maxWidth: 700,
-                            alignSelf: 'stretch',
-                            width: '100%',
-                          }
-                        : { alignSelf: 'stretch', width: '100%' }
-                    }
-                  >
-                    {filteredHistory.map((payment: any, index: number) => {
-                      const date =
-                        payment.createdAt?.toDate?.() ||
-                        new Date(payment.createdAt);
-                      const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
-                      const dateStr = date.toLocaleDateString(locale, {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      });
-                      const timeStr = date.toLocaleTimeString(locale, {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      });
-                      const fullDateStr = `${dateStr} ${t(
-                        'atTimeShort',
-                      )} ${timeStr}`;
-
-                      // Build 261 - Affichage différencié dons vs cotisations avec emojis + i18n
-                      const isDonation = payment._type === 'donation';
-                      const type = isDonation
-                        ? `🤲 ${t('paymentTypeDonation')}${
-                            payment.projetNom ? ' — ' + payment.projetNom : ''
-                          }`
-                        : payment.metadata?.period === 'mensuel'
-                        ? `🔄 ${t('paymentTypeCotisationMensuel')}`
-                        : `📋 ${t('paymentTypeCotisationAnnuel')}`;
-
-                      const paymentMethod =
-                        payment.modePaiement || payment.paymentMethod;
-
-                      let status = t('statusPaid');
-                      let statusColor = colors.accent;
-                      if (isDonation) {
-                        if (payment.statut === 'refunded') {
-                          status = t('statusRefunded');
-                          statusColor = '#f97316';
-                        }
-                      } else if (payment.status === 'refunded') {
-                        status = t('statusRefunded');
-                        statusColor = '#f97316';
-                      } else if (payment.status === 'failed') {
-                        status = t('statusFailed');
-                        statusColor = '#ef4444';
-                      }
-
-                      return (
-                        <View
-                          key={payment.id}
-                          style={[
-                            styles.paymentHistoryItem,
-                            index !== filteredHistory.length - 1 &&
-                              styles.paymentHistoryItemBorder,
-                          ]}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.paymentHistoryType}>
-                              {type}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.paymentHistoryDate,
-                                { marginTop: 2 },
-                              ]}
-                            >
-                              {fullDateStr}
-                            </Text>
-                            {paymentMethod ? (
-                              <Text
-                                style={{
-                                  fontSize: 11,
-                                  color: colors.textMuted,
-                                  marginTop: 1,
-                                }}
-                              >
-                                {paymentMethod === 'card'
-                                  ? t('paymentMethodCB')
-                                  : paymentMethod}
-                              </Text>
-                            ) : null}
-                          </View>
-                          <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={styles.paymentHistoryAmount}>
-                              {(payment.amount || payment.montant || 0).toFixed(
-                                2,
-                              )}{' '}
-                              €
-                            </Text>
-                            <View
-                              style={[
-                                styles.paymentHistoryStatusBadge,
-                                { backgroundColor: statusColor + '20' },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.paymentHistoryStatusText,
-                                  { color: statusColor },
-                                ]}
-                              >
-                                {status}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                );
-              })()
-            )}
+              <TouchableOpacity
+                onPress={() => setShowAdhesionsModal(true)}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#3b82f620',
+                  borderRadius: 12,
+                  padding: 16,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: '#3b82f640',
+                }}
+              >
+                <Text style={{ fontSize: 28, marginBottom: 6 }}>📋</Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: colors.text,
+                  }}
+                >
+                  {t('myAdhesions')}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: colors.textMuted,
+                    marginTop: 2,
+                  }}
+                >
+                  {
+                    paymentHistory.filter((p: any) => p._type === 'cotisation')
+                      .length
+                  }{' '}
+                  {t('paymentTypeCotisationAnnuel').split(' ')[0].toLowerCase()}
+                  (s)
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>
+
+      {/* Modal Dons */}
+      <Modal
+        visible={showDonationsModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowDonationsModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              maxHeight: '85%',
+              paddingBottom: insets.bottom + 16,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: 20,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <Text
+                style={{ fontSize: 18, fontWeight: '700', color: colors.text }}
+              >
+                {'🤲 ' + t('myDonations')}
+              </Text>
+              <TouchableOpacity onPress={() => setShowDonationsModal(false)}>
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: colors.accent,
+                    fontWeight: '600',
+                  }}
+                >
+                  {t('close')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding: 16 }}>
+              {(() => {
+                const donations = paymentHistory
+                  .filter((p: any) => p._type === 'donation')
+                  .sort((a: any, b: any) => {
+                    const dA =
+                      a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+                    const dB =
+                      b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+                    return dB.getTime() - dA.getTime();
+                  });
+                if (donations.length === 0) {
+                  return (
+                    <Text
+                      style={{
+                        textAlign: 'center',
+                        color: colors.textMuted,
+                        paddingVertical: 32,
+                      }}
+                    >
+                      {t('noDonationsYet')}
+                    </Text>
+                  );
+                }
+                return donations.map((payment: any, index: number) => {
+                  const date =
+                    payment.createdAt?.toDate?.() ||
+                    new Date(payment.createdAt);
+                  const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
+                  const dateStr = date.toLocaleDateString(locale, {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric',
+                  });
+                  const timeStr = date.toLocaleTimeString(locale, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                  const paymentMethod =
+                    payment.modePaiement || payment.paymentMethod || '';
+                  let status = t('statusPaid');
+                  let statusColor = colors.accent;
+                  if (
+                    payment.statut === 'refunded' ||
+                    payment.status === 'refunded'
+                  ) {
+                    status = t('statusRefunded');
+                    statusColor = '#f97316';
+                  }
+
+                  return (
+                    <View
+                      key={payment.id}
+                      style={{
+                        backgroundColor: colors.background,
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 10,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              fontWeight: '600',
+                              color: colors.text,
+                            }}
+                          >
+                            {(payment.amount || payment.montant || 0).toFixed(
+                              2,
+                            )}{' '}
+                            €
+                          </Text>
+                          {payment.projetNom ? (
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: colors.textMuted,
+                                marginTop: 2,
+                              }}
+                            >
+                              {t('donationProject')} : {payment.projetNom}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View
+                          style={{
+                            backgroundColor: statusColor + '20',
+                            paddingHorizontal: 10,
+                            paddingVertical: 3,
+                            borderRadius: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: '600',
+                              color: statusColor,
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {status}
+                          </Text>
+                        </View>
+                      </View>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          marginTop: 8,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                          {dateStr} {t('atTimeShort')} {timeStr}
+                        </Text>
+                        {paymentMethod ? (
+                          <Text
+                            style={{ fontSize: 12, color: colors.textMuted }}
+                          >
+                            {paymentMethod === 'card'
+                              ? t('paymentMethodCB')
+                              : paymentMethod}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                });
+              })()}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Adhésions */}
+      <Modal
+        visible={showAdhesionsModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowAdhesionsModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              maxHeight: '85%',
+              paddingBottom: insets.bottom + 16,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: 20,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <Text
+                style={{ fontSize: 18, fontWeight: '700', color: colors.text }}
+              >
+                {'📋 ' + t('myAdhesions')}
+              </Text>
+              <TouchableOpacity onPress={() => setShowAdhesionsModal(false)}>
+                <Text
+                  style={{ fontSize: 16, color: '#3b82f6', fontWeight: '600' }}
+                >
+                  {t('close')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding: 16 }}>
+              {(() => {
+                const adhesions = paymentHistory
+                  .filter((p: any) => p._type === 'cotisation')
+                  .sort((a: any, b: any) => {
+                    const dA =
+                      a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+                    const dB =
+                      b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+                    return dB.getTime() - dA.getTime();
+                  });
+                if (adhesions.length === 0) {
+                  return (
+                    <Text
+                      style={{
+                        textAlign: 'center',
+                        color: colors.textMuted,
+                        paddingVertical: 32,
+                      }}
+                    >
+                      {t('noAdhesionsYet')}
+                    </Text>
+                  );
+                }
+                return adhesions.map((payment: any, index: number) => {
+                  const date =
+                    payment.createdAt?.toDate?.() ||
+                    new Date(payment.createdAt);
+                  const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
+                  const dateStr = date.toLocaleDateString(locale, {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric',
+                  });
+                  const timeStr = date.toLocaleTimeString(locale, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                  const paymentMethod =
+                    payment.modePaiement || payment.paymentMethod || '';
+                  const period =
+                    payment.metadata?.period || payment.period || '';
+                  const isMensuel = period === 'mensuel';
+                  let status = t('statusPaid');
+                  let statusColor = colors.accent;
+                  if (payment.status === 'refunded') {
+                    status = t('statusRefunded');
+                    statusColor = '#f97316';
+                  } else if (payment.status === 'failed') {
+                    status = t('statusFailed');
+                    statusColor = '#ef4444';
+                  }
+
+                  return (
+                    <View
+                      key={payment.id}
+                      style={{
+                        backgroundColor: colors.background,
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 10,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              fontWeight: '600',
+                              color: colors.text,
+                            }}
+                          >
+                            {(payment.amount || payment.montant || 0).toFixed(
+                              2,
+                            )}{' '}
+                            €
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: isMensuel ? '#3b82f6' : colors.accent,
+                              marginTop: 2,
+                              fontWeight: '500',
+                            }}
+                          >
+                            {isMensuel
+                              ? '🔄 ' + t('paymentTypeCotisationMensuel')
+                              : '📋 ' + t('paymentTypeCotisationAnnuel')}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            backgroundColor: statusColor + '20',
+                            paddingHorizontal: 10,
+                            paddingVertical: 3,
+                            borderRadius: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: '600',
+                              color: statusColor,
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {status}
+                          </Text>
+                        </View>
+                      </View>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          marginTop: 8,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                          {dateStr} {t('atTimeShort')} {timeStr}
+                        </Text>
+                        {paymentMethod ? (
+                          <Text
+                            style={{ fontSize: 12, color: colors.textMuted }}
+                          >
+                            {paymentMethod === 'card'
+                              ? t('paymentMethodCB')
+                              : paymentMethod}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {payment.memberName ? (
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.textMuted,
+                            marginTop: 4,
+                          }}
+                        >
+                          {t('adhesionMember')} : {payment.memberName}
+                        </Text>
+                      ) : null}
+                    </View>
+                  );
+                });
+              })()}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Modales */}
       <MemberCardFullScreen

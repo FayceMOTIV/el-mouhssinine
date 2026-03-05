@@ -211,8 +211,10 @@ service cloud.firestore {
         request.resource.data.montant >= 1 &&
         request.resource.data.montant <= 10000 &&
         request.resource.data.metadata.memberId == request.auth.uid;
-      // Seuls les admins peuvent modifier/supprimer, les Cloud Functions (admin SDK) bypassent
-      allow update, delete: if isAdmin();
+      // Modification: admin OU propriétaire (nécessaire car webhook peut créer le doc avant l'app → set+merge = update)
+      allow update: if isAdmin() ||
+        (isAuthenticated() && resource.data.metadata.memberId == request.auth.uid);
+      allow delete: if isAdmin();
     }
 
     // ==================== COLLECTIONS CLOUD FUNCTIONS ====================
