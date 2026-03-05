@@ -39,6 +39,7 @@ const getCotisationStatus = (membre) => {
   if (membre.status === 'en_attente_validation') return CotisationStatut.EN_ATTENTE_VALIDATION
   if (membre.status === 'en_attente_signature') return CotisationStatut.EN_ATTENTE_SIGNATURE
   if (membre.status === 'en_attente_paiement') return CotisationStatut.EN_ATTENTE_PAIEMENT
+  if (membre.status === 'annule') return CotisationStatut.ANNULE
 
   // For 'actif' status, MUST check if cotisation.dateFin is still valid
   // This fixes the consistency issue where backoffice showed ACTIF while app showed EXPIRÉ
@@ -702,6 +703,7 @@ export default function Adherents() {
       case CotisationStatut.EN_ATTENTE_SIGNATURE: return 'Attente signature'
       case CotisationStatut.EN_ATTENTE_PAIEMENT: return 'Attente paiement'
       case CotisationStatut.EXPIRE: return 'Expiré'
+      case CotisationStatut.ANNULE: return 'Annulé'
       default: return 'Aucun'
     }
   }
@@ -808,6 +810,7 @@ export default function Adherents() {
           [CotisationStatut.EN_ATTENTE_SIGNATURE]: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
           [CotisationStatut.EN_ATTENTE_PAIEMENT]: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CreditCard },
           [CotisationStatut.EXPIRE]: { bg: 'bg-red-500/20', text: 'text-red-400', icon: XCircle },
+          [CotisationStatut.ANNULE]: { bg: 'bg-orange-500/20', text: 'text-orange-400', icon: XCircle },
           [CotisationStatut.AUCUN]: { bg: 'bg-white/10', text: 'text-white/50', icon: AlertCircle },
         }
         const c = config[status] || config[CotisationStatut.AUCUN]

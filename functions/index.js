@@ -2128,9 +2128,12 @@ exports.stripeWebhook = functions
             const subMemberData = subMemberDoc.data();
             await subMemberDoc.ref.update({
               status: 'sympathisant',
+              statut: 'sympathisant', // Compatibilité ancien champ
               cotisationType: null,
               stripeSubscriptionId: null,
               aPaye: false,
+              abonnementActif: false,
+              subscriptionCancelPending: false, // Nettoyage flag annulation
               subscriptionCancelledAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             console.log('Membre passé en sympathisant suite à suppression abonnement Stripe');
