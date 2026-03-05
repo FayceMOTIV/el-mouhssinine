@@ -160,6 +160,7 @@ const HomeScreen = () => {
   const [activePopup, setActivePopup] = useState<Popup | null>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [popupQueue, setPopupQueue] = useState<Popup[]>([]); // File d'attente multi-popups
+  const cachedPopupsRef = useRef<Popup[]>([]); // Cache des popups pour re-évaluation au foreground
   const [currentRappel, setCurrentRappel] = useState<Rappel | null>(null);
 
   const [showCalendar, setShowCalendar] = useState(false);
@@ -505,42 +506,8 @@ const HomeScreen = () => {
     // Subscriptions aux popups Firebase - File d'attente multi-popups
     const unsubPopups = subscribeToPopups(async popups => {
       logger.log(`[HomeScreen] Popups reçus: ${popups?.length || 0}`);
-      if (popups && popups.length > 0) {
-        // Construire la file d'attente des popups a afficher (séquentiel)
-        const queue: Popup[] = [];
-        for (const popup of popups) {
-          // C5: Filtrage par ciblage
-          if (popup.cible && popup.cible !== 'tous') {
-            const isIOS = Platform.OS === 'ios';
-            const isLoggedIn = !!auth().currentUser;
-            const cibleMatch =
-              (popup.cible === 'ios' && isIOS) ||
-              (popup.cible === 'android' && !isIOS) ||
-              (popup.cible === 'membres' && isLoggedIn) ||
-              (popup.cible === 'non_membres' && !isLoggedIn);
-            if (!cibleMatch) {
-              logger.log(
-                `[HomeScreen] Popup ${popup.id} (${popup.titre}): ignorée car cible=${popup.cible} ne correspond pas`,
-              );
-              continue;
-            }
-          }
-          const shouldShow = await shouldShowPopup(popup);
-          logger.log(
-            `[HomeScreen] Popup ${popup.id} (${popup.titre}): shouldShow=${shouldShow}, frequence=${popup.frequence}`,
-          );
-          if (shouldShow) {
-            queue.push(popup);
-          }
-        }
-        logger.log(`[HomeScreen] Popup queue: ${queue.length} à afficher`);
-        // Stocker la file et afficher la premiere
-        if (queue.length > 0) {
-          setPopupQueue(queue.slice(1)); // Reste de la file
-          setActivePopup(queue[0]); // Premiere popup
-          setShowPopup(true);
-        }
-      }
+      cachedPopupsRef.current = popups || [];
+      await evaluateAndShowPopups(popups);
     });
 
     return () => {
@@ -987,6 +954,57 @@ const HomeScreen = () => {
         return true;
     }
   };
+
+  // Évaluer et afficher les popups (appelé au mount + au retour foreground)
+  const evaluateAndShowPopups = async (popups: Popup[] | null) => {
+    if (!popups || popups.length === 0) return;
+    // Ne pas re-afficher si une popup est déjà visible
+    if (showPopup) return;
+    const queue: Popup[] = [];
+    for (const popup of popups) {
+      if (popup.cible && popup.cible !== 'tous') {
+        const isIOS = Platform.OS === 'ios';
+        const isLoggedIn = !!auth().currentUser;
+        const cibleMatch =
+          (popup.cible === 'ios' && isIOS) ||
+          (popup.cible === 'android' && !isIOS) ||
+          (popup.cible === 'membres' && isLoggedIn) ||
+          (popup.cible === 'non_membres' && !isLoggedIn);
+        if (!cibleMatch) {
+          logger.log(
+            `[HomeScreen] Popup ${popup.id} (${popup.titre}): ignorée car cible=${popup.cible} ne correspond pas`,
+          );
+          continue;
+        }
+      }
+      const shouldShow = await shouldShowPopup(popup);
+      logger.log(
+        `[HomeScreen] Popup ${popup.id} (${popup.titre}): shouldShow=${shouldShow}, frequence=${popup.frequence}`,
+      );
+      if (shouldShow) {
+        queue.push(popup);
+      }
+    }
+    logger.log(`[HomeScreen] Popup queue: ${queue.length} à afficher`);
+    if (queue.length > 0) {
+      setPopupQueue(queue.slice(1));
+      setActivePopup(queue[0]);
+      setShowPopup(true);
+    }
+  };
+
+  // Re-évaluer les popups quand l'app revient au premier plan (ex: clic sur notification)
+  useEffect(() => {
+    const handleForegroundPopups = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && cachedPopupsRef.current.length > 0) {
+        logger.log('[HomeScreen] App au premier plan — re-évaluation popups');
+        evaluateAndShowPopups(cachedPopupsRef.current);
+      }
+    };
+    const sub = AppState.addEventListener('change', handleForegroundPopups);
+    return () => sub.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fermer le popup et enregistrer qu'il a été vu selon sa fréquence
   // Puis afficher la popup suivante dans la file d'attente
