@@ -5,6 +5,7 @@ import notifee, {
   TimestampTrigger,
   EventType,
 } from '@notifee/react-native';
+import { Platform } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import firestore from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,7 +29,7 @@ export const FCM_TOPICS = {
   MEMBERS: 'members', // Topic pour les membres uniquement
 } as const;
 
-export type FCMTopic = typeof FCM_TOPICS[keyof typeof FCM_TOPICS];
+export type FCMTopic = (typeof FCM_TOPICS)[keyof typeof FCM_TOPICS];
 
 // Créer les channels Android pour les différents types de notifications
 export const createNotificationChannels = async () => {
@@ -86,7 +87,14 @@ export const createNotificationChannels = async () => {
 
 // S'abonner à tous les topics par défaut
 export const subscribeToAllTopics = async () => {
-  const topics = ['general', 'announcements', 'events', 'janaza', 'jumua', 'fajr_reminders'];
+  const topics = [
+    'general',
+    'announcements',
+    'events',
+    'janaza',
+    'jumua',
+    'fajr_reminders',
+  ];
   let successCount = 0;
 
   for (const topic of topics) {
@@ -133,7 +141,9 @@ export const unsubscribeFromTopic = async (topic: FCMTopic) => {
 };
 
 // Vérifier si abonné à un topic
-export const isSubscribedToTopic = async (topic: FCMTopic): Promise<boolean> => {
+export const isSubscribedToTopic = async (
+  topic: FCMTopic,
+): Promise<boolean> => {
   const value = await AsyncStorage.getItem(`fcm_topic_${topic}`);
   return value !== 'false'; // Par défaut, on est abonné
 };
@@ -151,7 +161,9 @@ export const getFCMToken = async (): Promise<string | null> => {
 };
 
 // Sauvegarder le token FCM dans Firestore pour notifications personnelles
-export const saveFCMTokenToFirestore = async (userId: string): Promise<boolean> => {
+export const saveFCMTokenToFirestore = async (
+  userId: string,
+): Promise<boolean> => {
   try {
     const token = await messaging().getToken();
     if (!token || !userId) {
@@ -160,10 +172,13 @@ export const saveFCMTokenToFirestore = async (userId: string): Promise<boolean> 
     }
 
     // Mettre à jour le document membre avec le token FCM (set+merge pour éviter crash si doc inexistant)
-    await firestore().collection('members').doc(userId).set({
-      fcmToken: token,
-      fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await firestore().collection('members').doc(userId).set(
+      {
+        fcmToken: token,
+        fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
 
     logger.log('[FCM] Token sauvegardé pour userId:', userId);
     return true;
@@ -174,13 +189,18 @@ export const saveFCMTokenToFirestore = async (userId: string): Promise<boolean> 
 };
 
 // Supprimer le token FCM de Firestore lors de la déconnexion
-export const removeFCMTokenFromFirestore = async (userId: string): Promise<boolean> => {
+export const removeFCMTokenFromFirestore = async (
+  userId: string,
+): Promise<boolean> => {
   try {
     if (!userId) return false;
-    await firestore().collection('members').doc(userId).set({
-      fcmToken: firestore.FieldValue.delete(),
-      fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await firestore().collection('members').doc(userId).set(
+      {
+        fcmToken: firestore.FieldValue.delete(),
+        fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
     logger.log('[FCM] Token supprimé pour userId:', userId);
     return true;
   } catch (error) {
@@ -190,52 +210,67 @@ export const removeFCMTokenFromFirestore = async (userId: string): Promise<boole
 };
 
 // Callback pour afficher les notifications en modal dans l'app
-let inAppNotificationCallback: ((notification: { title: string; body: string; data?: Record<string, string> }) => void) | null = null;
+let inAppNotificationCallback:
+  | ((notification: {
+      title: string;
+      body: string;
+      data?: Record<string, string>;
+    }) => void)
+  | null = null;
 
 export const setInAppNotificationCallback = (
-  callback: ((notification: { title: string; body: string; data?: Record<string, string> }) => void) | null
+  callback:
+    | ((notification: {
+        title: string;
+        body: string;
+        data?: Record<string, string>;
+      }) => void)
+    | null,
 ) => {
   inAppNotificationCallback = callback;
 };
 
 // Gérer les messages FCM en foreground
 export const setupForegroundHandler = () => {
-  return messaging().onMessage(async (remoteMessage) => {
+  return messaging().onMessage(async remoteMessage => {
     logger.log('FCM Message received in foreground:', remoteMessage);
 
-    // Afficher la notification avec notifee
     const { notification, data } = remoteMessage;
 
     if (notification) {
       const title = notification.title || 'El Mohsinine';
       const body = notification.body || '';
 
-      // Déterminer le channel basé sur le type
-      let channelId = 'general';
-      if (data?.type === 'announcement') channelId = 'announcements';
-      else if (data?.type === 'event') channelId = 'events';
-      else if (data?.type === 'janaza') channelId = 'janaza_channel';
-      else if (data?.type === 'jumua_reminder') channelId = 'jumua';
-      else if (data?.type === 'fajr_reminder') channelId = 'fajr';
+      // Sur iOS, FCM affiche déjà la notification système en foreground.
+      // Ne PAS créer une 2e notification via notifee (cause doublon).
+      // Sur Android, FCM n'affiche pas en foreground → notifee nécessaire.
+      if (Platform.OS === 'android') {
+        let channelId = 'general';
+        if (data?.type === 'announcement') channelId = 'announcements';
+        else if (data?.type === 'event') channelId = 'events';
+        else if (data?.type === 'janaza') channelId = 'janaza_channel';
+        else if (data?.type === 'jumua_reminder') channelId = 'jumua';
+        else if (data?.type === 'fajr_reminder') channelId = 'fajr';
 
-      await notifee.displayNotification({
-        title,
-        body,
-        android: {
-          channelId,
-          importance: data?.type === 'janaza' ? AndroidImportance.HIGH : AndroidImportance.DEFAULT,
-          pressAction: { id: 'default' },
-        },
-        ios: {
-          sound: 'default',
-        },
-        data: data as Record<string, string>,
-      });
+        await notifee.displayNotification({
+          title,
+          body,
+          android: {
+            channelId,
+            importance:
+              data?.type === 'janaza'
+                ? AndroidImportance.HIGH
+                : AndroidImportance.DEFAULT,
+            pressAction: { id: 'default' },
+          },
+          data: data as Record<string, string>,
+        });
+      }
 
       // Stocker dans l'historique (notifications push du backoffice)
       const notifType = detectNotificationType(title, body);
       await addNotificationToHistory(title, body, notifType);
-      logger.log('[Notifications] Push notification ajoutée à l\'historique');
+      logger.log("[Notifications] Push notification ajoutée à l'historique");
 
       // Appeler le callback pour afficher en modal dans l'app
       if (inAppNotificationCallback) {
@@ -251,10 +286,10 @@ export const setupForegroundHandler = () => {
 
 // Gérer l'ouverture de l'app depuis une notification
 export const setupNotificationOpenedHandler = (
-  onNotificationOpened: (data: Record<string, string>) => void
+  onNotificationOpened: (data: Record<string, string>) => void,
 ) => {
   // Notification ouverte quand l'app était en background
-  messaging().onNotificationOpenedApp((remoteMessage) => {
+  messaging().onNotificationOpenedApp(remoteMessage => {
     logger.log('Notification opened app from background:', remoteMessage);
     if (remoteMessage.data) {
       onNotificationOpened(remoteMessage.data as Record<string, string>);
@@ -264,14 +299,34 @@ export const setupNotificationOpenedHandler = (
   // Vérifier si l'app a été ouverte depuis une notification (quit state)
   messaging()
     .getInitialNotification()
-    .then((remoteMessage) => {
+    .then(remoteMessage => {
       if (remoteMessage) {
-        logger.log('App opened from quit state by notification:', remoteMessage);
+        logger.log(
+          'App opened from quit state by notification:',
+          remoteMessage,
+        );
         if (remoteMessage.data) {
           onNotificationOpened(remoteMessage.data as Record<string, string>);
         }
       }
     });
+
+  // Gérer le clic sur les notifications créées par notifee (Android foreground)
+  // et aussi les notifications iOS quand l'app est en foreground
+  notifee.onForegroundEvent(({ type, detail }) => {
+    if (type === EventType.PRESS) {
+      logger.log('[Notifee] Notification pressed:', detail.notification?.data);
+      const data = detail.notification?.data as
+        | Record<string, string>
+        | undefined;
+      if (data) {
+        onNotificationOpened(data);
+      } else {
+        // Pas de data spécifique → ouvrir l'historique notifications par défaut
+        onNotificationOpened({});
+      }
+    }
+  });
 };
 
 // Type pour le résultat d'initialisation FCM
@@ -292,9 +347,10 @@ export const initializeFCM = async (): Promise<FCMInitResult> => {
     // Demander la permission
     const authStatus = await messaging().requestPermission();
 
-    if (authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-        authStatus === messaging.AuthorizationStatus.PROVISIONAL) {
-
+    if (
+      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+      authStatus === messaging.AuthorizationStatus.PROVISIONAL
+    ) {
       // Obtenir le token FCM
       const token = await messaging().getToken();
 
@@ -344,7 +400,9 @@ export const requestNotificationPermission = async () => {
 export const scheduleJumuaReminder = async (language: 'fr' | 'ar' = 'fr') => {
   // Annuler l'ancienne notification standalone pour éviter doublon avec prayerNotifications
   await notifee.cancelNotification('jumua-reminder');
-  logger.log("[Jumu'a] scheduleJumuaReminder désactivé — géré par prayerNotifications");
+  logger.log(
+    "[Jumu'a] scheduleJumuaReminder désactivé — géré par prayerNotifications",
+  );
   return;
 
   // Créer le channel Android
@@ -378,12 +436,19 @@ export const scheduleJumuaReminder = async (language: 'fr' | 'ar' = 'fr') => {
   // Vérifier quel offset Paris a à ce moment
   const testParts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Europe/Paris',
-    hour: '2-digit', minute: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
     hour12: false,
   }).formatToParts(new Date(utcTimestamp));
-  const testH = parseInt(testParts.find(p => p.type === 'hour')?.value || '0', 10);
-  const testM = parseInt(testParts.find(p => p.type === 'minute')?.value || '0', 10);
-  const diffMin = (testH * 60 + testM) - (12 * 60 + 30);
+  const testH = parseInt(
+    testParts.find(p => p.type === 'hour')?.value || '0',
+    10,
+  );
+  const testM = parseInt(
+    testParts.find(p => p.type === 'minute')?.value || '0',
+    10,
+  );
+  const diffMin = testH * 60 + testM - (12 * 60 + 30);
   const nextFriday = new Date(utcTimestamp - diffMin * 60000);
 
   // Si c'est passé, prendre le vendredi suivant
@@ -422,7 +487,7 @@ export const scheduleJumuaReminder = async (language: 'fr' | 'ar' = 'fr') => {
         sound: 'default',
       },
     },
-    trigger
+    trigger,
   );
 
   await AsyncStorage.setItem('jumua_reminder_enabled', 'true');

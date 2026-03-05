@@ -249,18 +249,28 @@ const AppNavigator = () => {
   // Gérer le clic sur les notifications pour naviguer vers le bon écran
   useEffect(() => {
     setupNotificationOpenedHandler(data => {
-      if (data.type === 'message_reply' && data.messageId) {
-        // Naviguer vers la conversation du message
-        navigationRef.current?.navigate('Conversation', {
-          messageId: data.messageId,
-        });
-      } else {
-        // Toute autre notification → ouvrir l'historique notifications sur Home
-        navigationRef.current?.navigate('MainTabs', {
-          screen: 'Home',
-          params: { openNotifications: true },
-        });
-      }
+      // Petit délai pour laisser la navigation se réhydrater après background
+      setTimeout(() => {
+        if (data.type === 'message_reply' && data.messageId) {
+          navigationRef.current?.navigate('Conversation', {
+            messageId: data.messageId,
+          });
+        } else {
+          // Toute autre notification → ouvrir l'historique notifications sur Home
+          // D'abord reset le param pour forcer le useEffect à se re-déclencher
+          navigationRef.current?.navigate('MainTabs', {
+            screen: 'Home',
+            params: { openNotifications: undefined },
+          });
+          // Puis naviguer avec le param true après un tick
+          setTimeout(() => {
+            navigationRef.current?.navigate('MainTabs', {
+              screen: 'Home',
+              params: { openNotifications: true },
+            });
+          }, 100);
+        }
+      }, 300);
     });
   }, []);
 
