@@ -1144,6 +1144,8 @@ const MemberScreen = () => {
           email: memberProfile.email, // Email pour sendRecuFiscal
           period: familyFormule,
           membersCount: familyMembers.length.toString(),
+          montantCotisation: totalAmount,
+          montantDon: 0,
         },
       });
 

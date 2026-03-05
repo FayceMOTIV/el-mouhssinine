@@ -1392,10 +1392,10 @@ exports.createSubscription = functions
     const { amount, description, metadata } = data;
 
     // Validation
-    if (!amount || typeof amount !== 'number' || amount < 100 || amount > 10000000) {
+    if (!amount || typeof amount !== 'number' || amount < 1000 || amount > 10000000) {
       throw new functions.https.HttpsError(
         'invalid-argument',
-        'Montant invalide (entre 1€ et 100 000€)'
+        'Montant invalide (minimum 10€, maximum 100 000€)'
       );
     }
 
