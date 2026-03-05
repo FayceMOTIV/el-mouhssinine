@@ -1306,17 +1306,18 @@ exports.createPaymentIntent = functions
     }
 
     // Validation montant minimum cotisation (ne concerne pas les dons)
+    // Minimum 1€ pour les tests — remettre 10€/100€ en production
     if (metadata && metadata.type === 'cotisation') {
-      if (metadata.period === 'mensuel' && amount < 1000) {
+      if (metadata.period === 'mensuel' && amount < 100) {
         throw new functions.https.HttpsError(
           'invalid-argument',
-          'Montant minimum : 10€ pour une cotisation mensuelle.'
+          'Montant minimum : 1€ pour une cotisation mensuelle.'
         );
       }
-      if (metadata.period === 'annuel' && amount < 10000) {
+      if (metadata.period === 'annuel' && amount < 100) {
         throw new functions.https.HttpsError(
           'invalid-argument',
-          'Montant minimum : 100€ pour une cotisation annuelle.'
+          'Montant minimum : 1€ pour une cotisation annuelle.'
         );
       }
     }
@@ -1392,10 +1393,10 @@ exports.createSubscription = functions
     const { amount, description, metadata } = data;
 
     // Validation
-    if (!amount || typeof amount !== 'number' || amount < 1000 || amount > 10000000) {
+    if (!amount || typeof amount !== 'number' || amount < 100 || amount > 10000000) {
       throw new functions.https.HttpsError(
         'invalid-argument',
-        'Montant invalide (minimum 10€, maximum 100 000€)'
+        'Montant invalide (minimum 1€, maximum 100 000€)'
       );
     }
 

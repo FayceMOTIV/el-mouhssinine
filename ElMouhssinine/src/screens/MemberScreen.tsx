@@ -1820,91 +1820,127 @@ const MemberScreen = () => {
               </TouchableOpacity>
             )}
 
-            {/* Bouton annuler abonnement mensuel */}
-            {memberProfile?.cotisationType === 'mensuel' && isPaid && (
-              <TouchableOpacity
-                style={[
-                  styles.card,
-                  {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    borderColor: '#ef4444',
-                    borderWidth: 1,
-                  },
-                ]}
-                onPress={() => {
-                  Alert.alert(
-                    t('cancelSubscription'),
-                    t('cancelSubscriptionQuestion'),
-                    [
-                      {
-                        text: t('commonNo'),
-                        style: 'cancel',
-                      },
-                      {
-                        text: t('commonConfirm'),
-                        style: 'destructive',
-                        onPress: async () => {
-                          try {
-                            const result = await cancelSubscription();
-                            if (result.success) {
-                              // Mise à jour immédiate du state local (pas d'attente Firestore)
-                              setMemberProfile((prev: any) =>
-                                prev
-                                  ? {
-                                      ...prev,
-                                      status: 'sympathisant',
-                                      statut: 'sympathisant',
-                                      cotisationType: null,
-                                    }
-                                  : null,
-                              );
-                              setIsPaid(false);
-                              setMemberPage('sympathisant');
-
-                              Alert.alert(
-                                t('subscriptionCancelled'),
-                                result.message,
-                              );
-
-                              // Recharger aussi depuis Firestore en arrière-plan
-                              const user = AuthService.getCurrentUser();
-                              if (user) loadMemberData(user.uid);
-                            } else {
-                              Alert.alert(t('commonError'), result.message);
-                            }
-                          } catch (err: any) {
-                            Alert.alert(
-                              t('commonError'),
-                              err?.message || t('networkError'),
-                            );
-                          }
-                        },
-                      },
-                    ],
-                  );
-                }}
-              >
-                <Text style={{ fontSize: 20, marginRight: 12 }}>❌</Text>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[
-                      styles.cardTitle,
-                      { color: '#ef4444', fontSize: 15 },
-                    ]}
-                  >
-                    {language === 'ar'
-                      ? 'إلغاء اشتراكي الشهري'
-                      : 'Annuler mon abonnement mensuel'}
-                  </Text>
-                  <Text style={[styles.cardSubtitle, { fontSize: 12 }]}>
-                    {language === 'ar'
-                      ? 'إيقاف الخصم التلقائي'
-                      : 'Arrêter le prélèvement automatique'}
-                  </Text>
+            {/* Message si annulation déjà programmée */}
+            {memberProfile?.subscriptionCancelPending &&
+              memberProfile?.cotisationType === 'mensuel' &&
+              isPaid && (
+                <View
+                  style={[
+                    styles.card,
+                    {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      borderColor: '#f59e0b',
+                      borderWidth: 1,
+                      backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                    },
+                  ]}
+                >
+                  <Text style={{ fontSize: 20, marginRight: 12 }}>🔔</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.cardTitle,
+                        { color: '#f59e0b', fontSize: 15 },
+                      ]}
+                    >
+                      {language === 'ar'
+                        ? 'تم جدولة الإلغاء'
+                        : 'Annulation programmée'}
+                    </Text>
+                    <Text style={[styles.cardSubtitle, { fontSize: 12 }]}>
+                      {language === 'ar'
+                        ? 'ستبقى عضويتك نشطة حتى نهاية الفترة الحالية'
+                        : "Votre adhésion reste active jusqu'à la fin de la période en cours"}
+                    </Text>
+                  </View>
                 </View>
-              </TouchableOpacity>
-            )}
+              )}
+
+            {/* Bouton annuler abonnement mensuel (masqué si annulation déjà programmée) */}
+            {memberProfile?.cotisationType === 'mensuel' &&
+              isPaid &&
+              !memberProfile?.subscriptionCancelPending && (
+                <TouchableOpacity
+                  style={[
+                    styles.card,
+                    {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      borderColor: '#ef4444',
+                      borderWidth: 1,
+                    },
+                  ]}
+                  onPress={() => {
+                    Alert.alert(
+                      t('cancelSubscription'),
+                      t('cancelSubscriptionQuestion'),
+                      [
+                        {
+                          text: t('commonNo'),
+                          style: 'cancel',
+                        },
+                        {
+                          text: t('commonConfirm'),
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              const result = await cancelSubscription();
+                              if (result.success) {
+                                // Marquer l'annulation programmée — le membre garde l'accès
+                                // jusqu'à fin de période (cancel_at_period_end côté Stripe)
+                                setMemberProfile((prev: any) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        subscriptionCancelPending: true,
+                                      }
+                                    : null,
+                                );
+
+                                Alert.alert(
+                                  t('subscriptionCancelled'),
+                                  result.message,
+                                );
+
+                                // Recharger depuis Firestore en arrière-plan
+                                const user = AuthService.getCurrentUser();
+                                if (user) loadMemberData(user.uid);
+                              } else {
+                                Alert.alert(t('commonError'), result.message);
+                              }
+                            } catch (err: any) {
+                              Alert.alert(
+                                t('commonError'),
+                                err?.message || t('networkError'),
+                              );
+                            }
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                >
+                  <Text style={{ fontSize: 20, marginRight: 12 }}>❌</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.cardTitle,
+                        { color: '#ef4444', fontSize: 15 },
+                      ]}
+                    >
+                      {language === 'ar'
+                        ? 'إلغاء اشتراكي الشهري'
+                        : 'Annuler mon abonnement mensuel'}
+                    </Text>
+                    <Text style={[styles.cardSubtitle, { fontSize: 12 }]}>
+                      {language === 'ar'
+                        ? 'إيقاف الخصم التلقائي'
+                        : 'Arrêter le prélèvement automatique'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
 
             {/* Renouveler si bientôt expiré */}
             {memberProfile?.cotisationExpiry &&
