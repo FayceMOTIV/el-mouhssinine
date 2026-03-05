@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { resetPassword } from '../services/firebase'
 import { Button, Input } from '../components/common'
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
 
@@ -10,6 +11,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
 
@@ -112,6 +115,42 @@ export default function Login() {
               Se connecter
             </Button>
           </form>
+
+          <div className="mt-4 text-center">
+            {resetSent ? (
+              <p className="text-green-400 text-sm">
+                Email de réinitialisation envoyé ! Vérifiez votre boîte mail.
+              </p>
+            ) : (
+              <button
+                type="button"
+                disabled={resetLoading}
+                onClick={async () => {
+                  if (!email) {
+                    setError('Entrez votre email pour réinitialiser le mot de passe')
+                    return
+                  }
+                  setResetLoading(true)
+                  setError('')
+                  try {
+                    await resetPassword(email)
+                    setResetSent(true)
+                  } catch (err) {
+                    if (err.code === 'auth/user-not-found') {
+                      setError('Aucun compte trouvé avec cet email')
+                    } else {
+                      setError('Erreur lors de l\'envoi. Réessayez.')
+                    }
+                  } finally {
+                    setResetLoading(false)
+                  }
+                }}
+                className="text-sm text-white/50 hover:text-secondary transition-colors"
+              >
+                {resetLoading ? 'Envoi en cours...' : 'Mot de passe oublié ?'}
+              </button>
+            )}
+          </div>
         </div>
 
         <p className="text-center text-white/30 text-sm mt-6">

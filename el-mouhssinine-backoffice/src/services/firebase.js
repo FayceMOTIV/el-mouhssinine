@@ -22,7 +22,8 @@ import {
   getAuth,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from 'firebase/auth'
 import {
   getStorage,
@@ -171,6 +172,10 @@ export const loginUser = async (email, password) => {
 export const logoutUser = async () => {
   if (isDemoMode) return
   return signOut(auth)
+}
+
+export const resetPassword = async (email) => {
+  return sendPasswordResetEmail(auth, email)
 }
 
 export const onAuthChange = (callback) => {

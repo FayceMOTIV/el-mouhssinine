@@ -2108,116 +2108,180 @@ const MemberScreen = () => {
                     </Text>
                   );
                 }
-                return donations.map((payment: any, index: number) => {
-                  const date =
-                    payment.createdAt?.toDate?.() ||
-                    new Date(payment.createdAt);
-                  const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
-                  const dateStr = date.toLocaleDateString(locale, {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric',
-                  });
-                  const timeStr = date.toLocaleTimeString(locale, {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
-                  const paymentMethod =
-                    payment.modePaiement || payment.paymentMethod || '';
-                  let status = t('statusPaid');
-                  let statusColor = colors.accent;
-                  if (
-                    payment.statut === 'refunded' ||
-                    payment.status === 'refunded'
-                  ) {
-                    status = t('statusRefunded');
-                    statusColor = '#f97316';
-                  }
+                // Grouper par année
+                const byYear: Record<number, any[]> = {};
+                donations.forEach((p: any) => {
+                  const d =
+                    p.createdAt?.toDate?.() || new Date(p.createdAt || 0);
+                  const y = d.getFullYear();
+                  if (!byYear[y]) byYear[y] = [];
+                  byYear[y].push(p);
+                });
+                const years = Object.keys(byYear)
+                  .map(Number)
+                  .sort((a, b) => b - a);
+                const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
 
+                return years.map(year => {
+                  const items = byYear[year];
+                  const totalYear = items.reduce(
+                    (sum: number, p: any) => sum + (p.amount || p.montant || 0),
+                    0,
+                  );
                   return (
-                    <View
-                      key={payment.id}
-                      style={{
-                        backgroundColor: colors.background,
-                        borderRadius: 12,
-                        padding: 14,
-                        marginBottom: 10,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                      }}
-                    >
+                    <View key={year}>
                       <View
                         style={{
                           flexDirection: 'row',
                           justifyContent: 'space-between',
-                          alignItems: 'flex-start',
+                          alignItems: 'center',
+                          paddingVertical: 10,
+                          paddingHorizontal: 4,
+                          marginTop: years.indexOf(year) > 0 ? 12 : 0,
+                          borderBottomWidth: 2,
+                          borderBottomColor: colors.accent,
+                          marginBottom: 10,
                         }}
                       >
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontSize: 15,
-                              fontWeight: '600',
-                              color: colors.text,
-                            }}
-                          >
-                            {(payment.amount || payment.montant || 0).toFixed(
-                              2,
-                            )}{' '}
-                            €
-                          </Text>
-                          {payment.projetNom ? (
-                            <Text
-                              style={{
-                                fontSize: 12,
-                                color: colors.textMuted,
-                                marginTop: 2,
-                              }}
-                            >
-                              {t('donationProject')} : {payment.projetNom}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <View
+                        <Text
                           style={{
-                            backgroundColor: statusColor + '20',
-                            paddingHorizontal: 10,
-                            paddingVertical: 3,
-                            borderRadius: 8,
+                            fontSize: 17,
+                            fontWeight: '800',
+                            color: colors.text,
                           }}
                         >
-                          <Text
+                          {year}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 16,
+                            fontWeight: '700',
+                            color: colors.accent,
+                          }}
+                        >
+                          {totalYear.toFixed(2)} €
+                        </Text>
+                      </View>
+                      {items.map((payment: any) => {
+                        const date =
+                          payment.createdAt?.toDate?.() ||
+                          new Date(payment.createdAt);
+                        const dateStr = date.toLocaleDateString(locale, {
+                          day: '2-digit',
+                          month: 'long',
+                        });
+                        const timeStr = date.toLocaleTimeString(locale, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        });
+                        const paymentMethod =
+                          payment.modePaiement || payment.paymentMethod || '';
+                        let status = t('statusPaid');
+                        let statusColor = colors.accent;
+                        if (
+                          payment.statut === 'refunded' ||
+                          payment.status === 'refunded'
+                        ) {
+                          status = t('statusRefunded');
+                          statusColor = '#f97316';
+                        }
+                        return (
+                          <View
+                            key={payment.id}
                             style={{
-                              fontSize: 11,
-                              fontWeight: '600',
-                              color: statusColor,
-                              textTransform: 'uppercase',
+                              backgroundColor: colors.background,
+                              borderRadius: 12,
+                              padding: 14,
+                              marginBottom: 10,
+                              borderWidth: 1,
+                              borderColor: colors.border,
                             }}
                           >
-                            {status}
-                          </Text>
-                        </View>
-                      </View>
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          marginTop: 8,
-                        }}
-                      >
-                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                          {dateStr} {t('atTimeShort')} {timeStr}
-                        </Text>
-                        {paymentMethod ? (
-                          <Text
-                            style={{ fontSize: 12, color: colors.textMuted }}
-                          >
-                            {paymentMethod === 'card'
-                              ? t('paymentMethodCB')
-                              : paymentMethod}
-                          </Text>
-                        ) : null}
-                      </View>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                              }}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={{
+                                    fontSize: 15,
+                                    fontWeight: '600',
+                                    color: colors.text,
+                                  }}
+                                >
+                                  {(
+                                    payment.amount ||
+                                    payment.montant ||
+                                    0
+                                  ).toFixed(2)}{' '}
+                                  €
+                                </Text>
+                                {payment.projetNom ? (
+                                  <Text
+                                    style={{
+                                      fontSize: 12,
+                                      color: colors.textMuted,
+                                      marginTop: 2,
+                                    }}
+                                  >
+                                    {t('donationProject')} : {payment.projetNom}
+                                  </Text>
+                                ) : null}
+                              </View>
+                              <View
+                                style={{
+                                  backgroundColor: statusColor + '20',
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 3,
+                                  borderRadius: 8,
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: '600',
+                                    color: statusColor,
+                                    textTransform: 'uppercase',
+                                  }}
+                                >
+                                  {status}
+                                </Text>
+                              </View>
+                            </View>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                marginTop: 8,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  color: colors.textMuted,
+                                }}
+                              >
+                                {dateStr} {t('atTimeShort')} {timeStr}
+                              </Text>
+                              {paymentMethod ? (
+                                <Text
+                                  style={{
+                                    fontSize: 12,
+                                    color: colors.textMuted,
+                                  }}
+                                >
+                                  {paymentMethod === 'card'
+                                    ? t('paymentMethodCB')
+                                    : paymentMethod}
+                                </Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        );
+                      })}
                     </View>
                   );
                 });
@@ -2297,131 +2361,197 @@ const MemberScreen = () => {
                     </Text>
                   );
                 }
-                return adhesions.map((payment: any, index: number) => {
-                  const date =
-                    payment.createdAt?.toDate?.() ||
-                    new Date(payment.createdAt);
-                  const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
-                  const dateStr = date.toLocaleDateString(locale, {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric',
-                  });
-                  const timeStr = date.toLocaleTimeString(locale, {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
-                  const paymentMethod =
-                    payment.modePaiement || payment.paymentMethod || '';
-                  const period =
-                    payment.metadata?.period || payment.period || '';
-                  const isMensuel = period === 'mensuel';
-                  let status = t('statusPaid');
-                  let statusColor = colors.accent;
-                  if (payment.status === 'refunded') {
-                    status = t('statusRefunded');
-                    statusColor = '#f97316';
-                  } else if (payment.status === 'failed') {
-                    status = t('statusFailed');
-                    statusColor = '#ef4444';
-                  }
+                // Grouper par année
+                const byYear: Record<number, any[]> = {};
+                adhesions.forEach((p: any) => {
+                  const d =
+                    p.createdAt?.toDate?.() || new Date(p.createdAt || 0);
+                  const y = d.getFullYear();
+                  if (!byYear[y]) byYear[y] = [];
+                  byYear[y].push(p);
+                });
+                const years = Object.keys(byYear)
+                  .map(Number)
+                  .sort((a, b) => b - a);
+                const locale = language === 'ar' ? 'ar-SA' : 'fr-FR';
 
+                return years.map(year => {
+                  const items = byYear[year];
+                  const totalYear = items.reduce(
+                    (sum: number, p: any) => sum + (p.amount || p.montant || 0),
+                    0,
+                  );
                   return (
-                    <View
-                      key={payment.id}
-                      style={{
-                        backgroundColor: colors.background,
-                        borderRadius: 12,
-                        padding: 14,
-                        marginBottom: 10,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                      }}
-                    >
+                    <View key={year}>
                       <View
                         style={{
                           flexDirection: 'row',
                           justifyContent: 'space-between',
-                          alignItems: 'flex-start',
+                          alignItems: 'center',
+                          paddingVertical: 10,
+                          paddingHorizontal: 4,
+                          marginTop: years.indexOf(year) > 0 ? 12 : 0,
+                          borderBottomWidth: 2,
+                          borderBottomColor: colors.accent,
+                          marginBottom: 10,
                         }}
                       >
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontSize: 15,
-                              fontWeight: '600',
-                              color: colors.text,
-                            }}
-                          >
-                            {(payment.amount || payment.montant || 0).toFixed(
-                              2,
-                            )}{' '}
-                            €
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: isMensuel ? '#3b82f6' : colors.accent,
-                              marginTop: 2,
-                              fontWeight: '500',
-                            }}
-                          >
-                            {isMensuel
-                              ? '🔄 ' + t('paymentTypeCotisationMensuel')
-                              : '📋 ' + t('paymentTypeCotisationAnnuel')}
-                          </Text>
-                        </View>
-                        <View
-                          style={{
-                            backgroundColor: statusColor + '20',
-                            paddingHorizontal: 10,
-                            paddingVertical: 3,
-                            borderRadius: 8,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontWeight: '600',
-                              color: statusColor,
-                              textTransform: 'uppercase',
-                            }}
-                          >
-                            {status}
-                          </Text>
-                        </View>
-                      </View>
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          marginTop: 8,
-                        }}
-                      >
-                        <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                          {dateStr} {t('atTimeShort')} {timeStr}
-                        </Text>
-                        {paymentMethod ? (
-                          <Text
-                            style={{ fontSize: 12, color: colors.textMuted }}
-                          >
-                            {paymentMethod === 'card'
-                              ? t('paymentMethodCB')
-                              : paymentMethod}
-                          </Text>
-                        ) : null}
-                      </View>
-                      {payment.memberName ? (
                         <Text
                           style={{
-                            fontSize: 12,
-                            color: colors.textMuted,
-                            marginTop: 4,
+                            fontSize: 17,
+                            fontWeight: '800',
+                            color: colors.text,
                           }}
                         >
-                          {t('adhesionMember')} : {payment.memberName}
+                          {year}
                         </Text>
-                      ) : null}
+                        <Text
+                          style={{
+                            fontSize: 16,
+                            fontWeight: '700',
+                            color: colors.accent,
+                          }}
+                        >
+                          {totalYear.toFixed(2)} €
+                        </Text>
+                      </View>
+                      {items.map((payment: any) => {
+                        const date =
+                          payment.createdAt?.toDate?.() ||
+                          new Date(payment.createdAt);
+                        const dateStr = date.toLocaleDateString(locale, {
+                          day: '2-digit',
+                          month: 'long',
+                        });
+                        const timeStr = date.toLocaleTimeString(locale, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        });
+                        const paymentMethod =
+                          payment.modePaiement || payment.paymentMethod || '';
+                        const period =
+                          payment.metadata?.period || payment.period || '';
+                        const isMensuel = period === 'mensuel';
+                        let status = t('statusPaid');
+                        let statusColor = colors.accent;
+                        if (payment.status === 'refunded') {
+                          status = t('statusRefunded');
+                          statusColor = '#f97316';
+                        } else if (payment.status === 'failed') {
+                          status = t('statusFailed');
+                          statusColor = '#ef4444';
+                        }
+                        return (
+                          <View
+                            key={payment.id}
+                            style={{
+                              backgroundColor: colors.background,
+                              borderRadius: 12,
+                              padding: 14,
+                              marginBottom: 10,
+                              borderWidth: 1,
+                              borderColor: colors.border,
+                            }}
+                          >
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                              }}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={{
+                                    fontSize: 15,
+                                    fontWeight: '600',
+                                    color: colors.text,
+                                  }}
+                                >
+                                  {(
+                                    payment.amount ||
+                                    payment.montant ||
+                                    0
+                                  ).toFixed(2)}{' '}
+                                  €
+                                </Text>
+                                <Text
+                                  style={{
+                                    fontSize: 12,
+                                    color: isMensuel
+                                      ? '#3b82f6'
+                                      : colors.accent,
+                                    marginTop: 2,
+                                    fontWeight: '500',
+                                  }}
+                                >
+                                  {isMensuel
+                                    ? '🔄 ' + t('paymentTypeCotisationMensuel')
+                                    : '📋 ' + t('paymentTypeCotisationAnnuel')}
+                                </Text>
+                              </View>
+                              <View
+                                style={{
+                                  backgroundColor: statusColor + '20',
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 3,
+                                  borderRadius: 8,
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: '600',
+                                    color: statusColor,
+                                    textTransform: 'uppercase',
+                                  }}
+                                >
+                                  {status}
+                                </Text>
+                              </View>
+                            </View>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                marginTop: 8,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  color: colors.textMuted,
+                                }}
+                              >
+                                {dateStr} {t('atTimeShort')} {timeStr}
+                              </Text>
+                              {paymentMethod ? (
+                                <Text
+                                  style={{
+                                    fontSize: 12,
+                                    color: colors.textMuted,
+                                  }}
+                                >
+                                  {paymentMethod === 'card'
+                                    ? t('paymentMethodCB')
+                                    : paymentMethod}
+                                </Text>
+                              ) : null}
+                            </View>
+                            {payment.memberName ? (
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  color: colors.textMuted,
+                                  marginTop: 4,
+                                }}
+                              >
+                                {t('adhesionMember')} : {payment.memberName}
+                              </Text>
+                            ) : null}
+                          </View>
+                        );
+                      })}
                     </View>
                   );
                 });
