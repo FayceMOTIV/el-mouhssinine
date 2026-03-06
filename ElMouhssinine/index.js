@@ -2,33 +2,22 @@
  * @format
  */
 
-import { AppRegistry, LogBox } from 'react-native';
+import { AppRegistry, LogBox, Platform } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import notifee, { EventType } from '@notifee/react-native';
 import TrackPlayer from 'react-native-track-player';
-import BackgroundFetch from 'react-native-background-fetch';
 import App from './App';
 import { name as appName } from './app.json';
-import { addNotificationToHistory, detectNotificationType } from './src/services/notificationHistory';
+import {
+  addNotificationToHistory,
+  detectNotificationType,
+} from './src/services/notificationHistory';
 
 // IMPORTANT: Enregistrer le service de lecture audio (Coran)
 TrackPlayer.registerPlaybackService(() => require('./service'));
 
-// IMPORTANT: Enregistrer le headless task pour le background fetch (Android)
-// Permet de vérifier la proximité de la mosquée même si l'app est fermée
-BackgroundFetch.registerHeadlessTask(async ({ taskId }) => {
-  console.log(`[BackgroundFetch] Headless task ${taskId}`);
-  // La logique de proximité est gérée dans backgroundLocation.ts
-  // Ce handler est appelé automatiquement par le système
-  BackgroundFetch.finish(taskId);
-});
-
 // Ignore specific warnings
-LogBox.ignoreLogs([
-  'Firebase',
-  'AsyncStorage',
-  'Require cycle',
-]);
+LogBox.ignoreLogs(['Firebase', 'AsyncStorage', 'Require cycle']);
 
 // IMPORTANT: Gestionnaire de notifications LOCALES en arrière-plan (notifee)
 // Capture les notifications de prière, boost, coran, ramadan quand l'app est en background/killed
@@ -39,45 +28,55 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
     if (title && body) {
       const notifType = detectNotificationType(title, body);
       await addNotificationToHistory(title, body, notifType);
-      console.log('[Background] Notification locale ajoutée à l\'historique:', title);
+      console.log(
+        "[Background] Notification locale ajoutée à l'historique:",
+        title,
+      );
     }
   }
 });
 
 // IMPORTANT: Gestionnaire de notifications FCM en arrière-plan
 // Doit être enregistré AVANT AppRegistry.registerComponent
-messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+messaging().setBackgroundMessageHandler(async remoteMessage => {
   console.log('🔔 [FCM] Background message received:', remoteMessage);
 
-  // Afficher la notification avec notifee
   const { notification, data } = remoteMessage;
 
   if (notification) {
-    // Déterminer le channel basé sur le type
-    let channelId = 'general';
-    if (data?.type === 'announcement') channelId = 'announcements';
-    else if (data?.type === 'event') channelId = 'events';
-    else if (data?.type === 'janaza') channelId = 'janaza_channel';
-    else if (data?.type === 'backoffice_notification') channelId = 'general';
+    // Sur iOS, APNs affiche DEJA la notification système en background.
+    // Ne PAS créer une 2e notification via notifee (cause doublon).
+    // Sur Android, il faut afficher via notifee.
+    if (Platform.OS === 'android') {
+      let channelId = 'general';
+      if (data?.type === 'announcement') channelId = 'announcements';
+      else if (data?.type === 'event') channelId = 'events';
+      else if (data?.type === 'janaza') channelId = 'janaza_channel';
+      else if (data?.type === 'backoffice_notification') channelId = 'general';
 
-    await notifee.displayNotification({
-      title: notification.title || 'Notification',
-      body: notification.body || '',
-      android: {
-        channelId,
-        smallIcon: 'ic_notification',
-        pressAction: {
-          id: 'default',
+      await notifee.displayNotification({
+        title: notification.title || 'Notification',
+        body: notification.body || '',
+        android: {
+          channelId,
+          smallIcon: 'ic_notification',
+          pressAction: {
+            id: 'default',
+          },
         },
-      },
-      ios: {
-        sound: 'default',
-      },
-    });
+      });
+    }
 
-    // Ajouter à l'historique des notifications
-    const notifType = detectNotificationType(notification.title || '', notification.body || '');
-    await addNotificationToHistory(notification.title || 'Notification', notification.body || '', notifType);
+    // Ajouter à l'historique des notifications (toutes plateformes)
+    const notifType = detectNotificationType(
+      notification.title || '',
+      notification.body || '',
+    );
+    await addNotificationToHistory(
+      notification.title || 'Notification',
+      notification.body || '',
+      notifType,
+    );
   }
 });
 

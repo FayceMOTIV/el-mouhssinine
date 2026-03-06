@@ -1,11 +1,15 @@
 /**
- * Background Location Service
- * Vérifie périodiquement la position de l'utilisateur en arrière-plan
- * pour envoyer une notification quand il est proche de la mosquée
+ * Background Location Service — Geofencing via watchPosition
+ *
+ * Utilise Geolocation.watchPosition avec distanceFilter pour détecter
+ * quand l'utilisateur s'approche de la mosquée, même en arrière-plan.
+ * Remplace l'ancien système BackgroundFetch (polling toutes les ~15min,
+ * iOS throttlait agressivement → notifications jamais reçues).
  */
 
-import BackgroundFetch from 'react-native-background-fetch';
-import Geolocation from '@react-native-community/geolocation';
+import Geolocation, {
+  GeolocationError,
+} from '@react-native-community/geolocation';
 import { Platform } from 'react-native';
 import {
   checkMosqueProximity,
@@ -24,7 +28,7 @@ Geolocation.setRNConfiguration({
 const PROXIMITY_TRANSLATIONS = {
   fr: {
     title: '🕌 Vous êtes à la mosquée',
-    body: 'N\'oubliez pas de mettre votre téléphone en mode silencieux 🔕',
+    body: "N'oubliez pas de mettre votre téléphone en mode silencieux 🔕",
   },
   ar: {
     title: '🕌 أنت في المسجد',
@@ -32,151 +36,120 @@ const PROXIMITY_TRANSLATIONS = {
   },
 };
 
-/**
- * Récupère la position actuelle de l'utilisateur
- */
-const getCurrentPosition = (): Promise<{ latitude: number; longitude: number } | null> => {
-  return new Promise((resolve) => {
-    const getPosition = () => {
-      Geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        (error) => {
-          if (__DEV__) console.log('[BackgroundLocation] Erreur géolocalisation:', error.message);
-          resolve(null);
-        },
-        {
-          enableHighAccuracy: false, // Low power mode pour background
-          timeout: 15000,
-          maximumAge: 60000, // Position peut avoir jusqu'à 1 minute
-        }
-      );
-    };
-
-    // Demander la permission iOS si nécessaire, puis obtenir la position
-    if (Platform.OS === 'ios') {
-      Geolocation.requestAuthorization(
-        () => getPosition(), // Obtenir la position après autorisation
-        (err) => {
-          if (__DEV__) console.log('[BackgroundLocation] Auth error:', err);
-          resolve(null);
-        }
-      );
-    } else {
-      getPosition();
-    }
-  });
-};
+// ID du watcher actif (null = pas de watch en cours)
+let activeWatchId: number | null = null;
 
 /**
- * Tâche de vérification de proximité mosquée
+ * Callback appelé à chaque mise à jour de position par watchPosition.
+ * Vérifie la proximité de la mosquée et envoie la notification si nécessaire.
  */
-const checkMosqueProximityTask = async (): Promise<void> => {
+const onPositionUpdate = async (position: {
+  coords: { latitude: number; longitude: number };
+}): Promise<void> => {
   try {
-    // Vérifier si la feature est activée
     const settings = await getMosqueProximitySettings();
     if (!settings.enabled) {
       return;
     }
 
-    // Obtenir la position
-    const position = await getCurrentPosition();
-    if (!position) {
-      return;
-    }
-
-    // Note: On ne log JAMAIS les coordonnées GPS (vie privée)
-
-    // Vérifier la proximité et envoyer la notification si nécessaire
-    // Utiliser les traductions françaises par défaut (la plupart des utilisateurs)
-    const sent = await checkMosqueProximity(
-      position.latitude,
-      position.longitude,
-      PROXIMITY_TRANSLATIONS.fr
+    await checkMosqueProximity(
+      position.coords.latitude,
+      position.coords.longitude,
+      PROXIMITY_TRANSLATIONS.fr,
     );
-
-    // Notification envoyée si sent === true
   } catch (error) {
-    // Erreur silencieuse en production
-    if (__DEV__) console.error('[BackgroundLocation] Error:', error);
+    if (__DEV__) console.error('[BackgroundLocation] onPositionUpdate error:', error);
   }
 };
 
 /**
- * Configure et démarre le Background Fetch
+ * Callback appelé quand watchPosition échoue (GPS off, permission refusée, etc.)
+ */
+const onPositionError = (error: GeolocationError): void => {
+  // Codes d'erreur courants :
+  // 1 = PERMISSION_DENIED
+  // 2 = POSITION_UNAVAILABLE
+  // 3 = TIMEOUT
+  console.log(
+    `[BackgroundLocation] watchPosition error: code=${error.code}, message=${error.message}`,
+  );
+};
+
+/**
+ * Démarre le watchPosition pour surveiller la proximité de la mosquée.
+ * Utilise distanceFilter: 100m — le GPS ne se réveille que si l'utilisateur
+ * se déplace de 100m+, ce qui économise la batterie.
  */
 export const initBackgroundLocation = async (): Promise<void> => {
   try {
-    // Configuration du Background Fetch
-    const status = await BackgroundFetch.configure(
+    // Vérifier si la feature est activée
+    const settings = await getMosqueProximitySettings();
+    if (!settings.enabled) {
+      console.log('[BackgroundLocation] Mode silencieux mosquée désactivé, skip watchPosition');
+      return;
+    }
+
+    // Arrêter un éventuel watch précédent
+    if (activeWatchId !== null) {
+      Geolocation.clearWatch(activeWatchId);
+      activeWatchId = null;
+    }
+
+    // Demander la permission sur iOS avant de démarrer le watch
+    if (Platform.OS === 'ios') {
+      await new Promise<void>((resolve) => {
+        Geolocation.requestAuthorization(
+          () => resolve(),
+          (err) => {
+            console.log('[BackgroundLocation] Authorization error:', err);
+            resolve(); // On continue quand même, watchPosition renverra une erreur si refusé
+          },
+        );
+      });
+    }
+
+    // Démarrer le watch
+    activeWatchId = Geolocation.watchPosition(
+      onPositionUpdate,
+      onPositionError,
       {
-        minimumFetchInterval: 15, // Minimum 15 minutes (iOS impose ce minimum)
-        stopOnTerminate: false, // Continuer même si l'app est fermée
-        startOnBoot: true, // Démarrer au boot (Android)
-        enableHeadless: true, // Exécuter même quand l'app n'est pas lancée
-        requiredNetworkType: BackgroundFetch.NETWORK_TYPE_NONE, // Pas besoin de réseau
-        requiresCharging: false,
-        requiresDeviceIdle: false,
-        requiresBatteryNotLow: false,
-        requiresStorageNotLow: false,
+        enableHighAccuracy: false,   // Low power — GPS approximatif suffit pour 200m
+        distanceFilter: 100,         // Se réveille uniquement si déplacement de 100m+
+        interval: 60000,             // Android : intervalle souhaité 60s
+        fastestInterval: 30000,      // Android : intervalle minimum 30s
+        maximumAge: 120000,          // Position peut avoir jusqu'à 2 minutes
+        timeout: 30000,              // Timeout 30s par position
       },
-      async (taskId) => {
-        // Tâche exécutée en background
-        await checkMosqueProximityTask();
-        // IMPORTANT: Signaler que la tâche est terminée
-        BackgroundFetch.finish(taskId);
-      },
-      (taskId) => {
-        // Timeout - la tâche a pris trop de temps
-        BackgroundFetch.finish(taskId);
-      }
     );
 
-    // Démarrer le scheduling
-    await BackgroundFetch.start();
-
+    console.log(`[BackgroundLocation] watchPosition démarré (watchId: ${activeWatchId})`);
   } catch (error) {
-    if (__DEV__) console.error('[BackgroundLocation] Init error:', error);
+    console.log('[BackgroundLocation] initBackgroundLocation error:', error);
   }
 };
 
 /**
- * Arrête le Background Fetch
+ * Arrête le watchPosition
  */
 export const stopBackgroundLocation = async (): Promise<void> => {
   try {
-    await BackgroundFetch.stop();
+    if (activeWatchId !== null) {
+      Geolocation.clearWatch(activeWatchId);
+      console.log(`[BackgroundLocation] watchPosition arrêté (watchId: ${activeWatchId})`);
+      activeWatchId = null;
+    }
   } catch (error) {
     if (__DEV__) console.error('[BackgroundLocation] Stop error:', error);
   }
 };
 
 /**
- * Vérifie le statut du Background Fetch
- */
-export const getBackgroundLocationStatus = async (): Promise<number> => {
-  return BackgroundFetch.status();
-};
-
-/**
- * Headless task pour Android (exécuté même si l'app n'est pas lancée)
- */
-export const registerHeadlessTask = (): void => {
-  BackgroundFetch.registerHeadlessTask(async ({ taskId }) => {
-    await checkMosqueProximityTask();
-    BackgroundFetch.finish(taskId);
-  });
-};
-
-/**
  * Vérification immédiate de proximité (appelée quand l'app passe au premier plan)
  * Utilise une précision GPS plus élevée car on est au premier plan
  */
-export const checkMosqueProximityForeground = async (language: 'fr' | 'ar' = 'fr'): Promise<boolean> => {
+export const checkMosqueProximityForeground = async (
+  language: 'fr' | 'ar' = 'fr',
+): Promise<boolean> => {
   try {
     // Vérifier si la feature est activée
     const settings = await getMosqueProximitySettings();
@@ -186,7 +159,10 @@ export const checkMosqueProximityForeground = async (language: 'fr' | 'ar' = 'fr
     }
 
     // Obtenir la position avec haute précision (on est au premier plan)
-    const position = await new Promise<{ latitude: number; longitude: number } | null>((resolve) => {
+    const position = await new Promise<{
+      latitude: number;
+      longitude: number;
+    } | null>((resolve) => {
       const getPos = () => {
         Geolocation.getCurrentPosition(
           (pos) => {
@@ -196,14 +172,17 @@ export const checkMosqueProximityForeground = async (language: 'fr' | 'ar' = 'fr
             });
           },
           (error) => {
-            console.log('[BackgroundLocation] Foreground geoloc error:', error.message);
+            console.log(
+              '[BackgroundLocation] Foreground geoloc error:',
+              error.message,
+            );
             resolve(null);
           },
           {
             enableHighAccuracy: true, // Haute précision au premier plan
             timeout: 10000,
             maximumAge: 30000, // Position plus fraîche
-          }
+          },
         );
       };
 
@@ -211,9 +190,10 @@ export const checkMosqueProximityForeground = async (language: 'fr' | 'ar' = 'fr
         Geolocation.requestAuthorization(
           () => getPos(),
           (err) => {
-            if (__DEV__) console.log('[BackgroundLocation] Foreground auth error:', err);
+            if (__DEV__)
+              console.log('[BackgroundLocation] Foreground auth error:', err);
             resolve(null);
-          }
+          },
         );
       } else {
         getPos();
@@ -229,7 +209,7 @@ export const checkMosqueProximityForeground = async (language: 'fr' | 'ar' = 'fr
     const sent = await checkMosqueProximity(
       position.latitude,
       position.longitude,
-      translations
+      translations,
     );
 
     return sent;
