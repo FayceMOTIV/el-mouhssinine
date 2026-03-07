@@ -237,9 +237,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Paiements échoués - Aucun accès client
+    // Paiements échoués - Lecture admin, écriture Cloud Functions only
     match /failed_payments/{docId} {
-      allow read, write: if false;
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // Reçus fiscaux - Lecture admin ou propriétaire, écriture Cloud Functions only

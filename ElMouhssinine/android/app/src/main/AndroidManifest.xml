@@ -45,10 +45,18 @@
         </intent-filter>
       </activity>
 
-      <!-- Background Fetch HeadlessTask -->
-      <service
-        android:name="com.transistorsoft.rnbackgroundfetch.HeadlessTask"
-        android:permission="android.permission.BIND_JOB_SERVICE"
-        android:exported="true" />
+      <!-- Geofencing: BroadcastReceiver statique (fonctionne app killed) -->
+      <receiver
+        android:name=".MosqueGeofencingReceiver"
+        android:exported="false"/>
+
+      <!-- Geofencing: Réenregistre les geofences après reboot -->
+      <receiver
+        android:name=".MosqueGeofenceBootReceiver"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.intent.action.BOOT_COMPLETED"/>
+        </intent-filter>
+      </receiver>
     </application>
 </manifest>

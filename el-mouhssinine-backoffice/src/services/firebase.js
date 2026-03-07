@@ -38,20 +38,15 @@ import {
   connectFunctionsEmulator
 } from 'firebase/functions'
 
-// Configuration Firebase - préfère les variables d'environnement si disponibles
+// Configuration Firebase via variables d'environnement (.env)
 // Note: Les credentials Firebase web sont publiques par design (protection via Firestore Rules)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCJr6tGI9QpbWr3pf1GpYoEnvsGgkJj8j8",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "el-mouhssinine.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "el-mouhssinine",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "el-mouhssinine.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "658931173250",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:658931173250:web:c5a7e8f2d3b4a192837465"
-}
-
-// Avertissement en dev si variables d'environnement non configurées
-if (import.meta.env.DEV && !import.meta.env.VITE_FIREBASE_API_KEY) {
-  console.warn('[Firebase] Variables d\'environnement non configurées - utilisation des valeurs par défaut')
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 }
 
 // Force demo mode for development (set to true to use mock data)

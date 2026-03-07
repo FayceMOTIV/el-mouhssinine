@@ -549,6 +549,21 @@ exports.sendManualNotification = functions
         sentAt: new Date().toISOString(),
         ...customData,
       },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          sound: 'default',
+          channelId: 'general',
+        },
+      },
       topic: topic || 'general',
     };
 
@@ -1199,7 +1214,7 @@ exports.onMessageReply = functions
           return null;
         }
 
-        const userName = sanitizeString(after.nom, 50) || 'Un utilisateur';
+        const userName = sanitizeString(after.userName || after.nom, 50) || 'Un utilisateur';
         const message = {
           notification: {
             title: '💬 Nouvelle réponse adhérent',
@@ -1657,7 +1672,12 @@ exports.stripeWebhook = functions
                 type: 'cotisation',
                 description: paymentIntent.description,
                 membreId: metadata.memberId || null,
+                memberId: metadata.memberIdDisplay || '',
+                memberName: metadata.memberName || '',
+                period: metadata.period || 'annuel',
+                modePaiement: 'carte',
                 metadata: metadata,
+                date: admin.firestore.FieldValue.serverTimestamp(),
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
               }, { merge: true });
@@ -1732,6 +1752,7 @@ exports.stripeWebhook = functions
                 projetId: metadata.projectId || null,
                 projetNom: metadata.projectName || null,
                 isAnonymous: metadata.isAnonymous === 'true',
+                modePaiement: 'carte',
                 source: 'webhook_stripe',
                 date: admin.firestore.FieldValue.serverTimestamp(),
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1926,6 +1947,7 @@ exports.stripeWebhook = functions
                 email: email,
                 period: 'mensuel',
               },
+              date: admin.firestore.FieldValue.serverTimestamp(),
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
 
@@ -3574,6 +3596,14 @@ exports.validateMembership = functions
               type: 'membership_approved',
               memberId: memberId,
             },
+            apns: {
+              payload: {
+                aps: {
+                  sound: 'default',
+                  badge: 1,
+                },
+              },
+            },
           });
         }
 
@@ -3703,6 +3733,14 @@ exports.validateMembership = functions
               type: 'membership_rejected',
               memberId: memberId,
             },
+            apns: {
+              payload: {
+                aps: {
+                  sound: 'default',
+                  badge: 1,
+                },
+              },
+            },
           });
         }
 
@@ -3757,6 +3795,14 @@ exports.validateMembership = functions
             data: {
               type: 'visit_requested',
               memberId: memberId,
+            },
+            apns: {
+              payload: {
+                aps: {
+                  sound: 'default',
+                  badge: 1,
+                },
+              },
             },
           });
         }
@@ -4394,7 +4440,9 @@ exports.onDonationConfirmation = functions
     }
 
     // 2. Vérifier statut (double nommage app/webhook)
-    const isCompleted = donation.statut === 'completed' || donation.status === 'succeeded';
+    // FIX: L'app écrit status:'completed', le webhook écrit statut:'completed'
+    // Il faut accepter les deux variantes
+    const isCompleted = donation.statut === 'completed' || donation.status === 'succeeded' || donation.status === 'completed';
     if (!isCompleted) {
       console.log('Don non complété, skip:', donationId);
       return null;
@@ -4578,9 +4626,23 @@ exports.onCotisationConfirmation = functions
     }
 
     // 3. Vérifier statut
-    const isCompleted = payment.statut === 'completed' || payment.status === 'succeeded';
+    // FIX: L'app écrit status:'completed', le webhook écrit status:'succeeded'
+    // Il faut accepter les deux variantes
+    const isCompleted = payment.statut === 'completed' || payment.status === 'succeeded' || payment.status === 'completed';
     if (!isCompleted) {
       console.log('Paiement non complété, skip:', paymentId);
+      return null;
+    }
+
+    // 4. Ne pas envoyer l'email "Bienvenue" pour les renouvellements mensuels
+    // Les docs créés par invoice.payment_succeeded ont source:'stripe_subscription'
+    const isRenewal = payment.source === 'stripe_subscription';
+    if (isRenewal) {
+      console.log('Renouvellement mensuel, skip email bienvenue:', paymentId);
+      // Marquer comme traité pour éviter les retries
+      try {
+        await snap.ref.update({ emailConfirmationSent: true });
+      } catch (e) { /* ignore */ }
       return null;
     }
 
@@ -4841,6 +4903,43 @@ exports.refundPayment = functions
       }
 
       console.log(`✅ Remboursement effectué pour membre ${memberId}: ${refundedAmount}€ (${isPartialRefund ? 'partiel' : 'total'})`);
+
+      // Envoyer email de confirmation de remboursement au membre
+      try {
+        const memberEmail = memberData.email;
+        if (memberEmail) {
+          const fromEmail = BREVO_FROM_EMAIL.value();
+          const fromName = BREVO_FROM_NAME.value();
+          const refundTransporter = nodemailer.createTransport({
+            host: 'smtp-relay.brevo.com',
+            port: 587,
+            auth: { user: BREVO_SMTP_USER.value(), pass: BREVO_SMTP_PASS.value() },
+          });
+          await refundTransporter.sendMail({
+            from: `"${fromName}" <${fromEmail}>`,
+            to: memberEmail,
+            subject: 'Remboursement confirmé - El Mouhssinine',
+            html: `
+              <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #e65100, #ff9800); padding: 30px; text-align: center;">
+                  <h1 style="color: white; margin: 0;">Remboursement confirmé</h1>
+                </div>
+                <div style="padding: 30px; background: white;">
+                  <p>Votre remboursement de <strong>${refundedAmount}€</strong> a bien été traité.</p>
+                  <p>Il apparaîtra sur votre compte bancaire sous 5 à 10 jours ouvrés.</p>
+                  <p style="margin-top: 20px;">L'équipe El Mouhssinine</p>
+                </div>
+                <div style="background: #f5f5f5; padding: 15px; text-align: center; font-size: 12px; color: #999;">
+                  <p style="margin: 0;">Association El Mohsinine</p>
+                </div>
+              </div>`,
+          });
+          console.log(`📧 Email remboursement envoyé à ${memberEmail.substring(0, 3)}***`);
+        }
+      } catch (emailError) {
+        console.warn('⚠️ Email remboursement non envoyé (non bloquant):', emailError.message);
+      }
+
       return {
         success: true,
         refunded: !!refundResult,
@@ -5170,6 +5269,43 @@ exports.refundDonation = functions
       }
 
       console.log(`✅ Don ${donationId} remboursé: ${refundedAmount}€ (${isPartial ? 'partiel' : 'total'})`);
+
+      // Envoyer email de confirmation de remboursement au donateur
+      try {
+        const donorEmail = donationData.donateurEmail || donationData.email;
+        if (donorEmail) {
+          const fromEmail = BREVO_FROM_EMAIL.value();
+          const fromName = BREVO_FROM_NAME.value();
+          const refundTransporter = nodemailer.createTransport({
+            host: 'smtp-relay.brevo.com',
+            port: 587,
+            auth: { user: BREVO_SMTP_USER.value(), pass: BREVO_SMTP_PASS.value() },
+          });
+          await refundTransporter.sendMail({
+            from: `"${fromName}" <${fromEmail}>`,
+            to: donorEmail,
+            subject: 'Remboursement de votre don confirmé - El Mouhssinine',
+            html: `
+              <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #e65100, #ff9800); padding: 30px; text-align: center;">
+                  <h1 style="color: white; margin: 0;">Remboursement confirmé</h1>
+                </div>
+                <div style="padding: 30px; background: white;">
+                  <p>Le remboursement de votre don de <strong>${refundedAmount}€</strong> a bien été traité.</p>
+                  <p>Il apparaîtra sur votre compte bancaire sous 5 à 10 jours ouvrés.</p>
+                  <p style="margin-top: 20px;">L'équipe El Mouhssinine</p>
+                </div>
+                <div style="background: #f5f5f5; padding: 15px; text-align: center; font-size: 12px; color: #999;">
+                  <p style="margin: 0;">Association El Mohsinine</p>
+                </div>
+              </div>`,
+          });
+          console.log(`📧 Email remboursement don envoyé à ${donorEmail.substring(0, 3)}***`);
+        }
+      } catch (emailError) {
+        console.warn('⚠️ Email remboursement don non envoyé (non bloquant):', emailError.message);
+      }
+
       return {
         success: true,
         refundId: refundResult.id,

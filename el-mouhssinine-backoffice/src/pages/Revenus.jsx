@@ -117,7 +117,9 @@ export default function Revenus() {
 
     // 1. Paiements de la collection payments
     payments.forEach(p => {
-      const date = p.date?.toDate?.() || new Date(p.date)
+      // FIX: invoice.payment_succeeded n'écrit pas 'date', fallback sur 'createdAt'
+      const rawDate = p.date || p.createdAt
+      const date = rawDate?.toDate?.() || new Date(rawDate || Date.now())
       const membreUid = getMembreUid(p)
       const displayId = p.memberId || p.metadata?.memberIdDisplay || ''
       revenues.push({
@@ -292,9 +294,10 @@ export default function Revenus() {
     return payments.filter(p => {
       if (p.type !== 'cotisation') return false
 
-      // Filtrer par période
-      const date = p.date?.toDate?.() || new Date(p.date)
-      if (!isWithinInterval(date, { start: dateRange.start, end: dateRange.end })) return false
+      // Filtrer par période (FIX: fallback createdAt pour renouvellements mensuels)
+      const rawDate = p.date || p.createdAt
+      const date = rawDate?.toDate?.() || new Date(rawDate || Date.now())
+      if (isNaN(date.getTime()) || !isWithinInterval(date, { start: dateRange.start, end: dateRange.end })) return false
 
       // Filtrer par recherche
       if (cotisationSearchQuery) {

@@ -60,6 +60,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       launchOptions: launchOptions
     )
 
+    // Initialize geofencing (restore CLLocationManager delegate for persisted regions)
+    _ = MosqueGeofencingManager.shared
+
+    // Handle relaunch by iOS when a geofence event fired while app was closed
+    if launchOptions?[UIApplication.LaunchOptionsKey.location] != nil {
+      MosqueGeofencingManager.shared.restartMonitoring()
+    }
+
     return true
   }
 

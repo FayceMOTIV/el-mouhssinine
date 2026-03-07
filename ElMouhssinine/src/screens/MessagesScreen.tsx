@@ -33,6 +33,7 @@ import {
   MESSAGE_SUBJECTS,
 } from '../services/firebase';
 import { clearBadgeCount } from '../services/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EmptyMessages } from '../components';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -92,6 +93,8 @@ const MessagesScreen = () => {
   // Effacer le badge quand on ouvre l'écran Messages
   useEffect(() => {
     clearBadgeCount();
+    // Mettre à jour le timestamp de dernière lecture pour réinitialiser le badge 💬 sur HomeScreen
+    AsyncStorage.setItem('messages_last_read_at', new Date().toISOString());
   }, []);
 
   // Écouter l'état de connexion Firebase
@@ -478,6 +481,7 @@ const MessagesScreen = () => {
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
+                maxLength={500}
               />
               <Text style={styles.charCount}>
                 {messageText.length}/500{' '}

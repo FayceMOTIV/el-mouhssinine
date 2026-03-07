@@ -27,6 +27,7 @@ import {
   UserMessage,
 } from '../services/firebase';
 import { clearBadgeCount } from '../services/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ConversationScreen = () => {
@@ -46,6 +47,8 @@ const ConversationScreen = () => {
   // Effacer le badge quand on ouvre la conversation
   useEffect(() => {
     clearBadgeCount();
+    // Mettre à jour le timestamp de dernière lecture pour réinitialiser le badge 💬 sur HomeScreen
+    AsyncStorage.setItem('messages_last_read_at', new Date().toISOString());
   }, []);
 
   // Charger le message
