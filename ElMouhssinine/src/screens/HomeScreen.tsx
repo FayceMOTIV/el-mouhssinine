@@ -68,15 +68,11 @@ import {
   cancelBoostNotificationsForPrayer,
   scheduleBoostNotifications,
   PrayerBoostSettings,
-  checkMosqueProximity,
-  getMosqueProximitySettings,
   getPrayedPrayersToday,
   markPrayerAsPrayed,
   getRamadanNotificationSettings,
   scheduleRamadanNotifications,
 } from '../services/prayerNotifications';
-import { checkMosqueProximityForeground } from '../services/backgroundLocation';
-import Geolocation from '@react-native-community/geolocation';
 import { setInAppNotificationCallback } from '../services/notifications';
 import auth from '@react-native-firebase/auth';
 import { logger } from '../utils';
@@ -815,57 +811,9 @@ const HomeScreen = () => {
     setNotificationHistory(history);
   }, []);
 
-  // Vérifier la proximité de la mosquée au démarrage ET quand l'app revient au premier plan
-  // Note: Le service backgroundLocation.ts gère aussi la vérification en arrière-plan (toutes les ~15min)
-  useEffect(() => {
-    let isMounted = true;
-
-    const checkProximity = async () => {
-      if (!isMounted) return;
-
-      try {
-        if (__DEV__)
-          console.log(
-            '[HomeScreen] Vérification proximité mosquée (foreground)...',
-          );
-        const sent = await checkMosqueProximityForeground(
-          language === 'ar' ? 'ar' : 'fr',
-        );
-        if (sent) {
-          if (__DEV__)
-            console.log('[HomeScreen] Notification mode silencieux envoyée !');
-        }
-      } catch (error) {
-        if (__DEV__)
-          console.warn('[HomeScreen] Erreur check proximité:', error);
-      }
-    };
-
-    // Vérifier au démarrage
-    checkProximity();
-
-    // Écouter les changements d'état de l'app (arrière-plan -> premier plan)
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active') {
-        if (__DEV__)
-          console.log(
-            '[HomeScreen] App au premier plan, vérification proximité...',
-          );
-        checkProximity();
-      }
-    };
-
-    const subscription = AppState.addEventListener(
-      'change',
-      handleAppStateChange,
-    );
-
-    // Cleanup
-    return () => {
-      isMounted = false;
-      subscription.remove();
-    };
-  }, [language]);
+  // Proximité mosquée : géré entièrement par le geofencing natif iOS/Android
+  // (MosqueGeofencing.swift / MosqueGeofencingReceiver.kt)
+  // Plus besoin de check JS foreground — le natif gère background + foreground
 
   // Gérer le clic sur "J'ai prié" - annule les notifications boost et masque le bouton
   const handlePrayed = useCallback(async () => {
