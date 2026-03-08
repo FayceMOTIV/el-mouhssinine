@@ -900,6 +900,45 @@ Le backoffice utilisait `p.membreId` (francais) pour identifier le membre dans l
 - [x] Backoffice : https://el-mouhssinine.web.app deploye
 - [x] Git : commit bfe3bb3 push sur main
 
+## Corrige (7 Mar 2026 - Build 273)
+
+### Geofencing natif mosquee (iOS + Android)
+- [x] iOS : MosqueGeofencingManager (Swift) avec CLCircularRegion 200m
+  - Flag `wantsMonitoring` persiste dans UserDefaults (survit aux relaunches)
+  - `locationManagerDidChangeAuthorization` garde par wantsMonitoring
+  - Cooldown 30 min entre notifications
+  - Notification locale native (fonctionne meme si JS bridge pas pret)
+- [x] iOS : MosqueGeofencingBridge.m (RCT_EXTERN_MODULE)
+- [x] iOS : AppDelegate.swift restartMonitoring() au lancement par localisation
+- [x] iOS : project.pbxproj + Info.plist (UIBackgroundModes location deja present)
+- [x] Android : MosqueGeofencingModule.kt (GeofencingClient 200m)
+- [x] Android : MosqueGeofencingReceiver.kt (BroadcastReceiver statique)
+- [x] Android : MosqueGeofenceBootReceiver.kt (re-enregistre apres reboot)
+- [x] Android : MosqueGeofencingPackage.kt + MainApplication.kt
+- [x] Android : AndroidManifest.xml (permissions + receivers)
+- [x] backgroundLocation.ts simplifie (delegue start/stop au natif)
+
+### Bugfixes
+- [x] stripe.ts : 3 erreurs TypeScript corrigees (nombre d'arguments)
+- [x] functions/index.js : email de confirmation apres remboursement
+- [x] functions/index.js : nettoyage logger (plus de console.log en production)
+- [x] el-mouhssinine-backoffice/firebase.js : suppression legacy config hardcodee
+- [x] Revenus.jsx : fix colonnes cotisations backoffice
+
+### Architecture fichiers geofencing
+- ios/ElMouhssinine/MosqueGeofencing.swift (NOUVEAU)
+- ios/ElMouhssinine/MosqueGeofencingBridge.m (NOUVEAU)
+- android/.../MosqueGeofencingModule.kt (NOUVEAU)
+- android/.../MosqueGeofencingReceiver.kt (NOUVEAU)
+- android/.../MosqueGeofenceBootReceiver.kt (NOUVEAU)
+- android/.../MosqueGeofencingPackage.kt (NOUVEAU)
+
+### Deployements
+- [x] Cloud Functions : 34 fonctions deployees
+- [x] Backoffice : https://el-mouhssinine.web.app deploye
+- [x] Archive iOS Build 273 prete (Xcode Organizer)
+- [x] Git : commit 9c99fee sur main
+
 ## Bugs connus / Pieges
 
 ### membreId vs memberId (payments collection)
@@ -943,11 +982,17 @@ Ne PAS imbriquer 3+ niveaux de `TouchableWithoutFeedback`. Le wrapper externe ca
 ### Historique dons — double query
 La requete `where('userId', '==', uid)` ne suffit pas : les dons crees par le webhook Stripe n'ont souvent pas de userId. Toujours combiner avec `where('donateurEmail', '==', email)` et dedupliquer par doc.id via Map.
 
+### MosqueGeofencing iOS — wantsMonitoring obligatoire
+`locationManagerDidChangeAuthorization` est appele automatiquement quand le delegate est assigne dans `init()`. Sans le flag `wantsMonitoring` (UserDefaults), le monitoring demarrerait meme si l'utilisateur a desactive la fonctionnalite dans les parametres. Le flag est set par `start()` (true) et `stop()` (false), et verifie dans le delegate et `restartMonitoring()`.
+
+### MosqueGeofencing Android — BroadcastReceiver statique
+Le `MosqueGeofencingReceiver` DOIT etre declare statiquement dans AndroidManifest.xml (pas enregistre dynamiquement). Sinon Android ne peut pas le declencher quand l'app est tuee. Meme chose pour le `MosqueGeofenceBootReceiver` (BOOT_COMPLETED).
+
 ## Notes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
 - Mock data janaza supprime (donnees sensibles)
 - Sections vides masquees sur HomeScreen (annonces, evenements, janaza)
-- Cloud Functions bien structurees, 33 fonctions deployees
+- Cloud Functions bien structurees, 34 fonctions deployees
 - Score audit securite : 9/10 (apres corrections Build 228)
 - Score audit i18n : 9/10 (apres corrections Build 98)
 - App iOS uniquement en production (Android non deploye)

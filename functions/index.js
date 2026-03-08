@@ -1719,13 +1719,51 @@ exports.stripeWebhook = functions
 
               // Mettre à jour le membre (déjà lu en phase 1)
               // Status → en_attente_validation (l'admin valide via backoffice → actif)
+              // BUG A FIX: Le webhook est la source unique de vérité pour payments/ + member update
+              // L'app ne doit PLUS écrire dans payments/ ni modifier les champs critiques du membre
               if (memberRef && memberDoc && memberDoc.exists) {
+                const memberData = memberDoc.data() || {};
+                const period = metadata.period || 'annuel';
+
+                // Calculer dateFin (même logique que l'ancien addCotisation côté app)
+                const now = new Date();
+                let baseDate = now;
+                // Si le membre a une dateFin dans le futur, prolonger à partir de celle-ci
+                const existingExpiry = memberData.cotisation?.dateFin;
+                if (existingExpiry) {
+                  const expiryDate = existingExpiry.toDate ? existingExpiry.toDate() : new Date(existingExpiry);
+                  if (expiryDate > now) {
+                    baseDate = expiryDate;
+                  }
+                }
+                let dateFin;
+                if (period === 'mensuel') {
+                  dateFin = new Date(baseDate);
+                  dateFin.setMonth(dateFin.getMonth() + 1);
+                  if (dateFin.getDate() !== baseDate.getDate()) {
+                    dateFin.setDate(0); // Dernier jour du mois voulu
+                  }
+                } else {
+                  dateFin = new Date(baseDate);
+                  dateFin.setFullYear(dateFin.getFullYear() + 1);
+                  if (dateFin.getDate() !== baseDate.getDate()) {
+                    dateFin.setDate(0); // Fix débordement mois
+                  }
+                }
+
                 transaction.update(memberRef, {
                   status: 'en_attente_validation',
                   aPaye: true,
                   datePaiement: admin.firestore.FieldValue.serverTimestamp(),
                   montantPaye: montantCotisation,
                   stripePaymentId: paymentIntentId,
+                  formule: period,
+                  cotisation: {
+                    type: period,
+                    montant: montantCotisation,
+                    dateDebut: admin.firestore.Timestamp.fromDate(now),
+                    dateFin: admin.firestore.Timestamp.fromDate(dateFin),
+                  },
                 });
               } else if (metadata.memberId) {
                 console.warn('Membre non trouvé pour update:', metadata.memberId);

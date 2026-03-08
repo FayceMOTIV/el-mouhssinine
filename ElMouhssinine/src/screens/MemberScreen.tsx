@@ -31,8 +31,6 @@ import {
 import {
   subscribeToCotisationPrices,
   CotisationPrices,
-  addCotisation,
-  addDonation,
   getMosqueeInfo,
   MosqueeInfo,
   createMember,
@@ -148,6 +146,7 @@ const MemberScreen = () => {
   );
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const isProcessingRef = useRef(false); // BUG 7 FIX: Verrou synchrone anti-double tap
+  const paymentSucceededRef = useRef(false); // BUG D FIX: Empêche de payer plusieurs fois dans la même session
   const [customAmount, setCustomAmount] = useState<string>('');
   const [isApplePayAvailable, setIsApplePayAvailable] = useState(false);
 
@@ -878,6 +877,10 @@ const MemberScreen = () => {
       'profile:',
       !!memberProfile,
     );
+    if (paymentSucceededRef.current) {
+      console.log('[Member] Paiement déjà réussi dans cette session, bloqué');
+      return;
+    }
     if (isProcessingRef.current || isProcessingPayment || !memberProfile) {
       console.log(
         '[Member] Bloqué - processing:',
@@ -989,33 +992,15 @@ const MemberScreen = () => {
       }
 
       if (paymentResult.success && paymentResult.paymentIntentId) {
-        // Enregistrer la cotisation
-        await addCotisation({
-          memberId: memberProfile.memberId || '',
-          memberUid: memberProfile.uid,
-          memberName: memberProfile.name,
-          memberEmail: memberProfile.email,
-          amount: breakdown.cotisation,
-          stripePaymentIntentId: paymentResult.paymentIntentId,
-          paymentMethod: method === 'apple' ? 'Apple Pay' : 'CB',
-          period: selectedFormule,
-          stripeSubscriptionId: subscriptionId, // Ajouté pour abonnements mensuels
-        });
+        // BUG A FIX: NE PAS écrire dans payments/ ni members/ côté client
+        // Le webhook Stripe (admin SDK) gère tout :
+        // 1. Crée payments/{paymentIntentId} (avec montant cotisation + don si applicable)
+        // 2. Met à jour le membre (status: 'en_attente_validation')
+        // 3. Envoie l'email de confirmation
+        // Les Firestore rules bloquent les champs critiques pour les non-admins
 
-        // Si don > 0, enregistrer le don dans la collection DONATIONS (pas payments)
-        if (breakdown.don > 0) {
-          await addDonation({
-            projectId: '',
-            projectName: 'Don libre (adhésion)',
-            amount: breakdown.don,
-            stripePaymentIntentId: paymentResult.paymentIntentId + '_don',
-            paymentMethod: method === 'apple' ? 'Apple Pay' : 'CB',
-            isAnonymous: false,
-            donorEmail: memberProfile.email,
-            donorName: memberProfile.name,
-            donorType: 'particulier',
-          });
-        }
+        // BUG D FIX: Marquer le paiement comme réussi pour empêcher les doublons
+        paymentSucceededRef.current = true;
 
         setShowPaymentModal(false);
         setCustomAmount('');
@@ -1029,9 +1014,8 @@ const MemberScreen = () => {
           { text: t('commonOk'), style: 'default' },
         ]);
 
-        // Passer directement en page membre actif (UI optimiste)
+        // UI optimiste — le webhook Stripe met à jour le membre en background (2-5s)
         // Le listener temps réel (subscribeToMemberProfile) recevra la confirmation
-        // du webhook Stripe automatiquement dans 2-5s
         setMemberPage('membre_actif');
         setContextMessage(null);
         setIsPaid(true);
@@ -1082,6 +1066,12 @@ const MemberScreen = () => {
   };
 
   const handlePayFamily = async (method: 'card' | 'apple' | 'virement') => {
+    if (paymentSucceededRef.current) {
+      console.log(
+        '[Member] Paiement famille déjà réussi dans cette session, bloqué',
+      );
+      return;
+    }
     if (
       isProcessingRef.current ||
       isProcessingPayment ||
@@ -1201,6 +1191,9 @@ const MemberScreen = () => {
       });
 
       if (paymentResult.success && paymentResult.paymentIntentId) {
+        // BUG D FIX: Marquer le paiement comme réussi pour empêcher les doublons
+        paymentSucceededRef.current = true;
+
         const timestamp = new Date();
         // FIX B3: Pour les membres famille, pas de dateFin existante à prolonger
         // (ce sont de nouveaux membres), donc on utilise now comme base
