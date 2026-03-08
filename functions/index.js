@@ -1989,8 +1989,10 @@ exports.stripeWebhook = functions
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
 
-            t.update(memberRefTx, {
-              status: 'actif',
+            // Ne PAS forcer status: 'actif' — respecter le statut existant
+            // Un renouvellement mensuel ne doit PAS bypasser la validation admin
+            // Seul un membre déjà 'actif' (validé par admin) reste 'actif'
+            const renewalUpdate = {
               aPaye: true,
               datePaiement: admin.firestore.FieldValue.serverTimestamp(),
               montantPaye: amountEuros,
@@ -2001,7 +2003,14 @@ exports.stripeWebhook = functions
                 dateDebut: memberData.cotisation?.dateDebut || admin.firestore.Timestamp.fromDate(now),
                 dateFin: admin.firestore.Timestamp.fromDate(newEndDate),
               },
-            });
+            };
+            // Seulement si déjà actif (validé par admin), on maintient actif
+            if (memberData.status === 'actif') {
+              renewalUpdate.status = 'actif';
+            }
+            // Sinon on ne touche PAS au status (reste en_attente_validation, etc.)
+
+            t.update(memberRefTx, renewalUpdate);
 
             t.set(invoiceProcessedRef, {
               processedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2301,7 +2310,11 @@ exports.stripeWebhook = functions
             if (updatedSubMemberData.subscriptionCancelPending) {
               console.log('Annulation programmée détectée, statut non modifié par subscription.updated');
             } else if (updatedSubscription.status === 'active') {
-              updateData.status = 'actif';
+              // Ne remettre 'actif' que si le membre était déjà 'actif' (validé par admin)
+              // Un membre en_attente_validation ne doit PAS passer actif automatiquement
+              if (updatedSubMemberData.status === 'actif') {
+                updateData.status = 'actif';
+              }
             } else if (updatedSubscription.status === 'canceled' || updatedSubscription.status === 'unpaid') {
               updateData.status = 'sympathisant';
               updateData.statut = 'sympathisant';

@@ -322,9 +322,20 @@ export default function Adherents() {
         dateFin: dateFin
       }
 
-      // Mettre à jour le statut
       if (membre.aSigne) {
-        updates.status = 'actif'
+        // Payé + signé → valider via CF (email bienvenue + notif push + status actif)
+        updates.status = 'en_attente_validation'
+        await handleCotisationUpdate(updates)
+        try {
+          const functions = getFunctions(undefined, 'europe-west1')
+          const validate = httpsCallable(functions, 'validateMembership')
+          await validate({ memberId: membre.id, action: 'approve' })
+          toast.success(`${membre.prenom} ${membre.nom} est maintenant membre actif !`)
+        } catch (err) {
+          console.error('Error auto-validating:', err)
+          toast.error('Paiement enregistré mais erreur envoi email de bienvenue')
+        }
+        return
       } else {
         updates.status = 'en_attente_signature'
       }
@@ -344,11 +355,9 @@ export default function Adherents() {
       aSigne: isSigned,
     }
 
-    // Mettre à jour le statut
     const isPaid = membre.aPaye || membre.datePaiement
     if (isPaid && isSigned) {
-      updates.status = 'actif'
-      // FIX: Ensure cotisation.dateFin is set when marking as signed + paid
+      // Payé + signé → valider via CF (email bienvenue + notif push + status actif)
       if (!membre.cotisation?.dateFin) {
         const now = new Date()
         const type = membre.cotisation?.type || membre.formule || 'annuel'
@@ -359,6 +368,18 @@ export default function Adherents() {
           dateFin: dateFin
         }
       }
+      updates.status = 'en_attente_validation'
+      await handleCotisationUpdate(updates)
+      try {
+        const functions = getFunctions(undefined, 'europe-west1')
+        const validate = httpsCallable(functions, 'validateMembership')
+        await validate({ memberId: membre.id, action: 'approve' })
+        toast.success(`${membre.prenom} ${membre.nom} est maintenant membre actif !`)
+      } catch (err) {
+        console.error('Error auto-validating:', err)
+        toast.error('Signature enregistrée mais erreur envoi email de bienvenue')
+      }
+      return
     } else if (isPaid && !isSigned) {
       updates.status = 'en_attente_signature'
     } else {
