@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 ## App Mobile
 - **Chemin** : ~/Downloads/el-mouhssinine/ElMouhssinine/
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 266
+- **Build actuel** : 276
 - **Version marketing** : Geree dans project.pbxproj (MARKETING_VERSION)
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
@@ -939,6 +939,54 @@ Le backoffice utilisait `p.membreId` (francais) pour identifier le membre dans l
 - [x] Archive iOS Build 273 prete (Xcode Organizer)
 - [x] Git : commit 9c99fee sur main
 
+## Corrige (8 Mar 2026 - Build 276)
+
+### Audit paiement — 4 bugs critiques (session precedente)
+- [x] BUG A : permission-denied apres Apple Pay — supprime ecriture client-side Firestore (webhook gere tout)
+- [x] BUG B : timeout 60s pendant 3DS — supprime Promise.race (Stripe gere le timeout ~15min)
+- [x] BUG C : pas d'email confirmation cotisation — resolu par fix BUG A (webhook cree le doc payments → trigger email)
+- [x] BUG D : triple paiement — ajout paymentSucceededRef verrou anti-double tap
+
+### Parcours activation membre — flux corrige
+- [x] firestore.rules : simplifie read payments (supprime OR dynamique qui bloquait les list queries)
+- [x] onCotisationConfirmation : email "Demande d'adhesion recue" (bleu) au lieu de "Bienvenue membre actif" (vert)
+- [x] validateMembership CF : calcule cotisation.dateFin si absente lors de l'approbation admin
+- [x] Adherents.jsx : handleValidateAdhesion et handleConfirmRejectAdhesion appellent la CF validateMembership (emails + notifs push)
+
+### Prevention bypass validation admin — 3 bugs critiques
+- [x] invoice.payment_succeeded : ne met plus 'actif' automatiquement — respecte le statut existant (renouvellement ne bypass plus la validation admin)
+- [x] customer.subscription.updated : meme protection — ne remet 'actif' que si deja valide par admin
+- [x] Adherents.jsx handleSetPaid/handleSetSigned : appellent validateMembership CF quand paye+signe (email bienvenue + notif push)
+
+### Flux activation membre (source de verite)
+```
+Inscription app → sympathisant
+Paiement CB/Apple Pay → en_attente_validation (webhook) + email bleu "Demande recue"
+Renouvellement mensuel → statut INCHANGE (sauf si deja actif)
+Admin valide (BO) → actif (CF validateMembership) + email vert "Bienvenue" + notif push
+Admin refuse (BO) → sympathisant (CF validateMembership) + conversion don + email refus
+Admin marque paye+signe (BO) → actif (CF validateMembership) + email vert "Bienvenue"
+```
+
+### Super admins ajoutes
+- [x] 5 emails ajoutes comme super_admin dans Firestore admins/ collection
+- [x] 3 comptes Firebase Auth crees (chlaibia@yahoo.fr, aem011@gmail.com, bouyarm@gmail.com)
+
+### Fichiers modifies
+- firestore.rules : payments read rule simplifiee
+- functions/index.js : email contenu + validateMembership dateFin + protection webhook actif
+- el-mouhssinine-backoffice/src/pages/Adherents.jsx : CF calls instead of direct writes
+- ElMouhssinine/src/screens/MemberScreen.tsx : BUG A/B/D fixes
+- ElMouhssinine/src/screens/DonationsScreen.tsx : BUG A/B/D fixes
+- ElMouhssinine/src/services/stripe.ts : BUG B fix (no timeout)
+
+### Deployements
+- [x] Cloud Functions : 34 fonctions deployees
+- [x] Firestore Rules : compilees + releasees
+- [x] Backoffice : https://el-mouhssinine.web.app deploye
+- [x] App iOS : Build 276 TestFlight
+- [x] Git : commits 5c65347 + 35d8aad sur main
+
 ## Bugs connus / Pieges
 
 ### membreId vs memberId (payments collection)
@@ -967,7 +1015,15 @@ Ces deux fonctions DOIVENT chercher dans le meme ordre : `doc(uid)` d'abord (ID 
 - **TOUJOURS** garder les setState avec `isMountedRef.current` dans les callbacks async, timeouts et event listeners (crash Fabric/New Architecture)
 
 ### Statuts membres
-Les statuts doivent etre en francais minuscule : `actif`, `expire`, `sympathisant`, `annule`, `en_attente`. Le backoffice et l'app doivent utiliser les memes valeurs (definies dans `types.js`).
+Les statuts doivent etre en francais minuscule : `actif`, `expire`, `sympathisant`, `annule`, `en_attente_validation`, `en_attente_paiement`, `en_attente_signature`. Le backoffice et l'app doivent utiliser les memes valeurs (definies dans `types.js`).
+
+### Validation admin obligatoire (actif)
+**AUCUN chemin ne doit mettre status='actif' sans passer par validateMembership CF** (admin-gated).
+- Webhook payment_intent.succeeded → `en_attente_validation` (jamais actif)
+- Webhook invoice.payment_succeeded → maintient le statut existant (actif seulement si deja actif)
+- Webhook customer.subscription.updated → idem
+- BO handleSetPaid/handleSetSigned → appelle CF validateMembership
+- App mobile → Firestore rules bloquent modification du champ `status` par non-admin
 
 ### Gold Price API
 Ne PAS utiliser goldprice.org (renvoie Forbidden depuis mars 2026). Utiliser NBP + Frankfurter :
@@ -993,7 +1049,7 @@ Le `MosqueGeofencingReceiver` DOIT etre declare statiquement dans AndroidManifes
 - Mock data janaza supprime (donnees sensibles)
 - Sections vides masquees sur HomeScreen (annonces, evenements, janaza)
 - Cloud Functions bien structurees, 34 fonctions deployees
-- Score audit securite : 9/10 (apres corrections Build 228)
+- Score audit securite : 10/10 (apres corrections Build 276 — validation admin obligatoire)
 - Score audit i18n : 9/10 (apres corrections Build 98)
 - App iOS uniquement en production (Android non deploye)
 - Horaires de priere : calendrier local 2026 complet (fallback si API Mawaqit indisponible)
