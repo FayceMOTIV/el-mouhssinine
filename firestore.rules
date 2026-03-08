@@ -200,10 +200,10 @@ service cloud.firestore {
     // FIX G4: Payments - User lit ses propres paiements, création par propriétaire, modification admin/CF only
     match /payments/{paymentId} {
       // Lecture: admin peut tout lire, user peut lire ses propres paiements (via metadata.memberId)
+      // NOTE: La rule doit être compatible avec les queries list (pas de OR dynamique)
       allow read: if isAdmin() ||
         (isAuthenticated() &&
-          (resource.data.metadata.memberId == request.auth.uid ||
-           ('userId' in resource.data && resource.data.userId == request.auth.uid)));
+          resource.data.metadata.memberId == request.auth.uid);
       // Création avec validation du montant (min 1€, max 10000€ pour cotisations)
       // Bug 10 Fix: Vérifier que metadata.memberId correspond à l'utilisateur authentifié
       allow create: if request.auth != null &&

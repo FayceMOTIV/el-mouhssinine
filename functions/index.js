@@ -3583,12 +3583,35 @@ exports.validateMembership = functions
 
       // ========== APPROVAL ==========
       if (action === 'approve') {
-        // Mettre à jour le statut
-        await memberRef.update({
+        // Préparer les champs à mettre à jour
+        const updateData = {
           status: 'actif',
           validatedAt: admin.firestore.FieldValue.serverTimestamp(),
           validatedBy: context.auth.uid,
-        });
+        };
+
+        // S'assurer que cotisation.dateFin est défini (sinon carte membre cassée)
+        if (!member.cotisation || !member.cotisation.dateFin) {
+          const now = new Date();
+          const type = member.cotisation?.type || member.formule || 'annuel';
+          let dateFin;
+          if (type === 'mensuel') {
+            dateFin = new Date(now);
+            dateFin.setMonth(dateFin.getMonth() + 1);
+          } else {
+            dateFin = new Date(now);
+            dateFin.setFullYear(dateFin.getFullYear() + 1);
+          }
+          updateData.cotisation = {
+            ...(member.cotisation || {}),
+            type: type,
+            dateDebut: member.cotisation?.dateDebut || admin.firestore.Timestamp.fromDate(now),
+            dateFin: admin.firestore.Timestamp.fromDate(dateFin),
+            montant: member.cotisation?.montant || member.montantPaye || 0,
+          };
+        }
+
+        await memberRef.update(updateData);
 
         // Envoyer email de confirmation
         if (transporter && email) {
@@ -4642,7 +4665,7 @@ exports.onDonationConfirmation = functions
 
 // ==================== CONFIRMATION ADHÉSION PAR EMAIL ====================
 // Trigger : quand un nouveau paiement de cotisation est créé dans payments/{paymentId}
-// Envoie un email de bienvenue membre actif avec récap adhésion et avantages
+// Envoie un email de confirmation paiement cotisation (demande en attente de validation bureau)
 
 exports.onCotisationConfirmation = functions
   .region('europe-west1')
@@ -4782,17 +4805,19 @@ exports.onCotisationConfirmation = functions
 
       let subject, htmlContent;
       if (template) {
-        subject = template.subject;
+        // Override: le subject du template peut dire "Bienvenue membre actif"
+        // mais le membre n'est PAS encore actif — il est en attente de validation
+        subject = `Cotisation reçue - En attente de validation - ${nomAssociation}`;
         htmlContent = textToEmailHtml(template.body, {
-          headerTitle: '🎉 Bienvenue parmi les membres actifs',
-          headerGradient: '#2e7d32, #4caf50',
+          headerTitle: '📋 Demande d\'adhésion reçue',
+          headerGradient: '#1565c0, #42a5f5',
           footerAssociation: nomAssociation,
           footerAdresse: adresseAssociation ? `${adresseAssociation}, ${codePostalAssociation} ${villeAssociation}` : '',
           footerTelephone: telephoneMosquee,
         });
       } else {
-        subject = `Bienvenue parmi les membres actifs - El Mohsinine`;
-        htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;"><h1 style="color: white; margin: 0;">🎉 Bienvenue parmi les membres actifs</h1></div><div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;"><p>Salam alaykoum ${prenom},</p><p>Merci pour votre adhésion ! Vous êtes maintenant membre actif.</p><p>Barakallahou fikoum, Le Bureau de ${nomAssociation}</p></div></div>`;
+        subject = `Cotisation reçue - En attente de validation - ${nomAssociation}`;
+        htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;"><div style="background: linear-gradient(135deg, #1565c0 0%, #42a5f5 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;"><h1 style="color: white; margin: 0;">📋 Demande d'adhésion reçue</h1></div><div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;"><p>Salam alaykoum ${prenom},</p><p>Nous avons bien reçu votre paiement de cotisation. Votre demande d'adhésion est <strong>en cours d'examen par le bureau</strong>.</p><p>Vous recevrez un email de confirmation dès que votre adhésion sera validée.</p><p>Barakallahou fikoum,<br/>Le Bureau de ${nomAssociation}</p></div></div>`;
       }
 
       await transporter.sendMail({

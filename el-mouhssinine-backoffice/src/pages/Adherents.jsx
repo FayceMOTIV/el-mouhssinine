@@ -451,31 +451,17 @@ export default function Adherents() {
 
     setSaving(true)
     try {
-      const updates = {
-        status: 'actif',
-        validatedAt: new Date(),
-        validatedBy: 'bureau'
-      }
-
-      // FIX: Ensure cotisation.dateFin is set when validating adhesion
-      // This prevents the inconsistency where status='actif' but dateFin=null
-      if (!membre.cotisation?.dateFin) {
-        const now = new Date()
-        const type = membre.cotisation?.type || membre.formule || 'annuel'
-        const dateFin = type === 'mensuel' ? addMonths(now, 1) : addYears(now, 1)
-
-        updates.cotisation = {
-          ...membre.cotisation,
-          dateDebut: membre.cotisation?.dateDebut || now,
-          dateFin: dateFin
-        }
-      }
-
-      await updateDocument('members', membre.id, updates)
+      // Appeler la Cloud Function validateMembership (envoie email + notif push + update status)
+      const functions = getFunctions(undefined, 'europe-west1')
+      const validateMembership = httpsCallable(functions, 'validateMembership')
+      await validateMembership({ memberId: membre.id, action: 'approve' })
       toast.success(`Adhésion de ${membre.prenom} ${membre.nom} validée !`)
     } catch (err) {
       console.error('Error validating adhesion:', err)
-      toast.error('Erreur lors de la validation')
+      const message = err?.message?.includes('not-found')
+        ? 'Membre non trouvé'
+        : err?.message || 'Erreur lors de la validation'
+      toast.error(message)
     } finally {
       setSaving(false)
     }
@@ -495,44 +481,17 @@ export default function Adherents() {
     setRejectAdhesionModal({ open: false, membre: null })
     setSaving(true)
     try {
-      // 1. Créer un don à partir du paiement
+      // Appeler la Cloud Function validateMembership (gère conversion don + email refus + notif)
+      const functions = getFunctions(undefined, 'europe-west1')
+      const validateMembership = httpsCallable(functions, 'validateMembership')
+      await validateMembership({ memberId: membre.id, action: 'reject' })
+
       const montant = membre.cotisation?.montant || 0
-      if (montant > 0) {
-        await addDocument('donations', {
-          donateur: `${membre.prenom} ${membre.nom}`,
-          email: membre.email || '',
-          telephone: membre.telephone || '',
-          montant: montant,
-          projetId: null, // Don libre
-          projetNom: 'Don libre',
-          modePaiement: membre.modePaiement || 'autre',
-          origine: 'conversion_adhesion_refusee',
-          membreId: membre.id,
-          eligibleRecuFiscal: true,
-          date: new Date()
-        })
-      }
-
-      // 2. Mettre à jour le membre en sympathisant
-      await updateDocument('members', membre.id, {
-        status: 'sympathisant',
-        adhesionRefuseeAt: new Date(),
-        adhesionRefuseeRaison: 'Décision du bureau',
-        // Réinitialiser les infos de cotisation
-        cotisation: {
-          ...membre.cotisation,
-          dateDebut: null,
-          dateFin: null
-        },
-        aPaye: false,
-        datePaiement: null
-      })
-
       toast.success(`Adhésion refusée. Le paiement de ${montant}€ a été converti en don.`)
       setCotisationModal({ open: false, membre: null })
     } catch (err) {
       console.error('Error rejecting adhesion:', err)
-      toast.error('Erreur lors du refus')
+      toast.error(err?.message || 'Erreur lors du refus')
     } finally {
       setSaving(false)
     }
