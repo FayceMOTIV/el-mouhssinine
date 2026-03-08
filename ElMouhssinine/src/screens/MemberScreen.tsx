@@ -45,7 +45,11 @@ import {
   requestRecuFiscal,
   cancelSubscription,
 } from '../services/firebase';
-import { AuthService, MemberProfile } from '../services/auth';
+import {
+  AuthService,
+  MemberProfile,
+  validateEmailQuality,
+} from '../services/auth';
 import {
   makePayment,
   makeApplePayPayment,
@@ -639,6 +643,13 @@ const MemberScreen = () => {
       return;
     }
 
+    // 2b. Validation qualité email (typos, domaines bidon)
+    const emailError = validateEmailQuality(loginEmail.trim());
+    if (emailError) {
+      Alert.alert(t('commonError'), emailError);
+      return;
+    }
+
     // 3. Validation format téléphone français (B4)
     const cleanPhone = registerTelephone.replace(/\s/g, '');
     if (!phoneRegex.test(cleanPhone)) {
@@ -817,6 +828,46 @@ const MemberScreen = () => {
   // ============================================================
 
   const handlePayment = async (method: 'card' | 'apple' | 'virement') => {
+    // Bloquer si email non vérifié (reload pour obtenir le statut à jour)
+    const currentUser = AuthService.getCurrentUser();
+    if (currentUser) {
+      try {
+        await currentUser.reload();
+      } catch {
+        // Ignore reload error (offline, etc.)
+      }
+    }
+    if (currentUser && !currentUser.emailVerified) {
+      Alert.alert(
+        language === 'ar'
+          ? '📧 تحقق من بريدك الإلكتروني'
+          : '📧 Vérifiez votre email',
+        language === 'ar'
+          ? 'يجب عليك تأكيد بريدك الإلكتروني قبل الاشتراك. تحقق من صندوق الوارد الخاص بك.'
+          : 'Vous devez vérifier votre adresse email avant de souscrire une adhésion. Consultez votre boîte de réception.',
+        [
+          { text: t('commonOk'), style: 'cancel' },
+          {
+            text: language === 'ar' ? 'إعادة إرسال' : "Renvoyer l'email",
+            onPress: async () => {
+              try {
+                await currentUser.sendEmailVerification();
+                Alert.alert('✅', t('verificationEmailSent'));
+              } catch {
+                Alert.alert(
+                  t('commonError'),
+                  language === 'ar'
+                    ? 'خطأ في إرسال البريد'
+                    : "Erreur lors de l'envoi",
+                );
+              }
+            },
+          },
+        ],
+      );
+      return;
+    }
+
     console.log(
       '[Member] handlePayment appelé, method:',
       method,

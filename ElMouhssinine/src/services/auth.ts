@@ -78,6 +78,197 @@ const getErrorMessage = (errorCode: string): string => {
   );
 };
 
+// ==================== VALIDATION EMAIL ANTI-TYPOS ====================
+
+const VALID_COMMON_DOMAINS = [
+  'gmail.com',
+  'yahoo.fr',
+  'yahoo.com',
+  'hotmail.com',
+  'hotmail.fr',
+  'outlook.com',
+  'outlook.fr',
+  'live.fr',
+  'live.com',
+  'msn.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'aol.com',
+  'orange.fr',
+  'wanadoo.fr',
+  'free.fr',
+  'sfr.fr',
+  'laposte.net',
+  'bbox.fr',
+  'numericable.fr',
+  'protonmail.com',
+  'proton.me',
+  'gmx.fr',
+  'gmx.com',
+];
+
+// Domaines bidon fréquents (typos ou faux)
+const BLOCKED_DOMAINS = [
+  'gmail.cum',
+  'gmail.con',
+  'gmail.co',
+  'gmail.fr',
+  'gmail.cm',
+  'gmail.om',
+  'gmail.cmo',
+  'gmail.comm',
+  'gmail.ccom',
+  'gmal.com',
+  'gmil.com',
+  'gmai.com',
+  'gmali.com',
+  'gamail.com',
+  'gnail.com',
+  'gemail.com',
+  'gimail.com',
+  'hotmail.cum',
+  'hotmail.con',
+  'hotmail.co',
+  'hotmal.com',
+  'hotmial.com',
+  'hotamil.com',
+  'hotmil.com',
+  'yahoo.cum',
+  'yahoo.con',
+  'yaho.com',
+  'yahooo.com',
+  'yhoo.com',
+  'outlook.cum',
+  'outlook.con',
+  'outloo.com',
+  'outlok.com',
+  'icloud.cum',
+  'icloud.con',
+  'orange.cum',
+  'orange.con',
+  'test.com',
+  'test.fr',
+  'example.com',
+  'email.com',
+  'fake.com',
+  'fake.fr',
+  'bidon.com',
+  'bidon.fr',
+  'aaa.com',
+  'bbb.com',
+  'abc.com',
+  'azerty.com',
+  'qwerty.com',
+  'tempmail.com',
+  'throwaway.email',
+  'guerrillamail.com',
+  'mailinator.com',
+  'yopmail.com',
+  'yopmail.fr',
+  'jetable.org',
+  'trashmail.com',
+  'sharklasers.com',
+  'guerrillamailblock.com',
+  'grr.la',
+  'dispostable.com',
+  'temp-mail.org',
+];
+
+const VALID_TLDS = [
+  'com',
+  'fr',
+  'net',
+  'org',
+  'io',
+  'me',
+  'co',
+  'eu',
+  'be',
+  'ch',
+  'de',
+  'es',
+  'it',
+  'uk',
+  'ca',
+  'us',
+  'info',
+  'pro',
+  'biz',
+  'dz',
+  'ma',
+  'tn',
+  'ly',
+  'eg',
+  'sa',
+  'ae',
+  'qa',
+  'kw',
+];
+
+/**
+ * Valide un email contre les typos et domaines bidon courants.
+ * Retourne null si OK, ou un message d'erreur en français si invalide.
+ */
+export const validateEmailQuality = (email: string): string | null => {
+  const trimmed = email.trim().toLowerCase();
+
+  // Format basique
+  const parts = trimmed.split('@');
+  if (parts.length !== 2) {
+    return 'Format email invalide';
+  }
+
+  const [localPart, domain] = parts;
+
+  // Local part vide ou trop court
+  if (!localPart || localPart.length < 2) {
+    return 'Adresse email trop courte';
+  }
+
+  // Caractères répétitifs (aaaa@, 1111@)
+  if (/^(.)\1{3,}$/.test(localPart)) {
+    return 'Adresse email invalide';
+  }
+
+  // Domaine vide
+  if (!domain || !domain.includes('.')) {
+    return 'Domaine email invalide';
+  }
+
+  // Domaine bloqué (typos, jetables, faux)
+  if (BLOCKED_DOMAINS.includes(domain)) {
+    // Chercher la suggestion : même base ou base similaire
+    const domainBase = domain.split('.')[0];
+    const suggestion = VALID_COMMON_DOMAINS.find(
+      d =>
+        d.startsWith(domainBase) ||
+        d.split('.')[0].startsWith(domainBase.slice(0, 3)),
+    );
+    if (suggestion) {
+      return `Domaine "${domain}" invalide. Vouliez-vous dire "${suggestion}" ?`;
+    }
+    return `Domaine "${domain}" non autorisé`;
+  }
+
+  // TLD invalide
+  const tld = domain.split('.').pop() || '';
+  if (tld.length < 2 || tld.length > 6) {
+    return 'Extension email invalide';
+  }
+  if (!VALID_TLDS.includes(tld)) {
+    return `Extension ".${tld}" non reconnue`;
+  }
+
+  // Domaine avec chiffres uniquement (123.com)
+  const domainName = domain.split('.')[0];
+  if (/^\d+$/.test(domainName)) {
+    return 'Domaine email invalide';
+  }
+
+  return null; // Email OK
+};
+
 export const AuthService = {
   // Mode production (vraie auth Firebase)
   isMockMode: false,

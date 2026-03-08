@@ -48,7 +48,11 @@ import {
 } from '../services/stripe';
 import { isPlatformPaySupported } from '@stripe/stripe-react-native';
 import { EmptyProjects } from '../components';
-import { AuthService, MemberProfile } from '../services/auth';
+import {
+  AuthService,
+  MemberProfile,
+  validateEmailQuality,
+} from '../services/auth';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import {
   getGoldPricePerGram,
@@ -223,6 +227,11 @@ const DonationsScreen = () => {
     }
     if (!donorEmail.trim() || !/\S+@\S+\.\S+/.test(donorEmail)) {
       Alert.alert(t('commonError') as string, t('invalidEmail') as string);
+      return false;
+    }
+    const emailQualityError = validateEmailQuality(donorEmail.trim());
+    if (emailQualityError) {
+      Alert.alert(t('commonError') as string, emailQualityError);
       return false;
     }
     if (!donorAddress.trim()) {
