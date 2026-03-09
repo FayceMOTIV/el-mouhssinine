@@ -1878,76 +1878,68 @@ const DonationsScreen = () => {
                 );
               }
 
-              // Projets internes : CB + Apple Pay si disponible
-              const paymentMethods =
-                Platform.OS === 'ios'
-                  ? ['card', ...(isApplePayAvailable ? ['apple'] : [])]
-                  : ['card'];
-              return paymentMethods.map(method => (
-                <TouchableOpacity
-                  key={method}
-                  style={[
-                    styles.paymentOption,
-                    paymentMethod === method && styles.paymentOptionSelected,
-                    isRTL && styles.paymentOptionRTL,
-                  ]}
-                  onPress={() => setPaymentMethod(method)}
-                >
-                  {method === 'card' ? (
-                    <Text style={styles.paymentIcon}>💳</Text>
-                  ) : method === 'apple' ? (
-                    <Image
-                      source={require('../assets/apple-logo.png')}
-                      style={styles.paymentLogoIcon}
-                    />
-                  ) : (
-                    <Image
-                      source={require('../assets/google-logo.png')}
-                      style={styles.paymentLogoIcon}
-                    />
-                  )}
-                  <View style={styles.paymentInfo}>
+              // Projets internes : redirection vers site sécurisé (Apple guideline 3.2.1)
+              return (
+                <View>
+                  <View style={styles.externalPaymentNotice}>
+                    <Text style={styles.externalPaymentNoticeIcon}>🌐</Text>
                     <Text
-                      style={[styles.paymentTitle, isRTL && styles.rtlText]}
+                      style={[
+                        styles.externalPaymentNoticeText,
+                        isRTL && styles.rtlText,
+                      ]}
                     >
-                      {method === 'card'
-                        ? t('cardPayment')
-                        : method === 'apple'
-                        ? 'Apple Pay'
-                        : 'Google Pay'}
-                    </Text>
-                    <Text style={[styles.paymentDesc, isRTL && styles.rtlText]}>
-                      {method === 'card'
-                        ? t('visaMastercard')
-                        : t('fastSecurePayment')}
+                      {t('donationRedirectNotice')}
                     </Text>
                   </View>
-                  {paymentMethod === method && (
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      styles.paymentOptionSelected,
+                      isRTL && styles.paymentOptionRTL,
+                    ]}
+                    onPress={() => setPaymentMethod('virement')}
+                  >
+                    <Text style={styles.paymentIcon}>🏦</Text>
+                    <View style={styles.paymentInfo}>
+                      <Text
+                        style={[styles.paymentTitle, isRTL && styles.rtlText]}
+                      >
+                        {t('bankTransfer')}
+                      </Text>
+                      <Text
+                        style={[styles.paymentDesc, isRTL && styles.rtlText]}
+                      >
+                        {t('useProjectIban')}
+                      </Text>
+                    </View>
                     <View style={styles.checkmark}>
                       <Text style={styles.checkmarkText}>✓</Text>
                     </View>
-                  )}
-                </TouchableOpacity>
-              ));
+                  </TouchableOpacity>
+                </View>
+              );
             })()}
 
             <TouchableOpacity
               style={[
                 styles.primaryBtn,
                 { marginTop: 20 },
-                (!paymentMethod || isProcessingPayment) &&
-                  styles.primaryBtnDisabled,
               ]}
-              onPress={handlePayment}
-              disabled={!paymentMethod || isProcessingPayment}
+              onPress={() => {
+                if (paymentMethod === 'virement') {
+                  handlePayment();
+                } else {
+                  setShowPaymentModal(false);
+                  Linking.openURL('https://el-mouhssinine.web.app/don');
+                }
+              }}
             >
-              {isProcessingPayment ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>
-                  🔒 {t('payButton')} {getFinalAmount()}€
-                </Text>
-              )}
+              <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>
+                {paymentMethod === 'virement'
+                  ? `🔒 ${t('payButton')} ${getFinalAmount()}€`
+                  : `🌐 ${t('donateOnWebsite')}`}
+              </Text>
             </TouchableOpacity>
 
             <Text style={[styles.modalDisclaimer, isRTL && styles.rtlText]}>

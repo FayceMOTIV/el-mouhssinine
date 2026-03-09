@@ -25,6 +25,8 @@ import Notifications from './pages/Notifications'
 import Ramadan from './pages/Ramadan'
 import EmailTemplates from './pages/EmailTemplates'
 import AuditLogs from './pages/AuditLogs'
+import Privacy from './pages/Privacy'
+import DonPublic from './pages/DonPublic'
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -69,6 +71,10 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Pages publiques (pas de ProtectedRoute) */}
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/don" element={<DonPublic />} />
+
       <Route
         path="/login"
         element={isAuthenticated ? <Navigate to="/" replace /> : <Login />}

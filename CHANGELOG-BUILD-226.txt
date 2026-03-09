@@ -1,0 +1,51 @@
+Build 226 - Mega-Correction Phase 1 + CERFA Optimise
+
+CORRECTIONS
+- Fix : Renouvellement anticipe conserve les mois restants (B3)
+- Fix : Bug montant historique paiements (centimes -> euros)
+
+NOUVELLES FONCTIONNALITES
+- Admin peut annuler les abonnements (backoffice)
+- Admin peut rembourser les dons entierement
+- Admin peut rembourser partiellement les cotisations
+- Historique complet des paiements dans l'app
+- Recu fiscal des dons telechargeable (CERFA optimise)
+
+SECURITE & BACKEND
+- Firestore Security Rules renforcees (isolation donnees)
+- Validation automatique montants webhook Stripe
+- Gestion automatique disputes Stripe
+- Reconciliation automatique Stripe/Firestore (cron)
+
+CERFA OPTIMISE
+- Article 200 du CGI (conformite fiscale)
+- Mention absence contrepartie ajoutee
+- Template 1 page (au lieu de 2)
+- Cachet association integre (image ou simule)
+- Template Entreprise compacte (238 bis du CGI)
+
+BACKOFFICE
+- Page Adherents : bouton annuler abonnement + remboursement partiel
+- Page Dons : bouton rembourser par don
+- Backoffice deploye : https://el-mouhssinine.web.app
+
+FONCTIONS CLOUD DEPLOYEES (30 total)
+- adminCancelSubscription (NOUVELLE)
+- refundDonation (NOUVELLE)
+- reconcileStripePayments (NOUVELLE - cron dimanche 3h)
+- stripeWebhook (MODIFIE - disputes + validation montant)
+- sendRecuFiscal (MODIFIE - CERFA 1 page + cachet)
+- generateAnnualRecusFiscaux (MODIFIE - CERFA 1 page + cachet)
+- forceGenerateRecusFiscaux (MODIFIE - CERFA 1 page + cachet)
+- refundPayment (MODIFIE - remboursement partiel)
+
+FIRESTORE RULES
+- donations : auth + montant 1-100000 EUR
+- payments : auth + isolation donnees utilisateur
+- disputes : verrouille total (Cloud Functions only)
+- processed_payments, failed_payments, counters, rate_limits : verrouille total
+
+TESTS
+- 36/36 Security Rules tests PASS
+- Syntaxe index.js OK
+- CERFA PDF : 1 page, cachet present, Article 200 OK

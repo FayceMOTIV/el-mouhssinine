@@ -1615,6 +1615,7 @@ exports.stripeWebhook = functions
   .runWith({
     timeoutSeconds: 60,
     memory: '256MB',
+    minInstances: 1,
   })
   .region('europe-west1')
   .https.onRequest(async (req, res) => {
@@ -7118,5 +7119,114 @@ exports.exportMyData = functions
       paiements: paymentsSnap.docs.map(sanitizeDoc),
       messages: messagesSnap.docs.map(sanitizeDoc),
     };
+  });
+
+// ════════════════════════════════════════
+// PIÈGE 5 — onAuthUserDeleted
+// Filet de sécurité : si un compte Auth est supprimé
+// (ex: via console Firebase, suppression manuelle, ou API)
+// sans passer par deleteMyAccount/deleteMemberByAdmin,
+// cette function nettoie les données orphelines.
+// NOTE: functions.auth.user() ne supporte PAS .region()
+// ════════════════════════════════════════
+exports.onAuthUserDeleted = functions
+  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .auth.user().onDelete(async (user) => {
+    const uid = user.uid;
+    const email = user.email || '';
+    console.log(`=== onAuthUserDeleted: ${uid} (${email}) ===`);
+
+    const db = admin.firestore();
+
+    // Guard : si deleteMyAccount/deleteMemberByAdmin a déjà traité, skip
+    const deletionLogSnap = await db.collection('deletion_logs')
+      .where('uid', '==', uid).limit(1).get();
+    if (!deletionLogSnap.empty) {
+      console.log(`onAuthUserDeleted: déjà traité par deletion_logs, skip.`);
+      return;
+    }
+
+    try {
+      // Chercher le document membre
+      let memberRef = null;
+      let memberData = null;
+
+      const memberByUid = await db.collection('members')
+        .where('uid', '==', uid).limit(1).get();
+      if (!memberByUid.empty) {
+        memberRef = memberByUid.docs[0].ref;
+        memberData = memberByUid.docs[0].data();
+      } else {
+        const directDoc = await db.collection('members').doc(uid).get();
+        if (directDoc.exists) {
+          memberRef = directDoc.ref;
+          memberData = directDoc.data();
+        }
+      }
+
+      if (memberRef && memberData) {
+        // Annuler abonnement Stripe si actif
+        if (memberData.stripeSubscriptionId) {
+          try {
+            await stripe.subscriptions.cancel(memberData.stripeSubscriptionId);
+          } catch (e) {
+            console.log('onAuthUserDeleted: Stripe cancel skip:', e.message);
+          }
+        }
+
+        // Anonymiser le document membre (ne pas supprimer pour audit)
+        await memberRef.update({
+          nom: '[supprimé]',
+          prenom: '[supprimé]',
+          email: '[supprimé]',
+          telephone: '[supprimé]',
+          adresse: '[supprimé]',
+          uid: `deleted_${uid}`,
+          status: 'annule',
+          deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+          deletedBy: 'onAuthUserDeleted',
+          fcmTokens: admin.firestore.FieldValue.delete(),
+          fcmToken: admin.firestore.FieldValue.delete(),
+        });
+      }
+
+      // Supprimer messages
+      const messagesSnap = await db.collection('messages')
+        .where('userId', '==', uid).get();
+      const batch = db.batch();
+      messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
+      if (!messagesSnap.empty) await batch.commit();
+
+      // Supprimer doc admin si existant — GUARD : ne pas supprimer le dernier admin
+      const adminDoc = await db.collection('admins').doc(uid).get();
+      if (adminDoc.exists) {
+        const allAdmins = await db.collection('admins').get();
+        if (allAdmins.size <= 1) {
+          console.warn(`onAuthUserDeleted: ${uid} est le dernier admin — doc admins conservé`);
+        } else {
+          await adminDoc.ref.delete();
+        }
+      }
+
+      // Log RGPD
+      await db.collection('deletion_logs').add({
+        uid,
+        email: '[supprimé]',
+        deletedBy: 'onAuthUserDeleted',
+        deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+        memberFound: !!memberRef,
+        messagesDeleted: messagesSnap.size,
+      });
+
+      await createNotifBO({
+        type: 'compte_supprime',
+        titre: '🗑️ Compte Auth supprimé (orphelin)',
+        message: `UID ${uid} supprimé hors app — données nettoyées automatiquement.`,
+      });
+
+      console.log(`=== onAuthUserDeleted: ${uid} nettoyé ===`);
+    } catch (error) {
+      console.error('❌ onAuthUserDeleted error:', error);
+    }
   });
 
