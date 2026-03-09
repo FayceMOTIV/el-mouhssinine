@@ -987,6 +987,56 @@ Admin marque paye+signe (BO) → actif (CF validateMembership) + email vert "Bie
 - [x] App iOS : Build 276 TestFlight
 - [x] Git : commits 5c65347 + 35d8aad sur main
 
+## Corrige (9 Mar 2026 - Build 276)
+
+### Audit complet parcours membre — ConfirmModal + securite + guards
+
+#### ConfirmModal backoffice (15 instances corrigees)
+- [x] Prop `confirmLabel` → `confirmText` dans 15 ConfirmModals (11 pages + Adherents.jsx 4 modals)
+- [x] Pages corrigees : Annonces, Evenements, Janaza, Dons (x2), RecusFiscaux, Admins, Popups, Notifications, Messages, Parametres
+- [x] Modal.jsx : ajout `whitespace-pre-line` pour rendu des retours a la ligne dans les messages
+- [x] Symptome : tous les boutons affichaient "Confirmer" au lieu du texte specifique ("Supprimer", "Rembourser", "Generer")
+
+#### Firestore Rules renforcees
+- [x] 5 champs ajoutes aux champs proteges membres : `subscriptionCancelPending`, `stripeSubscriptionId`, `stripeCustomerId`, `validatedAt`, `validatedBy`
+- [x] Empeche un utilisateur malveillant de modifier ces champs cote client
+
+#### Guards anti double-validation (Adherents.jsx)
+- [x] handleSetPaid : guard si status deja 'actif' ou 'en_attente_validation' → skip re-validation CF
+- [x] handleSetSigned : meme guard — evite double appel validateMembership et double email bienvenue
+
+#### App mobile
+- [x] MemberCardFullScreen.tsx : couleur statut `annule` = rouge (#991B1B) au lieu de gris (#374151)
+- [x] MemberScreen.tsx : reset paymentSucceededRef + isProcessingRef au logout (empeche blocage paiement apres changement de compte)
+
+#### Audit 5 agents — resultats
+| Couche | Score | Verdict |
+|--------|-------|---------|
+| App mobile (inscription/paiement) | 7/10 | Flux solide, incohérences nommage |
+| Cloud Functions (webhooks/emails) | 7.8/10 | Idempotence OK, toutes CF deployees |
+| Backoffice Adherents.jsx | 9/10 | Tous boutons fonctionnels |
+| Firestore Rules + DB | 8.5/10 | Securise, champs proteges complets |
+| Emails + Mes Adhesions | 8/10 | 8/8 emails OK |
+
+#### Faux positifs des agents (deja implementes)
+- validateMembership action='reject' : implementee (lignes 3708-3841, email + don + notif)
+- refundPayment CF : deployee (remboursement partiel/total Stripe)
+- adminCancelSubscription CF : deployee (annulation immediate)
+- deleteMemberByAdmin recus_fiscaux : anonymise (lignes 5973-6013)
+
+### Fichiers modifies
+- firestore.rules : 5 champs proteges ajoutes
+- el-mouhssinine-backoffice/src/components/common/Modal.jsx : whitespace-pre-line
+- el-mouhssinine-backoffice/src/pages/ : 11 pages confirmLabel→confirmText
+- el-mouhssinine-backoffice/src/pages/Adherents.jsx : guards anti double-validation
+- ElMouhssinine/src/components/MemberCardFullScreen.tsx : couleur annule rouge
+- ElMouhssinine/src/screens/MemberScreen.tsx : reset refs au logout
+
+### Deployements
+- [x] Firestore Rules : compilees + releasees
+- [x] Backoffice : https://el-mouhssinine.web.app deploye
+- [x] Git : commit 5d81aa9 sur main
+
 ## Bugs connus / Pieges
 
 ### membreId vs memberId (payments collection)
@@ -1041,6 +1091,9 @@ La requete `where('userId', '==', uid)` ne suffit pas : les dons crees par le we
 ### MosqueGeofencing iOS — wantsMonitoring obligatoire
 `locationManagerDidChangeAuthorization` est appele automatiquement quand le delegate est assigne dans `init()`. Sans le flag `wantsMonitoring` (UserDefaults), le monitoring demarrerait meme si l'utilisateur a desactive la fonctionnalite dans les parametres. Le flag est set par `start()` (true) et `stop()` (false), et verifie dans le delegate et `restartMonitoring()`.
 
+### ConfirmModal — confirmText (PAS confirmLabel)
+Le composant `ConfirmModal` dans `Modal.jsx` accepte `confirmText` et `loading` comme props. NE JAMAIS utiliser `confirmLabel` (prop inexistante, silencieusement ignoree par React). Toujours passer `loading={stateVariable}` pour desactiver le bouton pendant les operations async.
+
 ### MosqueGeofencing Android — BroadcastReceiver statique
 Le `MosqueGeofencingReceiver` DOIT etre declare statiquement dans AndroidManifest.xml (pas enregistre dynamiquement). Sinon Android ne peut pas le declencher quand l'app est tuee. Meme chose pour le `MosqueGeofenceBootReceiver` (BOOT_COMPLETED).
 
@@ -1049,7 +1102,7 @@ Le `MosqueGeofencingReceiver` DOIT etre declare statiquement dans AndroidManifes
 - Mock data janaza supprime (donnees sensibles)
 - Sections vides masquees sur HomeScreen (annonces, evenements, janaza)
 - Cloud Functions bien structurees, 34 fonctions deployees
-- Score audit securite : 10/10 (apres corrections Build 276 — validation admin obligatoire)
+- Score audit securite : 9/10 (apres audit complet Build 276 — validation admin + champs proteges)
 - Score audit i18n : 9/10 (apres corrections Build 98)
 - App iOS uniquement en production (Android non deploye)
 - Horaires de priere : calendrier local 2026 complet (fallback si API Mawaqit indisponible)
