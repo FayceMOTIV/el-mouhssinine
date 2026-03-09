@@ -156,7 +156,8 @@ export const CotisationStatut = {
   EN_ATTENTE_VALIDATION: 'en_attente_validation',
   EN_ATTENTE_SIGNATURE: 'en_attente_signature',
   EN_ATTENTE_PAIEMENT: 'en_attente_paiement',
-  ANNULE: 'annule'
+  ANNULE: 'annule',
+  SUSPENDU: 'suspendu'
 }
 
 // Fichiers autorises

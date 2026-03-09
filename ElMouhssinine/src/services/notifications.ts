@@ -171,10 +171,10 @@ export const saveFCMTokenToFirestore = async (
       return false;
     }
 
-    // Mettre à jour le document membre avec le token FCM (set+merge pour éviter crash si doc inexistant)
+    // Mettre à jour le document membre avec le token FCM (multi-device: arrayUnion)
     await firestore().collection('members').doc(userId).set(
       {
-        fcmToken: token,
+        fcmTokens: firestore.FieldValue.arrayUnion(token),
         fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -194,13 +194,17 @@ export const removeFCMTokenFromFirestore = async (
 ): Promise<boolean> => {
   try {
     if (!userId) return false;
-    await firestore().collection('members').doc(userId).set(
-      {
-        fcmToken: firestore.FieldValue.delete(),
-        fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    // Multi-device: retirer uniquement le token actuel de l'array
+    const currentToken = await messaging().getToken();
+    if (currentToken) {
+      await firestore().collection('members').doc(userId).set(
+        {
+          fcmTokens: firestore.FieldValue.arrayRemove(currentToken),
+          fcmTokenUpdatedAt: firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
     logger.log('[FCM] Token supprimé pour userId:', userId);
     return true;
   } catch (error) {

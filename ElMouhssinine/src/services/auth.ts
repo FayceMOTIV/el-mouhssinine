@@ -445,16 +445,19 @@ export const AuthService = {
         }
       }
 
-      // 3. Supprimer le token FCM de Firestore
+      // 3. Retirer le token FCM actuel de Firestore (multi-device: arrayRemove)
       try {
         const uid = auth().currentUser?.uid;
         if (uid) {
-          await firestore().collection('members').doc(uid).update({
-            fcmToken: firestore.FieldValue.delete(),
-          });
+          const token = await messaging().getToken();
+          if (token) {
+            await firestore().collection('members').doc(uid).update({
+              fcmTokens: firestore.FieldValue.arrayRemove(token),
+            });
+          }
         }
       } catch (e) {
-        // Non bloquant
+        // Non bloquant — le token peut être indisponible au logout
       }
 
       await auth().signOut();

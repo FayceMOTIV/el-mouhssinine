@@ -69,6 +69,8 @@ import { logger } from '../utils';
 import { computeMemberStatus } from '../utils/memberStatus';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import firestore from '@react-native-firebase/firestore';
+import firebase from '@react-native-firebase/app';
+import '@react-native-firebase/functions';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ============================================================
@@ -249,6 +251,9 @@ const MemberScreen = () => {
 
       if (user) {
         setIsLoggedIn(true);
+
+        // S10: Vérifier paiement interrompu (3DS)
+        checkPendingPayment();
 
         // Souscrire au profil en temps réel (se met à jour depuis le backoffice)
         const unsubMember = subscribeToMemberProfile(
@@ -993,7 +998,14 @@ const MemberScreen = () => {
         });
       }
 
+      // S10: Sauvegarder paymentIntentId pour récupération 3DS interrompu
+      if (paymentResult.paymentIntentId) {
+        await AsyncStorage.setItem('pendingPaymentIntentId', paymentResult.paymentIntentId);
+      }
+
       if (paymentResult.success && paymentResult.paymentIntentId) {
+        // S10: Nettoyer le paiement pending
+        await AsyncStorage.removeItem('pendingPaymentIntentId');
         // BUG A FIX: NE PAS écrire dans payments/ ni members/ côté client
         // Le webhook Stripe (admin SDK) gère tout :
         // 1. Crée payments/{paymentIntentId} (avec montant cotisation + don si applicable)
@@ -1007,25 +1019,48 @@ const MemberScreen = () => {
         setShowPaymentModal(false);
         setCustomAmount('');
 
-        // Popup de confirmation adhesion
-        const message = isMensuel
-          ? 'Votre abonnement mensuel est activé ! Vous serez prélevé automatiquement chaque mois. Vous allez recevoir toutes les infos par email.'
-          : 'Vous allez recevoir toutes les infos par email.';
+        // S6: UI optimiste + onSnapshot pour confirmer le traitement webhook
+        Alert.alert(
+          t('congratulations'),
+          'Paiement reçu ! Traitement en cours...',
+          [{ text: t('commonOk'), style: 'default' }],
+        );
 
-        Alert.alert(t('congratulations'), message, [
-          { text: t('commonOk'), style: 'default' },
-        ]);
-
-        // UI optimiste — le webhook Stripe met à jour le membre en background (2-5s)
-        // Le listener temps réel (subscribeToMemberProfile) recevra la confirmation
         setMemberPage('membre_actif');
         setContextMessage(null);
         setIsPaid(true);
         setIsExpired(false);
+
+        // Écouter le changement de statut Firestore (webhook Stripe)
+        const currentUid = AuthService.getCurrentUser()?.uid;
+        if (currentUid) {
+          const memberDocRef = firestore().collection('members').doc(currentUid);
+          let unsubSnapshot: (() => void) | null = null;
+          const timeoutId = setTimeout(() => {
+            unsubSnapshot?.();
+          }, 30000);
+          unsubSnapshot = memberDocRef.onSnapshot(
+            (docSnap) => {
+              if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data?.status === 'en_attente_validation' || data?.status === 'actif') {
+                  clearTimeout(timeoutId);
+                  unsubSnapshot?.();
+                }
+              }
+            },
+            (err) => {
+              console.log('onSnapshot error (non-bloquant):', err.message);
+              clearTimeout(timeoutId);
+            },
+          );
+        }
       } else if (
         paymentResult.error &&
         paymentResult.error !== 'Paiement annulé'
       ) {
+        // S10: Nettoyer si erreur explicite
+        await AsyncStorage.removeItem('pendingPaymentIntentId');
         showPaymentError(paymentResult.error);
       }
     } catch (error) {
@@ -1034,6 +1069,38 @@ const MemberScreen = () => {
     } finally {
       setIsProcessingPayment(false);
       isProcessingRef.current = false; // BUG 7 FIX: Reset verrou
+    }
+  };
+
+  // ============================================================
+  // S10: Vérifier paiement interrompu au chargement
+  // ============================================================
+  const checkPendingPayment = async () => {
+    try {
+      const pendingId = await AsyncStorage.getItem('pendingPaymentIntentId');
+      if (!pendingId) return;
+
+      const checkPending = firebase.app().functions('europe-west1').httpsCallable('checkPendingPayment');
+      const result = await checkPending({ paymentIntentId: pendingId });
+      const status = (result.data as any)?.status;
+
+      if (status === 'succeeded' || status === 'already_processed') {
+        await AsyncStorage.removeItem('pendingPaymentIntentId');
+      } else if (status === 'expired') {
+        await AsyncStorage.removeItem('pendingPaymentIntentId');
+        Alert.alert('Paiement expiré', 'Votre paiement précédent a expiré. Veuillez réessayer.');
+      } else if (status === 'pending') {
+        Alert.alert(
+          'Paiement en attente',
+          'Un paiement nécessite une action de votre part (vérification 3D Secure).',
+          [
+            { text: 'Ignorer', style: 'cancel', onPress: () => AsyncStorage.removeItem('pendingPaymentIntentId') },
+            { text: 'Réessayer', onPress: () => AsyncStorage.removeItem('pendingPaymentIntentId') },
+          ],
+        );
+      }
+    } catch (err) {
+      console.log('checkPendingPayment non-bloquant:', (err as Error).message);
     }
   };
 

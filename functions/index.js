@@ -112,6 +112,71 @@ const createNotifBO = async ({ type, titre, message, membreId = null, membreNom 
 };
 
 /**
+ * Envoie une notification push à un membre via ses tokens FCM (multi-device)
+ * Supporte le fallback depuis l'ancien champ fcmToken (string) vers fcmTokens (array)
+ * Auto-cleanup des tokens invalides
+ * @param {string} uid - L'ID du document membre
+ * @param {string} title - Titre de la notification
+ * @param {string} body - Corps de la notification
+ * @param {Object} data - Données supplémentaires (optionnel)
+ */
+const sendPushToMember = async (uid, title, body, data = {}) => {
+  if (!uid) return;
+  try {
+    const memberDoc = await admin.firestore().collection('members').doc(uid).get();
+    if (!memberDoc.exists) return;
+
+    const memberData = memberDoc.data();
+    // Multi-device: utiliser fcmTokens (array) avec fallback fcmToken (string rétrocompat)
+    let tokens = [];
+    if (Array.isArray(memberData.fcmTokens) && memberData.fcmTokens.length > 0) {
+      tokens = [...memberData.fcmTokens];
+    } else if (memberData.fcmToken) {
+      tokens = [memberData.fcmToken];
+    }
+
+    if (tokens.length === 0) return;
+
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: { title, body },
+      data: { ...data },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+    });
+
+    // Auto-cleanup tokens invalides
+    const invalidTokens = [];
+    response.responses.forEach((resp, idx) => {
+      if (!resp.success) {
+        const code = resp.error?.code;
+        if (
+          code === 'messaging/invalid-registration-token' ||
+          code === 'messaging/registration-token-not-registered'
+        ) {
+          invalidTokens.push(tokens[idx]);
+        }
+      }
+    });
+
+    if (invalidTokens.length > 0) {
+      await admin.firestore().collection('members').doc(uid).update({
+        fcmTokens: admin.firestore.FieldValue.arrayRemove(...invalidTokens),
+      });
+      console.log(`[FCM] ${invalidTokens.length} token(s) invalide(s) nettoyé(s) pour ${uid.substring(0, 8)}...`);
+    }
+  } catch (err) {
+    console.log(`[FCM] Push non envoyé à ${uid.substring(0, 8)}...:`, err.message);
+  }
+};
+
+/**
  * Rate limiting helper - Limite les appels par utilisateur
  * @param {string} uid - L'ID de l'utilisateur
  * @param {string} functionName - Nom de la fonction
@@ -860,8 +925,11 @@ exports.onNewMessage = functions
             .get();
 
           membersSnapshot.docs.forEach(memberDoc => {
-            if (memberDoc.data().fcmToken) {
-              adminTokens.push(memberDoc.data().fcmToken);
+            const md = memberDoc.data();
+            if (Array.isArray(md.fcmTokens)) {
+              adminTokens.push(...md.fcmTokens);
+            } else if (md.fcmToken) {
+              adminTokens.push(md.fcmToken);
             }
           });
         }
@@ -1053,54 +1121,13 @@ exports.onMessageReply = functions
         return null;
       }
 
-      // Récupérer le token FCM de l'utilisateur
+      // Envoyer push au membre (multi-device)
       try {
-        const memberDoc = await admin.firestore().collection('members').doc(userId).get();
-        const fcmToken = memberDoc.exists ? memberDoc.data().fcmToken : null;
-
-        if (!fcmToken) {
-          console.log('Pas de token FCM pour userId:', userId);
-          return null;
-        }
-
-        const message = {
-          notification: {
-            title: '🕌 Nouvelle réponse',
-            body: `La mosquée a répondu à votre message "${truncate(after.sujet, 30)}"`,
-          },
-          data: {
-            type: 'message_reply',
-            messageId: context.params.messageId,
-            click_action: 'FLUTTER_NOTIFICATION_CLICK',
-          },
-          apns: {
-            headers: {
-              'apns-priority': '10',
-              'apns-push-type': 'alert',
-            },
-            payload: {
-              aps: {
-                alert: {
-                  title: '🕌 Nouvelle réponse',
-                  body: `La mosquée a répondu à votre message`,
-                },
-                sound: 'default',
-                badge: 1,
-              },
-            },
-          },
-          android: {
-            priority: 'high',
-            notification: {
-              sound: 'default',
-              channelId: 'messages',
-            },
-          },
-          token: fcmToken, // Envoyer directement au token de l'utilisateur
-        };
-
-        const response = await admin.messaging().send(message);
-        console.log('🔔 Notification envoyée à l\'utilisateur:', userId, response);
+        await sendPushToMember(userId, '🕌 Nouvelle réponse',
+          `La mosquée a répondu à votre message "${truncate(after.sujet, 30)}"`,
+          { type: 'message_reply', messageId: context.params.messageId, click_action: 'FLUTTER_NOTIFICATION_CLICK' }
+        );
+        console.log('🔔 Notification envoyée à l\'utilisateur:', userId);
 
         // Enregistrer dans l'historique
         await admin.firestore().collection('notifications_history').add({
@@ -1108,11 +1135,13 @@ exports.onMessageReply = functions
           body: `Réponse au message: ${after.sujet}`,
           targetUserId: userId,
           sentAt: admin.firestore.FieldValue.serverTimestamp(),
-          messageId: response,
           success: true,
           source: 'message_reply_to_user',
           relatedMessageId: context.params.messageId,
         });
+
+        // Charger le member doc pour l'email
+        const memberDoc = await admin.firestore().collection('members').doc(userId).get();
 
         // === EMAIL à l'utilisateur ===
         try {
@@ -1236,8 +1265,11 @@ exports.onMessageReply = functions
             .get();
 
           membersSnapshot.docs.forEach(memberDoc => {
-            if (memberDoc.data().fcmToken) {
-              adminTokens.push(memberDoc.data().fcmToken);
+            const md = memberDoc.data();
+            if (Array.isArray(md.fcmTokens)) {
+              adminTokens.push(...md.fcmTokens);
+            } else if (md.fcmToken) {
+              adminTokens.push(md.fcmToken);
             }
           });
         }
@@ -2123,6 +2155,7 @@ exports.stripeWebhook = functions
 
             if (attemptCount >= 3) {
               statusUpdate.status = 'expire';
+              statusUpdate.paymentFailed = true;
               console.log('3 tentatives échouées, membre passé en expire pour renouvellement');
             }
 
@@ -2224,6 +2257,22 @@ exports.stripeWebhook = functions
               }
             }
           }
+
+          // Push notification au membre
+          if (failedMemberDoc) {
+            const pushMsg = attemptCount >= 3
+              ? 'Votre cotisation a expiré après 3 échecs de paiement. Renouvelez depuis l\'app.'
+              : `Tentative ${attemptCount}/3 échouée. Vérifiez votre carte bancaire.`;
+            await sendPushToMember(failedMemberDoc.id, '⚠️ Prélèvement échoué', pushMsg);
+          }
+
+          // Notification backoffice
+          const notifTitre = attemptCount >= 3
+            ? '🚨 Cotisation expirée (3 échecs)'
+            : `⚠️ Paiement échoué (${attemptCount}/3)`;
+          const notifMessage = `${failedMemberPrenom || 'Membre'} — ${((failedInvoice.amount_due || 0) / 100).toFixed(2)} €`;
+          await createNotifBO('paiement', notifTitre, notifMessage, failedMemberDoc ? failedMemberDoc.id : null);
+
         } catch (err) {
           console.error('Erreur traitement invoice.payment_failed:', err);
         }
@@ -2456,6 +2505,46 @@ exports.stripeWebhook = functions
               console.error('Email non-bloquant (dispute alert):', emailErr.message);
             }
           }
+
+          // 3. Trouver le membre via payment_intent → payments collection
+          let disputeMemberId = null;
+          let disputeMemberName = '';
+          if (dispute.payment_intent) {
+            const paymentsSnap = await admin.firestore()
+              .collection('payments')
+              .where('stripePaymentIntentId', '==', dispute.payment_intent)
+              .limit(1)
+              .get();
+
+            if (!paymentsSnap.empty) {
+              const paymentData = paymentsSnap.docs[0].data();
+              disputeMemberId = paymentData.membreId || null;
+            }
+          }
+
+          // 4. Suspendre le membre si trouvé
+          if (disputeMemberId) {
+            const disputeMemberRef = admin.firestore().collection('members').doc(disputeMemberId);
+            const disputeMemberDoc = await disputeMemberRef.get();
+            if (disputeMemberDoc.exists) {
+              disputeMemberName = disputeMemberDoc.data().prenom || disputeMemberDoc.data().nom || '';
+              await disputeMemberRef.update({
+                status: 'suspendu',
+                disputeId: dispute.id,
+                suspendedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log('Membre suspendu suite au litige:', disputeMemberId);
+            }
+          }
+
+          // 5. Notification backoffice
+          await createNotifBO(
+            'remboursement',
+            '🚨 Dispute bancaire !',
+            `${disputeMemberName || 'Membre inconnu'} — ${dispute.amount / 100} € contestés (${dispute.reason || 'non spécifié'})`,
+            disputeMemberId
+          );
+
         } catch (err) {
           console.error('Erreur traitement charge.dispute.created:', err);
         }
@@ -2474,6 +2563,68 @@ exports.stripeWebhook = functions
           console.log('Litige mis à jour dans Firestore');
         } catch (err) {
           console.error('Erreur traitement charge.dispute.closed:', err);
+        }
+        break;
+      }
+
+      case 'setup_intent.succeeded': {
+        const setupIntent = event.data.object;
+        const siMetadata = setupIntent.metadata || {};
+        console.log('SetupIntent succeeded:', setupIntent.id, 'metadata:', siMetadata);
+
+        try {
+          // Mise à jour de la carte par défaut sur l'abonnement
+          if (siMetadata.subscriptionId && setupIntent.payment_method) {
+            await stripe.subscriptions.update(siMetadata.subscriptionId, {
+              default_payment_method: setupIntent.payment_method,
+            });
+            console.log('Carte mise à jour sur subscription:', siMetadata.subscriptionId);
+
+            // Notifier le membre
+            if (siMetadata.uid) {
+              await sendPushToMember(siMetadata.uid, '✅ Carte mise à jour', 'Votre nouvelle carte bancaire a été enregistrée.');
+
+              // Email confirmation
+              const siMemberDoc = await admin.firestore().collection('members').doc(siMetadata.uid).get();
+              if (siMemberDoc.exists) {
+                const siMember = siMemberDoc.data();
+                const siEmail = siMember.email;
+                if (siEmail) {
+                  const siBrevoUser = BREVO_SMTP_USER.value();
+                  const siBrevoPass = BREVO_SMTP_PASS.value();
+                  const siFromEmail = BREVO_FROM_EMAIL.value();
+                  const siFromName = BREVO_FROM_NAME.value();
+                  if (siBrevoUser && siBrevoPass && siFromEmail) {
+                    const siTransporter = nodemailer.createTransport({
+                      host: 'smtp-relay.brevo.com', port: 587, secure: false,
+                      auth: { user: siBrevoUser, pass: siBrevoPass },
+                    });
+                    try {
+                      await siTransporter.sendMail({
+                        from: `"${siFromName}" <${siFromEmail}>`,
+                        to: siEmail,
+                        subject: '✅ Carte bancaire mise à jour — El Mohsinine',
+                        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+                          <div style="background:linear-gradient(135deg,#2e7d32,#4caf50);padding:20px;text-align:center;border-radius:10px 10px 0 0;">
+                            <h1 style="color:white;margin:0;">✅ Carte mise à jour</h1>
+                          </div>
+                          <div style="background:#f9f9f9;padding:30px;border-radius:0 0 10px 10px;">
+                            <p>Salam alaykoum${siMember.prenom ? ' ' + siMember.prenom : ''},</p>
+                            <p>Votre nouvelle carte bancaire a bien été enregistrée pour votre cotisation mensuelle.</p>
+                            <p>Les prochains prélèvements seront effectués sur cette carte.</p>
+                          </div>
+                        </div>`,
+                      });
+                    } catch (emailErr) {
+                      console.error('Email non-bloquant (setup_intent):', emailErr.message);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Erreur traitement setup_intent.succeeded:', err);
         }
         break;
       }
@@ -3328,24 +3479,11 @@ exports.sendRecuFiscal = functions
         console.error('⚠️ Erreur copie message reçu fiscal:', msgError);
       }
 
-      // Push notification reçu fiscal
-      try {
-        const memberQuery = await admin.firestore().collection('members').doc(context.auth.uid).get();
-        const memberFcmToken = memberQuery.exists ? memberQuery.data().fcmToken : null;
-        if (memberFcmToken) {
-          await admin.messaging().send({
-            token: memberFcmToken,
-            notification: {
-              title: '📄 Votre reçu fiscal est disponible',
-              body: 'Votre reçu fiscal a été envoyé par email. Conservez-le pour votre déclaration d\'impôts.',
-            },
-            data: { type: 'recu_fiscal', annee: String(annee) },
-            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-          });
-        }
-      } catch (pushErr) {
-        console.log('Push reçu fiscal non envoyé:', pushErr.message);
-      }
+      // Push notification reçu fiscal (multi-device)
+      await sendPushToMember(context.auth.uid, '📄 Votre reçu fiscal est disponible',
+        'Votre reçu fiscal a été envoyé par email. Conservez-le pour votre déclaration d\'impôts.',
+        { type: 'recu_fiscal', annee: String(annee) }
+      );
 
       return {
         success: true,
@@ -3495,6 +3633,40 @@ exports.onNewSympathisant = functions
 
     console.log('🎉 Nouveau sympathisant:', prenom, email.replace(/(.{2}).*(@.*)/, '$1***$2'));
 
+    // S13: Vérifier doublon email
+    try {
+      const existingMembers = await admin.firestore()
+        .collection('members')
+        .where('email', '==', email)
+        .limit(2)
+        .get();
+
+      const otherDocs = existingMembers.docs.filter(d => d.id !== snap.id);
+      if (otherDocs.length > 0) {
+        console.log('⚠️ Double compte détecté pour email:', email.replace(/(.{2}).*(@.*)/, '$1***$2'));
+        // Transférer le FCM token vers le compte existant
+        if (member.fcmTokens && Array.isArray(member.fcmTokens)) {
+          await otherDocs[0].ref.update({
+            fcmTokens: admin.firestore.FieldValue.arrayUnion(...member.fcmTokens),
+          });
+        } else if (member.fcmToken) {
+          await otherDocs[0].ref.update({
+            fcmTokens: admin.firestore.FieldValue.arrayUnion(member.fcmToken),
+          });
+        }
+        // Supprimer le doublon
+        await snap.ref.delete();
+        await createNotifBO({
+          type: 'nouveau_membre',
+          titre: '⚠️ Double compte détecté',
+          message: `${prenom} (${email.replace(/(.{2}).*(@.*)/, '$1***$2')}) — doublon supprimé, FCM transféré`,
+        });
+        return null;
+      }
+    } catch (dupErr) {
+      console.warn('⚠️ Vérif doublon non bloquante:', dupErr.message);
+    }
+
     try {
       // Récupérer les infos de la mosquée
       const mosqueeDoc = await admin.firestore()
@@ -3597,22 +3769,11 @@ exports.onNewSympathisant = functions
         membreNom: `${prenom} ${member.nom || ''}`.trim(),
       });
 
-      // Push notification bienvenue
-      if (member.fcmToken) {
-        try {
-          await admin.messaging().send({
-            token: member.fcmToken,
-            notification: {
-              title: '🕌 Bienvenue chez El Mouhssinine !',
-              body: 'Votre compte a bien été créé. Complétez votre adhésion en réglant votre cotisation.',
-            },
-            data: { type: 'welcome_sympathisant', memberId: snap.id },
-            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-          });
-        } catch (pushErr) {
-          console.log('Push bienvenue non envoyé:', pushErr.message);
-        }
-      }
+      // Push notification bienvenue (multi-device)
+      await sendPushToMember(snap.id, '🕌 Bienvenue chez El Mouhssinine !',
+        'Votre compte a bien été créé. Complétez votre adhésion en réglant votre cotisation.',
+        { type: 'welcome_sympathisant', memberId: snap.id }
+      );
 
       return { success: true, email };
 
@@ -3693,35 +3854,48 @@ exports.validateMembership = functions
 
       // ========== APPROVAL ==========
       if (action === 'approve') {
-        // Préparer les champs à mettre à jour
-        const updateData = {
-          status: 'actif',
-          validatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          validatedBy: context.auth.uid,
-        };
-
-        // S'assurer que cotisation.dateFin est défini (sinon carte membre cassée)
-        if (!member.cotisation || !member.cotisation.dateFin) {
-          const now = new Date();
-          const type = member.cotisation?.type || member.formule || 'annuel';
-          let dateFin;
-          if (type === 'mensuel') {
-            dateFin = new Date(now);
-            dateFin.setMonth(dateFin.getMonth() + 1);
-          } else {
-            dateFin = new Date(now);
-            dateFin.setFullYear(dateFin.getFullYear() + 1);
+        // Transaction atomique pour éviter race condition (membre expiré entre-temps)
+        await admin.firestore().runTransaction(async (t) => {
+          const freshDoc = await t.get(memberRef);
+          if (!freshDoc.exists) {
+            throw new functions.https.HttpsError('not-found', 'Membre non trouvé');
           }
-          updateData.cotisation = {
-            ...(member.cotisation || {}),
-            type: type,
-            dateDebut: member.cotisation?.dateDebut || admin.firestore.Timestamp.fromDate(now),
-            dateFin: admin.firestore.Timestamp.fromDate(dateFin),
-            montant: member.cotisation?.montant || member.montantPaye || 0,
-          };
-        }
+          const freshData = freshDoc.data();
 
-        await memberRef.update(updateData);
+          // Vérifier que le membre est toujours en attente de validation
+          if (freshData.status !== 'en_attente_validation' && freshData.status !== 'en_attente_paiement' && freshData.status !== 'en_attente_signature' && freshData.status !== 'sympathisant') {
+            throw new functions.https.HttpsError('failed-precondition', `Statut actuel "${freshData.status}" — validation impossible`);
+          }
+
+          const updateData = {
+            status: 'actif',
+            validatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            validatedBy: context.auth.uid,
+          };
+
+          // S'assurer que cotisation.dateFin est défini (sinon carte membre cassée)
+          if (!freshData.cotisation || !freshData.cotisation.dateFin) {
+            const now = new Date();
+            const type = freshData.cotisation?.type || freshData.formule || 'annuel';
+            let dateFin;
+            if (type === 'mensuel') {
+              dateFin = new Date(now);
+              dateFin.setMonth(dateFin.getMonth() + 1);
+            } else {
+              dateFin = new Date(now);
+              dateFin.setFullYear(dateFin.getFullYear() + 1);
+            }
+            updateData.cotisation = {
+              ...(freshData.cotisation || {}),
+              type: type,
+              dateDebut: freshData.cotisation?.dateDebut || admin.firestore.Timestamp.fromDate(now),
+              dateFin: admin.firestore.Timestamp.fromDate(dateFin),
+              montant: freshData.cotisation?.montant || freshData.montantPaye || 0,
+            };
+          }
+
+          t.update(memberRef, updateData);
+        });
 
         // Envoyer email de confirmation
         if (transporter && email) {
@@ -3755,28 +3929,11 @@ exports.validateMembership = functions
           }
         }
 
-        // Envoyer notification push
-        if (member.fcmToken) {
-          await admin.messaging().send({
-            token: member.fcmToken,
-            notification: {
-              title: '🎉 Adhésion validée !',
-              body: 'Félicitations, vous êtes maintenant membre actif.',
-            },
-            data: {
-              type: 'membership_approved',
-              memberId: memberId,
-            },
-            apns: {
-              payload: {
-                aps: {
-                  sound: 'default',
-                  badge: 1,
-                },
-              },
-            },
-          });
-        }
+        // Envoyer notification push (multi-device)
+        await sendPushToMember(memberId, '🎉 Adhésion validée !',
+          'Félicitations, vous êtes maintenant membre actif.',
+          { type: 'membership_approved', memberId }
+        );
 
         // Copie dans messagerie interne
         try {
@@ -3899,28 +4056,11 @@ exports.validateMembership = functions
           }
         }
 
-        // 4. Envoyer notification push
-        if (member.fcmToken) {
-          await admin.messaging().send({
-            token: member.fcmToken,
-            notification: {
-              title: 'Information adhésion',
-              body: `Votre paiement de ${montant}€ a été converti en don.`,
-            },
-            data: {
-              type: 'membership_rejected',
-              memberId: memberId,
-            },
-            apns: {
-              payload: {
-                aps: {
-                  sound: 'default',
-                  badge: 1,
-                },
-              },
-            },
-          });
-        }
+        // 4. Envoyer notification push (multi-device)
+        await sendPushToMember(memberId, 'Information adhésion',
+          `Votre paiement de ${montant}€ a été converti en don.`,
+          { type: 'membership_rejected', memberId }
+        );
 
         // Copie dans messagerie interne
         try {
@@ -3969,28 +4109,11 @@ exports.validateMembership = functions
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // Envoyer notification push
-        if (member.fcmToken) {
-          await admin.messaging().send({
-            token: member.fcmToken,
-            notification: {
-              title: '📍 Passage au bureau demandé',
-              body: 'La mosquée souhaite vous rencontrer pour votre adhésion.',
-            },
-            data: {
-              type: 'visit_requested',
-              memberId: memberId,
-            },
-            apns: {
-              payload: {
-                aps: {
-                  sound: 'default',
-                  badge: 1,
-                },
-              },
-            },
-          });
-        }
+        // Envoyer notification push (multi-device)
+        await sendPushToMember(memberId, '📍 Passage au bureau demandé',
+          'La mosquée souhaite vous rencontrer pour votre adhésion.',
+          { type: 'visit_requested', memberId }
+        );
 
         console.log('📍 Demande de passage au bureau pour', prenom, nom);
         return { success: true, action: 'visit_requested' };
@@ -3998,6 +4121,79 @@ exports.validateMembership = functions
 
     } catch (error) {
       console.error('❌ Erreur validateMembership:', error);
+      throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ========================================================================
+// UNDO VALIDATION - Annuler une validation admin (dans l'heure)
+// ========================================================================
+exports.undoValidation = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+
+    const adminCheck = await isAdmin(context.auth.uid);
+    if (!adminCheck) {
+      throw new functions.https.HttpsError('permission-denied', 'Réservé aux administrateurs');
+    }
+
+    const { memberId } = data;
+    if (!memberId) {
+      throw new functions.https.HttpsError('invalid-argument', 'memberId requis');
+    }
+
+    try {
+      const memberRef = admin.firestore().collection('members').doc(memberId);
+      const memberDoc = await memberRef.get();
+
+      if (!memberDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Membre non trouvé');
+      }
+
+      const member = memberDoc.data();
+
+      if (member.status !== 'actif') {
+        throw new functions.https.HttpsError('failed-precondition', 'Le membre n\'est pas actif');
+      }
+
+      // Vérifier que la validation date de moins d'1 heure
+      if (!member.validatedAt) {
+        throw new functions.https.HttpsError('failed-precondition', 'Pas de date de validation trouvée');
+      }
+
+      const validatedAt = member.validatedAt.toDate ? member.validatedAt.toDate() : new Date(member.validatedAt);
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+      if (validatedAt < oneHourAgo) {
+        throw new functions.https.HttpsError('failed-precondition', 'Annulation possible uniquement dans l\'heure suivant la validation');
+      }
+
+      await memberRef.update({
+        status: 'en_attente_validation',
+        validatedAt: admin.firestore.FieldValue.delete(),
+        validatedBy: admin.firestore.FieldValue.delete(),
+        undoneAt: admin.firestore.FieldValue.serverTimestamp(),
+        undoneBy: context.auth.uid,
+      });
+
+      // Push notification au membre
+      await sendPushToMember(memberId, 'Validation annulée', 'Votre validation a été annulée par un administrateur. Contactez la mosquée pour plus d\'informations.');
+
+      await createNotifBO({
+        type: 'validation_requise',
+        titre: '↩️ Validation annulée',
+        message: `${member.prenom || ''} ${member.nom || ''} — validation annulée par admin`.trim(),
+        membreId: memberId,
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Erreur undoValidation:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
       throw new functions.https.HttpsError('internal', error.message);
     }
   });
@@ -4783,30 +4979,14 @@ exports.onDonationConfirmation = functions
         montant: montant,
       });
 
-      // Push notification FCM (chercher le membre par email pour le token)
-      try {
-        const donorUid = donation.userId || donation.metadata?.userId;
-        let donorFcmToken = null;
-        if (donorUid) {
-          const donorDoc = await admin.firestore().collection('members').doc(donorUid).get();
-          if (donorDoc.exists) {
-            donorFcmToken = donorDoc.data().fcmToken;
-          }
-        }
-        if (donorFcmToken) {
-          const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
-          await admin.messaging().send({
-            token: donorFcmToken,
-            notification: {
-              title: '✅ Don reçu — Merci !',
-              body: `Votre don${pushMontant ? ' de ' + pushMontant : ''} a bien été reçu. Barak Allahu fik.`,
-            },
-            data: { type: 'don_received', donationId },
-            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-          });
-        }
-      } catch (pushErr) {
-        console.log('Push don non envoyé:', pushErr.message);
+      // Push notification FCM (multi-device)
+      const donorUid = donation.userId || donation.metadata?.userId;
+      if (donorUid) {
+        const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
+        await sendPushToMember(donorUid, '✅ Don reçu — Merci !',
+          `Votre don${pushMontant ? ' de ' + pushMontant : ''} a bien été reçu. Barak Allahu fik.`,
+          { type: 'don_received', donationId }
+        );
       }
 
       // Marquer comme envoyé
@@ -5008,22 +5188,14 @@ exports.onCotisationConfirmation = functions
         membreNom: memberNameForNotif,
       });
 
-      // Push notification FCM
-      if (memberData && memberData.fcmToken) {
-        try {
-          const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
-          await admin.messaging().send({
-            token: memberData.fcmToken,
-            notification: {
-              title: '✅ Paiement reçu — Merci !',
-              body: `Votre cotisation${pushMontant ? ' de ' + pushMontant : ''} a bien été enregistrée. Votre adhésion est en cours de validation.`,
-            },
-            data: { type: 'cotisation_received', paymentId },
-            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-          });
-        } catch (pushErr) {
-          console.log('Push cotisation non envoyé:', pushErr.message);
-        }
+      // Push notification FCM (multi-device)
+      const memberUidForPush = payment.metadata?.memberId || '';
+      if (memberUidForPush) {
+        const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
+        await sendPushToMember(memberUidForPush, '✅ Paiement reçu — Merci !',
+          `Votre cotisation${pushMontant ? ' de ' + pushMontant : ''} a bien été enregistrée. Votre adhésion est en cours de validation.`,
+          { type: 'cotisation_received', paymentId }
+        );
       }
 
       // Marquer comme envoyé
@@ -5208,21 +5380,35 @@ exports.refundPayment = functions
         console.warn('⚠️ Email remboursement non envoyé (non bloquant):', emailError.message);
       }
 
-      // Push notification remboursement
-      if (memberData.fcmToken) {
-        try {
-          await admin.messaging().send({
-            token: memberData.fcmToken,
-            notification: {
-              title: '💸 Remboursement en cours',
-              body: `Votre remboursement de ${refundedAmount}€ a été initié. Comptez 5 à 10 jours ouvrés.`,
-            },
-            data: { type: 'refund_initiated', memberId },
-            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+      // Push notification remboursement (multi-device)
+      await sendPushToMember(memberId, '💸 Remboursement en cours',
+        `Votre remboursement de ${refundedAmount}€ a été initié. Comptez 5 à 10 jours ouvrés.`,
+        { type: 'refund_initiated', memberId }
+      );
+
+      // S11: Invalider le reçu fiscal lié si existant
+      try {
+        const recuQuery = await db.collection('recus_fiscaux')
+          .where('stripePaymentIntentId', '==', stripePaymentId)
+          .limit(1)
+          .get();
+
+        if (!recuQuery.empty) {
+          await recuQuery.docs[0].ref.update({
+            annule: true,
+            dateAnnulation: admin.firestore.FieldValue.serverTimestamp(),
+            raisonAnnulation: 'Remboursement',
           });
-        } catch (pushErr) {
-          console.log('Push remboursement non envoyé:', pushErr.message);
+          console.log('📄 Reçu fiscal invalidé suite au remboursement');
+          await createNotifBO({
+            type: 'remboursement',
+            titre: '📄 Reçu fiscal invalidé',
+            message: `Reçu fiscal annulé suite au remboursement de ${refundedAmount}€ pour ${memberData.prenom || ''} ${memberData.nom || ''}`.trim(),
+            membreId: memberId,
+          });
         }
+      } catch (recuErr) {
+        console.warn('⚠️ Invalidation reçu fiscal non bloquante:', recuErr.message);
       }
 
       return {
@@ -5239,6 +5425,150 @@ exports.refundPayment = functions
       console.error('❌ Erreur refundPayment:', error);
       if (error instanceof functions.https.HttpsError) throw error;
       throw new functions.https.HttpsError('internal', error.message);
+    }
+  });
+
+// ========================================================================
+// UPDATE PAYMENT METHOD - Changer de carte bancaire
+// ========================================================================
+exports.updatePaymentMethod = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+
+    const uid = context.auth.uid;
+
+    try {
+      const memberRef = admin.firestore().collection('members').doc(uid);
+      const memberDoc = await memberRef.get();
+
+      if (!memberDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Profil membre non trouvé');
+      }
+
+      const memberData = memberDoc.data();
+
+      if (!memberData.stripeCustomerId || !memberData.stripeSubscriptionId) {
+        throw new functions.https.HttpsError('failed-precondition', 'Pas d\'abonnement actif');
+      }
+
+      if (memberData.cotisationType !== 'mensuel') {
+        throw new functions.https.HttpsError('failed-precondition', 'Changement de carte disponible uniquement pour les cotisations mensuelles');
+      }
+
+      const setupIntent = await stripe.setupIntents.create({
+        customer: memberData.stripeCustomerId,
+        usage: 'off_session',
+        metadata: {
+          subscriptionId: memberData.stripeSubscriptionId,
+          uid: uid,
+        },
+      });
+
+      return { clientSecret: setupIntent.client_secret };
+    } catch (error) {
+      console.error('❌ Erreur updatePaymentMethod:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', 'Erreur lors de la mise à jour du moyen de paiement');
+    }
+  });
+
+// ========================================================================
+// CHECK PENDING PAYMENT - Vérifier paiement interrompu (3DS)
+// ========================================================================
+exports.checkPendingPayment = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+
+    const { paymentIntentId } = data;
+    if (!paymentIntentId) {
+      throw new functions.https.HttpsError('invalid-argument', 'paymentIntentId requis');
+    }
+
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+      if (pi.status === 'succeeded') {
+        // Vérifier si le webhook l'a déjà traité
+        const existingPayment = await admin.firestore()
+          .collection('payments')
+          .where('stripePaymentIntentId', '==', paymentIntentId)
+          .limit(1)
+          .get();
+
+        if (!existingPayment.empty) {
+          return { status: 'already_processed' };
+        }
+
+        // Le webhook va le traiter — retourner succeeded pour que l'app sache
+        return { status: 'succeeded' };
+      } else if (pi.status === 'canceled' || pi.status === 'requires_payment_method') {
+        return { status: 'expired' };
+      } else if (pi.status === 'requires_action' || pi.status === 'requires_confirmation') {
+        return { status: 'pending', clientSecret: pi.client_secret };
+      } else {
+        return { status: pi.status };
+      }
+    } catch (error) {
+      console.error('❌ Erreur checkPendingPayment:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', 'Erreur vérification paiement');
+    }
+  });
+
+// ========================================================================
+// SYNC PROFILE TO STRIPE - Synchroniser email/adresse vers Stripe
+// ========================================================================
+exports.syncProfileToStripe = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+
+    const uid = context.auth.uid;
+
+    try {
+      const memberDoc = await admin.firestore().collection('members').doc(uid).get();
+      if (!memberDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Profil non trouvé');
+      }
+
+      const memberData = memberDoc.data();
+      if (!memberData.stripeCustomerId) {
+        return { synced: false, reason: 'Pas de client Stripe' };
+      }
+
+      const updateFields = {};
+      if (memberData.email) updateFields.email = memberData.email;
+      if (memberData.nom || memberData.prenom) {
+        updateFields.name = `${memberData.prenom || ''} ${memberData.nom || ''}`.trim();
+      }
+      if (memberData.adresse || memberData.ville || memberData.codePostal) {
+        updateFields.address = {
+          line1: memberData.adresse || '',
+          city: memberData.ville || '',
+          postal_code: memberData.codePostal || '',
+          country: 'FR',
+        };
+      }
+
+      await stripe.customers.update(memberData.stripeCustomerId, updateFields);
+      console.log('Profil Stripe synchronisé pour:', uid.substring(0, 8));
+
+      return { synced: true };
+    } catch (error) {
+      console.error('❌ Erreur syncProfileToStripe:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', 'Erreur synchronisation Stripe');
     }
   });
 
@@ -5379,24 +5709,13 @@ exports.cancelSubscription = functions
         }
       }
 
-      // Push notification annulation
-      if (memberData.fcmToken) {
-        try {
-          const dateFin = memberData.cotisation?.dateFin;
-          const dateFinStr = dateFin?.toDate ? dateFin.toDate().toLocaleDateString('fr-FR') : '';
-          await admin.messaging().send({
-            token: memberData.fcmToken,
-            notification: {
-              title: '📋 Annulation confirmée',
-              body: `Votre abonnement mensuel sera actif jusqu'au ${dateFinStr || 'fin de période'}. Vous passerez ensuite en sympathisant.`,
-            },
-            data: { type: 'subscription_cancelled' },
-            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-          });
-        } catch (pushErr) {
-          console.log('Push annulation non envoyé:', pushErr.message);
-        }
-      }
+      // Push notification annulation (multi-device)
+      const dateFin = memberData.cotisation?.dateFin;
+      const dateFinStr = dateFin?.toDate ? dateFin.toDate().toLocaleDateString('fr-FR') : '';
+      await sendPushToMember(uid, '📋 Annulation confirmée',
+        `Votre abonnement mensuel sera actif jusqu'au ${dateFinStr || 'fin de période'}. Vous passerez ensuite en sympathisant.`,
+        { type: 'subscription_cancelled' }
+      );
 
       return {
         success: true,
@@ -5852,30 +6171,22 @@ exports.checkExpiringCotisations = functions
           html: htmlBody,
         });
 
-        // Push notification FCM (ne bloque pas le cron si échec)
-        const fcmToken = member.fcmToken;
-        if (fcmToken) {
-          try {
-            let pushTitle, pushBody;
-            if (emailType === 'remind30') {
-              pushTitle = '⏰ Votre adhésion expire dans 30 jours';
-              pushBody = 'Renouvelez votre cotisation pour rester membre actif.';
-            } else if (emailType === 'remind7') {
-              pushTitle = '⚠️ Votre adhésion expire dans 7 jours';
-              pushBody = 'Plus que 7 jours — pensez à renouveler votre cotisation.';
-            } else {
-              pushTitle = '❌ Votre adhésion a expiré';
-              pushBody = 'Votre statut est maintenant sympathisant. Renouvelez pour retrouver vos avantages.';
-            }
-            await admin.messaging().send({
-              token: fcmToken,
-              notification: { title: pushTitle, body: pushBody },
-              data: { type: 'expiration_reminder', emailType },
-              apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-            });
-          } catch (pushErr) {
-            console.log(`Push ${emailType} non envoyé (token invalide ou erreur):`, pushErr.message);
+        // Push notification FCM (multi-device, ne bloque pas le cron si échec)
+        {
+          let pushTitle, pushBody;
+          if (emailType === 'remind30') {
+            pushTitle = '⏰ Votre adhésion expire dans 30 jours';
+            pushBody = 'Renouvelez votre cotisation pour rester membre actif.';
+          } else if (emailType === 'remind7') {
+            pushTitle = '⚠️ Votre adhésion expire dans 7 jours';
+            pushBody = 'Plus que 7 jours — pensez à renouveler votre cotisation.';
+          } else {
+            pushTitle = '❌ Votre adhésion a expiré';
+            pushBody = 'Votre statut est maintenant sympathisant. Renouvelez pour retrouver vos avantages.';
           }
+          await sendPushToMember(memberDoc.id, pushTitle, pushBody,
+            { type: 'expiration_reminder', emailType }
+          );
         }
 
         // Marquer le rappel comme envoyé (idempotence — nouveau format + ancien format)
@@ -5951,19 +6262,10 @@ exports.checkExpiringCotisations = functions
               }),
             });
             // Push
-            if (gMember.fcmToken) {
-              try {
-                await admin.messaging().send({
-                  token: gMember.fcmToken,
-                  notification: {
-                    title: '🔔 Votre adhésion El Mouhssinine a expiré',
-                    body: 'Renouvelez maintenant pour retrouver votre statut de membre actif.',
-                  },
-                  data: { type: 'grace_period_expired' },
-                  apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-                });
-              } catch (pe) { /* silent */ }
-            }
+            await sendPushToMember(gDoc.id, '🔔 Votre adhésion El Mouhssinine a expiré',
+              'Renouvelez maintenant pour retrouver votre statut de membre actif.',
+              { type: 'grace_period_expired' }
+            );
             await gDoc.ref.update({ reminder_grace_expired_sent: true });
           } catch (eErr) {
             console.error('Erreur email/push grâce expirée:', eErr.message);
@@ -6013,19 +6315,10 @@ exports.checkExpiringCotisations = functions
             }),
           });
           // Push
-          if (rMember.fcmToken) {
-            try {
-              await admin.messaging().send({
-                token: rMember.fcmToken,
-                notification: {
-                  title: '💚 Rejoignez-nous à nouveau !',
-                  body: 'Un an de cotisation = accès complet + reçu fiscal.',
-                },
-                data: { type: 'relance_30d' },
-                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-              });
-            } catch (pe) { /* silent */ }
-          }
+          await sendPushToMember(rDoc.id, '💚 Rejoignez-nous à nouveau !',
+            'Un an de cotisation = accès complet + reçu fiscal.',
+            { type: 'relance_30d' }
+          );
           await rDoc.ref.update({ reminder_30d_relance_sent: true });
           relance30++;
         } catch (rErr) {
@@ -6261,6 +6554,15 @@ exports.deleteMemberByAdmin = functions
 
       if (!memberDoc.exists) {
         throw new functions.https.HttpsError('not-found', 'Membre non trouvé');
+      }
+
+      // S12: Protection dernier admin
+      const targetAdminDoc = await db.collection('admins').doc(memberId).get();
+      if (targetAdminDoc.exists) {
+        const allAdmins = await db.collection('admins').get();
+        if (allAdmins.size <= 1) {
+          throw new functions.https.HttpsError('failed-precondition', 'Impossible de supprimer le dernier administrateur');
+        }
       }
 
       const memberData = memberDoc.data();
@@ -6530,6 +6832,15 @@ exports.deleteMyAccount = functions
     };
 
     try {
+      // S12: Protection dernier admin
+      const selfAdminDoc = await db.collection('admins').doc(uid).get();
+      if (selfAdminDoc.exists) {
+        const allAdmins = await db.collection('admins').get();
+        if (allAdmins.size <= 1) {
+          throw new functions.https.HttpsError('failed-precondition', 'Impossible de supprimer le dernier administrateur');
+        }
+      }
+
       // 2. Trouver le document membre par uid
       const memberSnap = await db.collection('members')
         .where('uid', '==', uid).limit(1).get();

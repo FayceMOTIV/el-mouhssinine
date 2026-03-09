@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   PermissionsAndroid,
 } from 'react-native';
+import messaging from '@react-native-firebase/messaging';
 import Geolocation from '@react-native-community/geolocation';
 import { useNavigation } from '@react-navigation/native';
 import CompassHeading from 'react-native-compass-heading';
@@ -145,6 +146,27 @@ const MoreScreen = () => {
   const qiblaDirection = 119; // Direction Qibla pour Bourg-en-Bresse
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [pushDenied, setPushDenied] = useState(false);
+
+  // S15: Vérifier permission notifications push
+  useEffect(() => {
+    const checkPushPermission = async () => {
+      try {
+        const authStatus = await messaging().hasPermission();
+        if (authStatus === messaging.AuthorizationStatus.DENIED) {
+          setPushDenied(true);
+        } else if (authStatus === messaging.AuthorizationStatus.NOT_DETERMINED) {
+          const result = await messaging().requestPermission();
+          if (result === messaging.AuthorizationStatus.DENIED) {
+            setPushDenied(true);
+          }
+        }
+      } catch (err) {
+        console.log('Push permission check error:', err);
+      }
+    };
+    checkPushPermission();
+  }, []);
 
   useEffect(() => {
     const unsub = subscribeToMosqueeInfo(info => {
@@ -577,6 +599,34 @@ const MoreScreen = () => {
         </View>
 
         <View style={styles.content}>
+          {/* S15: Bannière notifications désactivées */}
+          {pushDenied && (
+            <TouchableOpacity
+              onPress={() => Linking.openSettings()}
+              style={{
+                backgroundColor: '#ff980020',
+                borderWidth: 1,
+                borderColor: '#ff980050',
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 16,
+                flexDirection: isRTL ? 'row-reverse' : 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <Text style={{ fontSize: 22 }}>🔔</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#ff9800', fontWeight: '700', fontSize: 14, textAlign: isRTL ? 'right' : 'left' }}>
+                  {language === 'ar' ? 'الإشعارات معطلة' : 'Notifications désactivées'}
+                </Text>
+                <Text style={{ color: '#ffffff90', fontSize: 12, marginTop: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                  {language === 'ar' ? 'اضغط لتفعيلها من الإعدادات' : 'Appuyez pour les activer dans les Réglages'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
           {/* Direction Qibla */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isRTL && styles.textRTL]}>

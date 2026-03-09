@@ -21,6 +21,8 @@ import {
 } from '../theme/colors';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import firestore from '@react-native-firebase/firestore';
+import firebase from '@react-native-firebase/app';
+import '@react-native-firebase/functions';
 import auth from '@react-native-firebase/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../context/LanguageContext';
@@ -75,6 +77,10 @@ const ProfileEditScreen = () => {
         adresse: editedAdresse.trim(),
         updatedAt: firestore.FieldValue.serverTimestamp(),
       });
+
+      // S8: Synchroniser les modifications vers Stripe (non-bloquant)
+      firebase.app().functions('europe-west1').httpsCallable('syncProfileToStripe')({})
+        .catch((err: any) => console.log('Sync Stripe non-bloquant:', err?.message));
 
       Alert.alert(t('commonSuccess'), t('profileUpdateSuccess'), [
         {

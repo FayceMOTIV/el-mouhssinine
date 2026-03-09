@@ -540,6 +540,32 @@ export default function Adherents() {
     )
   }
 
+  // ========== UNDO VALIDATION ==========
+  const handleUndoValidation = async (membre) => {
+    setSaving(true)
+    try {
+      const functions = getFunctions(undefined, 'europe-west1')
+      const undoValidation = httpsCallable(functions, 'undoValidation')
+      await undoValidation({ memberId: membre.id })
+      toast.success(`Validation de ${membre.prenom} ${membre.nom} annulée`)
+    } catch (err) {
+      console.error('Error undoing validation:', err)
+      const message = err?.message?.includes('failed-precondition')
+        ? 'Annulation impossible (délai d\'1h dépassé ou membre non actif)'
+        : err?.message || 'Erreur lors de l\'annulation'
+      toast.error(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Helper: check si undo est possible (validé il y a moins d'1h)
+  const canUndoValidation = (membre) => {
+    if (membre.status !== 'actif' || !membre.validatedAt) return false
+    const validatedAt = membre.validatedAt?.toDate ? membre.validatedAt.toDate() : new Date(membre.validatedAt)
+    return (Date.now() - validatedAt.getTime()) < 60 * 60 * 1000
+  }
+
   // ========== MESSAGE MEMBRE ==========
   const handleOpenMessageModal = (membre) => {
     const defaultMessage = `Bonjour ${membre.prenom},\n\nVotre inscription a été prise en compte, consultez votre boîte email.\n\nCordialement,\nLe Bureau`
@@ -1245,6 +1271,26 @@ export default function Adherents() {
                   <p className="text-white/40 text-xs mt-3">
                     En cas de refus, le paiement de {m.cotisation?.montant || 0}€ sera converti en don (éligible au reçu fiscal).
                   </p>
+                </div>
+              )}
+
+              {/* Bouton annuler validation (dans l'heure) */}
+              {canUndoValidation(m) && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-amber-400 text-sm">
+                      <Undo2 className="w-4 h-4" />
+                      <span>Validation récente — annulation possible</span>
+                    </div>
+                    <button
+                      onClick={() => handleUndoValidation(m)}
+                      disabled={saving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                      <Undo2 className="w-4 h-4" />
+                      Annuler validation
+                    </button>
+                  </div>
                 </div>
               )}
 
