@@ -35,3 +35,12 @@ build/
 .DS_Store
 *.log
 *.tgz
+functions/coverage/
+*.pdf
+bo-test-*.png
+AUDIT_*.md
+FINAL_AUDIT_SUMMARY.md
+QUICK_REFERENCE_FIXES.md
+CHANGELOG-BUILD-*.txt
+mega-deploy-*.sh
+monitor-post-deploy.sh
