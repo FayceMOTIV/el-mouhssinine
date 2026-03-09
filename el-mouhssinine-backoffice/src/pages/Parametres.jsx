@@ -965,7 +965,7 @@ Pour devenir membre actif, il faut..."
         onConfirm={handleConfirmDeleteImage}
         title="Supprimer l'image"
         message="Êtes-vous sûr de vouloir supprimer cette image ?"
-        confirmLabel="Supprimer"
+        confirmText="Supprimer"
         danger
       />
     </div>

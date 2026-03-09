@@ -82,7 +82,7 @@ export function ConfirmModal({
 }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
-      <p className="text-white/70 mb-6">{message}</p>
+      <p className="text-white/70 mb-6 whitespace-pre-line">{message}</p>
       <div className="flex gap-3 justify-end">
         <button
           onClick={onClose}

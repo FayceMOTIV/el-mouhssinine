@@ -564,7 +564,7 @@ export default function Janaza() {
         onConfirm={handleDelete}
         title="Supprimer la janaza"
         message={`Êtes-vous sûr de vouloir supprimer l'annonce pour "${deleteModal.janaza?.nomDefunt}" ?`}
-        confirmLabel="Supprimer"
+        confirmText="Supprimer"
         danger
       />
 

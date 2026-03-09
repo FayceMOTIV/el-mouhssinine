@@ -1178,7 +1178,7 @@ export default function Dons() {
         onConfirm={handleDelete}
         title={`Supprimer le ${deleteModal.type}`}
         message={`Êtes-vous sûr de vouloir supprimer "${deleteModal.item?.titre || deleteModal.item?.donateur}" ?`}
-        confirmLabel="Supprimer"
+        confirmText="Supprimer"
         danger
       />
 
@@ -1189,7 +1189,7 @@ export default function Dons() {
         onConfirm={handleConfirmRefundDonation}
         title="Confirmer le remboursement"
         message={refundDonationModal.message || 'Êtes-vous sûr de vouloir rembourser ce don ?'}
-        confirmLabel="Rembourser"
+        confirmText="Rembourser"
         danger
       />
     </div>

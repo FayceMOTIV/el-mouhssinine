@@ -305,6 +305,13 @@ export default function Adherents() {
     const membre = cotisationModal.membre
     if (!membre) return
 
+    // Guard: si déjà actif (validation en cours ou terminée), ne pas re-valider
+    if (isPaid && (membre.status === 'actif' || membre.status === 'en_attente_validation')) {
+      const updates = { aPaye: isPaid, modePaiement: paymentMode || membre.modePaiement || 'especes' }
+      await handleCotisationUpdate(updates)
+      return
+    }
+
     const updates = {
       aPaye: isPaid,
     }
@@ -350,6 +357,13 @@ export default function Adherents() {
   const handleSetSigned = async (isSigned) => {
     const membre = cotisationModal.membre
     if (!membre) return
+
+    // Guard: si déjà actif (validation en cours ou terminée), ne pas re-valider
+    if (membre.status === 'actif' || membre.status === 'en_attente_validation') {
+      const updates = { aSigne: isSigned }
+      await handleCotisationUpdate(updates)
+      return
+    }
 
     const updates = {
       aSigne: isSigned,
@@ -1616,7 +1630,8 @@ export default function Adherents() {
         onConfirm={handleDelete}
         title="Supprimer le membre"
         message={`Êtes-vous sûr de vouloir supprimer ${deleteModal.membre?.prenom} ${deleteModal.membre?.nom} ?\n\nCette action va :\n• Supprimer son compte utilisateur et ses messages\n• Anonymiser ses donations, paiements et reçus fiscaux (les montants restent dans la comptabilité)\n• Annuler son abonnement Stripe (si actif)\n\nCette action est irréversible.`}
-        confirmLabel={deleting ? 'Suppression...' : 'Supprimer définitivement'}
+        confirmText={deleting ? 'Suppression...' : 'Supprimer définitivement'}
+        loading={deleting}
         danger
       />
 
@@ -1627,7 +1642,7 @@ export default function Adherents() {
         onConfirm={handleConfirmRefund}
         title="Confirmer le remboursement"
         message={refundConfirmModal.message}
-        confirmLabel="Rembourser"
+        confirmText="Rembourser"
         danger
       />
 
@@ -1638,7 +1653,7 @@ export default function Adherents() {
         onConfirm={handleConfirmCancelSubscription}
         title="Annuler l'abonnement"
         message={`Êtes-vous sûr de vouloir annuler l'abonnement de ${cancelSubscriptionModal.membre?.prenom} ${cancelSubscriptionModal.membre?.nom} ? Cette action est irréversible.`}
-        confirmLabel="Annuler l'abonnement"
+        confirmText="Annuler l'abonnement"
         danger
       />
 
@@ -1649,7 +1664,7 @@ export default function Adherents() {
         onConfirm={handleConfirmRejectAdhesion}
         title="Refuser l'adhésion"
         message={`Êtes-vous sûr de vouloir refuser l'adhésion de ${rejectAdhesionModal.membre?.prenom} ${rejectAdhesionModal.membre?.nom} ?\n\nSon paiement de ${rejectAdhesionModal.membre?.cotisation?.montant || 0}€ sera converti en don.`}
-        confirmLabel="Refuser l'adhésion"
+        confirmText="Refuser l'adhésion"
         danger
       />
     </div>

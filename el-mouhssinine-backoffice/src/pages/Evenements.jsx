@@ -498,7 +498,7 @@ export default function Evenements() {
         onConfirm={handleDelete}
         title="Supprimer l'événement"
         message={`Êtes-vous sûr de vouloir supprimer l'événement "${deleteModal.evenement?.titre}" ?`}
-        confirmLabel="Supprimer"
+        confirmText="Supprimer"
         danger
       />
 

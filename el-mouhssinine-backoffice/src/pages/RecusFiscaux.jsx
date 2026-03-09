@@ -543,7 +543,7 @@ export default function RecusFiscaux() {
         onConfirm={handleConfirmForceGenerate}
         title="Générer les reçus fiscaux"
         message={`Générer tous les reçus fiscaux pour ${forceGenerateModal.year} ? Cette action enverra un email à chaque donateur.`}
-        confirmLabel="Générer"
+        confirmText="Générer"
         danger
       />
     </div>

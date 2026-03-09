@@ -467,7 +467,7 @@ export default function Popups() {
         onConfirm={handleDelete}
         title="Supprimer la popup"
         message={`Êtes-vous sûr de vouloir supprimer la popup "${deleteModal.popup?.titre}" ?`}
-        confirmLabel="Supprimer"
+        confirmText="Supprimer"
         danger
       />
     </div>

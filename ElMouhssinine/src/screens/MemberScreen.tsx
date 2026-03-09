@@ -437,6 +437,8 @@ const MemberScreen = () => {
         paymentsRef.current = [];
         donationsRef.current = [];
         donationsByEmailRef.current = [];
+        paymentSucceededRef.current = false;
+        isProcessingRef.current = false;
         setIsLoggedIn(false);
         setMemberProfile(null);
         setIsPaid(false);

@@ -552,7 +552,7 @@ export default function Notifications() {
         onConfirm={handleDelete}
         title="Supprimer la notification"
         message={`Êtes-vous sûr de vouloir supprimer la notification "${deleteModal.notification?.titre}" ?`}
-        confirmLabel="Supprimer"
+        confirmText="Supprimer"
         danger
       />
     </div>

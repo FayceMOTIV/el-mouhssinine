@@ -41,9 +41,10 @@ const getBackgroundColor = (status?: string) => {
     case 'expired':
     case 'expiré':
       return '#991B1B'; // Rouge foncé
-    case 'inactive':
     case 'annule':
     case 'annulé':
+      return '#991B1B'; // Rouge foncé (annulé = alerte)
+    case 'inactive':
     case 'aucun':
       return '#374151'; // Gris foncé
     case 'expire':

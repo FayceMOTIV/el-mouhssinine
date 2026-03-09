@@ -433,7 +433,7 @@ export default function Annonces() {
         onConfirm={handleDelete}
         title="Supprimer l'annonce"
         message={`Êtes-vous sûr de vouloir supprimer l'annonce "${deleteModal.annonce?.titre}" ?`}
-        confirmLabel="Supprimer"
+        confirmText="Supprimer"
         danger
       />
 

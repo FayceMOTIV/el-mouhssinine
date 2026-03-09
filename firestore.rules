@@ -112,7 +112,8 @@ service cloud.firestore {
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
                           'status', 'statut', 'numeroAdherent', 'memberId', 'paiementId',
                           'montantCotisation', 'modePaiement', 'inscritPar', 'datePaiement',
-                          'stripePaymentId', 'cotisation'
+                          'stripePaymentId', 'cotisation', 'subscriptionCancelPending',
+                          'stripeSubscriptionId', 'stripeCustomerId', 'validatedAt', 'validatedBy'
                         ]));
       // Suppression: admin uniquement
       allow delete: if isAdmin();

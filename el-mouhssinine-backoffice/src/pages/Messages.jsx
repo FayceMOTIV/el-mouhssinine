@@ -591,7 +591,7 @@ export default function Messages() {
         onConfirm={handleDeleteMessage}
         title="Supprimer ce message ?"
         message={`Êtes-vous sûr de vouloir supprimer le message de "${deleteModal.message?.userName || 'cet utilisateur'}" ? Cette action est irréversible.`}
-        confirmLabel="Supprimer"
+        confirmText="Supprimer"
         danger
       />
     </div>

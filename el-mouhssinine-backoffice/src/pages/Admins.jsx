@@ -481,7 +481,7 @@ export default function Admins() {
         onConfirm={handleDelete}
         title="Supprimer l'administrateur"
         message={`Êtes-vous sûr de vouloir supprimer ${deleteModal.admin?.nom} ? Cette action est irréversible.`}
-        confirmLabel="Supprimer"
+        confirmText="Supprimer"
         danger
       />
     </div>
