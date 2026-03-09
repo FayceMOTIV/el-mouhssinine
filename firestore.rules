@@ -272,6 +272,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Notifications backoffice - Admin uniquement (CF écrivent via admin SDK)
+    match /notifications_bo/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
     // ==================== RÈGLE PAR DÉFAUT ====================
 
     // Refuser tout accès non explicitement autorisé

@@ -84,6 +84,34 @@ const sanitizeString = (str, maxLength = 100) => {
 };
 
 /**
+ * Crée une notification backoffice temps réel
+ * @param {Object} params
+ * @param {string} params.type - Type de notification
+ * @param {string} params.titre - Titre affiché
+ * @param {string} params.message - Message détaillé
+ * @param {string|null} params.membreId - UID membre concerné
+ * @param {string|null} params.membreNom - Nom du membre
+ * @param {number|null} params.montant - Montant en euros
+ */
+const createNotifBO = async ({ type, titre, message, membreId = null, membreNom = null, montant = null }) => {
+  try {
+    await admin.firestore().collection('notifications_bo').add({
+      type,
+      titre,
+      message,
+      membreId,
+      membreNom,
+      montant,
+      lu: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.error('[NotifBO] Erreur création notif:', e.message);
+    // Ne jamais bloquer le flux principal
+  }
+};
+
+/**
  * Rate limiting helper - Limite les appels par utilisateur
  * @param {string} uid - L'ID de l'utilisateur
  * @param {string} functionName - Nom de la fonction
@@ -306,6 +334,11 @@ exports.onNewJanaza = functions
   .onCreate(async (snap, context) => {
     const janaza = snap.data();
     console.log('Nouvelle janaza créée:', context.params.janazaId, '- actif:', janaza.actif);
+    await createNotifBO({
+      type: 'janaza',
+      titre: '🕌 Avis de Janaza',
+      message: `Un avis de Janaza a été publié${janaza.nom ? ' (' + janaza.nom + ')' : ''}`,
+    });
     return null;
   });
 
@@ -1465,6 +1498,25 @@ exports.createSubscription = functions
           },
         });
         console.log('Nouveau Price Stripe créé:', price.id);
+      }
+
+      // 2b. Vérifier et annuler l'ancien abonnement Stripe s'il existe (évite orphelins)
+      const memberRefCheck = admin.firestore().collection('members').doc(uid);
+      const memberDocCheck = await memberRefCheck.get();
+      if (memberDocCheck.exists) {
+        const existingSub = memberDocCheck.data().stripeSubscriptionId;
+        if (existingSub) {
+          try {
+            const oldSub = await stripe.subscriptions.retrieve(existingSub);
+            if (oldSub.status === 'active' || oldSub.status === 'past_due') {
+              await stripe.subscriptions.cancel(existingSub);
+              console.log('Ancien abonnement Stripe annulé (orphelin):', existingSub);
+            }
+          } catch (subErr) {
+            // Subscription introuvable ou déjà annulée — on continue
+            console.log('Ancien abonnement Stripe ignoré:', subErr.message);
+          }
+        }
       }
 
       // 3. Créer la Subscription avec payment_behavior 'default_incomplete'
@@ -3276,6 +3328,25 @@ exports.sendRecuFiscal = functions
         console.error('⚠️ Erreur copie message reçu fiscal:', msgError);
       }
 
+      // Push notification reçu fiscal
+      try {
+        const memberQuery = await admin.firestore().collection('members').doc(context.auth.uid).get();
+        const memberFcmToken = memberQuery.exists ? memberQuery.data().fcmToken : null;
+        if (memberFcmToken) {
+          await admin.messaging().send({
+            token: memberFcmToken,
+            notification: {
+              title: '📄 Votre reçu fiscal est disponible',
+              body: 'Votre reçu fiscal a été envoyé par email. Conservez-le pour votre déclaration d\'impôts.',
+            },
+            data: { type: 'recu_fiscal', annee: String(annee) },
+            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+          });
+        }
+      } catch (pushErr) {
+        console.log('Push reçu fiscal non envoyé:', pushErr.message);
+      }
+
       return {
         success: true,
         numeroRecu,
@@ -3517,6 +3588,32 @@ exports.onNewSympathisant = functions
         welcomeEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // Notif backoffice
+      await createNotifBO({
+        type: 'nouveau_membre',
+        titre: '🆕 Nouvelle inscription',
+        message: `${prenom} ${member.nom || ''} vient de créer son compte`.trim(),
+        membreId: snap.id,
+        membreNom: `${prenom} ${member.nom || ''}`.trim(),
+      });
+
+      // Push notification bienvenue
+      if (member.fcmToken) {
+        try {
+          await admin.messaging().send({
+            token: member.fcmToken,
+            notification: {
+              title: '🕌 Bienvenue chez El Mouhssinine !',
+              body: 'Votre compte a bien été créé. Complétez votre adhésion en réglant votre cotisation.',
+            },
+            data: { type: 'welcome_sympathisant', memberId: snap.id },
+            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+          });
+        } catch (pushErr) {
+          console.log('Push bienvenue non envoyé:', pushErr.message);
+        }
+      }
+
       return { success: true, email };
 
     } catch (error) {
@@ -3701,6 +3798,13 @@ exports.validateMembership = functions
         }
 
         console.log('✅ Adhésion validée pour', prenom, nom);
+        await createNotifBO({
+          type: 'paiement',
+          titre: '✅ Membre validé',
+          message: `${context.auth.uid.substring(0, 8)}... a validé ${prenom} ${nom}`,
+          membreId: memberId,
+          membreNom: `${prenom} ${nom}`.trim(),
+        });
         return { success: true, action: 'approved' };
       }
 
@@ -3838,6 +3942,13 @@ exports.validateMembership = functions
         }
 
         console.log('❌ Adhésion refusée pour', prenom, nom, '- paiement converti en don');
+        await createNotifBO({
+          type: 'refus_admin',
+          titre: '❌ Membre refusé',
+          message: `${context.auth.uid.substring(0, 8)}... a refusé ${prenom} ${nom}`,
+          membreId: memberId,
+          membreNom: `${prenom} ${nom}`.trim(),
+        });
         return { success: true, action: 'rejected', donAmount: montant };
       }
 
@@ -4662,6 +4773,42 @@ exports.onDonationConfirmation = functions
 
       console.log(`✅ Email confirmation don ${donorType} envoyé à ${email}`);
 
+      // Notif backoffice don reçu
+      await createNotifBO({
+        type: 'don',
+        titre: '🤲 Don reçu',
+        message: `${donorFirstName} ${donorLastName} a fait un don de ${montant.toFixed(0)}€`,
+        membreId: donation.userId || null,
+        membreNom: `${donorFirstName} ${donorLastName}`.trim() || 'Anonyme',
+        montant: montant,
+      });
+
+      // Push notification FCM (chercher le membre par email pour le token)
+      try {
+        const donorUid = donation.userId || donation.metadata?.userId;
+        let donorFcmToken = null;
+        if (donorUid) {
+          const donorDoc = await admin.firestore().collection('members').doc(donorUid).get();
+          if (donorDoc.exists) {
+            donorFcmToken = donorDoc.data().fcmToken;
+          }
+        }
+        if (donorFcmToken) {
+          const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
+          await admin.messaging().send({
+            token: donorFcmToken,
+            notification: {
+              title: '✅ Don reçu — Merci !',
+              body: `Votre don${pushMontant ? ' de ' + pushMontant : ''} a bien été reçu. Barak Allahu fik.`,
+            },
+            data: { type: 'don_received', donationId },
+            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+          });
+        }
+      } catch (pushErr) {
+        console.log('Push don non envoyé:', pushErr.message);
+      }
+
       // Marquer comme envoyé
       await snap.ref.update({
         emailConfirmationSent: true,
@@ -4842,6 +4989,43 @@ exports.onCotisationConfirmation = functions
 
       console.log(`✅ Email confirmation cotisation envoyé à ${email}`);
 
+      // Notifs backoffice : cotisation reçue + validation requise
+      const memberUidForNotif = payment.metadata?.memberId || '';
+      const memberNameForNotif = prenom || payment.metadata?.memberName || 'Membre';
+      await createNotifBO({
+        type: 'paiement',
+        titre: '💳 Cotisation reçue',
+        message: `${memberNameForNotif} a payé ${montant.toFixed(0)}€ (${period === 'mensuel' ? 'mensuel' : 'annuel'})`,
+        membreId: memberUidForNotif,
+        membreNom: memberNameForNotif,
+        montant: montant,
+      });
+      await createNotifBO({
+        type: 'validation_requise',
+        titre: '⏳ Validation requise',
+        message: `${memberNameForNotif} attend votre validation`,
+        membreId: memberUidForNotif,
+        membreNom: memberNameForNotif,
+      });
+
+      // Push notification FCM
+      if (memberData && memberData.fcmToken) {
+        try {
+          const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
+          await admin.messaging().send({
+            token: memberData.fcmToken,
+            notification: {
+              title: '✅ Paiement reçu — Merci !',
+              body: `Votre cotisation${pushMontant ? ' de ' + pushMontant : ''} a bien été enregistrée. Votre adhésion est en cours de validation.`,
+            },
+            data: { type: 'cotisation_received', paymentId },
+            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+          });
+        } catch (pushErr) {
+          console.log('Push cotisation non envoyé:', pushErr.message);
+        }
+      }
+
       // Marquer comme envoyé
       await snap.ref.update({
         emailConfirmationSent: true,
@@ -4979,6 +5163,14 @@ exports.refundPayment = functions
       }
 
       console.log(`✅ Remboursement effectué pour membre ${memberId}: ${refundedAmount}€ (${isPartialRefund ? 'partiel' : 'total'})`);
+      await createNotifBO({
+        type: 'remboursement',
+        titre: '💸 Remboursement',
+        message: `Remboursement de ${refundedAmount}€ initié pour ${memberData.prenom || ''} ${memberData.nom || ''}`.trim(),
+        membreId: memberId,
+        membreNom: `${memberData.prenom || ''} ${memberData.nom || ''}`.trim(),
+        montant: refundedAmount,
+      });
 
       // Envoyer email de confirmation de remboursement au membre
       try {
@@ -5014,6 +5206,23 @@ exports.refundPayment = functions
         }
       } catch (emailError) {
         console.warn('⚠️ Email remboursement non envoyé (non bloquant):', emailError.message);
+      }
+
+      // Push notification remboursement
+      if (memberData.fcmToken) {
+        try {
+          await admin.messaging().send({
+            token: memberData.fcmToken,
+            notification: {
+              title: '💸 Remboursement en cours',
+              body: `Votre remboursement de ${refundedAmount}€ a été initié. Comptez 5 à 10 jours ouvrés.`,
+            },
+            data: { type: 'refund_initiated', memberId },
+            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+          });
+        } catch (pushErr) {
+          console.log('Push remboursement non envoyé:', pushErr.message);
+        }
       }
 
       return {
@@ -5095,6 +5304,13 @@ exports.cancelSubscription = functions
       });
 
       console.log(`✅ Abonnement mensuel annulé (fin de période) pour ${uid}`);
+      await createNotifBO({
+        type: 'annulation',
+        titre: '📋 Annulation abonnement',
+        message: `${memberData.prenom || ''} ${memberData.nom || ''} a annulé son abonnement mensuel`.trim(),
+        membreId: uid,
+        membreNom: `${memberData.prenom || ''} ${memberData.nom || ''}`.trim(),
+      });
 
       // Envoyer email de confirmation d'annulation programmée immédiatement
       const cancelEmail = memberData.email;
@@ -5160,6 +5376,25 @@ exports.cancelSubscription = functions
         } catch (emailErr) {
           console.error('Erreur envoi email annulation programmée:', emailErr);
           // Ne pas bloquer le flux principal si l'email échoue
+        }
+      }
+
+      // Push notification annulation
+      if (memberData.fcmToken) {
+        try {
+          const dateFin = memberData.cotisation?.dateFin;
+          const dateFinStr = dateFin?.toDate ? dateFin.toDate().toLocaleDateString('fr-FR') : '';
+          await admin.messaging().send({
+            token: memberData.fcmToken,
+            notification: {
+              title: '📋 Annulation confirmée',
+              body: `Votre abonnement mensuel sera actif jusqu'au ${dateFinStr || 'fin de période'}. Vous passerez ensuite en sympathisant.`,
+            },
+            data: { type: 'subscription_cancelled' },
+            apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+          });
+        } catch (pushErr) {
+          console.log('Push annulation non envoyé:', pushErr.message);
         }
       }
 
@@ -5601,10 +5836,11 @@ exports.checkExpiringCotisations = functions
             footerTelephone: assocData.telephone || '',
           });
 
-          // Passer le membre en sympathisant
+          // P1-5: Période de grâce 7 jours au lieu de passage immédiat à sympathisant
+          const gracePeriodEnd = new Date(today);
+          gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 7);
           await memberDoc.ref.update({
-            status: 'sympathisant',
-            aPaye: false,
+            gracePeriodEnd: admin.firestore.Timestamp.fromDate(gracePeriodEnd),
             cotisationExpiredAt: admin.firestore.FieldValue.serverTimestamp(),
           });
         }
@@ -5615,6 +5851,32 @@ exports.checkExpiringCotisations = functions
           subject: subject,
           html: htmlBody,
         });
+
+        // Push notification FCM (ne bloque pas le cron si échec)
+        const fcmToken = member.fcmToken;
+        if (fcmToken) {
+          try {
+            let pushTitle, pushBody;
+            if (emailType === 'remind30') {
+              pushTitle = '⏰ Votre adhésion expire dans 30 jours';
+              pushBody = 'Renouvelez votre cotisation pour rester membre actif.';
+            } else if (emailType === 'remind7') {
+              pushTitle = '⚠️ Votre adhésion expire dans 7 jours';
+              pushBody = 'Plus que 7 jours — pensez à renouveler votre cotisation.';
+            } else {
+              pushTitle = '❌ Votre adhésion a expiré';
+              pushBody = 'Votre statut est maintenant sympathisant. Renouvelez pour retrouver vos avantages.';
+            }
+            await admin.messaging().send({
+              token: fcmToken,
+              notification: { title: pushTitle, body: pushBody },
+              data: { type: 'expiration_reminder', emailType },
+              apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+            });
+          } catch (pushErr) {
+            console.log(`Push ${emailType} non envoyé (token invalide ou erreur):`, pushErr.message);
+          }
+        }
 
         // Marquer le rappel comme envoyé (idempotence — nouveau format + ancien format)
         await memberDoc.ref.update({
@@ -5633,6 +5895,149 @@ exports.checkExpiringCotisations = functions
     }
 
     console.log(`=== Résultat: 30j=${emailsSent.remind30}, 7j=${emailsSent.remind7}, expirés=${emailsSent.expired} ===`);
+
+    // Notif BO résumé expirations
+    if (emailsSent.remind7 > 0) {
+      await createNotifBO({
+        type: 'expiration_proche',
+        titre: '⚠️ Expiration imminente',
+        message: `${emailsSent.remind7} membre(s) expirent dans 7 jours`,
+      });
+    }
+    if (emailsSent.expired > 0) {
+      await createNotifBO({
+        type: 'expiration_proche',
+        titre: '❌ Cotisations expirées',
+        message: `${emailsSent.expired} cotisation(s) ont expiré aujourd'hui (grâce 7j activée)`,
+      });
+    }
+
+    // ========== P1-5: Fin de période de grâce (J+7) ==========
+    // Membres actifs avec gracePeriodEnd dans le passé → passer en sympathisant
+    let graceExpired = 0;
+    try {
+      const graceSnapshot = await admin.firestore()
+        .collection('members')
+        .where('status', '==', 'actif')
+        .where('gracePeriodEnd', '<=', admin.firestore.Timestamp.fromDate(today))
+        .get();
+
+      for (const gDoc of graceSnapshot.docs) {
+        const gMember = gDoc.data();
+        const gEmail = gMember.email;
+        const gPrenom = gMember.prenom || '';
+
+        // Passer en sympathisant
+        await gDoc.ref.update({
+          status: 'sympathisant',
+          aPaye: false,
+          gracePeriodExpiredAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Email relance J+7
+        if (gEmail && !gMember.reminder_grace_expired_sent) {
+          try {
+            const graceBody = `Salam alaykoum${gPrenom ? ' ' + gPrenom : ''},\n\nVotre adhésion a expiré et la période de grâce est terminée.\n\nVotre statut est désormais **sympathisant**. Renouvelez votre cotisation depuis l'application pour retrouver votre statut de membre actif.\n\nNous espérons vous revoir bientôt parmi nos membres actifs.`;
+            await transporter.sendMail({
+              from: `"${fromName}" <${fromEmail}>`,
+              to: gEmail,
+              subject: 'Votre adhésion a expiré — Revenez !',
+              html: textToEmailHtml(graceBody, {
+                headerTitle: '🔔 Adhésion expirée',
+                headerGradient: '#c62828, #ef5350',
+                footerAssociation: assocData.nom || 'Mosquée El Mohsinine',
+                footerAdresse: assocData.adresse || '',
+                footerTelephone: assocData.telephone || '',
+              }),
+            });
+            // Push
+            if (gMember.fcmToken) {
+              try {
+                await admin.messaging().send({
+                  token: gMember.fcmToken,
+                  notification: {
+                    title: '🔔 Votre adhésion El Mouhssinine a expiré',
+                    body: 'Renouvelez maintenant pour retrouver votre statut de membre actif.',
+                  },
+                  data: { type: 'grace_period_expired' },
+                  apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+                });
+              } catch (pe) { /* silent */ }
+            }
+            await gDoc.ref.update({ reminder_grace_expired_sent: true });
+          } catch (eErr) {
+            console.error('Erreur email/push grâce expirée:', eErr.message);
+          }
+        }
+        graceExpired++;
+      }
+      if (graceExpired > 0) console.log(`Grâce expirée: ${graceExpired} membres passés en sympathisant`);
+    } catch (graceErr) {
+      console.error('Erreur traitement grâce:', graceErr.message);
+    }
+
+    // ========== P1-6: Relance J+30 (sympathisants récents) ==========
+    let relance30 = 0;
+    try {
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const twentyEightDaysAgo = new Date(today);
+      twentyEightDaysAgo.setDate(twentyEightDaysAgo.getDate() - 28);
+
+      const relanceSnapshot = await admin.firestore()
+        .collection('members')
+        .where('status', '==', 'sympathisant')
+        .where('cotisationExpiredAt', '>=', admin.firestore.Timestamp.fromDate(thirtyDaysAgo))
+        .where('cotisationExpiredAt', '<=', admin.firestore.Timestamp.fromDate(twentyEightDaysAgo))
+        .get();
+
+      for (const rDoc of relanceSnapshot.docs) {
+        const rMember = rDoc.data();
+        const rEmail = rMember.email;
+        const rPrenom = rMember.prenom || '';
+
+        if (!rEmail || rMember.reminder_30d_relance_sent) continue;
+
+        try {
+          const relanceBody = `Salam alaykoum${rPrenom ? ' ' + rPrenom : ''},\n\nCela fait 30 jours que votre adhésion a expiré. Vous nous manquez !\n\nRenouvelez votre cotisation pour retrouver tous vos avantages :\n\n- ✨ Multiplier vos hassanates\n- 🗳️ Droit de vote en Assemblée Générale\n- 🎫 Carte de membre digitale\n- 📄 Reçu fiscal annuel\n\nUn an de cotisation = accès complet + reçu fiscal.`;
+          await transporter.sendMail({
+            from: `"${fromName}" <${fromEmail}>`,
+            to: rEmail,
+            subject: 'Vous nous manquez — Renouvelez votre adhésion',
+            html: textToEmailHtml(relanceBody, {
+              headerTitle: '💚 Rejoignez-nous à nouveau',
+              headerGradient: '#2e7d32, #4caf50',
+              footerAssociation: assocData.nom || 'Mosquée El Mohsinine',
+              footerAdresse: assocData.adresse || '',
+              footerTelephone: assocData.telephone || '',
+            }),
+          });
+          // Push
+          if (rMember.fcmToken) {
+            try {
+              await admin.messaging().send({
+                token: rMember.fcmToken,
+                notification: {
+                  title: '💚 Rejoignez-nous à nouveau !',
+                  body: 'Un an de cotisation = accès complet + reçu fiscal.',
+                },
+                data: { type: 'relance_30d' },
+                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+              });
+            } catch (pe) { /* silent */ }
+          }
+          await rDoc.ref.update({ reminder_30d_relance_sent: true });
+          relance30++;
+        } catch (rErr) {
+          console.error('Erreur relance J+30:', rErr.message);
+        }
+      }
+      if (relance30 > 0) console.log(`Relance J+30: ${relance30} emails envoyés`);
+    } catch (relanceErr) {
+      console.error('Erreur relance J+30:', relanceErr.message);
+    }
+
+    console.log(`=== Cron terminé ===`);
     return null;
     } catch (globalError) {
       console.error('[CRON ERROR] checkExpiringCotisations échoué:', globalError.message || globalError);
@@ -6072,6 +6477,13 @@ exports.deleteMemberByAdmin = functions
       console.log('Log RGPD enregistré');
 
       console.log(`=== SUPPRESSION MEMBRE ${memberId} TERMINÉE ===`);
+      await createNotifBO({
+        type: 'compte_supprime',
+        titre: '🗑️ Compte supprimé par admin',
+        message: `Admin a supprimé le compte de ${log.memberName || memberId}`,
+        membreId: memberId,
+        membreNom: log.memberName || null,
+      });
 
       return {
         success: true,
@@ -6224,6 +6636,44 @@ exports.deleteMyAccount = functions
         log.steps.push({ action: 'error_messages', error: err.message });
       }
 
+      // 4d. Anonymiser reçus fiscaux (garder montant, année — effacer identité, obligation fiscale 10 ans)
+      try {
+        const recuSnap = await db.collection('recus_fiscaux')
+          .where('userId', '==', uid)
+          .get();
+
+        if (!recuSnap.empty) {
+          const chunks = [];
+          let batch = db.batch();
+          let count = 0;
+
+          recuSnap.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+              nom: 'Donateur anonyme',
+              prenom: '',
+              email: 'supprime@supprime.fr',
+              adresse: '',
+              userId: 'deleted_' + uid,
+              anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+            if (count % 500 === 0) {
+              chunks.push(batch);
+              batch = db.batch();
+            }
+          });
+          chunks.push(batch);
+
+          for (const b of chunks) {
+            await b.commit();
+          }
+
+          log.steps.push({ action: 'anonymized_recus_fiscaux', count: recuSnap.size });
+        }
+      } catch (err) {
+        log.steps.push({ action: 'error_recus_fiscaux', error: err.message });
+      }
+
       // 5. Supprimer photo de profil dans Storage
       try {
         const bucket = admin.storage().bucket();
@@ -6244,6 +6694,41 @@ exports.deleteMyAccount = functions
         log.steps.push({ action: 'member_doc_deleted' });
       }
 
+      // 6b. Email confirmation suppression AVANT destruction du compte Auth
+      if (memberData && memberData.email) {
+        try {
+          const brevoUser = BREVO_SMTP_USER.value();
+          const brevoPass = BREVO_SMTP_PASS.value();
+          const fromEmail = BREVO_FROM_EMAIL.value();
+          const fromName = BREVO_FROM_NAME.value();
+          if (brevoUser && brevoPass && fromEmail) {
+            const delTransporter = nodemailer.createTransport({
+              host: 'smtp-relay.brevo.com',
+              port: 587,
+              secure: false,
+              auth: { user: brevoUser, pass: brevoPass },
+            });
+            await delTransporter.sendMail({
+              from: `"${fromName}" <${fromEmail}>`,
+              to: memberData.email,
+              subject: 'Votre compte El Mouhssinine a été supprimé',
+              html: textToEmailHtml(
+                `Salam alaykoum,\n\nVotre compte et vos données personnelles ont été supprimés conformément au RGPD.\n\nSi vous souhaitez revenir, vous pouvez créer un nouveau compte à tout moment depuis l'application.\n\nL'équipe El Mouhssinine`,
+                {
+                  headerTitle: '🗑️ Compte supprimé',
+                  headerGradient: '#616161, #9e9e9e',
+                  footerAssociation: 'Mosquée El Mohsinine',
+                }
+              ),
+            });
+            log.steps.push({ action: 'deletion_email_sent' });
+          }
+        } catch (emailErr) {
+          log.steps.push({ action: 'deletion_email_failed', reason: emailErr.message });
+          // Ne pas bloquer la suppression si l'email échoue
+        }
+      }
+
       // 7. Supprimer l'utilisateur Firebase Auth
       try {
         await admin.auth().deleteUser(uid);
@@ -6259,6 +6744,11 @@ exports.deleteMyAccount = functions
       });
 
       console.log(`=== AUTO-SUPPRESSION ${uid} TERMINÉE ===`);
+      await createNotifBO({
+        type: 'compte_supprime',
+        titre: '🗑️ Compte supprimé',
+        message: `Un membre a supprimé son propre compte${log.memberName ? ' (' + log.memberName + ')' : ''}`,
+      });
       return { success: true, message: 'Votre compte a été supprimé avec succès.' };
 
     } catch (error) {

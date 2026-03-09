@@ -1,5 +1,6 @@
-import { Menu, Bell, Search } from 'lucide-react'
+import { Menu, Search } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import NotificationsBell from './NotificationsBell'
 
 export default function Header({ onMenuClick, title }) {
   const { admin } = useAuth()
@@ -30,13 +31,8 @@ export default function Header({ onMenuClick, title }) {
             />
           </div>
 
-          {/* Notifications */}
-          <button className="relative text-white/70 hover:text-white">
-            <Bell className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-secondary rounded-full text-[10px] flex items-center justify-center text-white">
-              3
-            </span>
-          </button>
+          {/* Notifications temps réel */}
+          <NotificationsBell />
 
           {/* User avatar */}
           <div className="hidden sm:flex items-center gap-3">

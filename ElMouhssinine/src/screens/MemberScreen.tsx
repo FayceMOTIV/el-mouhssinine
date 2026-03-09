@@ -1930,6 +1930,8 @@ const MemberScreen = () => {
                           text: t('commonConfirm'),
                           style: 'destructive',
                           onPress: async () => {
+                            if (isProcessingRef.current) return;
+                            isProcessingRef.current = true;
                             try {
                               const result = await cancelSubscription();
                               if (result.success) {
@@ -1946,7 +1948,9 @@ const MemberScreen = () => {
 
                                 Alert.alert(
                                   t('subscriptionCancelled'),
-                                  result.message,
+                                  language === 'ar'
+                                    ? 'سيظل اشتراكك ساريًا حتى نهاية الفترة المدفوعة'
+                                    : "Votre abonnement sera actif jusqu'à la fin de la période payée.",
                                 );
 
                                 // Recharger depuis Firestore en arrière-plan
@@ -1960,6 +1964,8 @@ const MemberScreen = () => {
                                 t('commonError'),
                                 err?.message || t('networkError'),
                               );
+                            } finally {
+                              isProcessingRef.current = false;
                             }
                           },
                         },

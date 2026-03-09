@@ -1037,6 +1037,83 @@ Admin marque paye+signe (BO) → actif (CF validateMembership) + email vert "Bie
 - [x] Backoffice : https://el-mouhssinine.web.app deploye
 - [x] Git : commit 5d81aa9 sur main
 
+## Corrige (9 Mar 2026 - Build 277)
+
+### Audit notifications + grace period + RGPD — 11 parties
+
+#### P0-1 : Bouton annulation abonnement (MemberScreen.tsx)
+- [x] Le bouton fonctionnait deja (appel cancelSubscription CF ligne 1934) — faux positif de l'audit
+- [x] Amelioration : isProcessingRef guard anti double-tap + meilleur message succes FR/AR + finally block
+
+#### P0-2 : Orphelin Stripe subscription (createSubscription CF)
+- [x] Avant de creer un nouvel abonnement, verifie si le membre a un stripeSubscriptionId existant
+- [x] Si actif ou past_due, annule l'ancien avant d'en creer un nouveau
+- [x] Evite accumulation d'abonnements orphelins quand le membre change de formule
+
+#### P0-3 : RGPD recus fiscaux dans deleteMyAccount
+- [x] Ajout etape 4d dans deleteMyAccount : anonymisation recus_fiscaux
+- [x] Pattern : userId='deleted_'+uid, nom='Donateur anonyme', email='supprime@supprime.fr'
+- [x] deleteMemberByAdmin avait deja cette logique (lignes 5973-6013), deleteMyAccount non
+
+#### P0-4 : Push FCM expiration cotisation (checkExpiringCotisations)
+- [x] Push apres chaque email de rappel (J-30, J-7, jour J)
+- [x] 3 titres/corps differents selon emailType
+- [x] Pattern : try/catch silencieux, utilise member.fcmToken
+
+#### P0-5 : Push FCM apres paiement (cotisation + don)
+- [x] onCotisationConfirmation : push apres l'email de confirmation
+- [x] onDonationConfirmation : lookup membre par userId pour fcmToken
+
+#### P1-1 : Email suppression de compte
+- [x] Email envoye dans deleteMyAccount juste avant suppression Firebase Auth (etape 6b)
+- [x] Template textToEmailHtml avec header gradient gris
+- [x] try/catch non-bloquant (la suppression continue meme si l'email echoue)
+
+#### P1-2 : Push inscription sympathisant
+- [x] Push dans onNewSympathisant apres update welcomeEmailSent
+- [x] Titre : "🕌 Bienvenue chez El Mouhssinine !"
+
+#### P1-3 : Push annulation + remboursement
+- [x] cancelSubscription : push apres email, inclut dateFin dans le body
+- [x] refundPayment : push apres email, affiche refundedAmount
+
+#### P1-4 : Push recu fiscal
+- [x] Push dans sendRecuFiscal apres copie en messagerie interne
+- [x] Lookup membre par context.auth.uid pour fcmToken
+
+#### P1-5 : Grace period 7 jours (au lieu de sympathisant immediat)
+- [x] Jour J dans checkExpiringCotisations : ne met plus `status: 'sympathisant'` directement
+- [x] Met `gracePeriodEnd: today + 7 jours` + `gracePeriodStarted: true`
+- [x] Membre reste actif pendant la grace period
+
+#### P1-6 : Relances J+7 et J+30
+- [x] J+7 : query membres avec gracePeriodEnd <= today, status encore actif → set sympathisant + email + push
+- [x] J+30 : query sympathisant avec cotisationExpiredAt ~30 jours → email relance + push
+- [x] Nouveaux templates email pour chaque etape
+
+#### PARTIE 11 : Systeme notifications backoffice (nouveau)
+- [x] Helper `createNotifBO()` dans index.js (fire-and-forget, jamais bloquant)
+- [x] Collection `notifications_bo` dans Firestore
+- [x] Firestore rule `notifications_bo` : admin read/write
+- [x] 12 evenements integres : onNewJanaza, onNewSympathisant, validateMembership (approve+reject), onCotisationConfirmation (x2: paiement+validation_requise), onDonationConfirmation, cancelSubscription, refundPayment, checkExpiringCotisations (x2), deleteMyAccount, deleteMemberByAdmin
+- [x] NotificationsBell.jsx : composant React avec onSnapshot temps reel, badge non lus, dropdown 20 derniers, markAsRead/markAllRead
+- [x] Header.jsx : integration NotificationsBell a la place du Bell statique
+
+### Fichiers modifies
+- functions/index.js : +496 lignes (createNotifBO, push FCM, grace period, relances, RGPD)
+- firestore.rules : +6 lignes (notifications_bo admin read/write)
+- ElMouhssinine/src/screens/MemberScreen.tsx : isProcessingRef guard bouton annulation
+- el-mouhssinine-backoffice/src/components/layout/NotificationsBell.jsx (NOUVEAU)
+- el-mouhssinine-backoffice/src/components/layout/Header.jsx : NotificationsBell integration
+
+### Verifications
+- [x] npx tsc --noEmit = 0 erreurs
+- [x] npm run build (backoffice) = succes
+- [x] grep createNotifBO = 12 integrations confirmees
+
+### Deployements
+- [ ] A deployer (en attente accord) : functions, firestore:rules, hosting
+
 ## Bugs connus / Pieges
 
 ### membreId vs memberId (payments collection)
@@ -1094,6 +1171,20 @@ La requete `where('userId', '==', uid)` ne suffit pas : les dons crees par le we
 ### ConfirmModal — confirmText (PAS confirmLabel)
 Le composant `ConfirmModal` dans `Modal.jsx` accepte `confirmText` et `loading` comme props. NE JAMAIS utiliser `confirmLabel` (prop inexistante, silencieusement ignoree par React). Toujours passer `loading={stateVariable}` pour desactiver le bouton pendant les operations async.
 
+### Grace period cotisation (Build 277)
+Quand une cotisation expire (jour J), le membre n'est PAS mis en `sympathisant` immediatement. A la place :
+- Jour J : `gracePeriodEnd = today + 7j`, `gracePeriodStarted = true`, status reste `actif`
+- Jour J+7 : si `gracePeriodEnd <= today` ET status encore `actif` → status `sympathisant` + email + push
+- Jour J+30 : relance email + push pour les sympathisants dont `cotisationExpiredAt` est ~30 jours
+- Le cron `checkExpiringCotisations` gere les 3 etapes (J-30, J-7, J, J+7, J+30)
+
+### Notifications backoffice (notifications_bo)
+- Collection Firestore `notifications_bo` : lu:bool, type, titre, message, membreId?, membreNom?, montant?, createdAt
+- Helper `createNotifBO({type, titre, message, membreId, membreNom, montant})` dans index.js — fire-and-forget
+- 10 types : nouveau_membre, paiement, validation_requise, annulation, remboursement, expiration_proche, compte_supprime, don, refus_admin, janaza
+- NotificationsBell.jsx dans le backoffice (Header.jsx) — onSnapshot temps reel
+- Firestore rule : admin read/write uniquement
+
 ### MosqueGeofencing Android — BroadcastReceiver statique
 Le `MosqueGeofencingReceiver` DOIT etre declare statiquement dans AndroidManifest.xml (pas enregistre dynamiquement). Sinon Android ne peut pas le declencher quand l'app est tuee. Meme chose pour le `MosqueGeofenceBootReceiver` (BOOT_COMPLETED).
 
@@ -1101,8 +1192,9 @@ Le `MosqueGeofencingReceiver` DOIT etre declare statiquement dans AndroidManifes
 - Console.logs critiques nettoyes (emails masques, IBAN non logge)
 - Mock data janaza supprime (donnees sensibles)
 - Sections vides masquees sur HomeScreen (annonces, evenements, janaza)
-- Cloud Functions bien structurees, 34 fonctions deployees
+- Cloud Functions bien structurees, 34 fonctions (+ createNotifBO helper)
 - Score audit securite : 9/10 (apres audit complet Build 276 — validation admin + champs proteges)
+- Systeme notifications backoffice temps reel (notifications_bo + NotificationsBell)
 - Score audit i18n : 9/10 (apres corrections Build 98)
 - App iOS uniquement en production (Android non deploye)
 - Horaires de priere : calendrier local 2026 complet (fallback si API Mawaqit indisponible)
