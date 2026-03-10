@@ -652,7 +652,7 @@ export const addDonation = async (
         ? 'Anonyme'
         : params.donorName || params.donorEmail || 'Anonyme',
       donateurEmail: params.isAnonymous ? null : params.donorEmail || null,
-      montant: params.amount,
+      montant: Number(params.amount),
       projetId: params.projectId,
       projetNom: params.projectName,
       modePaiement: params.paymentMethod,
@@ -707,19 +707,11 @@ export const addCotisation = async (
   try {
     // Utiliser stripePaymentIntentId comme docId pour IDEMPOTENCE
     const docId = params.stripePaymentIntentId || `payment-${Date.now()}`;
-    const paymentRef = firestore().collection('payments').doc(docId);
-    // IMPORTANT: Utiliser memberUid (Firebase Auth UID) pour la mise à jour du document membre
+    // IMPORTANT: Utiliser memberUid (Firebase Auth UID) pour la lecture du document membre
     // memberId (ELM-XXXX) est juste pour l'affichage, pas pour le lookup Firestore
     const memberRef = params.memberUid
       ? firestore().collection('members').doc(params.memberUid)
       : null;
-
-    // Vérifier si paiement existe déjà (idempotence)
-    const existingDoc = await paymentRef.get();
-    if (existingDoc.exists()) {
-      logger.firebase(' Paiement déjà existant (idempotent):', docId);
-      return docId;
-    }
 
     const now = new Date();
     // Calculer dateFin selon la période
@@ -762,71 +754,9 @@ export const addCotisation = async (
       }
     }
 
-    // TRANSACTION ATOMIQUE: cotisation + update membre
-    await firestore().runTransaction(async transaction => {
-      // 1. Créer la cotisation
-      const paymentData: any = {
-        memberId: params.memberId,
-        membreId: params.memberUid || '',
-        memberName: params.memberName,
-        montant: params.amount,
-        modePaiement: params.paymentMethod,
-        stripePaymentIntentId: params.stripePaymentIntentId,
-        type: 'cotisation',
-        status: 'completed',
-        source: 'app_mobile',
-        period: params.period || 'annuel',
-        date: firestore.FieldValue.serverTimestamp(),
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        eligibleRecuFiscal: false,
-        // Metadata pour les triggers Cloud Functions (emails de confirmation)
-        metadata: {
-          memberId: params.memberUid || '', // UID Firebase pour lookup membre
-          memberIdDisplay: params.memberId, // Format ELM-XXXX
-          memberName: params.memberName,
-          email: params.memberEmail || '',
-          period: params.period || 'annuel',
-        },
-      };
-
-      // Ajouter stripeSubscriptionId si abonnement récurrent
-      if (params.stripeSubscriptionId) {
-        paymentData.stripeSubscriptionId = params.stripeSubscriptionId;
-      }
-
-      transaction.set(paymentRef, paymentData);
-
-      // 2. Mettre à jour le statut du membre
-      if (memberRef) {
-        const memberDoc = await transaction.get(memberRef);
-        if (memberDoc.exists()) {
-          const memberUpdate: any = {
-            status: 'actif',
-            datePaiement: firestore.FieldValue.serverTimestamp(),
-            montantPaye: params.amount,
-            stripePaymentId: params.stripePaymentIntentId,
-            formule: params.period || 'annuel',
-            modePaiement: params.stripeSubscriptionId ? 'prelevement' : 'carte',
-            cotisation: {
-              type: params.period || 'annuel',
-              montant: params.amount,
-              dateDebut: firestore.Timestamp.fromDate(now),
-              dateFin: firestore.Timestamp.fromDate(dateFin),
-            },
-          };
-
-          // Ajouter stripeSubscriptionId si abonnement récurrent
-          if (params.stripeSubscriptionId) {
-            memberUpdate.stripeSubscriptionId = params.stripeSubscriptionId;
-            memberUpdate.cotisationType = 'mensuel';
-          }
-
-          transaction.update(memberRef, memberUpdate);
-        }
-      }
-    });
-
-    logger.firebase(' Cotisation enregistrée (transaction atomique):', docId);
+    // Le webhook Stripe (admin SDK) crée payments/ ET met à jour members/.
+    // subscribeToMember() dans l'app détecte le changement en temps réel.
+    logger.firebase('✅ Cotisation initiée, webhook en cours:', docId);
     return docId;
   } catch (error) {
     logger.error('[Firebase] addCotisation error:', error);
