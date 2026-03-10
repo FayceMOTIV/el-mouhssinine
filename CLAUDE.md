@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 
 ## App Mobile
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 277
+- **Build actuel** : 279
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
 - **iOS minimum** : arm64 requis
@@ -96,6 +96,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 | deleteMyAccount | Callable | Suppression compte RGPD |
 | deleteMemberByAdmin | Callable | Suppression membre par admin RGPD |
 | checkExpiringCotisations | Scheduled | Rappels J-30/J-7/J/J+7/J+30 + grace period |
+| monitorSilentBugs | Scheduled (10 min) | errors_log + paymentFailed + validation bloquée → WhatsApp |
 
 ## Configuration
 
@@ -241,7 +242,7 @@ claude mcp list
 Une fois actif, Claude Code peut interroger : Crashlytics, Firestore, CF logs, FCM.
 
 ## Notes
-- 35 Cloud Functions deployees (+ createNotifBO helper + alertCrashWhatsApp)
+- 36 Cloud Functions deployees (+ createNotifBO helper + alertCrashWhatsApp + monitorSilentBugs)
 - Score audit securite : 9/10
 - App iOS uniquement en production (Android non deploye)
 - Calendrier priere local 2026 complet (fallback Mawaqit)

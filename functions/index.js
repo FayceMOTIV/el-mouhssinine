@@ -14,6 +14,21 @@ const https = require('https');
 
 admin.initializeApp();
 
+// ─── Helper logging erreurs serveur vers errors_log ────────────────────────
+async function logServerError(message, context, extra = {}) {
+  try {
+    await admin.firestore().collection('errors_log').add({
+      message: String(message).slice(0, 500),
+      stack: extra.stack ? String(extra.stack).slice(0, 500) : '',
+      context,
+      screen: 'CloudFunction',
+      uid: extra.uid ?? 'server',
+      alerted: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (_) {}
+}
+
 // ==================== PARAMÈTRES (migration functions.config → defineString) ====================
 const STRIPE_SECRET_KEY = defineString('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineString('STRIPE_WEBHOOK_SECRET');
@@ -1653,6 +1668,7 @@ exports.stripeWebhook = functions
       event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
     } catch (err) {
       console.error('Erreur signature webhook:', err.message);
+      await logServerError(err.message ?? String(err), 'stripeWebhook', { stack: err.stack });
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
@@ -5251,6 +5267,8 @@ exports.onCotisationConfirmation = functions
 
     } catch (error) {
       console.error('❌ Erreur envoi email confirmation cotisation:', error);
+      const uid = payment.metadata?.memberId ?? 'unknown';
+      await logServerError(error.message ?? String(error), 'sendEmail', { stack: error.stack, uid });
       return { error: error.message };
     }
   });
@@ -7270,6 +7288,129 @@ exports.onAuthUserDeleted = functions
     } catch (error) {
       console.error('❌ onAuthUserDeleted error:', error);
     }
+  });
+
+// ─── MONITOR SILENT BUGS ─────────────────────────────────────────────────────
+// Se declenche toutes les 10 minutes. Verifie errors_log, membres paymentFailed,
+// et membres bloques en en_attente_validation > 30 min.
+// Envoie un WhatsApp si des anomalies sont detectees.
+
+exports.monitorSilentBugs = functions
+  .region('europe-west1')
+  .pubsub.schedule('every 10 minutes')
+  .timeZone('Europe/Paris')
+  .onRun(async (_context) => {
+    const issues = [];
+    const db = admin.firestore();
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+    // 1. errors_log — erreurs non alertees
+    try {
+      const errorsSnap = await db
+        .collection('errors_log')
+        .where('alerted', '==', false)
+        .limit(20)
+        .get();
+
+      if (!errorsSnap.empty) {
+        issues.push(`⚠️ ${errorsSnap.size} erreur(s) silencieuse(s)`);
+
+        // Marquer comme alertees
+        const batch = db.batch();
+        errorsSnap.docs.forEach((doc) => {
+          batch.update(doc.ref, {
+            alerted: true,
+            alertedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        });
+        await batch.commit();
+
+        // Detailler les 3 premieres
+        errorsSnap.docs.slice(0, 3).forEach((doc) => {
+          const d = doc.data();
+          issues.push(`   • [${d.context ?? '?'}] ${String(d.message ?? '').slice(0, 80)}`);
+        });
+      }
+    } catch (err) {
+      console.error('monitorSilentBugs errors_log:', err.message);
+    }
+
+    // 2. Membres avec paymentFailed: true
+    try {
+      const failedSnap = await db
+        .collection('members')
+        .where('paymentFailed', '==', true)
+        .limit(10)
+        .get();
+
+      if (!failedSnap.empty) {
+        const names = failedSnap.docs
+          .slice(0, 3)
+          .map((d) => `${d.data().prenom ?? ''} ${d.data().nom ?? ''}`.trim())
+          .join(', ');
+        issues.push(
+          `💳 ${failedSnap.size} membre(s) paiement echoue: ${names}${failedSnap.size > 3 ? '...' : ''}`,
+        );
+      }
+    } catch (err) {
+      console.error('monitorSilentBugs paymentFailed:', err.message);
+    }
+
+    // 3. Membres bloques en en_attente_validation > 30 min
+    try {
+      const stuckSnap = await db
+        .collection('members')
+        .where('status', '==', 'en_attente_validation')
+        .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(thirtyMinAgo))
+        .limit(10)
+        .get();
+
+      if (!stuckSnap.empty) {
+        const names = stuckSnap.docs
+          .slice(0, 3)
+          .map((d) => `${d.data().prenom ?? ''} ${d.data().nom ?? ''}`.trim())
+          .join(', ');
+        issues.push(
+          `⏳ ${stuckSnap.size} membre(s) bloques validation >30min: ${names}${stuckSnap.size > 3 ? '...' : ''}`,
+        );
+      }
+    } catch (err) {
+      console.error('monitorSilentBugs stuck validation:', err.message);
+    }
+
+    if (issues.length === 0) {
+      console.log('monitorSilentBugs: OK — aucune anomalie');
+      return null;
+    }
+
+    // Envoyer WhatsApp
+    const heure = new Date().toLocaleTimeString('fr-FR', {
+      timeZone: 'Europe/Paris',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const message =
+      `🔍 MONITORING El Mouhssinine (${heure})\n\n` +
+      issues.join('\n') +
+      '\n\nBackoffice: https://el-mouhssinine.web.app';
+
+    try {
+      const twilio = require('twilio');
+      const client = twilio(
+        process.env.TWILIO_ACCOUNT_SID,
+        process.env.TWILIO_AUTH_TOKEN,
+      );
+      await client.messages.create({
+        from: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`,
+        to: `whatsapp:${process.env.TWILIO_WHATSAPP_TO}`,
+        body: message,
+      });
+      console.log(`monitorSilentBugs: WhatsApp envoye — ${issues.length} issue(s)`);
+    } catch (err) {
+      console.error('monitorSilentBugs: echec WhatsApp:', err.message);
+    }
+
+    return null;
   });
 
 // ─── WHATSAPP CRASH ALERT ─────────────────────────────────────────────────────

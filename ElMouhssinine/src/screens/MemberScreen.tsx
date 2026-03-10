@@ -69,6 +69,7 @@ import { logger } from '../utils';
 import { computeMemberStatus } from '../utils/memberStatus';
 import {
   logError,
+  logErrorToServer,
   logBreadcrumb,
   trackEvent,
   startTrace,
@@ -1081,9 +1082,9 @@ const MemberScreen = () => {
         showPaymentError(paymentResult.error);
       }
     } catch (error) {
-      const err = error as Error;
+      const err = error instanceof Error ? error : new Error(String(error));
       await paymentTrace.stop();
-      logError(err, { screen: 'MemberScreen', action: 'payment' });
+      logErrorToServer(err, 'payment', 'MemberScreen');
       trackEvent(Events.PAYMENT_FAILED, {
         reason: (err?.message || 'unknown').substring(0, 50),
       });
@@ -1346,8 +1347,8 @@ const MemberScreen = () => {
         showPaymentError(paymentResult.error);
       }
     } catch (error) {
-      const err = error as Error;
-      logError(err, { screen: 'MemberScreen', action: 'family_payment' });
+      const err = error instanceof Error ? error : new Error(String(error));
+      logErrorToServer(err, 'family_payment', 'MemberScreen');
       trackEvent(Events.PAYMENT_FAILED, {
         reason: (err?.message || 'unknown').substring(0, 50),
       });

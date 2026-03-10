@@ -278,6 +278,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Logs d'erreurs silencieuses - Ecriture app authentifiee, lecture/modif Cloud Functions only
+    match /errors_log/{docId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if false;
+    }
+
     // ==================== RÈGLE PAR DÉFAUT ====================
 
     // Refuser tout accès non explicitement autorisé

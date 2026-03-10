@@ -9,6 +9,8 @@
 import crashlytics from '@react-native-firebase/crashlytics';
 import analytics from '@react-native-firebase/analytics';
 import perf from '@react-native-firebase/perf';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 
 // ─── Crashlytics ──────────────────────────────────────────────────────────────
 
@@ -53,6 +55,38 @@ export function logError(
   }
   crashlytics().recordError(error);
 }
+
+/**
+ * Enregistre une erreur dans Crashlytics ET dans Firestore errors_log.
+ * Pour les operations critiques (paiement, auth) qui doivent etre visibles
+ * cote serveur dans le monitoring toutes les 10 minutes.
+ */
+export const logErrorToServer = async (
+  error: Error,
+  context: string,
+  screen?: string,
+): Promise<void> => {
+  // 1. Toujours logger dans Crashlytics
+  try {
+    crashlytics().recordError(error);
+  } catch (_) {}
+
+  // 2. Ecrire dans Firestore errors_log pour monitoring serveur
+  try {
+    const uid = auth().currentUser?.uid ?? 'anonymous';
+    await firestore().collection('errors_log').add({
+      message: error.message ?? 'Erreur inconnue',
+      stack: error.stack?.slice(0, 500) ?? '',
+      context,
+      screen: screen ?? 'unknown',
+      uid,
+      alerted: false,
+      createdAt: firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (_) {
+    // Ne jamais throw — l'erreur de logging ne doit pas faire planter l'app
+  }
+};
 
 // ─── Analytics ────────────────────────────────────────────────────────────────
 
