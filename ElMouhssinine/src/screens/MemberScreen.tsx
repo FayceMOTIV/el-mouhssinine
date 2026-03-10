@@ -911,14 +911,14 @@ const MemberScreen = () => {
 
       // Mettre à jour le membre avec status 'en_attente_paiement' pour que le backoffice le voie
       try {
+        // BUG FIX: status/statut sont des champs protégés (affectedKeys dans Firestore rules)
+        // L'app ne doit JAMAIS écrire status — seul admin/CF peut le modifier
+        // referenceVirement suffit comme signal pour le backoffice
         await AuthService.updateMemberProfile(memberProfile.uid, {
-          // @ts-ignore - Ces champs seront acceptés par Firestore
-          status: 'en_attente_paiement',
-          statut: 'en_attente_paiement', // Compatibilité
           referenceVirement: reference,
           formule: selectedFormule,
           montantAttendu: breakdown.total,
-        });
+        } as any);
         logger.log(
           '[Virement] Membre mis à jour avec status en_attente_paiement',
         );
@@ -1278,6 +1278,9 @@ const MemberScreen = () => {
         const payeurNom2 = nameParts2.slice(1).join(' ') || memberProfile.name;
 
         for (const member of familyMembers) {
+          // BUG FIX: 'en_attente_validation' n'est PAS dans la liste autorisée du allow create
+          // Firestore rules autorisent: en_attente_paiement, en_attente_signature, pending, sympathisant
+          // Le webhook payment_intent.succeeded mettra 'en_attente_validation' via admin SDK
           await createMember({
             email: '',
             nom: member.nom,
@@ -1292,7 +1295,7 @@ const MemberScreen = () => {
               nom: payeurNom2,
               prenom: payeurPrenom2,
             },
-            status: 'en_attente_validation',
+            status: 'en_attente_paiement',
             dateInscription: timestamp,
             datePaiement: timestamp,
             paiementId,

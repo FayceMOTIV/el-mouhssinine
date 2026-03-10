@@ -1584,6 +1584,25 @@ exports.createSubscription = functions
         throw new functions.https.HttpsError('internal', 'Impossible de récupérer le client_secret du PaymentIntent');
       }
 
+      // FIX CRITIQUE: Propager les metadata sur le PaymentIntent
+      // stripe.subscriptions.create() ne propage PAS les metadata sur le PI de l'invoice
+      // Sans ça, le webhook payment_intent.succeeded voit metadata={} → traite comme donation
+      await stripe.paymentIntents.update(paymentIntent.id, {
+        metadata: {
+          type: 'cotisation',
+          memberId: uid,
+          memberIdDisplay: metadata.memberIdDisplay || '',
+          memberName: metadata.memberName || '',
+          email: metadata.email || '',
+          period: 'mensuel',
+          montantCotisation: String(metadata.montantCotisation || (amount / 100)),
+          montantDon: String(metadata.montantDon || 0),
+          source: 'app_mobile',
+          subscriptionId: subscription.id,
+        },
+      });
+      console.log('Metadata propagé sur PaymentIntent:', paymentIntent.id);
+
       // 4. Stocker les IDs dans le document membre
       // FIX BUG 4: set({merge:true}) au lieu de update() — évite crash si le doc n'existe pas encore
       const memberRef = admin.firestore().collection('members').doc(uid);
@@ -1647,6 +1666,23 @@ exports.stripeWebhook = functions
         try {
           const metadata = paymentIntent.metadata || {};
           const amountEuros = paymentIntent.amount / 100;
+
+          // FIX CRITIQUE: Fallback — récupérer metadata depuis la subscription
+          // Si le PaymentIntent n'a pas de memberId (cas subscription: metadata sur sub, pas sur PI)
+          if (!metadata.memberId && paymentIntent.invoice) {
+            try {
+              const inv = await stripe.invoices.retrieve(paymentIntent.invoice);
+              if (inv.subscription) {
+                const sub = await stripe.subscriptions.retrieve(inv.subscription);
+                if (sub.metadata && sub.metadata.memberId) {
+                  Object.assign(metadata, sub.metadata);
+                  console.log('✅ Metadata récupéré depuis subscription:', sub.id, 'memberId:', sub.metadata.memberId);
+                }
+              }
+            } catch (fallbackErr) {
+              console.warn('⚠️ Impossible de récupérer metadata depuis subscription:', fallbackErr.message);
+            }
+          }
 
           // SÉCURITÉ: Valider que le montant metadata correspond au montant Stripe réel
           // Cela empêche la manipulation côté client des montants
@@ -1982,6 +2018,12 @@ exports.stripeWebhook = functions
         const subscriptionId = invoice.subscription;
 
         console.log('Paiement récurrent réussi pour subscription:', subscriptionId);
+
+        // Guard: ignorer les invoices sans subscription (one-off invoices, premier paiement géré par payment_intent.succeeded)
+        if (!subscriptionId) {
+          console.log('Invoice sans subscription (premier paiement ou one-off), skip — géré par payment_intent.succeeded');
+          break;
+        }
 
         try {
           // Récupérer la subscription pour avoir les metadata
