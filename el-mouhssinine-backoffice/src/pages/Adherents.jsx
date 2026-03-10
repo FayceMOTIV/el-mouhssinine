@@ -830,7 +830,7 @@ export default function Adherents() {
           [CotisationStatut.EN_ATTENTE_SIGNATURE]: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
           [CotisationStatut.EN_ATTENTE_PAIEMENT]: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CreditCard },
           [CotisationStatut.EXPIRE]: { bg: 'bg-red-500/20', text: 'text-red-400', icon: XCircle },
-          [CotisationStatut.ANNULE]: { bg: 'bg-orange-500/20', text: 'text-orange-400', icon: XCircle },
+          [CotisationStatut.ANNULE]: { bg: 'bg-red-500/20', text: 'text-red-400', icon: XCircle },
           [CotisationStatut.AUCUN]: { bg: 'bg-white/10', text: 'text-white/50', icon: AlertCircle },
         }
         const c = config[status] || config[CotisationStatut.AUCUN]
@@ -1226,6 +1226,7 @@ export default function Adherents() {
                   status === CotisationStatut.EN_ATTENTE_SIGNATURE ? 'bg-amber-500/20 text-amber-400' :
                   status === CotisationStatut.EN_ATTENTE_PAIEMENT ? 'bg-blue-500/20 text-blue-400' :
                   status === CotisationStatut.EXPIRE ? 'bg-red-500/20 text-red-400' :
+                  status === CotisationStatut.ANNULE ? 'bg-red-500/20 text-red-400' :
                   'bg-white/10 text-white/50'
                 }`}>
                   {getStatusLabel(status)}
@@ -1497,6 +1498,8 @@ export default function Adherents() {
                             linkedStatus === CotisationStatut.EN_ATTENTE_VALIDATION ? 'bg-violet-500/20 text-violet-400' :
                             linkedStatus === CotisationStatut.EN_ATTENTE_SIGNATURE ? 'bg-amber-500/20 text-amber-400' :
                             linkedStatus === CotisationStatut.EN_ATTENTE_PAIEMENT ? 'bg-blue-500/20 text-blue-400' :
+                            linkedStatus === CotisationStatut.EXPIRE ? 'bg-red-500/20 text-red-400' :
+                            linkedStatus === CotisationStatut.ANNULE ? 'bg-red-500/20 text-red-400' :
                             'bg-white/10 text-white/50'
                           }`}>
                             {getStatusLabel(linkedStatus)}

@@ -10,6 +10,7 @@ import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils';
 import { computeMemberStatus } from '../utils/memberStatus';
+import { setUserForCrashlytics } from './monitoring';
 
 const AUTH_STORAGE_KEY = '@auth_user_profile';
 
@@ -462,6 +463,7 @@ export const AuthService = {
 
       await auth().signOut();
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+      setUserForCrashlytics(null);
       logger.log('[Auth] Déconnexion réussie');
     } catch (error) {
       logger.error('[Auth] Erreur déconnexion', error);

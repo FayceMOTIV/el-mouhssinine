@@ -67,6 +67,14 @@ import MemberCard from '../components/MemberCard';
 import MemberCardFullScreen from '../components/MemberCardFullScreen';
 import { logger } from '../utils';
 import { computeMemberStatus } from '../utils/memberStatus';
+import {
+  logError,
+  logBreadcrumb,
+  trackEvent,
+  startTrace,
+  setUserForCrashlytics,
+  Events,
+} from '../services/monitoring';
 import { BackgroundPattern } from '../components/BackgroundPattern';
 import firestore from '@react-native-firebase/firestore';
 import firebase from '@react-native-firebase/app';
@@ -251,6 +259,7 @@ const MemberScreen = () => {
 
       if (user) {
         setIsLoggedIn(true);
+        setUserForCrashlytics(user.uid);
 
         // S10: Vérifier paiement interrompu (3DS)
         checkPendingPayment();
@@ -948,6 +957,9 @@ const MemberScreen = () => {
     }
 
     setIsProcessingPayment(true);
+    logBreadcrumb('Demarrage paiement cotisation');
+    trackEvent(Events.PAYMENT_STARTED, { type: selectedFormule });
+    const paymentTrace = await startTrace('payment_flow');
     try {
       // IMPORTANT: Utiliser makeSubscription pour les cotisations mensuelles (paiement récurrent)
       // et makePayment pour les cotisations annuelles (paiement unique)
@@ -1015,6 +1027,11 @@ const MemberScreen = () => {
 
         // BUG D FIX: Marquer le paiement comme réussi pour empêcher les doublons
         paymentSucceededRef.current = true;
+        await paymentTrace.stop();
+        trackEvent(Events.PAYMENT_SUCCESS, {
+          type: selectedFormule,
+          amount: String(breakdown.total),
+        });
 
         setShowPaymentModal(false);
         setCustomAmount('');
@@ -1065,6 +1082,11 @@ const MemberScreen = () => {
       }
     } catch (error) {
       const err = error as Error;
+      await paymentTrace.stop();
+      logError(err, { screen: 'MemberScreen', action: 'payment' });
+      trackEvent(Events.PAYMENT_FAILED, {
+        reason: (err?.message || 'unknown').substring(0, 50),
+      });
       showPaymentError(err?.message || 'Une erreur est survenue');
     } finally {
       setIsProcessingPayment(false);
@@ -1325,6 +1347,10 @@ const MemberScreen = () => {
       }
     } catch (error) {
       const err = error as Error;
+      logError(err, { screen: 'MemberScreen', action: 'family_payment' });
+      trackEvent(Events.PAYMENT_FAILED, {
+        reason: (err?.message || 'unknown').substring(0, 50),
+      });
       showPaymentError(err?.message || 'Une erreur est survenue');
     } finally {
       setIsProcessingPayment(false);

@@ -7272,3 +7272,55 @@ exports.onAuthUserDeleted = functions
     }
   });
 
+// ─── WHATSAPP CRASH ALERT ─────────────────────────────────────────────────────
+// Se declenche automatiquement quand Crashlytics detecte un nouveau crash fatal.
+// Envoie un WhatsApp a Faical via Twilio.
+// Variables d'env necessaires (firebase functions:secrets:set) :
+//   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
+//   TWILIO_WHATSAPP_FROM, TWILIO_WHATSAPP_TO
+
+const { onNewFatalIssuePublished } = require('firebase-functions/v2/alerts/crashlytics');
+
+exports.alertCrashWhatsApp = onNewFatalIssuePublished(
+  {
+    region: 'europe-west1',
+    secrets: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO'],
+  },
+  async (event) => {
+    const issue = event.data.payload.issue;
+    const appId = event.appId ?? 'el-mouhssinine';
+    const issueId = issue?.id ?? 'inconnu';
+    const title = issue?.title ?? 'Crash inconnu';
+    const subtitle = issue?.subtitle ?? '';
+    const impacted = issue?.impactedDevicesCount ?? '?';
+    const platform = appId.includes('ios') ? 'iOS' : 'Android';
+
+    const message =
+      `CRASH El Mouhssinine ${platform}\n\n` +
+      `Erreur : ${title}\n` +
+      `Detail : ${subtitle}\n` +
+      `Appareils touches : ${impacted}\n` +
+      `Issue ID : ${issueId}\n\n` +
+      `Ouvre Claude Code et tape :\n` +
+      `"verifie les bugs"\n\n` +
+      `https://console.firebase.google.com/project/el-mouhssinine/crashlytics`;
+
+    try {
+      const twilio = require('twilio');
+      const client = twilio(
+        process.env.TWILIO_ACCOUNT_SID,
+        process.env.TWILIO_AUTH_TOKEN,
+      );
+      await client.messages.create({
+        from: `whatsapp:${process.env.TWILIO_WHATSAPP_FROM}`,
+        to: `whatsapp:${process.env.TWILIO_WHATSAPP_TO}`,
+        body: message,
+      });
+      console.log(`WhatsApp crash alert envoye pour issue ${issueId}`);
+    } catch (err) {
+      // Ne jamais laisser l'alert crasher — juste logger
+      console.error('Echec envoi WhatsApp crash alert:', err.message);
+    }
+  },
+);
+

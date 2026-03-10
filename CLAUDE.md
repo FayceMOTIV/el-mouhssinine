@@ -201,8 +201,47 @@ Prop `confirmText` (PAS `confirmLabel`). Toujours passer `loading={state}`.
 ### Firebase onSnapshot
 Toujours passer un parametre d'erreur pour distinguer "pas de donnees" de "erreur Firestore".
 
+## Monitoring (Build 278+)
+
+### Crashlytics + Analytics + Performance
+- `src/services/monitoring.ts` — service centralise (logError, trackEvent, startTrace, etc.)
+- Crashlytics s'active automatiquement via `FirebaseApp.configure()` (AppDelegate.swift L22)
+- Analytics events : payment_started, payment_success, payment_failed, donation_success, geofence_mosque_enter, quran_play, janaza_view
+- Performance trace : `payment_flow` autour du flux paiement
+
+### WhatsApp Crash Alert
+- CF `alertCrashWhatsApp` — trigger `onNewFatalIssuePublished` (Crashlytics)
+- Envoie un WhatsApp via Twilio quand un crash fatal est detecte
+- Secrets Firebase : TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM, TWILIO_WHATSAPP_TO
+
+## Quand Faical dit "verifie les bugs" ou "check les crashs"
+
+Executer cette sequence sans attendre d'autres instructions :
+
+1. **Lire les crashs Crashlytics** via Firebase MCP (si connecte) ou demander `firebase login`
+2. **Analyser les 5 crashs les plus recents** : stack trace, fichier, ligne, cause
+3. **Proposer les fixes** : fichier, ligne, cause (1 phrase), code corrige
+4. **Attendre validation** — ne jamais appliquer un fix sans confirmation
+
+## Regles absolues du projet
+- NE JAMAIS builder ou deployer sans accord explicite de Faical
+- Region Cloud Functions : europe-west1 TOUJOURS
+- L'app ne doit JAMAIS ecrire dans `payments/` — webhook admin SDK uniquement
+- `computeMemberStatus` dans `utils/memberStatus.ts` = source de verite unique du statut
+- `paymentSucceededRef` est un useRef — ne jamais le remplacer par useState
+- Animations Quran : useNativeDriver: false obligatoire
+
+## Firebase MCP
+```bash
+# Configurer (une seule fois) :
+claude mcp add firebase -- npx -y firebase-tools@latest mcp
+# Verifier :
+claude mcp list
+```
+Une fois actif, Claude Code peut interroger : Crashlytics, Firestore, CF logs, FCM.
+
 ## Notes
-- 34 Cloud Functions deployees (+ createNotifBO helper)
+- 35 Cloud Functions deployees (+ createNotifBO helper + alertCrashWhatsApp)
 - Score audit securite : 9/10
 - App iOS uniquement en production (Android non deploye)
 - Calendrier priere local 2026 complet (fallback Mawaqit)
