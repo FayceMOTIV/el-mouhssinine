@@ -1928,9 +1928,13 @@ exports.stripeWebhook = functions
                 description: paymentIntent.description,
                 metadata: metadata,
                 // BUG 3 FIX: Sauvegarder nom donateur + userId depuis metadata Stripe
-                // FIX Payment Link: fallback sur receipt_email Stripe (Payment Links n'ont pas de metadata)
+                // Race condition fix: ne pas écraser donateurEmail si déjà mis par checkout.session.completed
+                // On utilise undefined pour exclure le champ si aucun email dispo (merge:true preserve la valeur existante)
                 donateur: metadata.donorName || metadata.donorEmail || paymentIntent.receipt_email || 'Anonyme',
-                donateurEmail: (metadata.donorEmail || metadata.email || metadata.donateurEmail || paymentIntent.receipt_email || '').toLowerCase() || null,
+                ...((() => {
+                  const e = (metadata.donorEmail || metadata.email || metadata.donateurEmail || paymentIntent.receipt_email || '').toLowerCase() || undefined;
+                  return e ? { donateurEmail: e } : {};
+                })()),
                 userId: (() => {
                   const uid = metadata.userId || metadata.donorUid || metadata.memberId || paymentIntent.metadata?.userId || paymentIntent.metadata?.memberId || '';
                   if (!uid) logServerError('Don créé sans userId — historique membre ne s\'affichera pas', 'stripeWebhook_donation_no_userId', { paymentIntentId, donateurEmail: (metadata.donorEmail || metadata.email || '').toLowerCase() || null });
@@ -2713,9 +2717,30 @@ exports.stripeWebhook = functions
         break;
       }
 
+      case 'checkout.session.completed': {
+        // Payment Link : l'email du payeur est dans session.customer_details (PAS dans le PI metadata)
+        try {
+          const session = event.data.object;
+          const piId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+          const donorEmail = (session.customer_details?.email || session.customer_email || '').toLowerCase() || null;
+          const donorName = session.customer_details?.name || donorEmail || 'Anonyme';
+          if (piId && donorEmail) {
+            await db.collection('donations').doc(piId).set(
+              { donateurEmail: donorEmail, donateur: donorName },
+              { merge: true }
+            );
+            console.log(`checkout.session.completed: donateurEmail mis à jour pour ${piId}: ${donorEmail}`);
+          } else {
+            console.log(`checkout.session.completed: pas d'email pour ${piId || 'PI inconnu'}`);
+          }
+        } catch (err) {
+          console.error('Erreur checkout.session.completed:', err.message);
+        }
+        break;
+      }
+
       default: {
         const criticalUnhandled = [
-          'checkout.session.completed',
           'customer.subscription.deleted',
           'payment_intent.payment_failed',
           'invoice.payment_failed',
@@ -5005,6 +5030,21 @@ exports.onDonationConfirmation = functions
           if (cust.email) {
             finalEmail = cust.email.toLowerCase();
             console.log(`📧 Email récupéré depuis Stripe customer: ${finalEmail}`);
+          }
+        }
+        // Dernier recours : checkout session (Payment Links)
+        if (!finalEmail) {
+          const sessions = await stripe.checkout.sessions.list({
+            payment_intent: donation.stripePaymentIntentId,
+            limit: 1,
+          });
+          if (sessions.data.length > 0) {
+            const sess = sessions.data[0];
+            const sessEmail = (sess.customer_details?.email || sess.customer_email || '').toLowerCase() || null;
+            if (sessEmail) {
+              finalEmail = sessEmail;
+              console.log(`📧 Email récupéré depuis Checkout Session: ${finalEmail}`);
+            }
           }
         }
         if (finalEmail) {
