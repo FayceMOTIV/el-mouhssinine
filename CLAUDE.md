@@ -221,6 +221,12 @@ Toujours passer un parametre d'erreur pour distinguer "pas de donnees" de "erreu
 - `monitorSilentBugs` (every 10 min) : 6 checks — errors_log non alertees, paymentFailed, validation bloquee >30min, dons sans userId, membres actifs expires (drift Stripe), CF errors recentes
 - Build 280 : fix historique donations (donateurEmail .lower(), BREVO process.env, merge listeners), page noire /don bypass auth loader
 
+### Stripe Payment Link donations (Build 282)
+- `/don` public page → `buy.stripe.com/...` (Payment Link) → PAS de metadata app (userId="", donorEmail vide)
+- Fix stripeWebhook: `donateurEmail = receipt_email` (Stripe) si metadata vide
+- Fix onDonationConfirmation: fallback Stripe API (`receipt_email` puis `customer.email`) + `snap.ref.update(donateurEmail)` pour syncer historique
+- Historique app via fallback `where('donateurEmail', '==', email)` — fonctionne si meme email que Firebase Auth
+
 ## Quand Faical dit "verifie les bugs" ou "check les crashs"
 
 Executer cette sequence sans attendre d'autres instructions :
