@@ -7714,3 +7714,60 @@ exports.alertCrashWhatsApp = onNewFatalIssuePublished(
   },
 );
 
+// ============================================================
+// createPublicCheckoutSession — Stripe Checkout pour la page /don
+// Remplace le Payment Link statique (buy.stripe.com) qui s'affichait
+// en noir sur les appareils en dark mode (appearance non configurable via API).
+// Checkout Sessions (checkout.stripe.com) utilisent toujours le thème clair.
+// ============================================================
+exports.createPublicCheckoutSession = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30 })
+  .https.onRequest(async (req, res) => {
+    const ALLOWED_ORIGIN = 'https://el-mouhssinine.web.app';
+    res.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') { res.status(204).send(''); return; }
+    if (req.method !== 'POST') { res.status(405).json({ error: 'Méthode non autorisée' }); return; }
+
+    try {
+      const { amount, email, name } = req.body || {};
+      const amountCents = Math.round(parseFloat(amount) * 100);
+
+      if (!amountCents || amountCents < 100 || amountCents > 500000) {
+        return res.status(400).json({ error: 'Montant invalide (1€ – 5000€)' });
+      }
+
+      const sessionParams = {
+        mode: 'payment',
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'eur',
+            product_data: { name: 'Don à El Mouhssinine' },
+            unit_amount: amountCents,
+          },
+          quantity: 1,
+        }],
+        success_url: `${ALLOWED_ORIGIN}/don?success=1`,
+        cancel_url: `${ALLOWED_ORIGIN}/don`,
+        metadata: {
+          type: 'donation',
+          donorEmail: email ? email.toLowerCase() : '',
+          donorName: name || '',
+          source: 'web_don_public',
+        },
+      };
+
+      if (email) sessionParams.customer_email = email.toLowerCase();
+
+      const session = await stripe.checkout.sessions.create(sessionParams);
+      return res.json({ url: session.url });
+    } catch (err) {
+      console.error('createPublicCheckoutSession error:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
