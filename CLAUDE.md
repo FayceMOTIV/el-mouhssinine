@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 
 ## App Mobile
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 281
+- **Build actuel** : 284
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
 - **iOS minimum** : arm64 requis

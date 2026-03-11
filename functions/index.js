@@ -2725,11 +2725,20 @@ exports.stripeWebhook = functions
           const donorEmail = (session.customer_details?.email || session.customer_email || '').toLowerCase() || null;
           const donorName = session.customer_details?.name || donorEmail || 'Anonyme';
           if (piId && donorEmail) {
-            await db.collection('donations').doc(piId).set(
-              { donateurEmail: donorEmail, donateur: donorName },
-              { merge: true }
-            );
-            console.log(`checkout.session.completed: donateurEmail mis à jour pour ${piId}: ${donorEmail}`);
+            try {
+              // update() (pas set/merge) : n'écrit que si le doc existe déjà.
+              // Si le doc n'existe pas encore (payment_intent.succeeded n'a pas encore tourné),
+              // on laisse le fallback onDonationConfirmation → stripe.checkout.sessions.list() gérer l'email.
+              // Cela évite de créer un doc incomplet qui déclencherait onDonationConfirmation
+              // avec status manquant → isCompleted=false → zéro email envoyé.
+              await db.collection('donations').doc(piId).update(
+                { donateurEmail: donorEmail, donateur: donorName }
+              );
+              console.log(`checkout.session.completed: donateurEmail mis à jour pour ${piId}: ${donorEmail}`);
+            } catch (updateErr) {
+              // Doc pas encore créé — payment_intent.succeeded le créera avec le fallback checkout sessions
+              console.log(`checkout.session.completed: doc ${piId} pas encore créé — fallback onDonationConfirmation prendra le relais (${donorEmail})`);
+            }
           } else {
             console.log(`checkout.session.completed: pas d'email pour ${piId || 'PI inconnu'}`);
           }

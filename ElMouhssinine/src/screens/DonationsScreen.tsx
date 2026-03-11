@@ -1943,6 +1943,12 @@ const DonationsScreen = () => {
               </Text>
             </TouchableOpacity>
 
+            {paymentMethod !== 'virement' && (
+              <Text style={{ fontSize: 12, color: '#888', textAlign: 'center', marginTop: 8, paddingHorizontal: 16 }}>
+                💡 Pour retrouver votre don dans votre historique, utilisez la même adresse email que votre compte membre.
+              </Text>
+            )}
+
             <Text style={[styles.modalDisclaimer, isRTL && styles.rtlText]}>
               {t('securePayment')}
             </Text>

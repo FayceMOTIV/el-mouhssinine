@@ -1,4 +1,23 @@
-# El Mouhssinine - Changelog (Build 98 → 277)
+# El Mouhssinine - Changelog (Build 98 → 284)
+
+## Build 284 (11 Mar 2026) — Dons : PaymentSheet clair + historique temps réel
+
+### PaymentSheet dark mode (app)
+- [x] `stripe.ts` L171 + L350 : `style: 'automatic'` → `style: 'alwaysLight'` — page noire en dark mode iOS résolue
+
+### Historique dons Payment Link (app)
+- [x] `MemberScreen.tsx` : listener `donateurEmail` `.get()` → `onSnapshot` temps réel (2e listener parallèle)
+- [x] Fix : le don apparaît dans l'historique sans recharger l'app (le `.get()` ponctuel arrivait avant que `onDonationConfirmation` écrive `donateurEmail`)
+
+### Webhook checkout.session.completed (functions)
+- [x] `index.js` : `set({merge:true})` → `update()` avec catch silencieux
+- [x] Fix race condition critique : `set/merge` créait un doc incomplet → `onDonationConfirmation` se déclenchait avec `status` manquant → `isCompleted=false` → aucun email envoyé
+- [x] Désormais : `update()` échoue silencieusement si doc absent → `payment_intent.succeeded` crée le doc complet → trigger se déclenche une seule fois avec `status:'succeeded'` → fallback `checkout.sessions.list()` récupère l'email ✅
+
+### Texte informatif don (app)
+- [x] `DonationsScreen.tsx` : message "💡 Pour retrouver votre don..." affiché sous le bouton lien Stripe
+
+---
 
 Historique detaille de tous les builds. Deplace depuis CLAUDE.md pour reduire la taille du contexte.
 

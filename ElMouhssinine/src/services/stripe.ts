@@ -168,7 +168,7 @@ export const makePayment = async (
     const { error: initError } = await initPaymentSheet({
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: 'Mosquée El Mohsinine',
-      style: 'automatic',
+      style: 'alwaysLight',
       // Pas de applePay ni googlePay → force le formulaire CB
       defaultBillingDetails: {
         address: {
@@ -347,7 +347,7 @@ export const makeSubscription = async (
     const { error: initError } = await initPaymentSheet({
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: 'Mosquée El Mohsinine',
-      style: 'automatic',
+      style: 'alwaysLight',
       // Pas de applePay ni googlePay pour les abonnements
       defaultBillingDetails: {
         address: {
