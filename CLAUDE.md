@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 
 ## App Mobile
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 279
+- **Build actuel** : 281
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
 - **iOS minimum** : arm64 requis
@@ -214,6 +214,12 @@ Toujours passer un parametre d'erreur pour distinguer "pas de donnees" de "erreu
 - CF `alertCrashWhatsApp` — trigger `onNewFatalIssuePublished` (Crashlytics)
 - Envoie un WhatsApp via Twilio quand un crash fatal est detecte
 - Secrets Firebase : TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM, TWILIO_WHATSAPP_TO
+
+### Silent Bug Monitoring (Build 281)
+- `logServerError(message, context, data)` dans index.js — fire-and-forget, ecrit dans `errors_log/`
+- 16 points de monitoring dans les CF (webhook, FCM, emails, validation, reconciliation)
+- `monitorSilentBugs` (every 10 min) : 6 checks — errors_log non alertees, paymentFailed, validation bloquee >30min, dons sans userId, membres actifs expires (drift Stripe), CF errors recentes
+- Build 280 : fix historique donations (donateurEmail .lower(), BREVO process.env, merge listeners), page noire /don bypass auth loader
 
 ## Quand Faical dit "verifie les bugs" ou "check les crashs"
 

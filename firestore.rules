@@ -125,7 +125,7 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         (isAuthenticated() &&
           (resource.data.userId == request.auth.uid ||
-           resource.data.donateurEmail == request.auth.token.email));
+           resource.data.donateurEmail == request.auth.token.email.lower()));
       // Création: user authentifié avec validation montant + userId obligatoire
       allow create: if isAuthenticated() &&
         (

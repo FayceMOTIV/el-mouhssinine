@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -63,9 +63,13 @@ function AdminRoute({ children }) {
 // App Routes
 function AppRoutes() {
   const { isAuthenticated, loading, authChecked } = useAuth()
+  const location = useLocation()
 
-  // Attendre que l'auth soit complètement vérifié
-  if (loading || !authChecked) {
+  // Pages publiques : rendre immédiatement sans attendre Firebase Auth
+  const isPublicRoute = ['/don', '/privacy'].includes(location.pathname)
+
+  // Attendre que l'auth soit complètement vérifié (sauf pour les routes publiques)
+  if (!isPublicRoute && (loading || !authChecked)) {
     return <FullPageLoader />
   }
 

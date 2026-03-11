@@ -513,6 +513,7 @@ const DonationsScreen = () => {
           isAnonymous: isAnonymous,
           donorEmail: donorEmail || currentUser?.email?.toLowerCase() || '',
           userId: currentUser?.uid || '',
+          memberId: currentUser?.uid || '',
           donorName: isAnonymous
             ? 'Anonyme'
             : donorFullName || donorEmail || '',

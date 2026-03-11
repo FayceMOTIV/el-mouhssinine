@@ -397,52 +397,49 @@ const MemberScreen = () => {
           );
         paymentHistoryUnsubscribeRef.current = unsubHistory;
 
-        // Listener dons (collection donations)
+        // Listener dons (collection donations) — Build 280 : un seul onSnapshot + fallback .get() email
+        const userEmail = user.email?.toLowerCase();
         const unsubDonations = firestore()
           .collection('donations')
           .where('userId', '==', user.uid)
           .onSnapshot(
-            snapshot => {
+            async snapshot => {
               donationsRef.current = snapshot.docs.map(doc => ({
                 ...doc.data(),
                 id: doc.id,
                 _type: 'donation',
               }));
+              // Fallback donateurEmail si userId retourne 0 résultats
+              if (donationsRef.current.length === 0 && userEmail) {
+                try {
+                  const fallbackSnap = await firestore()
+                    .collection('donations')
+                    .where('donateurEmail', '==', userEmail)
+                    .orderBy('createdAt', 'desc')
+                    .get();
+                  donationsByEmailRef.current = fallbackSnap.docs.map(doc => ({
+                    ...doc.data(),
+                    id: doc.id,
+                    _type: 'donation',
+                  }));
+                } catch (_) {
+                  donationsByEmailRef.current = [];
+                }
+              } else {
+                donationsByEmailRef.current = [];
+              }
               mergeAndSetHistory();
             },
             error => {
               if (__DEV__)
                 console.error('Error loading donation history:', error);
               donationsRef.current = [];
+              donationsByEmailRef.current = [];
               mergeAndSetHistory();
             },
           );
         donationHistoryUnsubscribeRef.current = unsubDonations;
-
-        // Build 261 - Second listener donations par email (attrape les dons sans userId)
-        const userEmail = user.email?.toLowerCase();
-        if (userEmail) {
-          const unsubDonationsByEmail = firestore()
-            .collection('donations')
-            .where('donateurEmail', '==', userEmail)
-            .onSnapshot(
-              snapshot => {
-                donationsByEmailRef.current = snapshot.docs.map(doc => ({
-                  ...doc.data(),
-                  id: doc.id,
-                  _type: 'donation',
-                }));
-                mergeAndSetHistory();
-              },
-              error => {
-                if (__DEV__)
-                  console.error('Error loading donations by email:', error);
-                donationsByEmailRef.current = [];
-                mergeAndSetHistory();
-              },
-            );
-          donationByEmailUnsubscribeRef.current = unsubDonationsByEmail;
-        }
+        // donationByEmailUnsubscribeRef non utilisé (fusionné dans le listener principal)
 
         // S'abonner aux notifications et sauvegarder le token
         await subscribeToMembersTopic();

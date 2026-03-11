@@ -32,10 +32,10 @@ async function logServerError(message, context, extra = {}) {
 // ==================== PARAMÈTRES (migration functions.config → defineString) ====================
 const STRIPE_SECRET_KEY = defineString('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineString('STRIPE_WEBHOOK_SECRET');
-const BREVO_SMTP_USER = defineString('BREVO_SMTP_USER');
-const BREVO_SMTP_PASS = defineString('BREVO_SMTP_PASS');
-const BREVO_FROM_EMAIL = defineString('BREVO_FROM_EMAIL');
-const BREVO_FROM_NAME = defineString('BREVO_FROM_NAME', { default: 'Mosquée El Mohsinine' });
+const BREVO_SMTP_USER = process.env.BREVO_SMTP_USER || '';
+const BREVO_SMTP_PASS = process.env.BREVO_SMTP_PASS || '';
+const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || '';
+const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'Mosquée El Mohsinine';
 
 // Initialiser Stripe de manière lazy (évite le warning "value() invoked during deployment")
 let _stripe;
@@ -150,7 +150,14 @@ const sendPushToMember = async (uid, title, body, data = {}) => {
       tokens = [memberData.fcmToken];
     }
 
-    if (tokens.length === 0) return;
+    if (tokens.length === 0) {
+      await logServerError(
+        'Push non envoyé — aucun token FCM valide pour ce membre',
+        'sendPushToMember_no_tokens',
+        { uid, title }
+      );
+      return;
+    }
 
     const response = await admin.messaging().sendEachForMulticast({
       tokens,
@@ -984,10 +991,10 @@ exports.onNewMessage = functions
 
     // === 2. Email aux admins ===
     try {
-      const brevoUser = BREVO_SMTP_USER.value();
-      const brevoPass = BREVO_SMTP_PASS.value();
-      const fromEmail = BREVO_FROM_EMAIL.value();
-      const fromName = BREVO_FROM_NAME.value();
+      const brevoUser = BREVO_SMTP_USER;
+      const brevoPass = BREVO_SMTP_PASS;
+      const fromEmail = BREVO_FROM_EMAIL;
+      const fromName = BREVO_FROM_NAME;
       const adminEmail = fromEmail || 'centreculturelislamique@orange.fr';
 
       if (!brevoUser || !brevoPass || !fromEmail) {
@@ -1165,10 +1172,10 @@ exports.onMessageReply = functions
           const prenom = memberData?.prenom || after.userName || 'Membre';
 
           if (userEmail) {
-            const brevoUser = BREVO_SMTP_USER.value();
-            const brevoPass = BREVO_SMTP_PASS.value();
-            const fromEmail = BREVO_FROM_EMAIL.value();
-            const fromName = BREVO_FROM_NAME.value();
+            const brevoUser = BREVO_SMTP_USER;
+            const brevoPass = BREVO_SMTP_PASS;
+            const fromEmail = BREVO_FROM_EMAIL;
+            const fromName = BREVO_FROM_NAME;
 
             if (brevoUser && brevoPass && fromEmail) {
               const transporter = nodemailer.createTransport({
@@ -1835,8 +1842,12 @@ exports.stripeWebhook = functions
                     linkedToCotisation: true,
                   },
                   donateur: metadata.memberName || metadata.donorName || metadata.donorEmail || 'Anonyme',
-                  donateurEmail: (metadata.email || metadata.donorEmail || '').toLowerCase() || null,
-                  userId: metadata.memberId || metadata.userId || '',
+                  donateurEmail: (metadata.email || metadata.donorEmail || metadata.donateurEmail || '').toLowerCase() || null,
+                  userId: (() => {
+                    const uid = metadata.memberId || metadata.userId || metadata.donorUid || paymentIntent.metadata?.memberId || paymentIntent.metadata?.userId || '';
+                    if (!uid) logServerError('Don créé sans userId — historique membre ne s\'affichera pas', 'stripeWebhook_donation_no_userId', { paymentIntentId, donateurEmail: (metadata.email || metadata.donorEmail || '').toLowerCase() || null });
+                    return uid;
+                  })(),
                   donorType: metadata.donorType || 'particulier',
                   donorInfo: (() => { try { return metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null; } catch (e) { console.warn('donorInfo JSON invalide (cotisation don):', e.message); return null; } })(),
                   projectId: null,
@@ -1918,8 +1929,12 @@ exports.stripeWebhook = functions
                 metadata: metadata,
                 // BUG 3 FIX: Sauvegarder nom donateur + userId depuis metadata Stripe
                 donateur: metadata.donorName || metadata.donorEmail || 'Anonyme',
-                donateurEmail: metadata.donorEmail ? metadata.donorEmail.toLowerCase() : null,
-                userId: metadata.userId || metadata.donorUid || '',
+                donateurEmail: (metadata.donorEmail || metadata.email || metadata.donateurEmail || '').toLowerCase() || null,
+                userId: (() => {
+                  const uid = metadata.userId || metadata.donorUid || metadata.memberId || paymentIntent.metadata?.userId || paymentIntent.metadata?.memberId || '';
+                  if (!uid) logServerError('Don créé sans userId — historique membre ne s\'affichera pas', 'stripeWebhook_donation_no_userId', { paymentIntentId, donateurEmail: (metadata.donorEmail || metadata.email || '').toLowerCase() || null });
+                  return uid;
+                })(),
                 donorType: metadata.donorType || 'particulier',
                 donorInfo: (() => { try { return metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null; } catch (e) { console.warn('donorInfo JSON invalide (donation):', e.message); return null; } })(),
                 projectId: metadata.projectId || null,
@@ -1947,6 +1962,15 @@ exports.stripeWebhook = functions
 
           console.log('Paiement enregistré dans Firestore (transaction atomique)');
 
+          // S3: Alerter si cotisation sans memberId dans metadata
+          if (metadata.type === 'cotisation' && !metadata.memberId) {
+            await logServerError(
+              'Subscription Stripe sans memberId dans metadata — statut membre non mis à jour',
+              'stripeWebhook_subscription_no_memberId',
+              { paymentIntentId, customerId: paymentIntent.customer }
+            );
+          }
+
           // Email A : "Demande d'adhésion reçue" pour les cotisations
           if (metadata.type === 'cotisation' && metadata.memberId) {
             try {
@@ -1956,10 +1980,10 @@ exports.stripeWebhook = functions
               const memberPrenom = memberData.prenom || metadata.memberName || 'Membre';
 
               if (memberEmail) {
-                const brevoUser = BREVO_SMTP_USER.value();
-                const brevoPass = BREVO_SMTP_PASS.value();
-                const fromEmail = BREVO_FROM_EMAIL.value();
-                const fromName = BREVO_FROM_NAME.value() || 'Mosquée El Mouhssinine';
+                const brevoUser = BREVO_SMTP_USER;
+                const brevoPass = BREVO_SMTP_PASS;
+                const fromEmail = BREVO_FROM_EMAIL;
+                const fromName = BREVO_FROM_NAME || 'Mosquée El Mouhssinine';
 
                 if (brevoUser && brevoPass && fromEmail) {
                   const transporter = nodemailer.createTransport({
@@ -2233,10 +2257,10 @@ exports.stripeWebhook = functions
           });
 
           if (failedEmail) {
-            const brevoUser = BREVO_SMTP_USER.value();
-            const brevoPass = BREVO_SMTP_PASS.value();
-            const fromEmail = BREVO_FROM_EMAIL.value();
-            const fromName = BREVO_FROM_NAME.value();
+            const brevoUser = BREVO_SMTP_USER;
+            const brevoPass = BREVO_SMTP_PASS;
+            const fromEmail = BREVO_FROM_EMAIL;
+            const fromName = BREVO_FROM_NAME;
 
             if (brevoUser && brevoPass && fromEmail) {
               const amountDue = ((failedInvoice.amount_due || 0) / 100).toFixed(2);
@@ -2372,10 +2396,10 @@ exports.stripeWebhook = functions
             const cancelPrenom = subMemberData.prenom || subMemberData.nom || 'Membre';
             if (cancelEmail) {
               try {
-                const brevoUser = BREVO_SMTP_USER.value();
-                const brevoPass = BREVO_SMTP_PASS.value();
-                const fromEmail = BREVO_FROM_EMAIL.value();
-                const fromName = BREVO_FROM_NAME.value();
+                const brevoUser = BREVO_SMTP_USER;
+                const brevoPass = BREVO_SMTP_PASS;
+                const fromEmail = BREVO_FROM_EMAIL;
+                const fromName = BREVO_FROM_NAME;
 
                 if (brevoUser && brevoPass && fromEmail) {
                   // Charger les infos association
@@ -2512,10 +2536,10 @@ exports.stripeWebhook = functions
           });
 
           // 2. Envoyer email alerte admin
-          const brevoUser = BREVO_SMTP_USER.value();
-          const brevoPass = BREVO_SMTP_PASS.value();
-          const fromEmail = BREVO_FROM_EMAIL.value();
-          const fromName = BREVO_FROM_NAME.value();
+          const brevoUser = BREVO_SMTP_USER;
+          const brevoPass = BREVO_SMTP_PASS;
+          const fromEmail = BREVO_FROM_EMAIL;
+          const fromName = BREVO_FROM_NAME;
 
           if (brevoUser && brevoPass && fromEmail) {
             const disputeTransporter = nodemailer.createTransport({
@@ -2649,10 +2673,10 @@ exports.stripeWebhook = functions
                 const siMember = siMemberDoc.data();
                 const siEmail = siMember.email;
                 if (siEmail) {
-                  const siBrevoUser = BREVO_SMTP_USER.value();
-                  const siBrevoPass = BREVO_SMTP_PASS.value();
-                  const siFromEmail = BREVO_FROM_EMAIL.value();
-                  const siFromName = BREVO_FROM_NAME.value();
+                  const siBrevoUser = BREVO_SMTP_USER;
+                  const siBrevoPass = BREVO_SMTP_PASS;
+                  const siFromEmail = BREVO_FROM_EMAIL;
+                  const siFromName = BREVO_FROM_NAME;
                   if (siBrevoUser && siBrevoPass && siFromEmail) {
                     const siTransporter = nodemailer.createTransport({
                       host: 'smtp-relay.brevo.com', port: 587, secure: false,
@@ -2688,8 +2712,25 @@ exports.stripeWebhook = functions
         break;
       }
 
-      default:
-        console.log('Événement non géré:', event.type);
+      default: {
+        const criticalUnhandled = [
+          'checkout.session.completed',
+          'customer.subscription.deleted',
+          'payment_intent.payment_failed',
+          'invoice.payment_failed',
+          'charge.dispute.created',
+        ];
+        if (criticalUnhandled.includes(event.type)) {
+          await logServerError(
+            `Événement Stripe critique non géré: ${event.type}`,
+            'stripeWebhook_unhandled',
+            { eventType: event.type, eventId: event.id }
+          );
+        } else {
+          console.log('Événement non géré (non critique):', event.type);
+        }
+        break;
+      }
     }
 
     res.json({ received: true });
@@ -3434,10 +3475,10 @@ exports.sendRecuFiscal = functions
       });
 
       // 6. Envoyer par email via Brevo SMTP
-      const brevoUser = BREVO_SMTP_USER.value();
-      const brevoPass = BREVO_SMTP_PASS.value();
-      const fromEmail = BREVO_FROM_EMAIL.value();
-      const fromName = BREVO_FROM_NAME.value();
+      const brevoUser = BREVO_SMTP_USER;
+      const brevoPass = BREVO_SMTP_PASS;
+      const fromEmail = BREVO_FROM_EMAIL;
+      const fromName = BREVO_FROM_NAME;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
         throw new functions.https.HttpsError(
@@ -3686,7 +3727,11 @@ exports.onNewSympathisant = functions
     const prenom = member.prenom || 'Membre';
 
     if (!email) {
-      console.log('Pas d\'email pour le sympathisant, skip email de bienvenue');
+      await logServerError(
+        'Nouveau sympathisant sans email — email de bienvenue non envoyé',
+        'onNewSympathisant_no_email',
+        { memberId: snap.id, prenom }
+      );
       return null;
     }
 
@@ -3741,10 +3786,10 @@ exports.onNewSympathisant = functions
       const emailMosquee = mosquee.email || '';
 
       // Configuration email Brevo
-      const brevoUser = BREVO_SMTP_USER.value();
-      const brevoPass = BREVO_SMTP_PASS.value();
-      const fromEmail = BREVO_FROM_EMAIL.value();
-      const fromName = BREVO_FROM_NAME.value() || nomMosquee;
+      const brevoUser = BREVO_SMTP_USER;
+      const brevoPass = BREVO_SMTP_PASS;
+      const fromEmail = BREVO_FROM_EMAIL;
+      const fromName = BREVO_FROM_NAME || nomMosquee;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
         console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${email || 'inconnu'}`);
@@ -3784,14 +3829,21 @@ exports.onNewSympathisant = functions
       }
 
       // Envoyer l'email de bienvenue
-      await transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to: email,
-        subject: emailSubject,
-        html: emailHtml,
-      });
-
-      console.log('✅ Email de bienvenue envoyé à', email.replace(/(.{2}).*(@.*)/, '$1***$2'));
+      try {
+        await transporter.sendMail({
+          from: `"${fromName}" <${fromEmail}>`,
+          to: email,
+          subject: emailSubject,
+          html: emailHtml,
+        });
+        console.log('✅ Email de bienvenue envoyé à', email.replace(/(.{2}).*(@.*)/, '$1***$2'));
+      } catch (emailError) {
+        await logServerError(
+          'Nouveau sympathisant mais email de bienvenue non envoyé',
+          'onNewSympathisant_email_failed',
+          { memberId: snap.id, prenom, error: emailError.message }
+        );
+      }
 
       // Copie dans messagerie interne (ne bloque pas si erreur)
       try {
@@ -3838,6 +3890,11 @@ exports.onNewSympathisant = functions
 
     } catch (error) {
       console.error('❌ Erreur envoi email bienvenue:', error);
+      await logServerError(
+        'Erreur inattendue dans onNewSympathisant',
+        'onNewSympathisant_error',
+        { memberId: snap.id, prenom, error: error.message }
+      );
       return { error: error.message };
     }
   });
@@ -3893,10 +3950,10 @@ exports.validateMembership = functions
       const nomMosquee = mosquee.nom || 'Mosquée El Mohsinine';
 
       // Configuration email
-      const brevoUser = BREVO_SMTP_USER.value();
-      const brevoPass = BREVO_SMTP_PASS.value();
-      const fromEmail = BREVO_FROM_EMAIL.value();
-      const fromName = BREVO_FROM_NAME.value() || nomMosquee;
+      const brevoUser = BREVO_SMTP_USER;
+      const brevoPass = BREVO_SMTP_PASS;
+      const fromEmail = BREVO_FROM_EMAIL;
+      const fromName = BREVO_FROM_NAME || nomMosquee;
 
       let transporter = null;
       if (brevoUser && brevoPass && fromEmail) {
@@ -3985,6 +4042,12 @@ exports.validateMembership = functions
             });
           } catch (emailError) {
             console.error('[EMAIL ERROR] validateMembership email échoué:', emailError.message);
+            await logServerError(
+              'Membre validé mais email de validation non envoyé',
+              'validateMembership_email_failed',
+              { memberId, error: emailError.message }
+            );
+            // NE PAS throw — la validation est faite, seulement l'email a échoué
           }
         }
 
@@ -4112,6 +4175,11 @@ exports.validateMembership = functions
             });
           } catch (emailError) {
             console.error('[EMAIL ERROR] validateMembership email échoué:', emailError.message);
+            await logServerError(
+              'Membre validé (reject→don) mais email non envoyé',
+              'validateMembership_email_failed',
+              { memberId, error: emailError.message }
+            );
           }
         }
 
@@ -4532,10 +4600,10 @@ const processAnnualRecusFiscaux = async (year) => {
   }
 
   // 4. Configuration email
-  const brevoUser = BREVO_SMTP_USER.value();
-  const brevoPass = BREVO_SMTP_PASS.value();
-  const fromEmail = BREVO_FROM_EMAIL.value();
-  const fromName = BREVO_FROM_NAME.value();
+  const brevoUser = BREVO_SMTP_USER;
+  const brevoPass = BREVO_SMTP_PASS;
+  const fromEmail = BREVO_FROM_EMAIL;
+  const fromName = BREVO_FROM_NAME;
 
   let transporter = null;
   if (brevoUser && brevoPass && fromEmail) {
@@ -4900,12 +4968,40 @@ exports.onDonationConfirmation = functions
       return null;
     }
 
-    // 5. Trouver l'email
-    const email = donation.donorInfo?.email || donation.donateurEmail || donation.metadata?.donorEmail || null;
-    if (!email) {
-      console.log('Pas d\'email pour le don, skip:', donationId);
+    // 5. Trouver l'email — fallback lookup membre par userId si champs email absents
+    const donorEmail = (
+      donation.donateurEmail
+      || donation.email
+      || donation.donorEmail
+      || donation.donorInfo?.email
+      || donation.metadata?.donorEmail
+      || donation.metadata?.email
+      || ''
+    ).toLowerCase() || null;
+
+    let finalEmail = donorEmail;
+    if (!finalEmail && donation.userId) {
+      try {
+        const memberDoc = await admin.firestore().collection('members').doc(donation.userId).get();
+        if (memberDoc.exists) {
+          finalEmail = memberDoc.data()?.email || null;
+          console.log(`📧 Email récupéré depuis membre ${donation.userId}: ${finalEmail}`);
+        }
+      } catch (e) {
+        console.error('onDonationConfirmation — lookup member failed:', e);
+      }
+    }
+
+    if (!finalEmail) {
+      await logServerError(
+        'Don sans email récupérable — email de confirmation non envoyé',
+        'onDonationConfirmation_no_email',
+        { donationId, userId: donation.userId || 'inconnu' }
+      );
       return null;
     }
+    // Alias pour compatibilité avec le reste de la fonction
+    const email = finalEmail;
 
     // 6. Données du don
     const donorType = donation.donorType || 'particulier';
@@ -4942,10 +5038,10 @@ exports.onDonationConfirmation = functions
       const telephoneMosquee = mosquee.telephone || '';
 
       // Config Brevo
-      const brevoUser = BREVO_SMTP_USER.value();
-      const brevoPass = BREVO_SMTP_PASS.value();
-      const fromEmail = BREVO_FROM_EMAIL.value();
-      const fromName = BREVO_FROM_NAME.value() || nomAssociation;
+      const brevoUser = BREVO_SMTP_USER;
+      const brevoPass = BREVO_SMTP_PASS;
+      const fromEmail = BREVO_FROM_EMAIL;
+      const fromName = BREVO_FROM_NAME || nomAssociation;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
         console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${email || 'inconnu'}`);
@@ -5139,7 +5235,11 @@ exports.onCotisationConfirmation = functions
       }
 
       if (!email) {
-        console.log('Pas d\'email pour la cotisation, skip:', paymentId);
+        await logServerError(
+          'Cotisation confirmée mais email de confirmation non envoyé — email absent',
+          'onCotisationConfirmation_no_email',
+          { memberId: memberUid || payment.memberId || payment.membreId || 'inconnu', paymentId }
+        );
         return null;
       }
 
@@ -5174,10 +5274,10 @@ exports.onCotisationConfirmation = functions
       const telephoneMosquee = mosquee.telephone || '';
 
       // 7. Config Brevo
-      const brevoUser = BREVO_SMTP_USER.value();
-      const brevoPass = BREVO_SMTP_PASS.value();
-      const fromEmail = BREVO_FROM_EMAIL.value();
-      const fromName = BREVO_FROM_NAME.value() || nomAssociation;
+      const brevoUser = BREVO_SMTP_USER;
+      const brevoPass = BREVO_SMTP_PASS;
+      const fromEmail = BREVO_FROM_EMAIL;
+      const fromName = BREVO_FROM_NAME || nomAssociation;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
         console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${email || 'inconnu'}`);
@@ -5409,12 +5509,12 @@ exports.refundPayment = functions
       try {
         const memberEmail = memberData.email;
         if (memberEmail) {
-          const fromEmail = BREVO_FROM_EMAIL.value();
-          const fromName = BREVO_FROM_NAME.value();
+          const fromEmail = BREVO_FROM_EMAIL;
+          const fromName = BREVO_FROM_NAME;
           const refundTransporter = nodemailer.createTransport({
             host: 'smtp-relay.brevo.com',
             port: 587,
-            auth: { user: BREVO_SMTP_USER.value(), pass: BREVO_SMTP_PASS.value() },
+            auth: { user: BREVO_SMTP_USER, pass: BREVO_SMTP_PASS },
           });
           await refundTransporter.sendMail({
             from: `"${fromName}" <${fromEmail}>`,
@@ -5708,10 +5808,10 @@ exports.cancelSubscription = functions
       const cancelPrenom = memberData.prenom || memberData.nom || 'Membre';
       if (cancelEmail) {
         try {
-          const brevoUser = BREVO_SMTP_USER.value();
-          const brevoPass = BREVO_SMTP_PASS.value();
-          const fromEmail = BREVO_FROM_EMAIL.value();
-          const fromName = BREVO_FROM_NAME.value();
+          const brevoUser = BREVO_SMTP_USER;
+          const brevoPass = BREVO_SMTP_PASS;
+          const fromEmail = BREVO_FROM_EMAIL;
+          const fromName = BREVO_FROM_NAME;
 
           if (brevoUser && brevoPass && fromEmail) {
             const cancelSettingsDoc = await admin.firestore().collection('settings').doc('association').get();
@@ -5965,12 +6065,12 @@ exports.refundDonation = functions
       try {
         const donorEmail = donationData.donateurEmail || donationData.email;
         if (donorEmail) {
-          const fromEmail = BREVO_FROM_EMAIL.value();
-          const fromName = BREVO_FROM_NAME.value();
+          const fromEmail = BREVO_FROM_EMAIL;
+          const fromName = BREVO_FROM_NAME;
           const refundTransporter = nodemailer.createTransport({
             host: 'smtp-relay.brevo.com',
             port: 587,
-            auth: { user: BREVO_SMTP_USER.value(), pass: BREVO_SMTP_PASS.value() },
+            auth: { user: BREVO_SMTP_USER, pass: BREVO_SMTP_PASS },
           });
           await refundTransporter.sendMail({
             from: `"${fromName}" <${fromEmail}>`,
@@ -6091,10 +6191,10 @@ exports.checkExpiringCotisations = functions
     try {
       console.log('=== Vérification des cotisations expirantes ===');
 
-      const brevoUser = BREVO_SMTP_USER.value();
-      const brevoPass = BREVO_SMTP_PASS.value();
-      const fromEmail = BREVO_FROM_EMAIL.value();
-      const fromName = BREVO_FROM_NAME.value();
+      const brevoUser = BREVO_SMTP_USER;
+      const brevoPass = BREVO_SMTP_PASS;
+      const fromEmail = BREVO_FROM_EMAIL;
+      const fromName = BREVO_FROM_NAME;
 
     if (!brevoUser || !brevoPass || !fromEmail) {
       console.error('[EMAIL ERROR] Config Brevo manquante. Email de rappel cotisation non envoyé');
@@ -6511,11 +6611,16 @@ exports.reconcileStripePayments = functions
       // 4. Si des décalages trouvés, envoyer email alerte admin
       if (mismatches.length > 0) {
         console.error('⚠️ RECONCILIATION MISMATCH:', JSON.stringify(mismatches));
+        await logServerError(
+          `Divergence Stripe/Firestore: ${mismatches.length} paiement(s) non trouvé(s)`,
+          'reconcileStripePayments_divergence',
+          { count: mismatches.length, mismatches: mismatches.slice(0, 3) }
+        );
 
-        const brevoUser = BREVO_SMTP_USER.value();
-        const brevoPass = BREVO_SMTP_PASS.value();
-        const fromEmail = BREVO_FROM_EMAIL.value();
-        const fromName = BREVO_FROM_NAME.value();
+        const brevoUser = BREVO_SMTP_USER;
+        const brevoPass = BREVO_SMTP_PASS;
+        const fromEmail = BREVO_FROM_EMAIL;
+        const fromName = BREVO_FROM_NAME;
 
         if (brevoUser && brevoPass && fromEmail) {
           const reconTransporter = nodemailer.createTransport({
@@ -7069,10 +7174,10 @@ exports.deleteMyAccount = functions
       // 6b. Email confirmation suppression AVANT destruction du compte Auth
       if (memberData && memberData.email) {
         try {
-          const brevoUser = BREVO_SMTP_USER.value();
-          const brevoPass = BREVO_SMTP_PASS.value();
-          const fromEmail = BREVO_FROM_EMAIL.value();
-          const fromName = BREVO_FROM_NAME.value();
+          const brevoUser = BREVO_SMTP_USER;
+          const brevoPass = BREVO_SMTP_PASS;
+          const fromEmail = BREVO_FROM_EMAIL;
+          const fromName = BREVO_FROM_NAME;
           if (brevoUser && brevoPass && fromEmail) {
             const delTransporter = nodemailer.createTransport({
               host: 'smtp-relay.brevo.com',
@@ -7376,6 +7481,77 @@ exports.monitorSilentBugs = functions
       }
     } catch (err) {
       console.error('monitorSilentBugs stuck validation:', err.message);
+    }
+
+    // 4. Dons sans userId créés dans les 90 dernières minutes
+    try {
+      const ninetyMinAgo = new Date(Date.now() - 90 * 60 * 1000);
+      const donsNoUserSnap = await db
+        .collection('donations')
+        .where('userId', '==', '')
+        .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(ninetyMinAgo))
+        .limit(5)
+        .get();
+
+      if (!donsNoUserSnap.empty) {
+        issues.push(`💸 ${donsNoUserSnap.size} don(s) sans userId (90 dernières min)`);
+      }
+    } catch (err) {
+      console.error('monitorSilentBugs dons_no_userId:', err.message);
+    }
+
+    // 5. Membres actifs dont cotisation.dateFin est expirée (drift Stripe/Firestore)
+    try {
+      const now = admin.firestore.Timestamp.now();
+      const expiredActiveSnap = await db
+        .collection('members')
+        .where('status', '==', 'actif')
+        .where('cotisation.dateFin', '<', now)
+        .limit(10)
+        .get();
+
+      if (!expiredActiveSnap.empty) {
+        const names = expiredActiveSnap.docs
+          .slice(0, 3)
+          .map((d) => `${d.data().prenom ?? ''} ${d.data().nom ?? ''}`.trim())
+          .join(', ');
+        issues.push(
+          `🔄 ${expiredActiveSnap.size} membre(s) "actif" avec cotisation expirée (drift): ${names}${expiredActiveSnap.size > 3 ? '...' : ''}`,
+        );
+      }
+    } catch (err) {
+      console.error('monitorSilentBugs actif_cotisation_expired:', err.message);
+    }
+
+    // 6. Erreurs Cloud Function récentes dans errors_log non encore alertées
+    try {
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const cfErrorsSnap = await db
+        .collection('errors_log')
+        .where('screen', '==', 'CloudFunction')
+        .where('alerted', '==', false)
+        .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(tenMinAgo))
+        .limit(10)
+        .get();
+
+      if (!cfErrorsSnap.empty) {
+        issues.push(`⚙️ ${cfErrorsSnap.size} erreur(s) CF récente(s) (10 dernières min)`);
+        const batch = db.batch();
+        cfErrorsSnap.docs.forEach((doc) => {
+          batch.update(doc.ref, {
+            alerted: true,
+            alertedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        });
+        await batch.commit();
+
+        cfErrorsSnap.docs.slice(0, 2).forEach((doc) => {
+          const d = doc.data();
+          issues.push(`   • [${d.context ?? '?'}] ${String(d.message ?? '').slice(0, 80)}`);
+        });
+      }
+    } catch (err) {
+      console.error('monitorSilentBugs cf_errors_recent:', err.message);
     }
 
     if (issues.length === 0) {
