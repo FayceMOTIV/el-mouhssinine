@@ -1928,8 +1928,9 @@ exports.stripeWebhook = functions
                 description: paymentIntent.description,
                 metadata: metadata,
                 // BUG 3 FIX: Sauvegarder nom donateur + userId depuis metadata Stripe
-                donateur: metadata.donorName || metadata.donorEmail || 'Anonyme',
-                donateurEmail: (metadata.donorEmail || metadata.email || metadata.donateurEmail || '').toLowerCase() || null,
+                // FIX Payment Link: fallback sur receipt_email Stripe (Payment Links n'ont pas de metadata)
+                donateur: metadata.donorName || metadata.donorEmail || paymentIntent.receipt_email || 'Anonyme',
+                donateurEmail: (metadata.donorEmail || metadata.email || metadata.donateurEmail || paymentIntent.receipt_email || '').toLowerCase() || null,
                 userId: (() => {
                   const uid = metadata.userId || metadata.donorUid || metadata.memberId || paymentIntent.metadata?.userId || paymentIntent.metadata?.memberId || '';
                   if (!uid) logServerError('Don créé sans userId — historique membre ne s\'affichera pas', 'stripeWebhook_donation_no_userId', { paymentIntentId, donateurEmail: (metadata.donorEmail || metadata.email || '').toLowerCase() || null });
@@ -4989,6 +4990,29 @@ exports.onDonationConfirmation = functions
         }
       } catch (e) {
         console.error('onDonationConfirmation — lookup member failed:', e);
+      }
+    }
+
+    // Fallback Stripe : receipt_email ou customer.email (Payment Links sans metadata)
+    if (!finalEmail && donation.stripePaymentIntentId) {
+      try {
+        const pi = await stripe.paymentIntents.retrieve(donation.stripePaymentIntentId);
+        if (pi.receipt_email) {
+          finalEmail = pi.receipt_email.toLowerCase();
+          console.log(`📧 Email récupéré depuis Stripe receipt_email: ${finalEmail}`);
+        } else if (pi.customer && typeof pi.customer === 'string') {
+          const cust = await stripe.customers.retrieve(pi.customer);
+          if (cust.email) {
+            finalEmail = cust.email.toLowerCase();
+            console.log(`📧 Email récupéré depuis Stripe customer: ${finalEmail}`);
+          }
+        }
+        if (finalEmail) {
+          // Mettre à jour le doc pour que l'historique fonctionne
+          snap.ref.update({ donateurEmail: finalEmail }).catch(() => {});
+        }
+      } catch (e) {
+        console.error('onDonationConfirmation — Stripe lookup failed:', e.message);
       }
     }
 
