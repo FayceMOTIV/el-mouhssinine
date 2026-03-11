@@ -425,7 +425,6 @@ const MemberScreen = () => {
           const unsubDonationsByEmail = firestore()
             .collection('donations')
             .where('donateurEmail', '==', userEmail)
-            .orderBy('createdAt', 'desc')
             .onSnapshot(
               snapshot => {
                 donationsByEmailRef.current = snapshot.docs.map(doc => ({
