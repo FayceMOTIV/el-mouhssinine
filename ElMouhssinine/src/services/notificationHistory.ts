@@ -147,6 +147,20 @@ export const getUnreadCount = async (): Promise<number> => {
 };
 
 /**
+ * Supprime une notification par son ID
+ */
+export const deleteNotificationById = async (notificationId: string): Promise<void> => {
+  try {
+    const history = await getNotificationHistory();
+    const filtered = history.filter(n => n.id !== notificationId);
+    await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(filtered));
+    logger.log('[NotifHistory] Notification supprimée:', notificationId);
+  } catch (error) {
+    logger.error('[NotifHistory] Erreur deleteById:', error);
+  }
+};
+
+/**
  * Efface tout l'historique
  */
 export const clearNotificationHistory = async (): Promise<void> => {

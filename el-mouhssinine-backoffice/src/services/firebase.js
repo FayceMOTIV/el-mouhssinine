@@ -406,18 +406,9 @@ export const subscribeToMemberPayments = (membreId, cb) => {
   })
 }
 
-// Ajouter un paiement
-export const addPayment = async (paymentData) => {
-  if (isDemoMode) {
-    console.log('[DEMO] Add payment:', paymentData)
-    return { id: 'demo-' + Date.now() }
-  }
-  const docRef = await addDoc(collection(db, 'payments'), {
-    ...paymentData,
-    createdAt: serverTimestamp()
-  })
-  return { id: docRef.id }
-}
+// addPayment SUPPRIMÉ — payments ne doivent JAMAIS être créés côté client
+// Seul le webhook Stripe (admin SDK) peut écrire dans payments/
+// Firestore rule: allow create: if false
 
 // Obtenir les paiements par type (cotisation ou don)
 export const getPaymentsByType = async (type) => {

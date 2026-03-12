@@ -83,6 +83,8 @@ import {
   getNotificationHistory,
   markAllNotificationsAsRead,
   getUnreadCount,
+  deleteNotificationById,
+  clearNotificationHistory,
   StoredNotification,
 } from '../services/notificationHistory';
 
@@ -839,6 +841,30 @@ const HomeScreen = () => {
     }
   }, []);
 
+  // Supprimer une notification individuelle
+  const handleDeleteNotification = useCallback(async (notifId: string) => {
+    try {
+      await deleteNotificationById(notifId);
+      const history = await getNotificationHistory();
+      setNotificationHistory(history);
+      const count = await getUnreadCount();
+      setUnreadNotifCount(count);
+    } catch (err) {
+      console.error('[HomeScreen] handleDeleteNotification error:', err);
+    }
+  }, []);
+
+  // Effacer tout l'historique
+  const handleClearAllNotifications = useCallback(async () => {
+    try {
+      await clearNotificationHistory();
+      setNotificationHistory([]);
+      setUnreadNotifCount(0);
+    } catch (err) {
+      console.error('[HomeScreen] handleClearAllNotifications error:', err);
+    }
+  }, []);
+
   // Proximité mosquée : géré entièrement par le geofencing natif iOS/Android
   // (MosqueGeofencing.swift / MosqueGeofencingReceiver.kt)
   // Plus besoin de check JS foreground — le natif gère background + foreground
@@ -1267,17 +1293,30 @@ const HomeScreen = () => {
               {isRTL ? 'آخر 24 ساعة' : 'Dernières 24 heures'}
             </Text>
 
-            {/* Bouton Tout marquer comme lu */}
-            {unreadNotifCount > 0 && (
-              <TouchableOpacity
-                style={styles.markAllReadBtn}
-                onPress={handleMarkAllRead}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.markAllReadBtnText}>
-                  {isRTL ? 'تعليم الكل كمقروء' : 'Tout marquer comme lu'}
-                </Text>
-              </TouchableOpacity>
+            {/* Boutons actions notifications */}
+            {notificationHistory.length > 0 && (
+              <View style={styles.historyActionsRow}>
+                {unreadNotifCount > 0 && (
+                  <TouchableOpacity
+                    style={styles.markAllReadBtn}
+                    onPress={handleMarkAllRead}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.markAllReadBtnText}>
+                      {isRTL ? 'تعليم الكل كمقروء' : 'Tout marquer comme lu'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.clearAllBtn}
+                  onPress={handleClearAllNotifications}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.clearAllBtnText}>
+                    {isRTL ? 'حذف الكل' : 'Tout effacer'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
 
             <ScrollView
@@ -1340,6 +1379,13 @@ const HomeScreen = () => {
                           <Text style={styles.historyExpandIcon}>
                             {isExpanded ? '▲' : '▼'}
                           </Text>
+                          <TouchableOpacity
+                            onPress={() => handleDeleteNotification(notif.id)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            style={styles.historyDeleteBtn}
+                          >
+                            <Text style={styles.historyDeleteIcon}>🗑</Text>
+                          </TouchableOpacity>
                         </View>
                         {isExpanded && notif.body ? (
                           <Text
@@ -3296,11 +3342,15 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginLeft: 8,
   },
+  historyActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
   markAllReadBtn: {
-    alignSelf: 'center',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    marginBottom: 12,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.accent,
@@ -3309,6 +3359,25 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.accent,
     fontWeight: '600',
+  },
+  clearAllBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e74c3c',
+  },
+  clearAllBtnText: {
+    fontSize: fontSize.sm,
+    color: '#e74c3c',
+    fontWeight: '600',
+  },
+  historyDeleteBtn: {
+    marginLeft: 8,
+    padding: 2,
+  },
+  historyDeleteIcon: {
+    fontSize: 14,
   },
   historyOkBtn: {
     backgroundColor: colors.accent,

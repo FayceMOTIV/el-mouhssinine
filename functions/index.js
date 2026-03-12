@@ -61,6 +61,16 @@ const stripe = new Proxy({}, {
 // ==================== HELPERS ====================
 
 /**
+ * Masque un email pour les logs (RGPD/hygiène)
+ * @param {string} email
+ * @returns {string} ex: "fa***@gm***.com"
+ */
+const maskEmail = (email) => {
+  if (!email || typeof email !== 'string') return '***';
+  return email.replace(/(.{2}).*(@.*)/, '$1***$2');
+};
+
+/**
  * Vérifie si l'utilisateur est admin
  * @param {string} uid - L'ID de l'utilisateur Firebase Auth
  * @returns {Promise<boolean>}
@@ -69,7 +79,8 @@ const isAdmin = async (uid) => {
   if (!uid) return false;
   try {
     const adminDoc = await admin.firestore().collection('admins').doc(uid).get();
-    return adminDoc.exists;
+    if (!adminDoc.exists) return false;
+    return adminDoc.data()?.actif === true;
   } catch (error) {
     console.error('Erreur vérification admin:', error);
     return false;
@@ -660,6 +671,17 @@ exports.sendManualNotification = functions
       );
     }
 
+    // SECURITE: whitelist des clés customData autorisées dans le payload FCM
+    const ALLOWED_DATA_KEYS = new Set(['screen', 'eventId', 'announcementId', 'url', 'category']);
+    const safeCustomData = {};
+    if (customData && typeof customData === 'object') {
+      for (const [k, v] of Object.entries(customData)) {
+        if (ALLOWED_DATA_KEYS.has(k) && typeof v === 'string' && v.length <= 200) {
+          safeCustomData[k] = v;
+        }
+      }
+    }
+
     const message = {
       notification: {
         title: title,
@@ -669,7 +691,7 @@ exports.sendManualNotification = functions
         type: 'manual',
         sentBy: context.auth.uid,
         sentAt: new Date().toISOString(),
-        ...customData,
+        ...safeCustomData,
       },
       apns: {
         payload: {
@@ -719,7 +741,7 @@ exports.sendManualNotification = functions
         success: false,
       });
 
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -904,7 +926,7 @@ exports.getNotificationStats = functions
       return stats;
     } catch (error) {
       console.error('Erreur stats notifications:', error);
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -1006,7 +1028,7 @@ exports.onNewMessage = functions
       const adminEmail = fromEmail || 'centreculturelislamique@orange.fr';
 
       if (!brevoUser || !brevoPass || !fromEmail) {
-        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${userEmail || 'inconnu'}`);
+        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${maskEmail(userEmail)}`);
         return null;
       }
 
@@ -1430,6 +1452,11 @@ exports.createPaymentIntent = functions
       );
     }
 
+    // SECURITE: cotisations requièrent une authentification (dons peuvent être anonymes)
+    if (metadata && metadata.type === 'cotisation' && !context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Connexion requise pour les cotisations');
+    }
+
     // Validation montant minimum cotisation (ne concerne pas les dons)
     // Minimum 1€ pour les tests — remettre 10€/100€ en production
     if (metadata && metadata.type === 'cotisation') {
@@ -1491,7 +1518,7 @@ exports.createPaymentIntent = functions
       };
     } catch (error) {
       console.error('Erreur création PaymentIntent:', error);
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -1525,7 +1552,9 @@ exports.createSubscription = functions
       );
     }
 
-    const email = metadata?.email;
+    // SECURITE: utiliser l'email Firebase Auth (vérifié) au lieu du client
+    const authEmail = context.auth.token?.email;
+    const email = authEmail || metadata?.email;
     if (!email) {
       throw new functions.https.HttpsError(
         'invalid-argument',
@@ -1537,7 +1566,7 @@ exports.createSubscription = functions
     await checkRateLimit(uid, 'subscription', 3, 300);
 
     try {
-      console.log('Création abonnement Stripe pour:', email);
+      console.log('Création abonnement Stripe pour UID:', uid);
 
       // 1. Trouver ou créer le Customer Stripe
       let customer;
@@ -1667,7 +1696,7 @@ exports.createSubscription = functions
       };
     } catch (error) {
       console.error('Erreur création subscription:', error);
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -2741,7 +2770,10 @@ exports.stripeWebhook = functions
       }
 
       case 'checkout.session.completed': {
-        // Payment Link : l'email du payeur est dans session.customer_details (PAS dans le PI metadata)
+        // Checkout Session (page /don publique) : l'email est dans session.customer_details
+        // SECURITE: Ne PAS attribuer userId par lookup email — l'email n'est pas vérifié
+        // (un donateur web peut entrer l'email de quelqu'un d'autre)
+        // Le lien userId sera fait côté app uniquement si l'email matche l'auth Firebase
         try {
           const session = event.data.object;
           const piId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
@@ -2749,37 +2781,21 @@ exports.stripeWebhook = functions
           const donorName = session.customer_details?.name || donorEmail || 'Anonyme';
           if (piId && donorEmail) {
             try {
-              // Lookup membre par email pour enrichir userId
-              let userId = '';
-              if (donorEmail) {
-                try {
-                  const memberSnap = await admin.firestore().collection('members')
-                    .where('email', '==', donorEmail)
-                    .limit(1)
-                    .get();
-                  if (!memberSnap.empty) {
-                    userId = memberSnap.docs[0].id;
-                  }
-                } catch (lookupErr) {
-                  console.warn('checkout.session.completed: lookup membre échoué:', lookupErr.message);
-                }
-              }
-
               // set+merge : crée le doc s'il n'existe pas, complète s'il existe déjà.
               // Résout la race condition : checkout.session.completed peut arriver
               // avant ou après payment_intent.succeeded — dans les deux cas l'email est sauvé.
+              // NOTE: userId volontairement NON attribué ici (email non vérifié sur dons publics)
               await admin.firestore().collection('donations').doc(piId).set(
                 {
                   donateurEmail: donorEmail,
                   donateur: donorName,
-                  ...(userId ? { userId, memberId: userId } : {}),
                   source: session.metadata?.source || 'web_don_public',
                   stripeSessionId: session.id,
                   webhookSessionProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
                 },
                 { merge: true }
               );
-              console.log(`checkout.session.completed: donations/${piId} set+merge OK — email: ${donorEmail}, userId: ${userId || 'non trouvé'}`);
+              console.log(`checkout.session.completed: donations/${piId} set+merge OK — email enregistré`);
             } catch (setErr) {
               console.error('checkout.session.completed: set+merge échoué:', setErr.message);
             }
@@ -3676,7 +3692,7 @@ exports.sendRecuFiscal = functions
       if (error instanceof functions.https.HttpsError) {
         throw error;
       }
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -3789,7 +3805,7 @@ exports.getDonsByYear = functions
 
     } catch (error) {
       console.error('Erreur getDonsByYear:', error);
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -3878,7 +3894,7 @@ exports.onNewSympathisant = functions
       const fromName = BREVO_FROM_NAME || nomMosquee;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
-        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${email || 'inconnu'}`);
+        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${maskEmail(email)}`);
         return null;
       }
 
@@ -4001,6 +4017,9 @@ exports.validateMembership = functions
     if (!adminCheck) {
       throw new functions.https.HttpsError('permission-denied', 'Réservé aux administrateurs');
     }
+
+    // SECURITE: Rate limiting — max 20 validations par heure par admin
+    await checkRateLimit(context.auth.uid, 'validateMembership', 20, 3600);
 
     const { memberId, action, message } = data;
 
@@ -4334,7 +4353,7 @@ exports.validateMembership = functions
 
     } catch (error) {
       console.error('❌ Erreur validateMembership:', error);
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -4353,6 +4372,9 @@ exports.undoValidation = functions
     if (!adminCheck) {
       throw new functions.https.HttpsError('permission-denied', 'Réservé aux administrateurs');
     }
+
+    // SECURITE: Rate limiting — max 10 annulations de validation par heure
+    await checkRateLimit(context.auth.uid, 'undoValidation', 10, 3600);
 
     const { memberId } = data;
     if (!memberId) {
@@ -4407,7 +4429,7 @@ exports.undoValidation = functions
     } catch (error) {
       console.error('❌ Erreur undoValidation:', error);
       if (error instanceof functions.https.HttpsError) throw error;
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -4544,7 +4566,7 @@ exports.forceCachePrayerTimes = functions
 
       return { success: true, date: todayStr };
     } catch (error) {
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -4722,7 +4744,7 @@ const processAnnualRecusFiscaux = async (year) => {
       .get();
 
     if (!existingRecu.empty) {
-      console.log(`⏭️ Reçu fiscal déjà existant pour ${email} (${year}), skip`);
+      console.log(`⏭️ Reçu fiscal déjà existant pour ${maskEmail(email)} (${year}), skip`);
       return 'already_exists';
     }
 
@@ -4899,7 +4921,7 @@ const processAnnualRecusFiscaux = async (year) => {
       });
     }
 
-    console.log(`✅ Reçu ${numeroRecu} envoyé à ${email} (${donor.total.toFixed(2)}€, ${donor.donorType})`);
+    console.log(`✅ Reçu ${numeroRecu} envoyé à ${maskEmail(email)} (${donor.total.toFixed(2)}€, ${donor.donorType})`);
     return 'success';
   };
 
@@ -5010,7 +5032,7 @@ exports.forceGenerateRecusFiscaux = functions
       return result;
     } catch (error) {
       console.error('❌ Erreur génération forcée:', error);
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -5071,7 +5093,7 @@ exports.onDonationConfirmation = functions
         const memberDoc = await admin.firestore().collection('members').doc(donation.userId).get();
         if (memberDoc.exists) {
           finalEmail = memberDoc.data()?.email || null;
-          console.log(`📧 Email récupéré depuis membre ${donation.userId}: ${finalEmail}`);
+          console.log(`📧 Email récupéré depuis membre ${donation.userId}: ${maskEmail(finalEmail)}`);
         }
       } catch (e) {
         console.error('onDonationConfirmation — lookup member failed:', e);
@@ -5084,7 +5106,7 @@ exports.onDonationConfirmation = functions
         const pi = await stripe.paymentIntents.retrieve(donation.stripePaymentIntentId);
         if (pi.receipt_email) {
           finalEmail = pi.receipt_email.toLowerCase();
-          console.log(`📧 Email récupéré depuis Stripe receipt_email: ${finalEmail}`);
+          console.log(`📧 Email récupéré depuis Stripe receipt_email: ${maskEmail(finalEmail)}`);
         } else if (pi.customer && typeof pi.customer === 'string') {
           const cust = await stripe.customers.retrieve(pi.customer);
           if (cust.email) {
@@ -5103,7 +5125,7 @@ exports.onDonationConfirmation = functions
             const sessEmail = (sess.customer_details?.email || sess.customer_email || '').toLowerCase() || null;
             if (sessEmail) {
               finalEmail = sessEmail;
-              console.log(`📧 Email récupéré depuis Checkout Session: ${finalEmail}`);
+              console.log(`📧 Email récupéré depuis Checkout Session: ${maskEmail(finalEmail)}`);
             }
           }
         }
@@ -5144,7 +5166,7 @@ exports.onDonationConfirmation = functions
     const siret = donation.donorInfo?.siret || '';
     const legalRep = donation.donorInfo?.legalRepresentative || '';
 
-    console.log(`📧 Email confirmation don ${donorType} pour ${email} (${montant}€)`);
+    console.log(`📧 Email confirmation don ${donorType} pour ${maskEmail(email)} (${montant}€)`);
 
     try {
       // Récupérer infos association
@@ -5168,7 +5190,7 @@ exports.onDonationConfirmation = functions
       const fromName = BREVO_FROM_NAME || nomAssociation;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
-        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${email || 'inconnu'}`);
+        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${maskEmail(email)}`);
         return null;
       }
 
@@ -5246,7 +5268,7 @@ exports.onDonationConfirmation = functions
         html: htmlContent,
       });
 
-      console.log(`✅ Email confirmation don ${donorType} envoyé à ${email}`);
+      console.log(`✅ Email confirmation don ${donorType} envoyé à ${maskEmail(email)}`);
 
       // Notif backoffice don reçu
       await createNotifBO({
@@ -5404,7 +5426,7 @@ exports.onCotisationConfirmation = functions
       const fromName = BREVO_FROM_NAME || nomAssociation;
 
       if (!brevoUser || !brevoPass || !fromEmail) {
-        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${email || 'inconnu'}`);
+        console.error(`[EMAIL ERROR] Config Brevo manquante. Email non envoyé à ${maskEmail(email)}`);
         return null;
       }
 
@@ -5450,7 +5472,7 @@ exports.onCotisationConfirmation = functions
         html: htmlContent,
       });
 
-      console.log(`✅ Email confirmation cotisation envoyé à ${email}`);
+      console.log(`✅ Email confirmation cotisation envoyé à ${maskEmail(email)}`);
 
       // Notifs backoffice : cotisation reçue + validation requise
       const memberUidForNotif = payment.metadata?.memberId || '';
@@ -5509,9 +5531,12 @@ exports.refundPayment = functions
       throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
     }
     const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
-    if (!adminDoc.exists) {
-      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux admins');
+    if (!adminDoc.exists || adminDoc.data()?.actif !== true) {
+      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux admins actifs');
     }
+
+    // SECURITE: Rate limiting — max 10 remboursements par heure
+    await checkRateLimit(context.auth.uid, 'refundPayment', 10, 3600);
 
     // FIX D3: Ajout paramètre amount optionnel pour remboursement partiel
     const { memberId, reason, amount } = data;
@@ -5715,7 +5740,7 @@ exports.refundPayment = functions
     } catch (error) {
       console.error('❌ Erreur refundPayment:', error);
       if (error instanceof functions.https.HttpsError) throw error;
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -5787,8 +5812,14 @@ exports.checkPendingPayment = functions
       const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
 
       // SÉCURITÉ: Vérifier que le PaymentIntent appartient à l'utilisateur
+      // Si pas de metadata userId, on refuse (sauf admin) — empêche l'accès à des PI sans ownership
       const piUserId = pi.metadata?.memberId || pi.metadata?.userId;
-      if (piUserId && piUserId !== context.auth.uid) {
+      if (!piUserId) {
+        const isAdminUser = await isAdmin(context.auth.uid);
+        if (!isAdminUser) {
+          throw new functions.https.HttpsError('permission-denied', 'Paiement non attribué');
+        }
+      } else if (piUserId !== context.auth.uid) {
         throw new functions.https.HttpsError('permission-denied', 'Ce paiement ne vous appartient pas');
       }
 
@@ -6021,7 +6052,7 @@ exports.cancelSubscription = functions
     } catch (error) {
       console.error('❌ Erreur cancelSubscription:', error);
       if (error instanceof functions.https.HttpsError) throw error;
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -6037,9 +6068,12 @@ exports.adminCancelSubscription = functions
       throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
     }
     const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
-    if (!adminDoc.exists) {
-      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux admins');
+    if (!adminDoc.exists || adminDoc.data()?.actif !== true) {
+      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux admins actifs');
     }
+
+    // SECURITE: Rate limiting — max 10 annulations abo par heure
+    await checkRateLimit(context.auth.uid, 'adminCancelSubscription', 10, 3600);
 
     const { memberId, reason } = data;
     if (!memberId) {
@@ -6087,7 +6121,7 @@ exports.adminCancelSubscription = functions
     } catch (error) {
       console.error('❌ Erreur adminCancelSubscription:', error);
       if (error instanceof functions.https.HttpsError) throw error;
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -6103,9 +6137,12 @@ exports.refundDonation = functions
       throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
     }
     const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
-    if (!adminDoc.exists) {
-      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux admins');
+    if (!adminDoc.exists || adminDoc.data()?.actif !== true) {
+      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux admins actifs');
     }
+
+    // SECURITE: Rate limiting — max 10 remboursements don par heure
+    await checkRateLimit(context.auth.uid, 'refundDonation', 10, 3600);
 
     const { donationId, amount } = data; // amount optionnel pour remboursement partiel
     if (!donationId) {
@@ -6248,7 +6285,7 @@ exports.refundDonation = functions
     } catch (error) {
       console.error('❌ Erreur refundDonation:', error);
       if (error instanceof functions.https.HttpsError) throw error;
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -6320,7 +6357,7 @@ exports.createAdmin = functions
       if (error.code === 'auth/email-already-exists') {
         throw new functions.https.HttpsError('already-exists', 'Un compte avec cet email existe déjà');
       }
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -6844,6 +6881,9 @@ exports.deleteMemberByAdmin = functions
       throw new functions.https.HttpsError('permission-denied', 'Réservé aux administrateurs');
     }
 
+    // SECURITE: Rate limiting — max 5 suppressions par heure (action destructive)
+    await checkRateLimit(adminUid, 'deleteMemberByAdmin', 5, 3600);
+
     const { memberId } = data;
     if (!memberId || typeof memberId !== 'string') {
       throw new functions.https.HttpsError('invalid-argument', 'memberId requis');
@@ -7119,7 +7159,7 @@ exports.deleteMemberByAdmin = functions
       }
 
       if (error instanceof functions.https.HttpsError) throw error;
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -7386,7 +7426,7 @@ exports.deleteMyAccount = functions
         console.error('Erreur log RGPD (self):', logErr);
       }
       if (error instanceof functions.https.HttpsError) throw error;
-      throw new functions.https.HttpsError('internal', error.message);
+      throw new functions.https.HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
     }
   });
 
@@ -7415,10 +7455,18 @@ exports.exportMyData = functions
       return val;
     };
 
-    const sanitizeDoc = (doc) => {
+    // SECURITE: champs internes à exclure de l'export RGPD
+    const INTERNAL_FIELDS = new Set([
+      'stripeCustomerId', 'stripeSubscriptionId', 'stripePaymentId',
+      'fcmTokens', 'fcmToken', 'paiementId', 'inscritPar',
+      'validatedBy', 'metadata',
+    ]);
+
+    const sanitizeDoc = (doc, excludeInternal = false) => {
       const d = doc.data();
       const result = { id: doc.id };
       for (const [key, val] of Object.entries(d)) {
+        if (excludeInternal && INTERNAL_FIELDS.has(key)) continue;
         result[key] = sanitizeTimestamp(val);
       }
       return result;
@@ -7426,11 +7474,11 @@ exports.exportMyData = functions
 
     return {
       exportedAt: new Date().toISOString(),
-      profil: memberDoc.exists ? sanitizeDoc(memberDoc) : {},
-      donations: donationsSnap.docs.map(sanitizeDoc),
-      paiements: paymentsSnap.docs.map(sanitizeDoc),
-      messages: messagesSnap.docs.map(sanitizeDoc),
-      recus_fiscaux: recusSnap.docs.map(sanitizeDoc),
+      profil: memberDoc.exists ? sanitizeDoc(memberDoc, true) : {},
+      donations: donationsSnap.docs.map(d => sanitizeDoc(d, true)),
+      paiements: paymentsSnap.docs.map(d => sanitizeDoc(d, true)),
+      messages: messagesSnap.docs.map(d => sanitizeDoc(d)),
+      recus_fiscaux: recusSnap.docs.map(d => sanitizeDoc(d)),
     };
   });
 
@@ -7447,7 +7495,7 @@ exports.onAuthUserDeleted = functions
   .auth.user().onDelete(async (user) => {
     const uid = user.uid;
     const email = user.email || '';
-    console.log(`=== onAuthUserDeleted: ${uid} (${email}) ===`);
+    console.log(`=== onAuthUserDeleted: ${uid} (${maskEmail(email)}) ===`);
 
     const db = admin.firestore();
 
@@ -7808,6 +7856,24 @@ exports.createPublicCheckoutSession = functions
     if (req.method !== 'POST') { res.status(405).json({ error: 'Méthode non autorisée' }); return; }
 
     try {
+      // Rate limiting par IP : max 10 sessions par heure
+      const clientIp = (req.headers['x-forwarded-for'] || req.ip || 'unknown').toString().split(',')[0].trim();
+      const ipKey = `rate_limits/ip_checkout_${clientIp.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const ipRef = admin.firestore().doc(ipKey);
+      const ipDoc = await ipRef.get();
+      const now = Date.now();
+      const windowMs = 3600 * 1000; // 1 heure
+      if (ipDoc.exists) {
+        const calls = (ipDoc.data().calls || []).filter(t => now - t < windowMs);
+        if (calls.length >= 10) {
+          return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans quelques minutes.' });
+        }
+        calls.push(now);
+        await ipRef.update({ calls, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      } else {
+        await ipRef.set({ calls: [now], updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      }
+
       const { amount, email, name } = req.body || {};
       const amountCents = Math.round(parseFloat(amount) * 100);
 
@@ -7851,24 +7917,25 @@ exports.createPublicCheckoutSession = functions
       return res.json({ url: session.url });
     } catch (err) {
       console.error('createPublicCheckoutSession error:', err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: 'Une erreur est survenue. Veuillez réessayer.' });
     }
   });
 
 // ============================================================
-// backfillWebDonations — One-shot : patche les dons web orphelins
-// Les dons créés AVANT le fix avaient donateurEmail:'' et userId:''
-// Cette CF récupère l'email depuis Stripe et enrichit les documents.
-// Usage : curl -X POST -H "x-admin-token: elmouhssinine-backfill-2026" \
-//   https://europe-west1-el-mouhssinine.cloudfunctions.net/backfillWebDonations
+// backfillWebDonations — DÉSACTIVÉ (one-shot terminé, token compromis dans Git)
+// Anciennement : patchait les dons web orphelins (donateurEmail vide)
+// Sécurité Build 285b : endpoint désactivé car token hardcodé dans l'historique Git
 // ============================================================
 exports.backfillWebDonations = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 300, memory: '256MB' })
+  .runWith({ timeoutSeconds: 30 })
   .https.onRequest(async (req, res) => {
-    // Sécurité : token admin requis
+    // DÉSACTIVÉ — one-shot terminé + token compromis
+    return res.status(410).json({ error: 'Endpoint désactivé (one-shot terminé)' });
+
+    // Code mort ci-dessous conservé pour référence — ne sera jamais exécuté
     const token = req.headers['x-admin-token'];
-    if (token !== 'elmouhssinine-backfill-2026') {
+    if (token !== 'DISABLED') {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -7966,7 +8033,7 @@ exports.backfillWebDonations = functions
       });
 
     } catch (err) {
-      return res.status(500).json({ error: err.message, ...results });
+      return res.status(500).json({ error: 'Une erreur est survenue.', ...results });
     }
   });
 
@@ -7995,8 +8062,8 @@ exports.generateAIContent = functions
       throw new functions.https.HttpsError('unauthenticated', 'Connexion requise');
     }
     const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
-    if (!adminDoc.exists) {
-      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux administrateurs');
+    if (!adminDoc.exists || adminDoc.data()?.actif !== true) {
+      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux administrateurs actifs');
     }
 
     const { type, userPrompt, contentContext } = data;

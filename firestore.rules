@@ -1,10 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Fonction helper pour vérifier si l'utilisateur est admin
+    // Fonction helper pour vérifier si l'utilisateur est admin ACTIF
     function isAdmin() {
       return request.auth != null &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.actif == true;
     }
 
     // Fonction helper pour vérifier si l'utilisateur est authentifié
@@ -57,10 +58,15 @@ service cloud.firestore {
     }
 
     // Settings (horaires, infos mosquée) - Lecture publique, sauf 'association' (contient IBAN)
-    // Bug 11 Fix: IBAN protégé - lecture authentifiée uniquement pour le doc association
+    // Bug 11 Fix: IBAN protégé - lecture admin uniquement pour le doc association
+    // SECURITE Build 285b: cotisation et reglement = super_admin uniquement en écriture
     match /settings/{docId} {
-      allow read: if docId != 'association' || request.auth != null;
-      allow write: if isAdmin();
+      allow read: if docId != 'association' || isAdmin();
+      allow write: if docId in ['cotisation', 'reglement', 'association']
+        ? (request.auth != null &&
+           exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin')
+        : isAdmin();
     }
 
     // ==================== COLLECTIONS PROTÉGÉES ====================
@@ -133,7 +139,8 @@ service cloud.firestore {
            (request.auth.token.email != null &&
             request.auth.token.email_verified == true &&
             resource.data.donateurEmail == request.auth.token.email.lower())));
-      // Création: user authentifié avec validation montant + userId obligatoire
+      // Création: user authentifié avec validation montant + userId + stripePaymentIntentId obligatoire
+      // SECURITE Build 285b: stripePaymentIntentId requis pour éviter les faux dons sans paiement
       allow create: if isAuthenticated() &&
         (
           (request.resource.data.montant is number &&
@@ -143,7 +150,10 @@ service cloud.firestore {
            request.resource.data.amount >= 1 &&
            request.resource.data.amount <= 100000)
         ) &&
-        request.resource.data.userId == request.auth.uid;
+        request.resource.data.userId == request.auth.uid &&
+        'stripePaymentIntentId' in request.resource.data &&
+        request.resource.data.stripePaymentIntentId is string &&
+        request.resource.data.stripePaymentIntentId.size() > 0;
       // Update: admin OU propriétaire du don (nécessaire pour set+merge quand webhook a créé en premier)
       // Le Cloud Functions admin SDK bypasse ces rules de toute façon
       // SÉCURITÉ: Empêcher modification des champs financiers par le client
@@ -193,10 +203,12 @@ service cloud.firestore {
          request.resource.data.message.size() <= 5000);
 
       // Mise à jour: admin (répondre, changer statut) OU propriétaire (soft delete + réponse)
+      // SECURITE Build 285b: limite reponses array à 50 entrées max
       allow update: if isAdmin() ||
         (isAuthenticated() && isMessageOwner() &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['deletedAt', 'deletedByUser', 'lu', 'reponses', 'updatedAt', 'status']));
+            .hasOnly(['deletedAt', 'deletedByUser', 'deletedByUserAt', 'lu', 'reponses', 'updatedAt', 'status']) &&
+          (!('reponses' in request.resource.data) || request.resource.data.reponses.size() <= 50));
 
       // Suppression: admin uniquement (les users font du soft delete)
       allow delete: if isAdmin();
@@ -223,14 +235,9 @@ service cloud.firestore {
       // Création: INTERDIT côté client — uniquement via Cloud Functions (admin SDK)
       // CLAUDE.md: "L'app ne doit JAMAIS écrire dans payments — webhook admin SDK uniquement"
       allow create: if false;
-      // Modification: admin OU propriétaire (nécessaire car webhook peut créer le doc avant l'app → set+merge = update)
-      // SÉCURITÉ: Empêcher modification des champs financiers par le client
-      allow update: if isAdmin() ||
-        (isAuthenticated() && resource.data.metadata.memberId == request.auth.uid &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'montant', 'status', 'statut', 'metadata', 'stripePaymentId',
-            'createdAt', 'type'
-          ]));
+      // Modification: admin uniquement — webhook utilise admin SDK (bypass rules)
+      // SECURITE Build 285b: client ne peut plus modifier aucun champ de payment
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -294,10 +301,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Logs d'erreurs silencieuses - Ecriture app authentifiee avec validation schema
+    // Logs d'erreurs silencieuses - Ecriture app authentifiee avec validation schema stricte
+    // SECURITE Build 285b: limite champs autorisés pour eviter abus payload
+    // Champs app: message, stack, context, screen, uid, alerted, createdAt
     match /errors_log/{docId} {
       allow create: if request.auth != null &&
-        request.resource.data.keys().hasAll(['message', 'context']) &&
+        request.resource.data.keys().hasAll(['message', 'context', 'uid']) &&
+        request.resource.data.keys().hasOnly(['message', 'context', 'uid', 'screen', 'stack', 'alerted', 'createdAt', 'data']) &&
         request.resource.data.message is string &&
         request.resource.data.message.size() <= 500 &&
         request.resource.data.context is string &&
