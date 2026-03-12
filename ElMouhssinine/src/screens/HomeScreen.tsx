@@ -686,6 +686,26 @@ const HomeScreen = () => {
         }
         return updated;
       });
+
+      // Recalculer nextPrayer pour que le countdown bascule sur la bonne prière
+      const next = PrayerAPI.getNextPrayer(rawPrayerTimings);
+      if (next) {
+        const isTomorrow = next.name.includes('(demain)') || next.name.includes('(غدا)');
+        const baseName = next.name.replace(' (demain)', '').replace(' (غدا)', '');
+        const prayerIconMap: Record<string, string> = {
+          Fajr: '🌅', Dhuhr: '☀️', Asr: '🌤️', Maghrib: '🌅', Isha: '🌙',
+        };
+        setNextPrayer(prev => {
+          const newTime = PrayerAPI.formatTime(next.time);
+          if (prev.name === next.name && prev.time === newTime) return prev;
+          return {
+            name: next.name,
+            time: newTime,
+            icon: prayerIconMap[baseName] || '🕌',
+            isTomorrow,
+          };
+        });
+      }
     }, 60000);
 
     return () => clearInterval(interval);
@@ -788,10 +808,14 @@ const HomeScreen = () => {
 
   // Ouvrir l'historique des notifications
   const openNotificationHistory = useCallback(async () => {
-    const history = await getNotificationHistory();
-    setNotificationHistory(history);
-    setShowNotificationHistory(true);
-    setExpandedNotifId(null);
+    try {
+      const history = await getNotificationHistory();
+      setNotificationHistory(history);
+      setShowNotificationHistory(true);
+      setExpandedNotifId(null);
+    } catch (err) {
+      console.error('[HomeScreen] openNotificationHistory error:', err);
+    }
   }, []);
 
   // Ouvrir automatiquement l'historique quand on arrive depuis un clic sur notification
@@ -805,10 +829,14 @@ const HomeScreen = () => {
 
   // Marquer toutes les notifications comme lues
   const handleMarkAllRead = useCallback(async () => {
-    await markAllNotificationsAsRead();
-    setUnreadNotifCount(0);
-    const history = await getNotificationHistory();
-    setNotificationHistory(history);
+    try {
+      await markAllNotificationsAsRead();
+      setUnreadNotifCount(0);
+      const history = await getNotificationHistory();
+      setNotificationHistory(history);
+    } catch (err) {
+      console.error('[HomeScreen] handleMarkAllRead error:', err);
+    }
   }, []);
 
   // Proximité mosquée : géré entièrement par le geofencing natif iOS/Android
@@ -955,15 +983,19 @@ const HomeScreen = () => {
     }
   };
 
-  // Re-évaluer les popups quand l'app revient au premier plan (ex: clic sur notification)
+  // Re-évaluer les popups et rafraîchir les horaires quand l'app revient au premier plan
   useEffect(() => {
-    const handleForegroundPopups = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active' && cachedPopupsRef.current.length > 0) {
-        logger.log('[HomeScreen] App au premier plan — re-évaluation popups');
-        evaluateAndShowPopups(cachedPopupsRef.current);
+    const handleForeground = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        if (cachedPopupsRef.current.length > 0) {
+          logger.log('[HomeScreen] App au premier plan — re-évaluation popups');
+          evaluateAndShowPopups(cachedPopupsRef.current);
+        }
+        // Rafraîchir les horaires de prière (recalcule nextPrayer + countdown)
+        loadPrayerData();
       }
     };
-    const sub = AppState.addEventListener('change', handleForegroundPopups);
+    const sub = AppState.addEventListener('change', handleForeground);
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

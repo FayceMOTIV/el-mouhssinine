@@ -43,7 +43,9 @@ const ProfileEditScreen = () => {
   const route = useRoute<RouteProp<ProfileEditRouteParams, 'ProfileEdit'>>();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const { uid, nom, prenom, telephone, adresse, email } = route.params;
+  const { nom, prenom, telephone, adresse, email } = route.params;
+  // SÉCURITÉ: Toujours utiliser l'uid de l'utilisateur connecté, jamais route.params
+  const uid = auth().currentUser?.uid;
 
   const [editedNom, setEditedNom] = useState(nom || '');
   const [editedPrenom, setEditedPrenom] = useState(prenom || '');
@@ -63,6 +65,11 @@ const ProfileEditScreen = () => {
 
     if (!editedTelephone.trim()) {
       Alert.alert(t('commonError'), t('phoneRequired'));
+      return;
+    }
+
+    if (!uid) {
+      Alert.alert(t('commonError'), 'Session expirée, veuillez vous reconnecter.');
       return;
     }
 

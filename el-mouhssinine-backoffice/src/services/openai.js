@@ -1,236 +1,45 @@
 /**
  * Service OpenAI pour l'assistant d'écriture IA
- * Utilise GPT-4o-mini pour générer du contenu
+ * Proxy via Cloud Function — la clé API reste côté serveur
  */
 
-import { getRemoteConfig, fetchAndActivate, getValue } from 'firebase/remote-config'
-import { app } from './firebase'
+import { functions } from './firebase'
+import { httpsCallable } from 'firebase/functions'
 
-let apiKey = null
-
-// Récupérer la clé API depuis Firebase Remote Config
-export const getOpenAIKey = async () => {
-  if (apiKey) return apiKey
-
-  try {
-    const remoteConfig = getRemoteConfig(app)
-    remoteConfig.settings.minimumFetchIntervalMillis = 3600000 // 1 heure
-
-    await fetchAndActivate(remoteConfig)
-    apiKey = getValue(remoteConfig, 'openai_api_key').asString()
-
-    if (!apiKey) {
-      console.warn('Clé OpenAI non configurée dans Remote Config')
-      return null
-    }
-
-    return apiKey
-  } catch (error) {
-    console.error('Erreur récupération clé OpenAI:', error)
-    return null
-  }
-}
-
-// Prompt SPECIAL pour la generation de TITRES uniquement
-const TITLE_PROMPT = `Tu generes des TITRES pour une application mobile de mosquee.
-REGLES STRICTES:
-- Maximum 40 caracteres (5-6 mots)
-- Pas de ponctuation finale (pas de point, pas de !)
-- Commence par un emoji pertinent
-- Ton direct et informatif
-- Pas de formules ("Chers freres", "Rappel important", etc.)
-- Pas de ":" dans le titre
-
-EXEMPLES DE BONS TITRES:
-- 🕌 Priere de l'Aid demain 8h
-- 📚 Nouveaux cours d'arabe
-- 🌙 Debut Ramadan confirme
-- 🤲 Collecte vetements ce samedi
-- ⚠️ Mosquee fermee lundi
-- 🎉 Fete de fin d'annee
-- 📖 Cours Coran enfants samedi
-
-EXEMPLES DE MAUVAIS TITRES (a eviter):
-- "Rappel important concernant la priere" ❌ (trop long)
-- "Chers freres et soeurs, venez nombreux" ❌ (formule inutile)
-- "Information : nouvelle activite" ❌ (pas informatif)
-- "N'oubliez pas !" ❌ (pas de contenu)
-
-Genere UN SEUL titre court et percutant, sans guillemets.`
-
-// Prompts contextuels pour chaque type de contenu
-// IMPORTANT: Tous les prompts limitent les reponses a 2-3 phrases pour l'app mobile
-const PROMPTS = {
-  notification: {
-    system: `Tu es un assistant pour une mosquee. Tu rediges des notifications push TRES COURTES.
-REGLES STRICTES:
-- Titre: MAX 50 caracteres
-- Message: MAX 2 phrases (100 caracteres)
-- Style DIRECT, pas de formules de politesse longues
-- Un emoji max au debut
-- Exemple: "La priere de l'Aid aura lieu demain a 8h. Venez nombreux!"
-NE JAMAIS depasser ces limites.`,
-    examples: [
-      { titre: "🕌 Jumu'a 13h30", message: "Priere du vendredi. Arrivez en avance !" },
-      { titre: "📢 Cours Coran", message: "Nouveau cours pour enfants ce samedi. Inscriptions ouvertes." }
-    ]
-  },
-  annonce: {
-    system: `Tu es un assistant pour une mosquee. Tu rediges des annonces CONCISES.
-REGLES STRICTES:
-- Titre: MAX 60 caracteres
-- Contenu: MAX 3 phrases courtes
-- Va droit au but, pas de blabla
-- Infos essentielles: quoi, quand, ou
-- Style direct et clair`,
-    examples: []
-  },
-  popup: {
-    system: `Tu es un assistant pour une mosquee. Tu rediges des popups ULTRA COURTS.
-REGLES STRICTES:
-- Titre: MAX 40 caracteres
-- Message: MAX 2 phrases (80 caracteres)
-- Style DIRECT et impactant
-- Un seul emoji si necessaire
-- Exemple: "Rappel: la priere de l'Aid aura lieu demain a 8h."
-NE JAMAIS faire de longs textes.`,
-    examples: []
-  },
-  evenement: {
-    system: `Tu es un assistant pour une mosquee. Tu rediges des descriptions d'evenements.
-REGLES STRICTES:
-- Titre: MAX 60 caracteres
-- Description: MAX 4 phrases courtes
-- Inclure: date, heure, lieu
-- Style engageant mais concis`,
-    examples: []
-  },
-  rappel: {
-    system: `Tu es un assistant pour une mosquee. Tu rediges des rappels spirituels.
-REGLES STRICTES:
-- MAX 3 phrases
-- Hadith + source courte si applicable
-- Peut etre en francais ET arabe
-- Ton inspirant mais bref`,
-    examples: []
-  },
-  janaza: {
-    system: `Tu es un assistant pour une mosquee. Tu rediges des annonces de Salat Janaza.
-REGLES STRICTES:
-- Titre: Nom + "Salat Janaza"
-- Message: MAX 3 phrases
-- Inclure: nom, date, heure, lieu
-- Formule de condoleances courte`,
-    examples: []
-  },
-  projet: {
-    system: `Tu es un assistant pour une mosquee. Tu rediges des descriptions de projets.
-REGLES STRICTES:
-- Titre: MAX 50 caracteres, accrocheur
-- Description: MAX 3 phrases
-- Expliquer l'impact concretement
-- Appel a l'action clair`,
-    examples: []
-  },
-  general: {
-    system: `Tu es un assistant pour une mosquee. Tu aides a rediger du contenu.
-REGLES STRICTES:
-- MAX 3 phrases par reponse
-- Style direct et concis
-- Pas de formules de politesse longues
-- Va droit au but`,
-    examples: []
-  }
-}
+const generateAIContentFn = httpsCallable(functions, 'generateAIContent')
 
 /**
- * Génère du contenu avec l'IA
+ * Génère du contenu avec l'IA via Cloud Function proxy
  * @param {string} type - Type de contenu (notification, annonce, popup, etc.)
  * @param {string} userPrompt - Instructions de l'utilisateur
  * @param {object} context - Contexte additionnel (titre existant, etc.)
- * @returns {Promise<{titre?: string, contenu: string}>}
+ * @returns {Promise<{content: string}>}
  */
 export const generateContent = async (type, userPrompt, context = {}) => {
-  const key = await getOpenAIKey()
-
-  if (!key) {
-    throw new Error('Clé API OpenAI non configurée. Allez dans Firebase Console > Remote Config et ajoutez "openai_api_key".')
-  }
-
-  const promptConfig = PROMPTS[type] || PROMPTS.general
-
-  // Construire le message utilisateur
-  let userMessage = userPrompt
-
-  // Determiner si on genere un TITRE ou du contenu
-  const isGeneratingTitle = context.field === 'titre'
-
-  if (context.existingTitle && !isGeneratingTitle) {
-    userMessage += `\n\nTitre existant: "${context.existingTitle}"`
-  }
-  if (context.existingContent) {
-    userMessage += `\n\nContenu existant à améliorer: "${context.existingContent}"`
-  }
-  if (context.field === 'message' || context.field === 'contenu') {
-    userMessage += '\n\nGénère uniquement le CONTENU/MESSAGE (pas de titre).'
-  }
-
-  // Utiliser le prompt TITRE special si on genere un titre
-  const systemPrompt = isGeneratingTitle ? TITLE_PROMPT : promptConfig.system
-
-  const messages = [
-    { role: 'system', content: systemPrompt },
-  ]
-
-  // Ajouter des exemples si disponibles (seulement pour le contenu, pas les titres)
-  if (!isGeneratingTitle && promptConfig.examples.length > 0) {
-    messages.push({
-      role: 'system',
-      content: 'Exemples de bons contenus:\n' + promptConfig.examples.map(e =>
-        `- Titre: "${e.titre}" | Message: "${e.message}"`
-      ).join('\n')
-    })
-  }
-
-  messages.push({ role: 'user', content: userMessage })
-
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`
+    const result = await generateAIContentFn({
+      type,
+      userPrompt,
+      contentContext: {
+        field: context.field || null,
+        existingTitle: context.existingTitle || null,
+        existingContent: context.existingContent || null,
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages,
-        max_tokens: 500,
-        temperature: 0.7,
-      })
     })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error?.message || 'Erreur API OpenAI')
-    }
-
-    const data = await response.json()
-    const content = data.choices[0]?.message?.content?.trim()
-
-    if (!content) {
-      throw new Error('Réponse vide de l\'IA')
-    }
-
-    return { content }
+    return { content: result.data.content }
   } catch (error) {
     console.error('Erreur génération IA:', error)
-    throw error
+    // Re-throw avec un message lisible
+    if (error.code === 'functions/failed-precondition') {
+      throw new Error('Clé API OpenAI non configurée côté serveur.')
+    }
+    if (error.code === 'functions/permission-denied') {
+      throw new Error('Accès réservé aux administrateurs.')
+    }
+    throw new Error(error.message || 'Erreur lors de la génération IA')
   }
 }
 
-/**
- * Suggestions rapides pour améliorer un texte
- */
 // Options d'amélioration communes à tous les types
 const IMPROVEMENT_OPTIONS = [
   "Améliore le style du texte",

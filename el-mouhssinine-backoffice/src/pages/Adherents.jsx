@@ -731,7 +731,9 @@ export default function Adherents() {
   // A3: Escape CSV — protège les champs contenant des séparateurs/guillemets
   const escapeCSV = (value) => {
     if (value === null || value === undefined) return ''
-    const str = String(value)
+    let str = String(value)
+    // Protection CSV injection (formules Excel =, +, -, @)
+    if (/^[=+\-@\t\r]/.test(str)) str = `'${str}`
     if (str.includes(';') || str.includes('"') || str.includes('\n')) {
       return `"${str.replace(/"/g, '""')}"`
     }

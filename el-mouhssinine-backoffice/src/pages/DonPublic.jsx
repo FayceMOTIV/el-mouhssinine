@@ -66,17 +66,33 @@ export default function DonPublic() {
 
       <main className="max-w-3xl mx-auto px-6 py-10">
 
-        {/* Message succès */}
-        {success && (
-          <div className="mb-6 bg-emerald-50 border border-emerald-300 rounded-2xl p-6 text-center">
-            <p className="text-2xl mb-2">✅</p>
-            <p className="text-emerald-800 font-semibold text-lg">Merci pour votre générosité !</p>
-            <p className="text-emerald-700 mt-1 text-sm">
-              Un reçu fiscal (CERFA) vous sera envoyé par email automatiquement.
+        {/* Page de remerciement après paiement réussi */}
+        {success ? (
+          <div className="bg-white rounded-2xl shadow-sm border p-10 text-center space-y-6">
+            <div className="text-6xl">✅</div>
+            <h2 className="text-2xl font-bold text-gray-900">Votre don a bien été enregistré !</h2>
+            <p className="text-lg text-emerald-700 font-semibold">جزاك الله خيرا — Jazak Allah Khayran</p>
+            <p className="text-gray-600 leading-relaxed">
+              Merci pour votre générosité envers la mosquée El Mouhssinine.<br />
+              Votre paiement a été confirmé avec succès.
             </p>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800">
+              <p className="font-medium mb-1">📄 Reçu fiscal</p>
+              <p>Un reçu fiscal (CERFA) vous sera envoyé automatiquement par email en début d'année prochaine.</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+              <p className="font-medium mb-1">💡 Le saviez-vous ?</p>
+              <p>Votre don est déductible des impôts à hauteur de 66 % dans la limite de 20 % du revenu imposable.</p>
+            </div>
+            <button
+              onClick={() => setSuccess(false)}
+              className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-8 rounded-xl transition-colors"
+            >
+              Faire un autre don
+            </button>
           </div>
-        )}
-
+        ) : (
+        <>
         {/* Formulaire */}
         <div className="bg-white rounded-2xl shadow-sm border p-8 space-y-6">
           <p className="text-gray-700 leading-relaxed text-center">
@@ -211,6 +227,8 @@ export default function DonPublic() {
           </p>
           <p>© {new Date().getFullYear()} Mosquée El Mohsinine — Tous droits réservés</p>
         </footer>
+        </>
+        )}
       </main>
     </div>
   )

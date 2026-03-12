@@ -76,10 +76,13 @@ service cloud.firestore {
       }
 
       // Lecture: admin OU propriétaire OU inscripteur (celui qui a inscrit ce membre)
+      // SÉCURITÉ: email_verified requis pour lecture par email (empêche usurpation)
       allow read: if isAdmin() ||
                      request.auth.uid == memberId ||
                      (resource.data.uid == request.auth.uid) ||
-                     (request.auth.token.email != null && resource.data.email == request.auth.token.email) ||
+                     (request.auth.token.email != null &&
+                      request.auth.token.email_verified == true &&
+                      resource.data.email == request.auth.token.email) ||
                      isInscripteur();
       // Création: utilisateur authentifié avec validation des données
       allow create: if request.auth != null &&
@@ -106,7 +109,9 @@ service cloud.firestore {
       allow update: if isAdmin() ||
                        ((request.auth.uid == memberId ||
                          resource.data.uid == request.auth.uid ||
-                         (request.auth.token.email != null && resource.data.email == request.auth.token.email) ||
+                         (request.auth.token.email != null &&
+                          request.auth.token.email_verified == true &&
+                          resource.data.email == request.auth.token.email) ||
                          isInscripteur()) &&
                         // SÉCURITÉ: Empêcher modification des champs critiques par le membre
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -125,7 +130,9 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         (isAuthenticated() &&
           (resource.data.userId == request.auth.uid ||
-           resource.data.donateurEmail == request.auth.token.email.lower()));
+           (request.auth.token.email != null &&
+            request.auth.token.email_verified == true &&
+            resource.data.donateurEmail == request.auth.token.email.lower())));
       // Création: user authentifié avec validation montant + userId obligatoire
       allow create: if isAuthenticated() &&
         (
@@ -139,9 +146,14 @@ service cloud.firestore {
         request.resource.data.userId == request.auth.uid;
       // Update: admin OU propriétaire du don (nécessaire pour set+merge quand webhook a créé en premier)
       // Le Cloud Functions admin SDK bypasse ces rules de toute façon
+      // SÉCURITÉ: Empêcher modification des champs financiers par le client
       allow update: if isAdmin() ||
         (isAuthenticated() &&
-          request.resource.data.userId == request.auth.uid);
+          request.resource.data.userId == request.auth.uid &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'montant', 'amount', 'status', 'statut', 'stripePaymentIntentId',
+            'metadata', 'createdAt', 'eligibleRecuFiscal', 'recuFiscalGenerated'
+          ]));
       // Suppression: admin uniquement
       allow delete: if isAdmin();
     }
@@ -180,8 +192,11 @@ service cloud.firestore {
          request.resource.data.message.size() > 0 &&
          request.resource.data.message.size() <= 5000);
 
-      // Mise à jour: admin (répondre, changer statut) OU propriétaire (ajouter réponse, soft delete)
-      allow update: if isAdmin() || (isAuthenticated() && isMessageOwner());
+      // Mise à jour: admin (répondre, changer statut) OU propriétaire (soft delete + réponse)
+      allow update: if isAdmin() ||
+        (isAuthenticated() && isMessageOwner() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['deletedAt', 'deletedByUser', 'lu', 'reponses', 'updatedAt', 'status']));
 
       // Suppression: admin uniquement (les users font du soft delete)
       allow delete: if isAdmin();
@@ -205,16 +220,17 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         (isAuthenticated() &&
           resource.data.metadata.memberId == request.auth.uid);
-      // Création avec validation du montant (min 1€, max 10000€ pour cotisations)
-      // Bug 10 Fix: Vérifier que metadata.memberId correspond à l'utilisateur authentifié
-      allow create: if request.auth != null &&
-        request.resource.data.montant is number &&
-        request.resource.data.montant >= 1 &&
-        request.resource.data.montant <= 10000 &&
-        request.resource.data.metadata.memberId == request.auth.uid;
+      // Création: INTERDIT côté client — uniquement via Cloud Functions (admin SDK)
+      // CLAUDE.md: "L'app ne doit JAMAIS écrire dans payments — webhook admin SDK uniquement"
+      allow create: if false;
       // Modification: admin OU propriétaire (nécessaire car webhook peut créer le doc avant l'app → set+merge = update)
+      // SÉCURITÉ: Empêcher modification des champs financiers par le client
       allow update: if isAdmin() ||
-        (isAuthenticated() && resource.data.metadata.memberId == request.auth.uid);
+        (isAuthenticated() && resource.data.metadata.memberId == request.auth.uid &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'montant', 'status', 'statut', 'metadata', 'stripePaymentId',
+            'createdAt', 'type'
+          ]));
       allow delete: if isAdmin();
     }
 
@@ -278,9 +294,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Logs d'erreurs silencieuses - Ecriture app authentifiee, lecture/modif Cloud Functions only
+    // Logs d'erreurs silencieuses - Ecriture app authentifiee avec validation schema
     match /errors_log/{docId} {
-      allow create: if request.auth != null;
+      allow create: if request.auth != null &&
+        request.resource.data.keys().hasAll(['message', 'context']) &&
+        request.resource.data.message is string &&
+        request.resource.data.message.size() <= 500 &&
+        request.resource.data.context is string &&
+        request.resource.data.context.size() <= 200 &&
+        request.resource.data.uid == request.auth.uid;
       allow read, update, delete: if false;
     }
 

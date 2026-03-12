@@ -59,6 +59,7 @@ export default function Notifications() {
   const [sendNow, setSendNow] = useState(true)
   const [notifHistory, setNotifHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [sendConfirmModal, setSendConfirmModal] = useState({ open: false, notification: null })
 
   useEffect(() => {
     const unsubscribe = subscribeToNotifications((data) => {
@@ -174,8 +175,14 @@ export default function Notifications() {
     }
   }
 
-  const handleSendNow = async (notification) => {
-    if (sendingNotifId) return // Protection double-clic
+  const handleSendNowConfirm = (notification) => {
+    setSendConfirmModal({ open: true, notification })
+  }
+
+  const handleSendNow = async () => {
+    const notification = sendConfirmModal.notification
+    if (!notification || sendingNotifId) return
+    setSendConfirmModal({ open: false, notification: null })
     setSendingNotifId(notification.id)
     try {
       await updateDocument('notifications', notification.id, {
@@ -263,7 +270,7 @@ export default function Notifications() {
         <div className="flex items-center gap-2">
           {row.statut === NotificationStatut.PROGRAMMEE && (
             <button
-              onClick={() => handleSendNow(row)}
+              onClick={() => handleSendNowConfirm(row)}
               disabled={sendingNotifId === row.id}
               className={`p-2 rounded-lg transition-colors ${sendingNotifId === row.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-500/10'}`}
               title="Envoyer maintenant"
@@ -544,6 +551,16 @@ export default function Notifications() {
           </Card>
         )}
       </div>
+
+      {/* Send Confirmation */}
+      <ConfirmModal
+        isOpen={sendConfirmModal.open}
+        onClose={() => setSendConfirmModal({ open: false, notification: null })}
+        onConfirm={handleSendNow}
+        title="Envoyer la notification"
+        message={`Envoyer "${sendConfirmModal.notification?.titre}" à ${getTopicLabel(sendConfirmModal.notification?.topic || '')} maintenant ?`}
+        confirmText="Envoyer"
+      />
 
       {/* Delete Confirmation */}
       <ConfirmModal

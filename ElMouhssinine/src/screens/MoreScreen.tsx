@@ -560,15 +560,15 @@ const MoreScreen = () => {
 
   const handleCall = () => {
     const phoneNumber = mosqueeInfo.phone.replace(/\s/g, '');
-    Linking.openURL(`tel:+33${phoneNumber.substring(1)}`);
+    Linking.openURL(`tel:+33${phoneNumber.substring(1)}`).catch(() => {});
   };
 
   const handleEmail = () => {
-    Linking.openURL(`mailto:${mosqueeInfo.email}`);
+    Linking.openURL(`mailto:${mosqueeInfo.email}`).catch(() => {});
   };
 
   const handleWebsite = () => {
-    Linking.openURL(`https://${mosqueeInfo.website}`);
+    Linking.openURL(`https://${mosqueeInfo.website}`).catch(() => {});
   };
 
   const Switch = ({

@@ -32,6 +32,8 @@ async function logServerError(message, context, extra = {}) {
 // ==================== PARAMÈTRES (migration functions.config → defineString) ====================
 const STRIPE_SECRET_KEY = defineString('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineString('STRIPE_WEBHOOK_SECRET');
+// OpenAI key optionnelle — via .env ou firebase functions:secrets:set
+const OPENAI_API_KEY_ENV = process.env.OPENAI_API_KEY || '';
 const BREVO_SMTP_USER = process.env.BREVO_SMTP_USER || '';
 const BREVO_SMTP_PASS = process.env.BREVO_SMTP_PASS || '';
 const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || '';
@@ -917,6 +919,12 @@ exports.onNewMessage = functions
     const data = snap.data();
     const messageId = context.params.messageId;
 
+    // Idempotence : skip si déjà traité (at-least-once delivery Firebase)
+    if (data.notificationSent === true) {
+      console.log('onNewMessage: déjà traité, skip:', messageId);
+      return null;
+    }
+
     // Skip messages système (créés par Cloud Functions, ex: bienvenue)
     if (data.createdBy === 'mosquee' || data.type === 'system') {
       console.log('Message système, skip notification:', messageId);
@@ -1105,6 +1113,9 @@ exports.onNewMessage = functions
         relatedMessageId: messageId,
       });
 
+      // Marquer comme traité (idempotence)
+      await snap.ref.update({ notificationSent: true }).catch(() => {});
+
       return { success: true };
     } catch (error) {
       console.error('❌ Erreur email nouveau message:', error.message);
@@ -1123,6 +1134,9 @@ exports.onMessageReply = functions
     const before = change.before.data();
     const after = change.after.data();
 
+    // Idempotency: comparer le compteur de réponses notifiées
+    const notifiedReplyCount = after.notifiedReplyCount || 0;
+
     // Vérifier si une nouvelle réponse a été ajoutée
     const beforeReplies = before.reponses || [];
     const afterReplies = after.reponses || [];
@@ -1131,6 +1145,15 @@ exports.onMessageReply = functions
       console.log('Pas de nouvelle réponse');
       return null;
     }
+
+    // Idempotency: si on a déjà notifié pour ce nombre de réponses, skip
+    if (notifiedReplyCount >= afterReplies.length) {
+      console.log('onMessageReply: déjà notifié pour', afterReplies.length, 'réponses, skip');
+      return null;
+    }
+
+    // Marquer comme notifié AVANT le traitement (at-least-once safe)
+    await change.after.ref.update({ notifiedReplyCount: afterReplies.length }).catch(() => {});
 
     // Trouver la nouvelle réponse
     const newReply = afterReplies[afterReplies.length - 1];
@@ -2359,7 +2382,7 @@ exports.stripeWebhook = functions
             ? '🚨 Cotisation expirée (3 échecs)'
             : `⚠️ Paiement échoué (${attemptCount}/3)`;
           const notifMessage = `${failedMemberPrenom || 'Membre'} — ${((failedInvoice.amount_due || 0) / 100).toFixed(2)} €`;
-          await createNotifBO('paiement', notifTitre, notifMessage, failedMemberDoc ? failedMemberDoc.id : null);
+          await createNotifBO({ type: 'paiement', titre: notifTitre, message: notifMessage, membreId: failedMemberDoc ? failedMemberDoc.id : null });
 
         } catch (err) {
           console.error('Erreur traitement invoice.payment_failed:', err);
@@ -2626,12 +2649,12 @@ exports.stripeWebhook = functions
           }
 
           // 5. Notification backoffice
-          await createNotifBO(
-            'remboursement',
-            '🚨 Dispute bancaire !',
-            `${disputeMemberName || 'Membre inconnu'} — ${dispute.amount / 100} € contestés (${dispute.reason || 'non spécifié'})`,
-            disputeMemberId
-          );
+          await createNotifBO({
+            type: 'remboursement',
+            titre: '🚨 Dispute bancaire !',
+            message: `${disputeMemberName || 'Membre inconnu'} — ${dispute.amount / 100} € contestés (${dispute.reason || 'non spécifié'})`,
+            membreId: disputeMemberId,
+          });
 
         } catch (err) {
           console.error('Erreur traitement charge.dispute.created:', err);
@@ -2726,18 +2749,39 @@ exports.stripeWebhook = functions
           const donorName = session.customer_details?.name || donorEmail || 'Anonyme';
           if (piId && donorEmail) {
             try {
-              // update() (pas set/merge) : n'écrit que si le doc existe déjà.
-              // Si le doc n'existe pas encore (payment_intent.succeeded n'a pas encore tourné),
-              // on laisse le fallback onDonationConfirmation → stripe.checkout.sessions.list() gérer l'email.
-              // Cela évite de créer un doc incomplet qui déclencherait onDonationConfirmation
-              // avec status manquant → isCompleted=false → zéro email envoyé.
-              await db.collection('donations').doc(piId).update(
-                { donateurEmail: donorEmail, donateur: donorName }
+              // Lookup membre par email pour enrichir userId
+              let userId = '';
+              if (donorEmail) {
+                try {
+                  const memberSnap = await admin.firestore().collection('members')
+                    .where('email', '==', donorEmail)
+                    .limit(1)
+                    .get();
+                  if (!memberSnap.empty) {
+                    userId = memberSnap.docs[0].id;
+                  }
+                } catch (lookupErr) {
+                  console.warn('checkout.session.completed: lookup membre échoué:', lookupErr.message);
+                }
+              }
+
+              // set+merge : crée le doc s'il n'existe pas, complète s'il existe déjà.
+              // Résout la race condition : checkout.session.completed peut arriver
+              // avant ou après payment_intent.succeeded — dans les deux cas l'email est sauvé.
+              await admin.firestore().collection('donations').doc(piId).set(
+                {
+                  donateurEmail: donorEmail,
+                  donateur: donorName,
+                  ...(userId ? { userId, memberId: userId } : {}),
+                  source: session.metadata?.source || 'web_don_public',
+                  stripeSessionId: session.id,
+                  webhookSessionProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+                },
+                { merge: true }
               );
-              console.log(`checkout.session.completed: donateurEmail mis à jour pour ${piId}: ${donorEmail}`);
-            } catch (updateErr) {
-              // Doc pas encore créé — payment_intent.succeeded le créera avec le fallback checkout sessions
-              console.log(`checkout.session.completed: doc ${piId} pas encore créé — fallback onDonationConfirmation prendra le relais (${donorEmail})`);
+              console.log(`checkout.session.completed: donations/${piId} set+merge OK — email: ${donorEmail}, userId: ${userId || 'non trouvé'}`);
+            } catch (setErr) {
+              console.error('checkout.session.completed: set+merge échoué:', setErr.message);
             }
           } else {
             console.log(`checkout.session.completed: pas d'email pour ${piId || 'PI inconnu'}`);
@@ -3653,8 +3697,15 @@ exports.getDonsByYear = functions
     }
 
     // Vérifier que l'utilisateur demande ses propres dons
+    // SÉCURITÉ: Si pas d'email vérifié dans le token, refuser (empêche bypass via phone auth)
     const userEmail = context.auth.token.email;
-    if (userEmail && userEmail.toLowerCase() !== email.toLowerCase()) {
+    if (!userEmail) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Email vérifié requis pour consulter les dons'
+      );
+    }
+    if (userEmail.toLowerCase() !== email.toLowerCase()) {
       throw new functions.https.HttpsError(
         'permission-denied',
         'Vous ne pouvez consulter que vos propres dons'
@@ -5467,6 +5518,12 @@ exports.refundPayment = functions
     if (!memberId) {
       throw new functions.https.HttpsError('invalid-argument', 'memberId requis');
     }
+    // Validation amount si fourni (remboursement partiel)
+    if (amount !== undefined && amount !== null) {
+      if (typeof amount !== 'number' || amount <= 0 || amount > 100000) {
+        throw new functions.https.HttpsError('invalid-argument', 'Montant de remboursement invalide (1-100000)');
+      }
+    }
 
     try {
       const db = admin.firestore();
@@ -5728,6 +5785,12 @@ exports.checkPendingPayment = functions
 
     try {
       const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+      // SÉCURITÉ: Vérifier que le PaymentIntent appartient à l'utilisateur
+      const piUserId = pi.metadata?.memberId || pi.metadata?.userId;
+      if (piUserId && piUserId !== context.auth.uid) {
+        throw new functions.https.HttpsError('permission-denied', 'Ce paiement ne vous appartient pas');
+      }
 
       if (pi.status === 'succeeded') {
         // Vérifier si le webhook l'a déjà traité
@@ -6048,6 +6111,11 @@ exports.refundDonation = functions
     if (!donationId) {
       throw new functions.https.HttpsError('invalid-argument', 'donationId requis');
     }
+    if (amount !== undefined && amount !== null) {
+      if (typeof amount !== 'number' || amount <= 0 || amount > 100000) {
+        throw new functions.https.HttpsError('invalid-argument', 'Montant de remboursement invalide (1-100000)');
+      }
+    }
 
     try {
       const db = admin.firestore();
@@ -6213,6 +6281,11 @@ exports.createAdmin = functions
     if (password.length < 6) {
       throw new functions.https.HttpsError('invalid-argument', 'Le mot de passe doit contenir au moins 6 caractères');
     }
+    // Whitelist des rôles autorisés
+    const allowedRoles = ['super_admin', 'admin', 'moderator'];
+    if (role && !allowedRoles.includes(role)) {
+      throw new functions.https.HttpsError('invalid-argument', `Rôle invalide. Autorisés: ${allowedRoles.join(', ')}`);
+    }
 
     try {
       // 1. Créer l'utilisateur Firebase Auth
@@ -6257,7 +6330,7 @@ exports.createAdmin = functions
 
 exports.checkExpiringCotisations = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .runWith({ timeoutSeconds: 300, memory: '512MB' })
   .pubsub.schedule('0 8 * * *')
   .timeZone('Europe/Paris')
   .onRun(async (context) => {
@@ -7165,7 +7238,7 @@ exports.deleteMyAccount = functions
 
       // 4c. Anonymiser messages (ne pas supprimer, anonymiser)
       try {
-        const msgSnap = await db.collection('messages').where('userId', '==', uid).get();
+        const msgSnap = await db.collection('messages').where('odUserId', '==', uid).get();
         if (!msgSnap.empty) {
           const chunks = [];
           let batch = db.batch();
@@ -7328,11 +7401,12 @@ exports.exportMyData = functions
     const uid = context.auth.uid;
     const db = admin.firestore();
 
-    const [memberDoc, donationsSnap, paymentsSnap, messagesSnap] = await Promise.all([
+    const [memberDoc, donationsSnap, paymentsSnap, messagesSnap, recusSnap] = await Promise.all([
       db.collection('members').doc(uid).get(),
       db.collection('donations').where('userId', '==', uid).get(),
       db.collection('payments').where('metadata.memberId', '==', uid).get(),
       db.collection('messages').where('odUserId', '==', uid).get(),
+      db.collection('recus_fiscaux').where('userId', '==', uid).get(),
     ]);
 
     const sanitizeTimestamp = (val) => {
@@ -7356,6 +7430,7 @@ exports.exportMyData = functions
       donations: donationsSnap.docs.map(sanitizeDoc),
       paiements: paymentsSnap.docs.map(sanitizeDoc),
       messages: messagesSnap.docs.map(sanitizeDoc),
+      recus_fiscaux: recusSnap.docs.map(sanitizeDoc),
     };
   });
 
@@ -7430,7 +7505,7 @@ exports.onAuthUserDeleted = functions
 
       // Supprimer messages
       const messagesSnap = await db.collection('messages')
-        .where('userId', '==', uid).get();
+        .where('odUserId', '==', uid).get();
       const batch = db.batch();
       messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
       if (!messagesSnap.empty) await batch.commit();
@@ -7759,9 +7834,18 @@ exports.createPublicCheckoutSession = functions
           donorName: name || '',
           source: 'web_don_public',
         },
+        customer_email: email ? email.toLowerCase() : undefined,
+        payment_intent_data: {
+          metadata: {
+            type: 'donation',
+            source: 'web_don_public',
+            donorEmail: email ? email.toLowerCase() : '',
+            donorName: name || '',
+            userId: '',
+            memberId: '',
+          },
+        },
       };
-
-      if (email) sessionParams.customer_email = email.toLowerCase();
 
       const session = await stripe.checkout.sessions.create(sessionParams);
       return res.json({ url: session.url });
@@ -7771,3 +7855,227 @@ exports.createPublicCheckoutSession = functions
     }
   });
 
+// ============================================================
+// backfillWebDonations — One-shot : patche les dons web orphelins
+// Les dons créés AVANT le fix avaient donateurEmail:'' et userId:''
+// Cette CF récupère l'email depuis Stripe et enrichit les documents.
+// Usage : curl -X POST -H "x-admin-token: elmouhssinine-backfill-2026" \
+//   https://europe-west1-el-mouhssinine.cloudfunctions.net/backfillWebDonations
+// ============================================================
+exports.backfillWebDonations = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 300, memory: '256MB' })
+  .https.onRequest(async (req, res) => {
+    // Sécurité : token admin requis
+    const token = req.headers['x-admin-token'];
+    if (token !== 'elmouhssinine-backfill-2026') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const results = { found: 0, patched: 0, skipped: 0, errors: [] };
+
+    try {
+      // 1. Récupérer tous les docs donations/ avec donateurEmail vide
+      const snapshot = await admin.firestore()
+        .collection('donations')
+        .where('donateurEmail', '==', '')
+        .get();
+
+      results.found = snapshot.size;
+
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+
+        // Skipper si déjà un email valide
+        if (data.donateurEmail && data.donateurEmail.trim() !== '') {
+          results.skipped++;
+          continue;
+        }
+
+        const piId = data.stripePaymentIntentId;
+        if (!piId) {
+          results.errors.push({ id: doc.id, reason: 'stripePaymentIntentId manquant' });
+          continue;
+        }
+
+        try {
+          // 2. Récupérer l'email depuis Stripe via les Checkout Sessions liées
+          const sessions = await stripe.checkout.sessions.list({
+            payment_intent: piId,
+            limit: 1,
+          });
+
+          if (!sessions.data.length) {
+            results.errors.push({ id: doc.id, piId, reason: 'Aucune session Stripe trouvée' });
+            continue;
+          }
+
+          const session = sessions.data[0];
+          const donorEmail = (
+            session.customer_details?.email ||
+            session.customer_email ||
+            ''
+          ).toLowerCase().trim();
+
+          const donorName =
+            session.customer_details?.name ||
+            data.donateur ||
+            'Anonyme';
+
+          if (!donorEmail) {
+            results.errors.push({ id: doc.id, piId, reason: 'Email absent dans la session Stripe' });
+            continue;
+          }
+
+          // 3. Lookup membre par email
+          let userId = data.userId || '';
+          if (!userId) {
+            const memberSnap = await admin.firestore()
+              .collection('members')
+              .where('email', '==', donorEmail)
+              .limit(1)
+              .get();
+            if (!memberSnap.empty) {
+              userId = memberSnap.docs[0].id;
+            }
+          }
+
+          // 4. Patcher le document Firestore
+          const updatePayload = {
+            donateurEmail: donorEmail,
+            donateur: donorName,
+            backfilledAt: admin.firestore.FieldValue.serverTimestamp(),
+          };
+          if (userId) {
+            updatePayload.userId = userId;
+            updatePayload.memberId = userId;
+          }
+
+          await doc.ref.update(updatePayload);
+          results.patched++;
+          console.log(`Backfill OK: ${doc.id} → ${donorEmail} (userId: ${userId || 'non trouvé'})`);
+
+        } catch (docErr) {
+          results.errors.push({ id: doc.id, piId, reason: docErr.message });
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        ...results,
+      });
+
+    } catch (err) {
+      return res.status(500).json({ error: err.message, ...results });
+    }
+  });
+
+// ════════════════════════════════════════
+// OpenAI Proxy — Empêche l'exposition de la clé API côté client
+// ════════════════════════════════════════
+const OPENAI_PROMPTS = {
+  notification: `Tu es un assistant pour une mosquee. Tu rediges des notifications push TRES COURTES.\nREGLES STRICTES:\n- Titre: MAX 50 caracteres\n- Message: MAX 2 phrases (100 caracteres)\n- Style DIRECT, pas de formules de politesse longues\n- Un emoji max au debut\nNE JAMAIS depasser ces limites.`,
+  annonce: `Tu es un assistant pour une mosquee. Tu rediges des annonces CONCISES.\nREGLES STRICTES:\n- Titre: MAX 60 caracteres\n- Contenu: MAX 3 phrases courtes\n- Va droit au but, pas de blabla\n- Infos essentielles: quoi, quand, ou\n- Style direct et clair`,
+  popup: `Tu es un assistant pour une mosquee. Tu rediges des popups ULTRA COURTS.\nREGLES STRICTES:\n- Titre: MAX 40 caracteres\n- Message: MAX 2 phrases (80 caracteres)\n- Style DIRECT et impactant\n- Un seul emoji si necessaire\nNE JAMAIS faire de longs textes.`,
+  evenement: `Tu es un assistant pour une mosquee. Tu rediges des descriptions d'evenements.\nREGLES STRICTES:\n- Titre: MAX 60 caracteres\n- Description: MAX 4 phrases courtes\n- Inclure: date, heure, lieu\n- Style engageant mais concis`,
+  rappel: `Tu es un assistant pour une mosquee. Tu rediges des rappels spirituels.\nREGLES STRICTES:\n- MAX 3 phrases\n- Hadith + source courte si applicable\n- Peut etre en francais ET arabe\n- Ton inspirant mais bref`,
+  janaza: `Tu es un assistant pour une mosquee. Tu rediges des annonces de Salat Janaza.\nREGLES STRICTES:\n- Titre: Nom + "Salat Janaza"\n- Message: MAX 3 phrases\n- Inclure: nom, date, heure, lieu\n- Formule de condoleances courte`,
+  projet: `Tu es un assistant pour une mosquee. Tu rediges des descriptions de projets.\nREGLES STRICTES:\n- Titre: MAX 50 caracteres, accrocheur\n- Description: MAX 3 phrases\n- Expliquer l'impact concretement\n- Appel a l'action clair`,
+  general: `Tu es un assistant pour une mosquee. Tu aides a rediger du contenu.\nREGLES STRICTES:\n- MAX 3 phrases par reponse\n- Style direct et concis\n- Pas de formules de politesse longues\n- Va droit au but`,
+};
+
+const OPENAI_TITLE_PROMPT = `Tu generes des TITRES pour une application mobile de mosquee.\nREGLES STRICTES:\n- Maximum 40 caracteres (5-6 mots)\n- Pas de ponctuation finale (pas de point, pas de !)\n- Commence par un emoji pertinent\n- Ton direct et informatif\n- Pas de formules ("Chers freres", "Rappel important", etc.)\n- Pas de ":" dans le titre\nGenere UN SEUL titre court et percutant, sans guillemets.`;
+
+exports.generateAIContent = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    // Admin requis
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Connexion requise');
+    }
+    const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
+    if (!adminDoc.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux administrateurs');
+    }
+
+    const { type, userPrompt, contentContext } = data;
+    if (!userPrompt || typeof userPrompt !== 'string' || userPrompt.length > 2000) {
+      throw new functions.https.HttpsError('invalid-argument', 'Prompt invalide (max 2000 caractères)');
+    }
+
+    const allowedTypes = Object.keys(OPENAI_PROMPTS);
+    const safeType = allowedTypes.includes(type) ? type : 'general';
+
+    const apiKey = OPENAI_API_KEY_ENV;
+    if (!apiKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'Clé OpenAI non configurée');
+    }
+
+    // Construire messages
+    const isGeneratingTitle = contentContext?.field === 'titre';
+    const systemPrompt = isGeneratingTitle ? OPENAI_TITLE_PROMPT : OPENAI_PROMPTS[safeType];
+
+    let userMessage = userPrompt;
+    if (contentContext?.existingTitle && !isGeneratingTitle) {
+      userMessage += `\n\nTitre existant: "${String(contentContext.existingTitle).slice(0, 200)}"`;
+    }
+    if (contentContext?.existingContent) {
+      userMessage += `\n\nContenu existant à améliorer: "${String(contentContext.existingContent).slice(0, 1000)}"`;
+    }
+    if (contentContext?.field === 'message' || contentContext?.field === 'contenu') {
+      userMessage += '\n\nGénère uniquement le CONTENU/MESSAGE (pas de titre).';
+    }
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ];
+
+    // Appel OpenAI via https natif
+    const payload = JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages,
+      max_tokens: 500,
+      temperature: 0.7,
+    });
+
+    const result = await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: 'api.openai.com',
+        path: '/v1/chat/completions',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(body);
+            if (res.statusCode !== 200) {
+              reject(new Error(parsed.error?.message || `OpenAI API error ${res.statusCode}`));
+            } else {
+              resolve(parsed);
+            }
+          } catch (e) {
+            reject(new Error('Réponse OpenAI invalide'));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.setTimeout(25000, () => { req.destroy(); reject(new Error('OpenAI timeout')); });
+      req.write(payload);
+      req.end();
+    });
+
+    const content = result.choices?.[0]?.message?.content?.trim();
+    if (!content) {
+      throw new functions.https.HttpsError('internal', 'Réponse vide de l\'IA');
+    }
+
+    return { content };
+  });

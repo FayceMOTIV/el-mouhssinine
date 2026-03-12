@@ -100,23 +100,28 @@ const MessagesScreen = () => {
   // Écouter l'état de connexion Firebase
   useEffect(() => {
     const unsubscribe = AuthService.onAuthStateChanged(async user => {
-      if (user) {
-        setIsLoggedIn(true);
-        const profile = await AuthService.getMemberProfile(user.uid);
-        setMemberProfile(profile);
-        // Si pas de profil trouvé, on arrête le loading quand même
-        if (!profile) {
+      try {
+        if (user) {
+          setIsLoggedIn(true);
+          const profile = await AuthService.getMemberProfile(user.uid);
+          setMemberProfile(profile);
+          // Si pas de profil trouvé, on arrête le loading quand même
+          if (!profile) {
+            setLoading(false);
+          }
+        } else {
+          // Nettoyer le listener messages avant de reset l'etat
+          if (messagesUnsubRef.current) {
+            messagesUnsubRef.current();
+            messagesUnsubRef.current = null;
+          }
+          setIsLoggedIn(false);
+          setMemberProfile(null);
+          setMessages([]);
           setLoading(false);
         }
-      } else {
-        // Nettoyer le listener messages avant de reset l'etat
-        if (messagesUnsubRef.current) {
-          messagesUnsubRef.current();
-          messagesUnsubRef.current = null;
-        }
-        setIsLoggedIn(false);
-        setMemberProfile(null);
-        setMessages([]);
+      } catch (err) {
+        console.error('[MessagesScreen] onAuthStateChanged error:', err);
         setLoading(false);
       }
     });

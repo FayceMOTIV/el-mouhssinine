@@ -25,15 +25,13 @@ const EMAIL_PROVIDER = 'none'
  * Configuration des providers (à remplir selon le provider choisi)
  */
 const CONFIG = {
-  // Pour Resend API
+  // Pour Resend API (clé gérée côté Cloud Functions, jamais côté client)
   resend: {
-    apiKey: process.env.VITE_RESEND_API_KEY || '',
     fromEmail: 'noreply@el-mouhssinine.fr',
     fromName: 'Mosquée El Mohsinine'
   },
-  // Pour SendGrid
+  // Pour SendGrid (clé gérée côté Cloud Functions, jamais côté client)
   sendgrid: {
-    apiKey: process.env.VITE_SENDGRID_API_KEY || '',
     fromEmail: 'noreply@el-mouhssinine.fr',
     fromName: 'Mosquée El Mohsinine'
   },

@@ -18,6 +18,7 @@ import {
   Dimensions,
   Keyboard,
   TouchableWithoutFeedback,
+  Animated,
 } from 'react-native';
 import {
   colors,
@@ -60,6 +61,7 @@ import {
   NISAB_INFO,
 } from '../services/goldPrice';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { logErrorToServer, trackEvent } from '../services/monitoring';
 
 const DonationsScreen = () => {
   const { t, isRTL, language } = useLanguage();
@@ -90,9 +92,11 @@ const DonationsScreen = () => {
   const [isApplePayAvailable, setIsApplePayAvailable] = useState(false);
 
   // 3 pages : choix → formulaire identité → projets (existant)
-  const [donPage, setDonPage] = useState<'choix' | 'formulaire' | 'projets'>(
+  const [donPage, setDonPage] = useState<'choix' | 'formulaire' | 'projets' | 'merci'>(
     'choix',
   );
+  const [lastDonation, setLastDonation] = useState<{amount: number; projectName: string} | null>(null);
+  const checkAnimRef = useRef(new Animated.Value(0)).current;
 
   // Formulaire identité donateur
   const [donorType, setDonorType] = useState<'particulier' | 'entreprise'>(
@@ -116,64 +120,68 @@ const DonationsScreen = () => {
   // Pré-remplir si user connecté + écouter changements de compte
   useEffect(() => {
     const unsubAuth = AuthService.onAuthStateChanged(async user => {
-      if (user) {
-        const profile = await AuthService.getMemberProfile(user.uid);
-        if (profile) {
-          setDonorFirstName(
-            profile.prenom || profile.name?.split(' ')[0] || '',
-          );
-          setDonorLastName(
-            profile.nom || profile.name?.split(' ').slice(1).join(' ') || '',
-          );
-          setDonorEmail(profile.email || user.email || '');
-          const fullAddress = profile.adresse || profile.address || '';
-          if (fullAddress) {
-            setDonorAddress(fullAddress);
-          }
-          if (profile.codePostal) {
-            setDonorPostalCode(profile.codePostal);
-          }
-          if (profile.ville) {
-            setDonorCity(profile.ville);
-          }
-          // BUG 2 FIX: Extraire CP et ville depuis l'adresse complète
-          // si les champs séparés sont absents (membres inscrits avant l'ajout de ces champs)
-          if (!profile.codePostal && !profile.ville && fullAddress) {
-            const cpMatch = fullAddress.match(/\b(\d{5})\b/);
-            if (cpMatch) {
-              setDonorPostalCode(cpMatch[1]);
-              // Extraire la ville : texte après le code postal (nettoyé)
-              const afterCp = fullAddress
-                .substring(fullAddress.indexOf(cpMatch[1]) + 5)
-                .replace(/^[\s,]+/, '')
-                .trim();
-              if (afterCp) {
-                setDonorCity(afterCp.split(/[,\n]/)[0].trim());
+      try {
+        if (user) {
+          const profile = await AuthService.getMemberProfile(user.uid);
+          if (profile) {
+            setDonorFirstName(
+              profile.prenom || profile.name?.split(' ')[0] || '',
+            );
+            setDonorLastName(
+              profile.nom || profile.name?.split(' ').slice(1).join(' ') || '',
+            );
+            setDonorEmail(profile.email || user.email || '');
+            const fullAddress = profile.adresse || profile.address || '';
+            if (fullAddress) {
+              setDonorAddress(fullAddress);
+            }
+            if (profile.codePostal) {
+              setDonorPostalCode(profile.codePostal);
+            }
+            if (profile.ville) {
+              setDonorCity(profile.ville);
+            }
+            // BUG 2 FIX: Extraire CP et ville depuis l'adresse complète
+            // si les champs séparés sont absents (membres inscrits avant l'ajout de ces champs)
+            if (!profile.codePostal && !profile.ville && fullAddress) {
+              const cpMatch = fullAddress.match(/\b(\d{5})\b/);
+              if (cpMatch) {
+                setDonorPostalCode(cpMatch[1]);
+                // Extraire la ville : texte après le code postal (nettoyé)
+                const afterCp = fullAddress
+                  .substring(fullAddress.indexOf(cpMatch[1]) + 5)
+                  .replace(/^[\s,]+/, '')
+                  .trim();
+                if (afterCp) {
+                  setDonorCity(afterCp.split(/[,\n]/)[0].trim());
+                }
               }
             }
+            setDonorFormFilled(true);
+            setMemberProfile(profile);
+          } else {
+            setDonorEmail(user.email || '');
+            setDonorFirstName('');
+            setDonorLastName('');
+            setDonorAddress('');
+            setDonorPostalCode('');
+            setDonorCity('');
+            setDonorFormFilled(false);
+            setMemberProfile(null);
           }
-          setDonorFormFilled(true);
-          setMemberProfile(profile);
         } else {
-          setDonorEmail(user.email || '');
+          // Reset all donor info on logout
           setDonorFirstName('');
           setDonorLastName('');
+          setDonorEmail('');
           setDonorAddress('');
           setDonorPostalCode('');
           setDonorCity('');
           setDonorFormFilled(false);
           setMemberProfile(null);
         }
-      } else {
-        // Reset all donor info on logout
-        setDonorFirstName('');
-        setDonorLastName('');
-        setDonorEmail('');
-        setDonorAddress('');
-        setDonorPostalCode('');
-        setDonorCity('');
-        setDonorFormFilled(false);
-        setMemberProfile(null);
+      } catch (err) {
+        console.error('[DonationsScreen] onAuthStateChanged error:', err);
       }
     });
     return () => unsubAuth();
@@ -477,7 +485,12 @@ const DonationsScreen = () => {
               },
             },
           ],
-          { cancelable: true },
+          {
+            cancelable: true,
+            onDismiss: () => {
+              processingRef.current = false;
+            },
+          },
         );
       });
     }
@@ -565,32 +578,24 @@ const DonationsScreen = () => {
           await addDonation(donationData);
         }
 
-        // Fermer le modal et afficher succès
+        // Sauvegarder infos don avant reset
+        const donAmount = getFinalAmount();
+        const donProjectName = getSelectedProjectData()?.name || '';
+        setLastDonation({ amount: donAmount, projectName: donProjectName });
+
+        // Fermer le modal et afficher page merci
         setShowPaymentModal(false);
 
-        // Message de succès
-        Alert.alert(
-          t('commonSuccess') as string,
-          t('paymentSuccess') as string,
-        );
+        // Lancer animation checkmark
+        checkAnimRef.setValue(0);
+        Animated.spring(checkAnimRef, {
+          toValue: 1,
+          friction: 4,
+          tension: 40,
+          useNativeDriver: true,
+        }).start();
 
-        // Reset complet et retour page 1
-        setSelectedProject(null);
-        setSelectedAmount(null);
-        setCustomAmount('');
-        setPaymentMethod(null);
-        setDonorType('particulier');
-        setDonorFirstName('');
-        setDonorLastName('');
-        setDonorEmail('');
-        setDonorAddress('');
-        setDonorPostalCode('');
-        setDonorCity('');
-        setDonorCompanyName('');
-        setDonorSiret('');
-        setDonorLegalRep('');
-        setDonorFormFilled(false);
-        setDonPage('choix');
+        setDonPage('merci');
       } else {
         showPaymentError(result.error || 'Une erreur est survenue');
       }
@@ -598,6 +603,8 @@ const DonationsScreen = () => {
       const err = error as Error;
       if (__DEV__) console.error('Erreur paiement:', err);
       showPaymentError(err?.message || 'Une erreur est survenue');
+      logErrorToServer(err, 'DonationsScreen.processPayment', 'DonationsScreen');
+      trackEvent('DONATION_PAYMENT_FAILED', { error: err?.message || 'unknown', method: paymentMethod || 'unknown' });
     } finally {
       setIsProcessingPayment(false);
       processingRef.current = false;
@@ -1137,19 +1144,6 @@ const DonationsScreen = () => {
                   </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={() => {
-                    if (!validateDonorForm()) return;
-                    setShowRIBModal(true);
-                  }}
-                >
-                  <Text
-                    style={[styles.secondaryBtnText, isRTL && styles.rtlText]}
-                  >
-                    🏦 {t('bankTransfer')}
-                  </Text>
-                </TouchableOpacity>
               </>
             )}
 
@@ -1590,6 +1584,71 @@ const DonationsScreen = () => {
                 </Text>
               </>
             )}
+
+            {/* ========== PAGE 4 : MERCI ========== */}
+            {donPage === 'merci' && lastDonation && (
+              <View style={styles.merciContainer}>
+                <Animated.View
+                  style={[
+                    styles.merciCheckCircle,
+                    { transform: [{ scale: checkAnimRef }] },
+                  ]}
+                >
+                  <Text style={styles.merciCheckmark}>&#10003;</Text>
+                </Animated.View>
+
+                <Text style={[styles.merciTitle, isRTL && styles.rtlText]}>
+                  {t('jazakAllahKhayran')}
+                </Text>
+
+                <Text style={[styles.merciSubtitle, isRTL && styles.rtlText]}>
+                  {t('donationThankYou')}
+                </Text>
+
+                <View style={styles.merciAmountBox}>
+                  <Text style={styles.merciAmount}>
+                    {lastDonation.amount}€
+                  </Text>
+                  {lastDonation.projectName ? (
+                    <Text style={[styles.merciProject, isRTL && styles.rtlText]}>
+                      {lastDonation.projectName}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <Text style={[styles.merciReceipt, isRTL && styles.rtlText]}>
+                  {t('donationReceiptNote')}
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.merciBtn}
+                  onPress={() => {
+                    // Reset complet
+                    setSelectedProject(null);
+                    setSelectedAmount(null);
+                    setCustomAmount('');
+                    setPaymentMethod(null);
+                    setDonorType('particulier');
+                    setDonorFirstName('');
+                    setDonorLastName('');
+                    setDonorEmail('');
+                    setDonorAddress('');
+                    setDonorPostalCode('');
+                    setDonorCity('');
+                    setDonorCompanyName('');
+                    setDonorSiret('');
+                    setDonorLegalRep('');
+                    setDonorFormFilled(false);
+                    setLastDonation(null);
+                    setDonPage('choix');
+                  }}
+                >
+                  <Text style={[styles.merciBtnText, isRTL && styles.rtlText]}>
+                    {t('makeAnotherDonation')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1893,31 +1952,6 @@ const DonationsScreen = () => {
                       {t('donationRedirectNotice')}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.paymentOption,
-                      styles.paymentOptionSelected,
-                      isRTL && styles.paymentOptionRTL,
-                    ]}
-                    onPress={() => setPaymentMethod('virement')}
-                  >
-                    <Text style={styles.paymentIcon}>🏦</Text>
-                    <View style={styles.paymentInfo}>
-                      <Text
-                        style={[styles.paymentTitle, isRTL && styles.rtlText]}
-                      >
-                        {t('bankTransfer')}
-                      </Text>
-                      <Text
-                        style={[styles.paymentDesc, isRTL && styles.rtlText]}
-                      >
-                        {t('useProjectIban')}
-                      </Text>
-                    </View>
-                    <View style={styles.checkmark}>
-                      <Text style={styles.checkmarkText}>✓</Text>
-                    </View>
-                  </TouchableOpacity>
                 </View>
               );
             })()}
@@ -3483,6 +3517,79 @@ const styles = StyleSheet.create({
   },
   formHalf: {
     flex: 1,
+  },
+  // Page Merci
+  merciContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl * 2,
+    paddingHorizontal: spacing.lg,
+  },
+  merciCheckCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#2E7D32',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xl,
+  },
+  merciCheckmark: {
+    fontSize: 44,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  merciTitle: {
+    fontSize: fontSize.xxl,
+    fontWeight: 'bold',
+    color: colors.accent,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  merciSubtitle: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+  },
+  merciAmountBox: {
+    backgroundColor: 'rgba(46, 125, 50, 0.08)',
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 125, 50, 0.15)',
+  },
+  merciAmount: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+  },
+  merciProject: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
+  merciReceipt: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+    lineHeight: 20,
+  },
+  merciBtn: {
+    backgroundColor: colors.accent,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl * 2,
+  },
+  merciBtnText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

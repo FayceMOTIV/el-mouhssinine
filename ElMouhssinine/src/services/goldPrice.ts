@@ -39,15 +39,20 @@ export const getGoldPricePerGram = async (): Promise<GoldPriceResult> => {
 
   try {
     // Étape 1 : Prix or en PLN/gramme (NBP - gratuit, sans clé)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     const [goldRes, fxRes] = await Promise.all([
       fetch('https://api.nbp.pl/api/cenyzlota?format=json', {
         headers: { 'Accept': 'application/json' },
+        signal: controller.signal,
       }),
       // Étape 2 : Taux EUR/PLN (Frankfurter - gratuit, sans clé)
       fetch('https://api.frankfurter.app/latest?from=EUR&to=PLN', {
         headers: { 'Accept': 'application/json' },
+        signal: controller.signal,
       }),
     ]);
+    clearTimeout(timeout);
 
     if (!goldRes.ok || !fxRes.ok) {
       throw new Error(`API response not ok: gold=${goldRes.status} fx=${fxRes.status}`);

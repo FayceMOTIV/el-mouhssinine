@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 
 ## App Mobile
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 284
+- **Build actuel** : 285
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
 - **iOS minimum** : arm64 requis
@@ -65,7 +65,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 - **Region** : europe-west1
 - **Collections** : announcements, events, janaza, projects, members, popups, rappels, settings, dates_islamiques, donations, messages, payments, processed_payments, notifications_history, notifications_bo
 
-## Cloud Functions (34 deployees)
+## Cloud Functions (42 deployees)
 | Fonction | Type | Description |
 |----------|------|-------------|
 | onNewAnnouncement | Trigger Firestore | Notif auto nouvelle annonce |
@@ -97,12 +97,23 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 | deleteMemberByAdmin | Callable | Suppression membre par admin RGPD |
 | checkExpiringCotisations | Scheduled | Rappels J-30/J-7/J/J+7/J+30 + grace period |
 | monitorSilentBugs | Scheduled (10 min) | errors_log + paymentFailed + validation bloquée → WhatsApp |
+| createPublicCheckoutSession | HTTPS | Checkout Session pour /don public |
+| backfillWebDonations | HTTPS | Backfill donations web manquantes |
+| syncProfileToStripe | Callable | Sync profil membre vers Stripe customer |
+| refundDonation | Callable | Remboursement don Stripe |
+| updatePaymentMethod | Callable | Mise a jour moyen paiement |
+| checkPendingPayment | Callable | Verification paiement en attente |
+| undoValidation | Callable | Annulation validation adhesion |
+| generateAIContent | Callable | Proxy OpenAI (cle serveur uniquement) |
+| reconcileStripePayments | Callable | Reconciliation paiements Stripe |
+| exportMyData | Callable | Export RGPD donnees personnelles |
+| onAuthUserDeleted | Auth trigger | Nettoyage apres suppression compte |
 
 ## Configuration
 
 ### Stripe
 - Webhook : `https://europe-west1-el-mouhssinine.cloudfunctions.net/stripeWebhook`
-- Events : `payment_intent.succeeded`, `payment_intent.payment_failed`, `invoice.payment_succeeded`, `customer.subscription.deleted`, `customer.subscription.updated`
+- Events : `payment_intent.succeeded`, `payment_intent.payment_failed`, `invoice.payment_succeeded`, `customer.subscription.deleted`, `customer.subscription.updated`, `checkout.session.completed`
 - Apple Pay Merchant ID : `merchant.fr.elmouhssinine.mosquee`
 - Mode LIVE (sk_live/pk_live)
 
@@ -221,11 +232,26 @@ Toujours passer un parametre d'erreur pour distinguer "pas de donnees" de "erreu
 - `monitorSilentBugs` (every 10 min) : 6 checks — errors_log non alertees, paymentFailed, validation bloquee >30min, dons sans userId, membres actifs expires (drift Stripe), CF errors recentes
 - Build 280 : fix historique donations (donateurEmail .lower(), BREVO process.env, merge listeners), page noire /don bypass auth loader
 
-### Stripe Payment Link donations (Build 282)
-- `/don` public page → `buy.stripe.com/...` (Payment Link) → PAS de metadata app (userId="", donorEmail vide)
-- Fix stripeWebhook: `donateurEmail = receipt_email` (Stripe) si metadata vide
-- Fix onDonationConfirmation: fallback Stripe API (`receipt_email` puis `customer.email`) + `snap.ref.update(donateurEmail)` pour syncer historique
+### Stripe Checkout Session donations (Build 284)
+- `/don` public page → CF `createPublicCheckoutSession` → Stripe Checkout Session (remplace Payment Link)
+- Checkout Session inclut metadata (email, name) pour traçabilite complete
+- Webhook `checkout.session.completed` → cree doc donation dans Firestore
 - Historique app via fallback `where('donateurEmail', '==', email)` — fonctionne si meme email que Firebase Auth
+
+### Audit securite Build 285 (22 fixes)
+- P0: OpenAI API key deplacee cote serveur (CF `generateAIContent` proxy)
+- P0: openai.js backoffice utilise httpsCallable (plus de cle exposee)
+- P1: emailService.js — suppression VITE_RESEND_API_KEY et VITE_SENDGRID_API_KEY
+- P1: Notifications.jsx — ConfirmModal avant envoi notification
+- P1: firestore.rules — payments `allow create: if false` (webhook uniquement)
+- P1: storage.rules — restrictions taille (5MB) et types MIME
+- P1: exportMyData — inclut recus_fiscaux
+- P1: DonationsScreen/MessagesScreen/HomeScreen/MoreScreen — try/catch robustes
+- P1: goldPrice.ts — AbortController timeout 10s sur fetch
+- P1: ProfileEditScreen — validation uid coherence
+- P1: DonPublic.jsx — page remerciement apres don reussi (success=1)
+- P2: Adherents.jsx — handleRefund loading state
+- UX: Suppression bouton virement redondant sur formulaire don app (page 2)
 
 ## Quand Faical dit "verifie les bugs" ou "check les crashs"
 
@@ -254,7 +280,7 @@ claude mcp list
 Une fois actif, Claude Code peut interroger : Crashlytics, Firestore, CF logs, FCM.
 
 ## Notes
-- 36 Cloud Functions deployees (+ createNotifBO helper + alertCrashWhatsApp + monitorSilentBugs)
+- 42 Cloud Functions deployees (+ createNotifBO helper + alertCrashWhatsApp + monitorSilentBugs + generateAIContent)
 - Score audit securite : 9/10
 - App iOS uniquement en production (Android non deploye)
 - Calendrier priere local 2026 complet (fallback Mawaqit)
