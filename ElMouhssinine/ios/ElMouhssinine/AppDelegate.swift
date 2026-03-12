@@ -25,6 +25,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     UNUserNotificationCenter.current().delegate = self
     Messaging.messaging().delegate = self
 
+    // Register notification categories with actions (Apple Watch + iPhone)
+    registerNotificationCategories()
+
     // Request notification authorization
     UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
       if granted {
@@ -101,6 +104,100 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     }
   }
 
+  // MARK: - Notification Categories (Apple Watch + iPhone actions)
+
+  private func registerNotificationCategories() {
+    // -- Actions réutilisables --
+    let viewTimesAction = UNNotificationAction(
+      identifier: "VIEW_PRAYER_TIMES",
+      title: "Horaires",
+      options: .foreground
+    )
+    let viewDetailsAction = UNNotificationAction(
+      identifier: "VIEW_DETAILS",
+      title: "Détails",
+      options: .foreground
+    )
+    let markReadAction = UNNotificationAction(
+      identifier: "MARK_READ",
+      title: "Lu",
+      options: []
+    )
+
+    // -- Catégories --
+    let prayerCategory = UNNotificationCategory(
+      identifier: "PRAYER_REMINDER",
+      actions: [viewTimesAction],
+      intentIdentifiers: [],
+      hiddenPreviewsBodyPlaceholder: "Rappel de prière",
+      options: .customDismissAction
+    )
+
+    let janazaCategory = UNNotificationCategory(
+      identifier: "JANAZA",
+      actions: [viewDetailsAction],
+      intentIdentifiers: [],
+      hiddenPreviewsBodyPlaceholder: "Annonce janaza",
+      options: .customDismissAction
+    )
+
+    let announcementCategory = UNNotificationCategory(
+      identifier: "ANNOUNCEMENT",
+      actions: [markReadAction],
+      intentIdentifiers: [],
+      options: []
+    )
+
+    let eventCategory = UNNotificationCategory(
+      identifier: "EVENT",
+      actions: [viewDetailsAction],
+      intentIdentifiers: [],
+      options: []
+    )
+
+    let donationCategory = UNNotificationCategory(
+      identifier: "DONATION",
+      actions: [viewDetailsAction],
+      intentIdentifiers: [],
+      options: []
+    )
+
+    let membershipCategory = UNNotificationCategory(
+      identifier: "MEMBERSHIP",
+      actions: [viewDetailsAction],
+      intentIdentifiers: [],
+      options: []
+    )
+
+    let messageCategory = UNNotificationCategory(
+      identifier: "MESSAGE",
+      actions: [viewDetailsAction, markReadAction],
+      intentIdentifiers: [],
+      options: []
+    )
+
+    let jumuaCategory = UNNotificationCategory(
+      identifier: "JUMUA_REMINDER",
+      actions: [viewTimesAction],
+      intentIdentifiers: [],
+      hiddenPreviewsBodyPlaceholder: "Rappel Jumu'a",
+      options: []
+    )
+
+    UNUserNotificationCenter.current().setNotificationCategories([
+      prayerCategory,
+      janazaCategory,
+      announcementCategory,
+      eventCategory,
+      donationCategory,
+      membershipCategory,
+      messageCategory,
+      jumuaCategory,
+    ])
+
+    print("✅ Notification categories registered (8 categories)")
+  }
+
   // MARK: - UNUserNotificationCenterDelegate
 
   // Handle notification when app is in foreground
@@ -108,8 +205,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     completionHandler([.banner, .sound, .badge])
   }
 
-  // Handle notification tap
+  // Handle notification tap or action button press
   func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+    let actionIdentifier = response.actionIdentifier
+    let userInfo = response.notification.request.content.userInfo
+
+    // Forward action to React Native via NotificationCenter
+    if actionIdentifier != UNNotificationDefaultActionIdentifier &&
+       actionIdentifier != UNNotificationDismissActionIdentifier {
+      NotificationCenter.default.post(
+        name: NSNotification.Name("NotificationActionReceived"),
+        object: nil,
+        userInfo: [
+          "actionIdentifier": actionIdentifier,
+          "userInfo": userInfo,
+        ]
+      )
+    }
+
     completionHandler()
   }
 }

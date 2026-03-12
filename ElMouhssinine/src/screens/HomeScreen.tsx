@@ -87,6 +87,7 @@ import {
   clearNotificationHistory,
   StoredNotification,
 } from '../services/notificationHistory';
+import { updateWidgetPrayerData } from '../services/widgetService';
 
 // Donnees mockees par defaut (fallback)
 const mockPrayerTimes: PrayerTime[] = [
@@ -304,6 +305,9 @@ const HomeScreen = () => {
         { name: 'Isha', time: PrayerAPI.formatTime(timings.Isha), icon: '🌙' },
       ];
       setPrayerTimes(formattedTimes);
+
+      // Mettre à jour les widgets iOS (WidgetKit via App Groups)
+      updateWidgetPrayerData(timings);
 
       // Calculer la prochaine priere
       const next = PrayerAPI.getNextPrayer(timings);

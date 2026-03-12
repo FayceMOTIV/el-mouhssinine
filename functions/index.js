@@ -148,7 +148,7 @@ const createNotifBO = async ({ type, titre, message, membreId = null, membreNom 
  * @param {string} body - Corps de la notification
  * @param {Object} data - Données supplémentaires (optionnel)
  */
-const sendPushToMember = async (uid, title, body, data = {}) => {
+const sendPushToMember = async (uid, title, body, data = {}, apnsOptions = {}) => {
   if (!uid) return;
   try {
     const memberDoc = await admin.firestore().collection('members').doc(uid).get();
@@ -172,16 +172,22 @@ const sendPushToMember = async (uid, title, body, data = {}) => {
       return;
     }
 
+    // Build APNs payload with category/thread-id/interruption-level support
+    const apsPayload = {
+      sound: apnsOptions.sound || 'default',
+      badge: 1,
+    };
+    if (apnsOptions.category) apsPayload.category = apnsOptions.category;
+    if (apnsOptions.threadId) apsPayload['thread-id'] = apnsOptions.threadId;
+    if (apnsOptions.interruptionLevel) apsPayload['interruption-level'] = apnsOptions.interruptionLevel;
+
     const response = await admin.messaging().sendEachForMulticast({
       tokens,
       notification: { title, body },
       data: { ...data },
       apns: {
         payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-          },
+          aps: apsPayload,
         },
       },
     });
@@ -477,6 +483,8 @@ exports.onNewPopup = functions
           aps: {
             sound: 'default',
             badge: 1,
+            category: 'ANNOUNCEMENT',
+            'thread-id': 'announcements',
           },
         },
       },
@@ -561,6 +569,17 @@ exports.onNotificationFromBackoffice = functions
     const notifTitle = notification.titre || 'Notification';
     const notifBody = truncate(notification.message, 200);
 
+    // Map topic to APNs category + thread-id for Apple Watch actions
+    const categoryMapping = {
+      announcements: { category: 'ANNOUNCEMENT', threadId: 'announcements' },
+      events: { category: 'EVENT', threadId: 'events' },
+      janaza: { category: 'JANAZA', threadId: 'janaza', interruptionLevel: 'time-sensitive' },
+      members: { category: 'MEMBERSHIP', threadId: 'membership' },
+      non_members: { category: 'ANNOUNCEMENT', threadId: 'announcements' },
+      general: { category: 'ANNOUNCEMENT', threadId: 'announcements' },
+    };
+    const apnsMeta = categoryMapping[fcmTopic] || categoryMapping.general;
+
     const message = {
       notification: {
         title: notifTitle,
@@ -586,6 +605,9 @@ exports.onNotificationFromBackoffice = functions
             sound: 'default',
             badge: 1,
             'content-available': 1,
+            ...(apnsMeta.category && { category: apnsMeta.category }),
+            ...(apnsMeta.threadId && { 'thread-id': apnsMeta.threadId }),
+            ...(apnsMeta.interruptionLevel && { 'interruption-level': apnsMeta.interruptionLevel }),
           },
         },
       },
@@ -698,6 +720,8 @@ exports.sendManualNotification = functions
           aps: {
             sound: 'default',
             badge: 1,
+            category: 'ANNOUNCEMENT',
+            'thread-id': 'announcements',
           },
         },
       },
@@ -999,7 +1023,7 @@ exports.onNewMessage = functions
             },
             apns: {
               headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
-              payload: { aps: { sound: 'default', badge: 1 } },
+              payload: { aps: { sound: 'default', badge: 1, category: 'MESSAGE', 'thread-id': 'messages' } },
             },
             android: {
               priority: 'high',
@@ -1192,7 +1216,8 @@ exports.onMessageReply = functions
       try {
         await sendPushToMember(userId, '🕌 Nouvelle réponse',
           `La mosquée a répondu à votre message "${truncate(after.sujet, 30)}"`,
-          { type: 'message_reply', messageId: context.params.messageId, click_action: 'FLUTTER_NOTIFICATION_CLICK' }
+          { type: 'message_reply', messageId: context.params.messageId, click_action: 'FLUTTER_NOTIFICATION_CLICK' },
+          { category: 'MESSAGE', threadId: 'messages' }
         );
         console.log('🔔 Notification envoyée à l\'utilisateur:', userId);
 
@@ -1366,6 +1391,8 @@ exports.onMessageReply = functions
               aps: {
                 sound: 'default',
                 badge: 1,
+                category: 'MESSAGE',
+                'thread-id': 'messages',
               },
             },
           },
@@ -2403,7 +2430,7 @@ exports.stripeWebhook = functions
             const pushMsg = attemptCount >= 3
               ? 'Votre cotisation a expiré après 3 échecs de paiement. Renouvelez depuis l\'app.'
               : `Tentative ${attemptCount}/3 échouée. Vérifiez votre carte bancaire.`;
-            await sendPushToMember(failedMemberDoc.id, '⚠️ Prélèvement échoué', pushMsg);
+            await sendPushToMember(failedMemberDoc.id, '⚠️ Prélèvement échoué', pushMsg, {}, { category: 'MEMBERSHIP', threadId: 'membership' });
           }
 
           // Notification backoffice
@@ -2722,7 +2749,7 @@ exports.stripeWebhook = functions
 
             // Notifier le membre
             if (siMetadata.uid) {
-              await sendPushToMember(siMetadata.uid, '✅ Carte mise à jour', 'Votre nouvelle carte bancaire a été enregistrée.');
+              await sendPushToMember(siMetadata.uid, '✅ Carte mise à jour', 'Votre nouvelle carte bancaire a été enregistrée.', {}, { category: 'MEMBERSHIP', threadId: 'membership' });
 
               // Email confirmation
               const siMemberDoc = await admin.firestore().collection('members').doc(siMetadata.uid).get();
@@ -3677,7 +3704,8 @@ exports.sendRecuFiscal = functions
       // Push notification reçu fiscal (multi-device)
       await sendPushToMember(context.auth.uid, '📄 Votre reçu fiscal est disponible',
         'Votre reçu fiscal a été envoyé par email. Conservez-le pour votre déclaration d\'impôts.',
-        { type: 'recu_fiscal', annee: String(annee) }
+        { type: 'recu_fiscal', annee: String(annee) },
+        { category: 'DONATION', threadId: 'donations' }
       );
 
       return {
@@ -3985,7 +4013,8 @@ exports.onNewSympathisant = functions
       // Push notification bienvenue (multi-device)
       await sendPushToMember(snap.id, '🕌 Bienvenue chez El Mouhssinine !',
         'Votre compte a bien été créé. Complétez votre adhésion en réglant votre cotisation.',
-        { type: 'welcome_sympathisant', memberId: snap.id }
+        { type: 'welcome_sympathisant', memberId: snap.id },
+        { category: 'MEMBERSHIP', threadId: 'membership' }
       );
 
       return { success: true, email };
@@ -4159,7 +4188,8 @@ exports.validateMembership = functions
         // Envoyer notification push (multi-device)
         await sendPushToMember(memberId, '🎉 Adhésion validée !',
           'Félicitations, vous êtes maintenant membre actif.',
-          { type: 'membership_approved', memberId }
+          { type: 'membership_approved', memberId },
+          { category: 'MEMBERSHIP', threadId: 'membership' }
         );
 
         // Copie dans messagerie interne
@@ -4291,7 +4321,8 @@ exports.validateMembership = functions
         // 4. Envoyer notification push (multi-device)
         await sendPushToMember(memberId, 'Information adhésion',
           `Votre paiement de ${montant}€ a été converti en don.`,
-          { type: 'membership_rejected', memberId }
+          { type: 'membership_rejected', memberId },
+          { category: 'MEMBERSHIP', threadId: 'membership' }
         );
 
         // Copie dans messagerie interne
@@ -4344,7 +4375,8 @@ exports.validateMembership = functions
         // Envoyer notification push (multi-device)
         await sendPushToMember(memberId, '📍 Passage au bureau demandé',
           'La mosquée souhaite vous rencontrer pour votre adhésion.',
-          { type: 'visit_requested', memberId }
+          { type: 'visit_requested', memberId },
+          { category: 'MEMBERSHIP', threadId: 'membership' }
         );
 
         console.log('📍 Demande de passage au bureau pour', prenom, nom);
@@ -4416,7 +4448,7 @@ exports.undoValidation = functions
       });
 
       // Push notification au membre
-      await sendPushToMember(memberId, 'Validation annulée', 'Votre validation a été annulée par un administrateur. Contactez la mosquée pour plus d\'informations.');
+      await sendPushToMember(memberId, 'Validation annulée', 'Votre validation a été annulée par un administrateur. Contactez la mosquée pour plus d\'informations.', {}, { category: 'MEMBERSHIP', threadId: 'membership' });
 
       await createNotifBO({
         type: 'validation_requise',
@@ -5286,7 +5318,8 @@ exports.onDonationConfirmation = functions
         const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
         await sendPushToMember(donorUid, '✅ Don reçu — Merci !',
           `Votre don${pushMontant ? ' de ' + pushMontant : ''} a bien été reçu. Barak Allahu fik.`,
-          { type: 'don_received', donationId }
+          { type: 'don_received', donationId },
+          { category: 'DONATION', threadId: 'donations' }
         );
       }
 
@@ -5499,7 +5532,8 @@ exports.onCotisationConfirmation = functions
         const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
         await sendPushToMember(memberUidForPush, '✅ Paiement reçu — Merci !',
           `Votre cotisation${pushMontant ? ' de ' + pushMontant : ''} a bien été enregistrée. Votre adhésion est en cours de validation.`,
-          { type: 'cotisation_received', paymentId }
+          { type: 'cotisation_received', paymentId },
+          { category: 'MEMBERSHIP', threadId: 'membership' }
         );
       }
 
@@ -5699,7 +5733,8 @@ exports.refundPayment = functions
       // Push notification remboursement (multi-device)
       await sendPushToMember(memberId, '💸 Remboursement en cours',
         `Votre remboursement de ${refundedAmount}€ a été initié. Comptez 5 à 10 jours ouvrés.`,
-        { type: 'refund_initiated', memberId }
+        { type: 'refund_initiated', memberId },
+        { category: 'MEMBERSHIP', threadId: 'membership' }
       );
 
       // S11: Invalider le reçu fiscal lié si existant
@@ -6042,7 +6077,8 @@ exports.cancelSubscription = functions
       const dateFinStr = dateFin?.toDate ? dateFin.toDate().toLocaleDateString('fr-FR') : '';
       await sendPushToMember(uid, '📋 Annulation confirmée',
         `Votre abonnement mensuel sera actif jusqu'au ${dateFinStr || 'fin de période'}. Vous passerez ensuite en sympathisant.`,
-        { type: 'subscription_cancelled' }
+        { type: 'subscription_cancelled' },
+        { category: 'MEMBERSHIP', threadId: 'membership' }
       );
 
       return {
@@ -6529,7 +6565,8 @@ exports.checkExpiringCotisations = functions
             pushBody = 'Votre statut est maintenant sympathisant. Renouvelez pour retrouver vos avantages.';
           }
           await sendPushToMember(memberDoc.id, pushTitle, pushBody,
-            { type: 'expiration_reminder', emailType }
+            { type: 'expiration_reminder', emailType },
+            { category: 'MEMBERSHIP', threadId: 'membership' }
           );
         }
 
@@ -6608,7 +6645,8 @@ exports.checkExpiringCotisations = functions
             // Push
             await sendPushToMember(gDoc.id, '🔔 Votre adhésion El Mouhssinine a expiré',
               'Renouvelez maintenant pour retrouver votre statut de membre actif.',
-              { type: 'grace_period_expired' }
+              { type: 'grace_period_expired' },
+              { category: 'MEMBERSHIP', threadId: 'membership' }
             );
             await gDoc.ref.update({ reminder_grace_expired_sent: true });
           } catch (eErr) {
@@ -6661,7 +6699,8 @@ exports.checkExpiringCotisations = functions
           // Push
           await sendPushToMember(rDoc.id, '💚 Rejoignez-nous à nouveau !',
             'Un an de cotisation = accès complet + reçu fiscal.',
-            { type: 'relance_30d' }
+            { type: 'relance_30d' },
+            { category: 'MEMBERSHIP', threadId: 'membership' }
           );
           await rDoc.ref.update({ reminder_30d_relance_sent: true });
           relance30++;
