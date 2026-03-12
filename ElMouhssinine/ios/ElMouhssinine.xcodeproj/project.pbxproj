@@ -37,20 +37,6 @@
 		};
 /* End PBXContainerItemProxy section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		45C05649F0CCF9549287003F /* Embed App Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				3B4134A92E75457C33B6721A /* ElMouhssinineWidgetsExtension.appex in Embed App Extensions */,
-			);
-			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
 		037206595AEBBA4B5246EF0A /* WidgetBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WidgetBridge.swift; path = ElMouhssinine/WidgetBridge.swift; sourceTree = "<group>"; };
 		058E22059BD73F7F383C5287 /* Pods_ElMouhssinine.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ElMouhssinine.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -210,12 +196,10 @@
 				022B0A921CCD3EAF48D19F80 /* [CP] Copy Pods Resources */,
 				16914B39D2119131450A542F /* [CP-User] [RNFB] Core Configuration */,
 				F02EF9810B1261ACC0790708 /* [CP-User] [RNFB] Crashlytics Configuration */,
-				45C05649F0CCF9549287003F /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				30CC6FD14BB274A990658692 /* PBXTargetDependency */,
 			);
 			name = ElMouhssinine;
 			productName = ElMouhssinine;
@@ -224,7 +208,7 @@
 		};
 		6673B21A7911644DEA564B27 /* ElMouhssinineWidgetsExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 056A608E9AAC9BF06E66A0A6 /* Build configuration list for PBXNativeTarget "ElMouhssinineWidgetsExtension" */;
+			buildConfigurationList = 056A608E9AAC9BF06E66A0A6 /* Build configuration list for <deleted target> */;
 			buildPhases = (
 				63EE9C4AB9FB103D83D8E18C /* Sources */,
 				C4A4FF1C591ABA6D40F652C6 /* Frameworks */,
@@ -270,7 +254,6 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* ElMouhssinine */,
-				6673B21A7911644DEA564B27 /* ElMouhssinineWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -727,7 +710,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		056A608E9AAC9BF06E66A0A6 /* Build configuration list for PBXNativeTarget "ElMouhssinineWidgetsExtension" */ = {
+		056A608E9AAC9BF06E66A0A6 /* Build configuration list for <deleted target> */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				148377C553747E39684E9B97 /* Release */,
