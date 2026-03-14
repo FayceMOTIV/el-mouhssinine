@@ -76,7 +76,7 @@ const DonationsScreen = () => {
   const [showRIBModal, setShowRIBModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showZakatModal, setShowZakatModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<string>('cb');
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
   const [copied, setCopied] = useState('');
   const [showFilesModal, setShowFilesModal] = useState(false);
@@ -1627,7 +1627,7 @@ const DonationsScreen = () => {
                     setSelectedProject(null);
                     setSelectedAmount(null);
                     setCustomAmount('');
-                    setPaymentMethod(null);
+                    setPaymentMethod('cb');
                     setDonorType('particulier');
                     setDonorFirstName('');
                     setDonorLastName('');
@@ -1938,20 +1938,72 @@ const DonationsScreen = () => {
                 );
               }
 
-              // Projets internes : redirection vers site sécurisé (Apple guideline 3.2.1)
+              // Projets internes : choix CB (site sécurisé) ou virement
               return (
                 <View>
-                  <View style={styles.externalPaymentNotice}>
-                    <Text style={styles.externalPaymentNoticeIcon}>🌐</Text>
-                    <Text
-                      style={[
-                        styles.externalPaymentNoticeText,
-                        isRTL && styles.rtlText,
-                      ]}
-                    >
-                      {t('donationRedirectNotice')}
-                    </Text>
-                  </View>
+                  {/* Option 1 : CB / Apple Pay via site */}
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      paymentMethod !== 'virement' &&
+                        styles.paymentOptionSelected,
+                      isRTL && styles.paymentOptionRTL,
+                    ]}
+                    onPress={() => setPaymentMethod('cb')}
+                  >
+                    <Text style={styles.paymentIcon}>💳</Text>
+                    <View style={styles.paymentInfo}>
+                      <Text
+                        style={[styles.paymentTitle, isRTL && styles.rtlText]}
+                      >
+                        {language === 'ar' ? 'بطاقة ائتمان / Apple Pay' : 'CB / Apple Pay'}
+                      </Text>
+                      <Text
+                        style={[styles.paymentDesc, isRTL && styles.rtlText]}
+                      >
+                        {language === 'ar'
+                          ? 'دفع آمن عبر موقعنا'
+                          : 'Paiement securise via notre site'}
+                      </Text>
+                    </View>
+                    {paymentMethod !== 'virement' && (
+                      <View style={styles.checkmark}>
+                        <Text style={styles.checkmarkText}>✓</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Option 2 : Virement bancaire */}
+                  <TouchableOpacity
+                    style={[
+                      styles.paymentOption,
+                      paymentMethod === 'virement' &&
+                        styles.paymentOptionSelected,
+                      isRTL && styles.paymentOptionRTL,
+                    ]}
+                    onPress={() => setPaymentMethod('virement')}
+                  >
+                    <Text style={styles.paymentIcon}>🏦</Text>
+                    <View style={styles.paymentInfo}>
+                      <Text
+                        style={[styles.paymentTitle, isRTL && styles.rtlText]}
+                      >
+                        {t('bankTransfer')}
+                      </Text>
+                      <Text
+                        style={[styles.paymentDesc, isRTL && styles.rtlText]}
+                      >
+                        {language === 'ar'
+                          ? 'تحويل إلى الحساب البنكي للمسجد'
+                          : 'Virement vers le compte de la mosquee'}
+                      </Text>
+                    </View>
+                    {paymentMethod === 'virement' && (
+                      <View style={styles.checkmark}>
+                        <Text style={styles.checkmarkText}>✓</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
                 </View>
               );
             })()}
@@ -1972,14 +2024,20 @@ const DonationsScreen = () => {
             >
               <Text style={[styles.primaryBtnText, isRTL && styles.rtlText]}>
                 {paymentMethod === 'virement'
-                  ? `🔒 ${t('payButton')} ${getFinalAmount()}€`
-                  : `🌐 ${t('donateOnWebsite')}`}
+                  ? language === 'ar'
+                    ? `🏦 عرض معلومات التحويل`
+                    : `🏦 Voir les coordonnees bancaires`
+                  : language === 'ar'
+                    ? `💳 ادفع ${getFinalAmount()}€ بالبطاقة`
+                    : `💳 Payer ${getFinalAmount()}€ par carte`}
               </Text>
             </TouchableOpacity>
 
             {paymentMethod !== 'virement' && (
               <Text style={{ fontSize: 12, color: '#888', textAlign: 'center', marginTop: 8, paddingHorizontal: 16 }}>
-                💡 Pour retrouver votre don dans votre historique, utilisez la même adresse email que votre compte membre.
+                {language === 'ar'
+                  ? '💡 لتجد تبرعك في سجلك، استخدم نفس البريد الإلكتروني لحسابك'
+                  : '💡 Pour retrouver votre don dans votre historique, utilisez la meme adresse email que votre compte membre.'}
               </Text>
             )}
 

@@ -202,11 +202,11 @@ export default function DonPublic() {
           </p>
           <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1 text-gray-700">
             <p><span className="text-gray-400">Titulaire :</span> MOSQUEE EL MOHSININE</p>
-            <p><span className="text-gray-400">IBAN :</span> Disponible sur demande</p>
+            <p><span className="text-gray-400">IBAN :</span> Disponible sur l'application El Mouhssinine</p>
             <p><span className="text-gray-400">Objet :</span> DON + votre nom</p>
           </div>
           <p className="text-sm text-gray-500">
-            Pour obtenir l'IBAN ou pour tout renseignement, contactez-nous à{' '}
+            Téléchargez l'application El Mouhssinine pour accéder au RIB complet, ou contactez-nous à{' '}
             <a href="mailto:centreculturelislamique@orange.fr" className="text-emerald-600 underline">
               centreculturelislamique@orange.fr
             </a>

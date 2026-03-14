@@ -2055,58 +2055,8 @@ exports.stripeWebhook = functions
             );
           }
 
-          // Email A : "Demande d'adhésion reçue" pour les cotisations
-          if (metadata.type === 'cotisation' && metadata.memberId) {
-            try {
-              const memberSnap = await admin.firestore().collection('members').doc(metadata.memberId).get();
-              const memberData = memberSnap.exists ? memberSnap.data() : {};
-              const memberEmail = (memberData.email || metadata.email || '').toLowerCase();
-              const memberPrenom = memberData.prenom || metadata.memberName || 'Membre';
-
-              if (memberEmail) {
-                const brevoUser = BREVO_SMTP_USER;
-                const brevoPass = BREVO_SMTP_PASS;
-                const fromEmail = BREVO_FROM_EMAIL;
-                const fromName = BREVO_FROM_NAME || 'Mosquée El Mouhssinine';
-
-                if (brevoUser && brevoPass && fromEmail) {
-                  const transporter = nodemailer.createTransport({
-                    host: 'smtp-relay.brevo.com',
-                    port: 587,
-                    secure: false,
-                    auth: { user: brevoUser, pass: brevoPass },
-                  });
-
-                  await transporter.sendMail({
-                    from: `"${fromName}" <${fromEmail}>`,
-                    to: memberEmail,
-                    subject: `✅ Votre demande d'adhésion a bien été reçue`,
-                    html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                      <div style="background: linear-gradient(135deg, #1a5276 0%, #2e86c1 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-                        <h1 style="color: white; margin: 0;">✅ Demande reçue</h1>
-                      </div>
-                      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-                        <p style="font-size: 16px;">Assalamu alaykum <strong>${escapeHtml(memberPrenom)}</strong>,</p>
-                        <p style="font-size: 16px;">Nous avons bien reçu votre paiement de cotisation de <strong>${amountEuros}€</strong>.</p>
-                        <div style="background: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2e86c1;">
-                          <p style="margin: 0; font-size: 16px;">Votre demande d'adhésion est <strong>en cours de traitement</strong> par le bureau de la mosquée.</p>
-                        </div>
-                        <p style="font-size: 16px;">Vous recevrez un email de confirmation dès validation de votre dossier.</p>
-                        <p style="font-size: 16px; color: #444;">Barakallahu fik,<br><strong>L'équipe El Mouhssinine</strong></p>
-                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
-                          <p style="color: #aaa; font-size: 11px;">Mosquée El Mouhssinine - Bourg-en-Bresse</p>
-                        </div>
-                      </div>
-                    </div>`,
-                  });
-                  console.log('📧 Email "demande adhésion reçue" envoyé à', memberEmail.substring(0, 3) + '***');
-                }
-              }
-            } catch (emailErr) {
-              console.error('[EMAIL ERROR] Email demande adhésion reçue échoué:', emailErr.message);
-            }
-          }
+          // Email A supprimé (doublon) — onCotisationConfirmation trigger gère l'envoi
+          // via le trigger Firestore payments/{paymentId}.onCreate
         } catch (dbError) {
           // Gérer le cas d'idempotence (pas une vraie erreur)
           if (dbError && dbError.alreadyProcessed) {
@@ -8184,4 +8134,106 @@ exports.generateAIContent = functions
     }
 
     return { content };
+  });
+
+// ==================== VERIFICATION EMAIL VIA BREVO (anti-spam) ====================
+
+exports.sendVerificationEmail = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    // 1. Auth check
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Connexion requise');
+    }
+    const uid = context.auth.uid;
+    const email = context.auth.token.email;
+    if (!email) {
+      throw new functions.https.HttpsError('invalid-argument', 'Email non trouvé dans le compte');
+    }
+
+    // 2. Skip si déjà vérifié
+    if (context.auth.token.email_verified) {
+      return { success: true, message: 'Email déjà vérifié' };
+    }
+
+    // 3. Rate limit : max 1 email / 2 min par uid
+    const rateLimitRef = admin.firestore().collection('verification_emails').doc(uid);
+    const rateLimitDoc = await rateLimitRef.get();
+    if (rateLimitDoc.exists) {
+      const lastSent = rateLimitDoc.data()?.lastSent?.toDate?.();
+      if (lastSent && (Date.now() - lastSent.getTime()) < 120000) {
+        throw new functions.https.HttpsError(
+          'resource-exhausted',
+          'Veuillez patienter 2 minutes avant de renvoyer un email de vérification'
+        );
+      }
+    }
+
+    // 4. Générer le lien de vérification Firebase
+    const verificationLink = await admin.auth().generateEmailVerificationLink(email, {
+      url: 'https://el-mouhssinine.web.app',
+    });
+
+    // 5. Envoyer via Brevo SMTP
+    const brevoUser = BREVO_SMTP_USER;
+    const brevoPass = BREVO_SMTP_PASS;
+    const fromEmail = BREVO_FROM_EMAIL || 'centreculturelislamique@orange.fr';
+    const fromName = BREVO_FROM_NAME || 'Mosquée El Mohsinine';
+
+    if (!brevoUser || !brevoPass) {
+      await logServerError('BREVO_SMTP non configuré pour sendVerificationEmail', 'sendVerificationEmail', { uid });
+      throw new functions.https.HttpsError('failed-precondition', 'Service email non configuré');
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
+      auth: { user: brevoUser, pass: brevoPass },
+    });
+
+    const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 22px;">📧 Vérification de votre email</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+        <p style="font-size: 16px;">Assalamu alaykum,</p>
+        <p style="font-size: 16px;">Merci de vous être inscrit(e) sur l'application <strong>El Mouhssinine</strong>.</p>
+        <p style="font-size: 16px;">Veuillez cliquer sur le bouton ci-dessous pour confirmer votre adresse email :</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationLink}" style="background: #2e7d32; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+            ✅ Vérifier mon email
+          </a>
+        </div>
+        <p style="font-size: 14px; color: #666;">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :</p>
+        <p style="font-size: 12px; color: #999; word-break: break-all;">${verificationLink}</p>
+        <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2e7d32;">
+          <p style="margin: 0; font-size: 14px;">⚠️ Ce lien est valable pendant 24 heures.</p>
+        </div>
+        <p style="font-size: 14px; color: #444;">Barakallahu fik,<br><strong>L'équipe El Mouhssinine</strong></p>
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
+          <p style="color: #aaa; font-size: 11px;">Mosquée El Mouhssinine — Bourg-en-Bresse</p>
+        </div>
+      </div>
+    </div>`;
+
+    try {
+      await transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to: email,
+        subject: '📧 Vérifiez votre email — El Mouhssinine',
+        html: emailHtml,
+      });
+    } catch (smtpError) {
+      await logServerError(`SMTP sendVerificationEmail échoué: ${smtpError.message}`, 'sendVerificationEmail', { uid });
+      throw new functions.https.HttpsError('internal', "Erreur lors de l'envoi de l'email");
+    }
+
+    // 6. Enregistrer le rate limit
+    await rateLimitRef.set({ lastSent: admin.firestore.FieldValue.serverTimestamp() });
+
+    console.log('📧 Email vérification Brevo envoyé à', maskEmail(email));
+    return { success: true, message: 'Email de vérification envoyé' };
   });

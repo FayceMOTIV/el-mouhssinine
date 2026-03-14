@@ -7,62 +7,76 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		070366E4AE4E5ADF11ECD0A3 /* ElMouhssinineWidgetsExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 88C6F454B299812C9958857C /* ElMouhssinineWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		171459B2E6D122A7C66F4E2A /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7C5278F0CD3A1D9DF31014E6 /* WidgetKit.framework */; };
 		18B056D5F466D679AA0655BB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
-		3B4134A92E75457C33B6721A /* ElMouhssinineWidgetsExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 91DC9B50240D9355391EF8EF /* ElMouhssinineWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		5B44A3B8A96E243EB31EBFE8 /* PrayerTimesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3032EF36BA3BFDDFCCB6D77 /* PrayerTimesWidget.swift */; };
-		7165235F73CA8E9EE6BEDE26 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 788D45B1A677D9F6400E70C1 /* Foundation.framework */; };
+		1A7E93CE9D15BFD1B1B6F088 /* ElMouhssinineWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 606D37EB814269A9149E8B4A /* ElMouhssinineWidgets.swift */; };
+		3CD364C402BF67F090519B86 /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC36084E4343C861B56A09DA /* WidgetBridge.swift */; };
+		5A55EC8D0C9FD45387291467 /* WidgetBridgeBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 23272E19EC36C97D2040B657 /* WidgetBridgeBridge.m */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
-		82C2EBC826987B52FC09B0CA /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F6C54EFB779EC68098B8C3B1 /* SwiftUI.framework */; };
-		9219FD5915A51E61EBCB30FE /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 037206595AEBBA4B5246EF0A /* WidgetBridge.swift */; };
+		8ECA02B6CF22C65B6C1006A8 /* SharedData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C4FBD638F3C0BFA1DF41A9 /* SharedData.swift */; };
 		B0EA40782F140FFD00731D11 /* MosqueGeofencing.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0EA40772F140FFD00731D10 /* MosqueGeofencing.swift */; };
 		B0EA407A2F140FFD00731D13 /* MosqueGeofencingBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = B0EA40792F140FFD00731D12 /* MosqueGeofencingBridge.m */; };
-		B15A6C37EE273B7A7CA6E111 /* WidgetBridgeBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = A094AC3DE94D0E74535C8C62 /* WidgetBridgeBridge.m */; };
-		CD706F889060ACCEF3CB9EF5 /* NextPrayerWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7818E9FE0CDA53F4D9797D42 /* NextPrayerWidget.swift */; };
-		E1EFC040FA724FA1A560B5A7 /* SharedData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B04E1081A968E4977E74A3 /* SharedData.swift */; };
+		D938BE15214053DF503CAFFE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 37C630F7CF98C3DBC16B73C9 /* Foundation.framework */; };
+		E279C7EE531B0E013A42172D /* PrayerTimesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC7701C66CF2F234D97DFB4 /* PrayerTimesWidget.swift */; };
 		EC6169C6D4D1EDE675CA23F7 /* Pods_ElMouhssinine.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 058E22059BD73F7F383C5287 /* Pods_ElMouhssinine.framework */; };
-		F7412A9593FB2FBF24B5EE0D /* ElMouhssinineWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE5987C4D2B8E5BF3BB5698 /* ElMouhssinineWidgets.swift */; };
+		F12A1DB79205A528B8F97771 /* NextPrayerWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4DE43A895A3D0EC85B7C990 /* NextPrayerWidget.swift */; };
+		F69836452B051B2A49E2A73E /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9954165313D8D1FC21A3732C /* WidgetKit.framework */; };
+		F758BE6B311F1E4F151F2518 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1C2097E9932D53843EEC8547 /* SwiftUI.framework */; };
 		FIREBASE001122334455667788 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FIREBASE001122334455667799 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		2B9437CBC4EAC92845ED3400 /* PBXContainerItemProxy */ = {
+		4AD5697BB0D904F9DEC76909 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 6673B21A7911644DEA564B27;
+			remoteGlobalIDString = 677B72DD451B3310C35C0740;
 			remoteInfo = ElMouhssinineWidgetsExtension;
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		8526D3545B0C8FFEF74FC7DD /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				070366E4AE4E5ADF11ECD0A3 /* ElMouhssinineWidgetsExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		037206595AEBBA4B5246EF0A /* WidgetBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WidgetBridge.swift; path = ElMouhssinine/WidgetBridge.swift; sourceTree = "<group>"; };
 		058E22059BD73F7F383C5287 /* Pods_ElMouhssinine.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ElMouhssinine.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0CC7701C66CF2F234D97DFB4 /* PrayerTimesWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PrayerTimesWidget.swift; sourceTree = "<group>"; };
+		0E1BC17E6900079ADDE64072 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* ElMouhssinine.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ElMouhssinine.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = ElMouhssinine/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = ElMouhssinine/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = ElMouhssinine/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		16721E8C477E40A95CB6C71C /* ElMouhssinineWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = ElMouhssinineWidgets.entitlements; path = ElMouhssinineWidgets/ElMouhssinineWidgets.entitlements; sourceTree = "<group>"; };
+		1C2097E9932D53843EEC8547 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		23272E19EC36C97D2040B657 /* WidgetBridgeBridge.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = WidgetBridgeBridge.m; path = ElMouhssinine/WidgetBridgeBridge.m; sourceTree = "<group>"; };
 		33140B6ADE7C0FBF7C6DF7DF /* Pods-ElMouhssinine.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ElMouhssinine.release.xcconfig"; path = "Target Support Files/Pods-ElMouhssinine/Pods-ElMouhssinine.release.xcconfig"; sourceTree = "<group>"; };
+		37C630F7CF98C3DBC16B73C9 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		606D37EB814269A9149E8B4A /* ElMouhssinineWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElMouhssinineWidgets.swift; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = ElMouhssinine/AppDelegate.swift; sourceTree = "<group>"; };
-		7818E9FE0CDA53F4D9797D42 /* NextPrayerWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = NextPrayerWidget.swift; path = ElMouhssinineWidgets/NextPrayerWidget.swift; sourceTree = "<group>"; };
-		788D45B1A677D9F6400E70C1 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		7C5278F0CD3A1D9DF31014E6 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = ElMouhssinine/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		918F2D46B33E85D4432CED19 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = ElMouhssinineWidgets/Info.plist; sourceTree = "<group>"; };
-		91DC9B50240D9355391EF8EF /* ElMouhssinineWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ElMouhssinineWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		93B04E1081A968E4977E74A3 /* SharedData.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SharedData.swift; path = ElMouhssinineWidgets/SharedData.swift; sourceTree = "<group>"; };
-		A094AC3DE94D0E74535C8C62 /* WidgetBridgeBridge.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = WidgetBridgeBridge.m; path = ElMouhssinine/WidgetBridgeBridge.m; sourceTree = "<group>"; };
+		88C6F454B299812C9958857C /* ElMouhssinineWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ElMouhssinineWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9954165313D8D1FC21A3732C /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		A4DE43A895A3D0EC85B7C990 /* NextPrayerWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NextPrayerWidget.swift; sourceTree = "<group>"; };
 		B0EA40762F140FFD00731D09 /* ElMouhssinine.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = ElMouhssinine.entitlements; path = ElMouhssinine/ElMouhssinine.entitlements; sourceTree = "<group>"; };
 		B0EA40772F140FFD00731D10 /* MosqueGeofencing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MosqueGeofencing.swift; path = ElMouhssinine/MosqueGeofencing.swift; sourceTree = "<group>"; };
 		B0EA40792F140FFD00731D12 /* MosqueGeofencingBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = MosqueGeofencingBridge.m; path = ElMouhssinine/MosqueGeofencingBridge.m; sourceTree = "<group>"; };
+		BC36084E4343C861B56A09DA /* WidgetBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WidgetBridge.swift; path = ElMouhssinine/WidgetBridge.swift; sourceTree = "<group>"; };
+		D2C4FBD638F3C0BFA1DF41A9 /* SharedData.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedData.swift; sourceTree = "<group>"; };
 		E15875B02240A4CC64404615 /* Pods-ElMouhssinine.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ElMouhssinine.debug.xcconfig"; path = "Target Support Files/Pods-ElMouhssinine/Pods-ElMouhssinine.debug.xcconfig"; sourceTree = "<group>"; };
+		EB4C4A145A1BEAEA7941DF89 /* ElMouhssinineWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = ElMouhssinineWidgets.entitlements; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		F3032EF36BA3BFDDFCCB6D77 /* PrayerTimesWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = PrayerTimesWidget.swift; path = ElMouhssinineWidgets/PrayerTimesWidget.swift; sourceTree = "<group>"; };
-		F6C54EFB779EC68098B8C3B1 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
-		FDE5987C4D2B8E5BF3BB5698 /* ElMouhssinineWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ElMouhssinineWidgets.swift; path = ElMouhssinineWidgets/ElMouhssinineWidgets.swift; sourceTree = "<group>"; };
 		FIREBASE001122334455667799 /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "ElMouhssinine/GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -75,13 +89,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		C4A4FF1C591ABA6D40F652C6 /* Frameworks */ = {
+		5FA9A1C942E7015E20736FC7 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7165235F73CA8E9EE6BEDE26 /* Foundation.framework in Frameworks */,
-				171459B2E6D122A7C66F4E2A /* WidgetKit.framework in Frameworks */,
-				82C2EBC826987B52FC09B0CA /* SwiftUI.framework in Frameworks */,
+				D938BE15214053DF503CAFFE /* Foundation.framework in Frameworks */,
+				F69836452B051B2A49E2A73E /* WidgetKit.framework in Frameworks */,
+				F758BE6B311F1E4F151F2518 /* SwiftUI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,10 +114,24 @@
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 				FIREBASE001122334455667799 /* GoogleService-Info.plist */,
-				037206595AEBBA4B5246EF0A /* WidgetBridge.swift */,
-				A094AC3DE94D0E74535C8C62 /* WidgetBridgeBridge.m */,
+				BC36084E4343C861B56A09DA /* WidgetBridge.swift */,
+				23272E19EC36C97D2040B657 /* WidgetBridgeBridge.m */,
 			);
 			name = ElMouhssinine;
+			sourceTree = "<group>";
+		};
+		1B628A5F71B047B3AE681939 /* ElMouhssinineWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				D2C4FBD638F3C0BFA1DF41A9 /* SharedData.swift */,
+				606D37EB814269A9149E8B4A /* ElMouhssinineWidgets.swift */,
+				A4DE43A895A3D0EC85B7C990 /* NextPrayerWidget.swift */,
+				0CC7701C66CF2F234D97DFB4 /* PrayerTimesWidget.swift */,
+				0E1BC17E6900079ADDE64072 /* Info.plist */,
+				EB4C4A145A1BEAEA7941DF89 /* ElMouhssinineWidgets.entitlements */,
+			);
+			name = ElMouhssinineWidgets;
+			path = ElMouhssinineWidgets;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
@@ -111,17 +139,17 @@
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				058E22059BD73F7F383C5287 /* Pods_ElMouhssinine.framework */,
-				32AE6478D3B2686F208A30C4 /* iOS */,
-				7C5278F0CD3A1D9DF31014E6 /* WidgetKit.framework */,
-				F6C54EFB779EC68098B8C3B1 /* SwiftUI.framework */,
+				5F2794412526DD77509F7807 /* iOS */,
+				9954165313D8D1FC21A3732C /* WidgetKit.framework */,
+				1C2097E9932D53843EEC8547 /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		32AE6478D3B2686F208A30C4 /* iOS */ = {
+		5F2794412526DD77509F7807 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
-				788D45B1A677D9F6400E70C1 /* Foundation.framework */,
+				37C630F7CF98C3DBC16B73C9 /* Foundation.framework */,
 			);
 			name = iOS;
 			sourceTree = "<group>";
@@ -141,7 +169,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
-				9A3310C6E59524B1B6F53814 /* ElMouhssinineWidgets */,
+				1B628A5F71B047B3AE681939 /* ElMouhssinineWidgets */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -152,23 +180,9 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* ElMouhssinine.app */,
-				91DC9B50240D9355391EF8EF /* ElMouhssinineWidgetsExtension.appex */,
+				88C6F454B299812C9958857C /* ElMouhssinineWidgetsExtension.appex */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		9A3310C6E59524B1B6F53814 /* ElMouhssinineWidgets */ = {
-			isa = PBXGroup;
-			children = (
-				93B04E1081A968E4977E74A3 /* SharedData.swift */,
-				FDE5987C4D2B8E5BF3BB5698 /* ElMouhssinineWidgets.swift */,
-				7818E9FE0CDA53F4D9797D42 /* NextPrayerWidget.swift */,
-				F3032EF36BA3BFDDFCCB6D77 /* PrayerTimesWidget.swift */,
-				16721E8C477E40A95CB6C71C /* ElMouhssinineWidgets.entitlements */,
-				918F2D46B33E85D4432CED19 /* Info.plist */,
-			);
-			name = ElMouhssinineWidgets;
-			path = ElMouhssinineWidgets;
 			sourceTree = "<group>";
 		};
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
@@ -196,23 +210,25 @@
 				022B0A921CCD3EAF48D19F80 /* [CP] Copy Pods Resources */,
 				16914B39D2119131450A542F /* [CP-User] [RNFB] Core Configuration */,
 				F02EF9810B1261ACC0790708 /* [CP-User] [RNFB] Crashlytics Configuration */,
+				8526D3545B0C8FFEF74FC7DD /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				6C7F9A6416C8382CADA74C6D /* PBXTargetDependency */,
 			);
 			name = ElMouhssinine;
 			productName = ElMouhssinine;
 			productReference = 13B07F961A680F5B00A75B9A /* ElMouhssinine.app */;
 			productType = "com.apple.product-type.application";
 		};
-		6673B21A7911644DEA564B27 /* ElMouhssinineWidgetsExtension */ = {
+		677B72DD451B3310C35C0740 /* ElMouhssinineWidgetsExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 056A608E9AAC9BF06E66A0A6 /* Build configuration list for <deleted target> */;
+			buildConfigurationList = FC7FB08EB1CC6319D63D96E7 /* Build configuration list for PBXNativeTarget "ElMouhssinineWidgetsExtension" */;
 			buildPhases = (
-				63EE9C4AB9FB103D83D8E18C /* Sources */,
-				C4A4FF1C591ABA6D40F652C6 /* Frameworks */,
-				96F3BF78F1AEAB1331F18F08 /* Resources */,
+				DE4F822E198C23053D82E4AF /* Sources */,
+				5FA9A1C942E7015E20736FC7 /* Frameworks */,
+				1529CB5E4B7A2F96B67AA84B /* Resources */,
 			);
 			buildRules = (
 			);
@@ -220,7 +236,7 @@
 			);
 			name = ElMouhssinineWidgetsExtension;
 			productName = ElMouhssinineWidgetsExtension;
-			productReference = 91DC9B50240D9355391EF8EF /* ElMouhssinineWidgetsExtension.appex */;
+			productReference = 88C6F454B299812C9958857C /* ElMouhssinineWidgetsExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -234,7 +250,7 @@
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1120;
 					};
-					6673B21A7911644DEA564B27 = {
+					677B72DD451B3310C35C0740 = {
 						CreatedOnToolsVersion = 15.0;
 						LastSwiftMigration = 1500;
 					};
@@ -254,6 +270,7 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* ElMouhssinine */,
+				677B72DD451B3310C35C0740 /* ElMouhssinineWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -270,7 +287,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		96F3BF78F1AEAB1331F18F08 /* Resources */ = {
+		1529CB5E4B7A2F96B67AA84B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -319,7 +336,6 @@
 			files = (
 			);
 			inputPaths = (
-				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "[CP-User] [RNFB] Core Configuration";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -349,8 +365,6 @@
 			files = (
 			);
 			inputPaths = (
-				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
-				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "[CP-User] [RNFB] Crashlytics Configuration";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -389,63 +403,34 @@
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				B0EA40782F140FFD00731D11 /* MosqueGeofencing.swift in Sources */,
 				B0EA407A2F140FFD00731D13 /* MosqueGeofencingBridge.m in Sources */,
-				9219FD5915A51E61EBCB30FE /* WidgetBridge.swift in Sources */,
-				B15A6C37EE273B7A7CA6E111 /* WidgetBridgeBridge.m in Sources */,
+				3CD364C402BF67F090519B86 /* WidgetBridge.swift in Sources */,
+				5A55EC8D0C9FD45387291467 /* WidgetBridgeBridge.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		63EE9C4AB9FB103D83D8E18C /* Sources */ = {
+		DE4F822E198C23053D82E4AF /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E1EFC040FA724FA1A560B5A7 /* SharedData.swift in Sources */,
-				F7412A9593FB2FBF24B5EE0D /* ElMouhssinineWidgets.swift in Sources */,
-				CD706F889060ACCEF3CB9EF5 /* NextPrayerWidget.swift in Sources */,
-				5B44A3B8A96E243EB31EBFE8 /* PrayerTimesWidget.swift in Sources */,
+				8ECA02B6CF22C65B6C1006A8 /* SharedData.swift in Sources */,
+				1A7E93CE9D15BFD1B1B6F088 /* ElMouhssinineWidgets.swift in Sources */,
+				F12A1DB79205A528B8F97771 /* NextPrayerWidget.swift in Sources */,
+				E279C7EE531B0E013A42172D /* PrayerTimesWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		30CC6FD14BB274A990658692 /* PBXTargetDependency */ = {
+		6C7F9A6416C8382CADA74C6D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = ElMouhssinineWidgetsExtension;
-			target = 6673B21A7911644DEA564B27 /* ElMouhssinineWidgetsExtension */;
-			targetProxy = 2B9437CBC4EAC92845ED3400 /* PBXContainerItemProxy */;
+			target = 677B72DD451B3310C35C0740 /* ElMouhssinineWidgetsExtension */;
+			targetProxy = 4AD5697BB0D904F9DEC76909 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		027D923B2F626EF1569E7A57 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = ElMouhssinineWidgets/ElMouhssinineWidgets.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 287;
-				DEVELOPMENT_TEAM = 5ZR87TPM89;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = ElMouhssinineWidgets/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = fr.elmouhssinine.mosquee.widgets;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E15875B02240A4CC64404615 /* Pods-ElMouhssinine.debug.xcconfig */;
@@ -453,7 +438,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = ElMouhssinine/ElMouhssinine.entitlements;
-				CURRENT_PROJECT_VERSION = 287;
+				CURRENT_PROJECT_VERSION = 288;
 				DEVELOPMENT_TEAM = 5ZR87TPM89;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = ElMouhssinine/Info.plist;
@@ -484,7 +469,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = ElMouhssinine/ElMouhssinine.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 287;
+				CURRENT_PROJECT_VERSION = 288;
 				DEVELOPMENT_TEAM = 5ZR87TPM89;
 				INFOPLIST_FILE = ElMouhssinine/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -502,34 +487,6 @@
 				PRODUCT_NAME = ElMouhssinine;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
-			};
-			name = Release;
-		};
-		148377C553747E39684E9B97 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_ENTITLEMENTS = ElMouhssinineWidgets/ElMouhssinineWidgets.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 287;
-				DEVELOPMENT_TEAM = 5ZR87TPM89;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = ElMouhssinineWidgets/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = fr.elmouhssinine.mosquee.widgets;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -707,18 +664,62 @@
 			};
 			name = Release;
 		};
+		97DC7FE1EC974D9849D7A338 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 288;
+				DEVELOPMENT_TEAM = 5ZR87TPM89;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ElMouhssinineWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fr.elmouhssinine.mosquee.widgets;
+				PRODUCT_NAME = ElMouhssinineWidgetsExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A3BF1071AD30503EEA26F41C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 288;
+				DEVELOPMENT_TEAM = 5ZR87TPM89;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ElMouhssinineWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fr.elmouhssinine.mosquee.widgets;
+				PRODUCT_NAME = ElMouhssinineWidgetsExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		056A608E9AAC9BF06E66A0A6 /* Build configuration list for <deleted target> */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				148377C553747E39684E9B97 /* Release */,
-				027D923B2F626EF1569E7A57 /* Debug */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "ElMouhssinine" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -733,6 +734,15 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FC7FB08EB1CC6319D63D96E7 /* Build configuration list for PBXNativeTarget "ElMouhssinineWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				97DC7FE1EC974D9849D7A338 /* Release */,
+				A3BF1071AD30503EEA26F41C /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

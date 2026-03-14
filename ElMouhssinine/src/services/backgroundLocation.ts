@@ -68,9 +68,42 @@ export const initBackgroundLocation = async (): Promise<void> => {
 
     NativeModules.MosqueGeofencing.start();
     console.log('[MosqueGeofencing] Geofencing natif démarré');
+
+    // Vérifier que la permission est suffisante (iOS)
+    if (Platform.OS === 'ios') {
+      const status = await getGeofencingStatus();
+      if (status === 'whenInUse') {
+        console.warn('[MosqueGeofencing] Permission "When In Use" seulement — geofencing background inactif');
+      } else if (status === 'denied' || status === 'restricted') {
+        console.warn('[MosqueGeofencing] Permission refusée — geofencing inactif');
+      } else {
+        console.log('[MosqueGeofencing] Permission "Always" OK');
+      }
+    }
   } catch (error) {
     console.log('[MosqueGeofencing] initBackgroundLocation error:', error);
   }
+};
+
+/**
+ * Vérifie le statut d'autorisation de localisation iOS.
+ * Retourne: "always" | "whenInUse" | "denied" | "restricted" | "notDetermined" | "unknown"
+ * Sur Android, retourne toujours "always" (géré via PermissionsAndroid).
+ */
+export const getGeofencingStatus = (): Promise<string> => {
+  return new Promise(resolve => {
+    try {
+      if (Platform.OS === 'ios' && NativeModules.MosqueGeofencing?.checkStatus) {
+        NativeModules.MosqueGeofencing.checkStatus((status: string) => {
+          resolve(status);
+        });
+      } else {
+        resolve('always'); // Android: vérifié via PermissionsAndroid, pas via ce module
+      }
+    } catch {
+      resolve('unknown');
+    }
+  });
 };
 
 /**

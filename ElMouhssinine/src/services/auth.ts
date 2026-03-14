@@ -6,6 +6,7 @@ import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import firestore, {
   FirebaseFirestoreTypes,
 } from '@react-native-firebase/firestore';
+import firebase from '@react-native-firebase/app';
 import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils';
@@ -13,6 +14,18 @@ import { computeMemberStatus } from '../utils/memberStatus';
 import { setUserForCrashlytics } from './monitoring';
 
 const AUTH_STORAGE_KEY = '@auth_user_profile';
+
+/**
+ * Envoie l'email de vérification via Cloud Function Brevo (anti-spam).
+ * Utilise le même expéditeur que les emails de paiement → bonne délivrabilité.
+ */
+export const sendVerificationEmailViaCF = async (): Promise<void> => {
+  const sendVerification = firebase
+    .app()
+    .functions('europe-west1')
+    .httpsCallable('sendVerificationEmail');
+  await sendVerification({});
+};
 
 export interface MemberProfile {
   uid: string;
@@ -300,11 +313,10 @@ export const AuthService = {
       // Mettre à jour le displayName
       await user.updateProfile({ displayName: name });
 
-      // Envoyer l'email de vérification (en français)
+      // Envoyer l'email de vérification via Brevo (meilleure délivrabilité)
       try {
-        auth().languageCode = 'fr';
-        await user.sendEmailVerification();
-        logger.log('[Auth] Email de vérification envoyé à', email);
+        await sendVerificationEmailViaCF();
+        logger.log('[Auth] Email de vérification Brevo envoyé à', email);
       } catch (emailError) {
         logger.warn('[Auth] Erreur envoi email vérification:', emailError);
         // On continue quand même, ce n'est pas bloquant

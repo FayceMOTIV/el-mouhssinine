@@ -47,6 +47,7 @@ import {
   AuthService,
   MemberProfile,
   validateEmailQuality,
+  sendVerificationEmailViaCF,
 } from '../services/auth';
 import {
   makePayment,
@@ -728,7 +729,17 @@ const MemberScreen = () => {
             { text: t('commonOk'), style: 'default' },
             {
               text: t('commonRetry'),
-              onPress: () => result.user?.sendEmailVerification(),
+              onPress: async () => {
+                try {
+                  await sendVerificationEmailViaCF();
+                  Alert.alert('✅', t('verificationEmailSent'));
+                } catch (e: any) {
+                  const msg = e?.message?.includes('2 minutes')
+                    ? (language === 'ar' ? 'انتظر دقيقتين قبل إعادة الإرسال' : 'Veuillez patienter 2 minutes avant de renvoyer')
+                    : (language === 'ar' ? 'خطأ في إرسال البريد' : "Erreur lors de l'envoi");
+                  Alert.alert(t('commonError'), msg);
+                }
+              },
             },
           ]);
         } else {
@@ -856,23 +867,21 @@ const MemberScreen = () => {
           ? '📧 تحقق من بريدك الإلكتروني'
           : '📧 Vérifiez votre email',
         language === 'ar'
-          ? 'يجب عليك تأكيد بريدك الإلكتروني قبل الاشتراك. تحقق من صندوق الوارد الخاص بك.'
-          : 'Vous devez vérifier votre adresse email avant de souscrire une adhésion. Consultez votre boîte de réception.',
+          ? 'يجب عليك تأكيد بريدك الإلكتروني قبل الاشتراك. تحقق من صندوق الوارد الخاص بك ومن مجلد الرسائل غير المرغوب فيها (spams).'
+          : 'Vous devez vérifier votre adresse email avant de souscrire une adhésion. Consultez votre boîte de réception et vos spams.',
         [
           { text: t('commonOk'), style: 'cancel' },
           {
             text: language === 'ar' ? 'إعادة إرسال' : "Renvoyer l'email",
             onPress: async () => {
               try {
-                await currentUser.sendEmailVerification();
+                await sendVerificationEmailViaCF();
                 Alert.alert('✅', t('verificationEmailSent'));
-              } catch {
-                Alert.alert(
-                  t('commonError'),
-                  language === 'ar'
-                    ? 'خطأ في إرسال البريد'
-                    : "Erreur lors de l'envoi",
-                );
+              } catch (e: any) {
+                const msg = e?.message?.includes('2 minutes')
+                  ? (language === 'ar' ? 'انتظر دقيقتين قبل إعادة الإرسال' : 'Veuillez patienter 2 minutes')
+                  : (language === 'ar' ? 'خطأ في إرسال البريد' : "Erreur lors de l'envoi");
+                Alert.alert(t('commonError'), msg);
               }
             },
           },
@@ -1045,6 +1054,18 @@ const MemberScreen = () => {
         setContextMessage(null);
         setIsPaid(true);
         setIsExpired(false);
+
+        // Paiement optimiste dans l'historique (visible immédiatement, remplacé par le webhook)
+        setPaymentHistory(prev => [{
+          id: paymentResult.paymentIntentId,
+          _type: 'cotisation',
+          amount: breakdown.total,
+          montant: breakdown.total,
+          status: 'succeeded',
+          type: 'cotisation',
+          createdAt: new Date(),
+          metadata: { type: selectedFormule, memberId: AuthService.getCurrentUser()?.uid },
+        }, ...prev]);
 
         // Écouter le changement de statut Firestore (webhook Stripe)
         const currentUid = AuthService.getCurrentUser()?.uid;
@@ -1334,6 +1355,18 @@ const MemberScreen = () => {
         showPaymentSuccess('cotisation');
         setShowFamilyModal(false);
         setFamilyMembers([]);
+
+        // Paiement optimiste dans l'historique
+        setPaymentHistory(prev => [{
+          id: paymentResult.paymentIntentId,
+          _type: 'cotisation',
+          amount: totalAmount,
+          montant: totalAmount,
+          status: 'succeeded',
+          type: 'cotisation',
+          createdAt: new Date(),
+          metadata: { type: familyFormule, memberId: AuthService.getCurrentUser()?.uid },
+        }, ...prev]);
 
         const user = AuthService.getCurrentUser();
         if (user) await loadMemberData(user.uid);

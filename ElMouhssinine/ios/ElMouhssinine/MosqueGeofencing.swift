@@ -163,6 +163,28 @@ class MosqueGeofencing: NSObject {
     MosqueGeofencingManager.shared.stop()
   }
 
+  /// Retourne le statut d'autorisation actuel via callback.
+  /// RCT_EXTERN_METHOD bridge le callback RCTResponseSenderBlock automatiquement.
+  @objc func checkStatus(_ callback: @escaping ([Any]) -> Void) {
+    let status = CLLocationManager().authorizationStatus
+    let statusString: String
+    switch status {
+    case .authorizedAlways:
+      statusString = "always"
+    case .authorizedWhenInUse:
+      statusString = "whenInUse"
+    case .denied:
+      statusString = "denied"
+    case .restricted:
+      statusString = "restricted"
+    case .notDetermined:
+      statusString = "notDetermined"
+    @unknown default:
+      statusString = "unknown"
+    }
+    callback([statusString])
+  }
+
   @objc static func requiresMainQueueSetup() -> Bool {
     return false
   }

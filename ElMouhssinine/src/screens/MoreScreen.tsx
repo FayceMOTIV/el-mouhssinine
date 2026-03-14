@@ -81,6 +81,7 @@ import {
 import {
   initBackgroundLocation,
   stopBackgroundLocation,
+  getGeofencingStatus,
 } from '../services/backgroundLocation';
 import { PrayerAPI } from '../services/prayerApi';
 
@@ -496,18 +497,42 @@ const MoreScreen = () => {
                 await saveMosqueProximitySettings(newSettings);
                 // IMPORTANT: Démarrer le service de localisation en arrière-plan
                 await initBackgroundLocation();
+
+                // Vérifier que la permission est bien "Toujours" (pas juste "When In Use")
+                if (Platform.OS === 'ios') {
+                  // Attendre que iOS traite la demande de permission
+                  await new Promise<void>(r => setTimeout(r, 2000));
+                  const status = await getGeofencingStatus();
+                  if (status === 'whenInUse') {
+                    Alert.alert(
+                      language === 'ar' ? '⚠️ إذن غير كامل' : '⚠️ Permission incomplete',
+                      language === 'ar'
+                        ? 'لقد منحت إذن "أثناء الاستخدام" فقط. للحصول على التنبيه حتى عند إغلاق التطبيق:\n\n1. افتح الإعدادات\n2. El Mouhssinine\n3. الموقع → "دائمًا"'
+                        : 'Vous avez autorise "Lorsque l\'app est active" uniquement. Pour recevoir le rappel meme app fermee :\n\n1. Ouvrez Reglages\n2. El Mouhssinine\n3. Position → "Toujours"',
+                      [
+                        { text: 'OK' },
+                        {
+                          text: language === 'ar' ? 'فتح الإعدادات' : 'Ouvrir Reglages',
+                          onPress: () => Linking.openSettings(),
+                        },
+                      ],
+                    );
+                    return;
+                  }
+                }
+
                 Alert.alert(
                   `✅ ${t('activated')}`,
                   language === 'ar'
                     ? 'ستتلقى تذكيرًا عند اقترابك من المسجد (حتى عندما يكون التطبيق مغلقًا)'
-                    : 'Vous recevrez un rappel quand vous approcherez de la mosquée (même app fermée)',
+                    : 'Vous recevrez un rappel quand vous approcherez de la mosquee (meme app fermee)',
                 );
               } else {
                 Alert.alert(
                   `❌ ${t('permissionDenied')}`,
                   language === 'ar'
                     ? 'يرجى تفعيل الموقع "دائمًا" في إعدادات هاتفك لاستخدام هذه الميزة'
-                    : 'Veuillez autoriser la localisation "Toujours" dans les paramètres pour utiliser cette fonctionnalité',
+                    : 'Veuillez autoriser la localisation "Toujours" dans les parametres pour utiliser cette fonctionnalite',
                 );
               }
             },
