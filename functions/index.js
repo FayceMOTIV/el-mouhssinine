@@ -8170,10 +8170,15 @@ exports.sendVerificationEmail = functions
       }
     }
 
-    // 4. Générer le lien de vérification Firebase
-    const verificationLink = await admin.auth().generateEmailVerificationLink(email, {
+    // 4. Générer le lien de vérification Firebase → redirige vers page custom
+    const firebaseLink = await admin.auth().generateEmailVerificationLink(email, {
       url: 'https://el-mouhssinine.web.app',
     });
+    // Remplacer la page par défaut Firebase par notre page custom (UX propre)
+    const verificationLink = firebaseLink.replace(
+      'https://el-mouhssinine.firebaseapp.com/__/auth/action',
+      'https://el-mouhssinine.web.app/auth/action'
+    );
 
     // 5. Envoyer via Brevo SMTP
     const brevoUser = BREVO_SMTP_USER;
@@ -8210,7 +8215,7 @@ exports.sendVerificationEmail = functions
         <p style="font-size: 14px; color: #666;">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :</p>
         <p style="font-size: 12px; color: #999; word-break: break-all;">${verificationLink}</p>
         <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2e7d32;">
-          <p style="margin: 0; font-size: 14px;">⚠️ Ce lien est valable pendant 24 heures.</p>
+          <p style="margin: 0; font-size: 14px;">⚠️ Ce lien est valable pendant 3 jours.</p>
         </div>
         <p style="font-size: 14px; color: #444;">Barakallahu fik,<br><strong>L'équipe El Mouhssinine</strong></p>
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">

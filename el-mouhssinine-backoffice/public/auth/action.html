@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mosquee El Mouhssinine</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      max-width: 480px;
+      width: 100%;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+    }
+    .header {
+      background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%);
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .header.error {
+      background: linear-gradient(135deg, #e65100 0%, #ff9800 100%);
+    }
+    .header h1 {
+      color: white;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .header .icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+    .body {
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .body p {
+      font-size: 16px;
+      color: #333;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .body .subtitle {
+      font-size: 14px;
+      color: #888;
+    }
+    .info-box {
+      background: #e8f5e9;
+      border-left: 4px solid #2e7d32;
+      padding: 16px;
+      border-radius: 8px;
+      margin: 20px 0;
+      text-align: left;
+    }
+    .info-box.warning {
+      background: #fff3e0;
+      border-left-color: #ff9800;
+    }
+    .info-box p {
+      margin: 0;
+      font-size: 14px;
+    }
+    .footer {
+      border-top: 1px solid #eee;
+      padding: 20px 24px;
+      text-align: center;
+    }
+    .footer p {
+      color: #aaa;
+      font-size: 12px;
+    }
+    .loading {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e0e0e0;
+      border-top-color: #2e7d32;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 20px 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <!-- Loading -->
+  <div class="card" id="loading-card">
+    <div class="header">
+      <div class="icon">🕌</div>
+      <h1>Mosquee El Mouhssinine</h1>
+    </div>
+    <div class="body">
+      <div class="loading"></div>
+      <p>Verification en cours...</p>
+    </div>
+  </div>
+
+  <!-- Success -->
+  <div class="card hidden" id="success-card">
+    <div class="header">
+      <div class="icon">✅</div>
+      <h1>Email verifie !</h1>
+    </div>
+    <div class="body">
+      <p>Votre adresse email a ete verifiee avec succes.</p>
+      <div class="info-box">
+        <p>Vous pouvez maintenant retourner dans l'application et souscrire votre adhesion.</p>
+      </div>
+      <p class="subtitle">Vous pouvez fermer cette page.</p>
+    </div>
+    <div class="footer">
+      <p>Mosquee El Mouhssinine — Bourg-en-Bresse</p>
+    </div>
+  </div>
+
+  <!-- Already verified -->
+  <div class="card hidden" id="already-card">
+    <div class="header">
+      <div class="icon">✅</div>
+      <h1>Deja verifie</h1>
+    </div>
+    <div class="body">
+      <p>Ce lien a deja ete utilise. Votre email est verifie.</p>
+      <div class="info-box">
+        <p>Retournez dans l'application pour continuer.</p>
+      </div>
+      <p class="subtitle">Vous pouvez fermer cette page.</p>
+    </div>
+    <div class="footer">
+      <p>Mosquee El Mouhssinine — Bourg-en-Bresse</p>
+    </div>
+  </div>
+
+  <!-- Expired -->
+  <div class="card hidden" id="expired-card">
+    <div class="header error">
+      <div class="icon">⏰</div>
+      <h1>Lien expire</h1>
+    </div>
+    <div class="body">
+      <p>Ce lien de verification a expire.</p>
+      <div class="info-box warning">
+        <p>Ouvrez l'application El Mouhssinine et cliquez sur <strong>"Renvoyer l'email"</strong> pour recevoir un nouveau lien.</p>
+      </div>
+    </div>
+    <div class="footer">
+      <p>Mosquee El Mouhssinine — Bourg-en-Bresse</p>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div class="card hidden" id="error-card">
+    <div class="header error">
+      <div class="icon">❌</div>
+      <h1>Erreur</h1>
+    </div>
+    <div class="body">
+      <p id="error-message">Une erreur est survenue.</p>
+      <div class="info-box warning">
+        <p>Ouvrez l'application et demandez un nouvel email de verification.</p>
+      </div>
+    </div>
+    <div class="footer">
+      <p>Mosquee El Mouhssinine — Bourg-en-Bresse</p>
+    </div>
+  </div>
+
+  <!-- Password reset success -->
+  <div class="card hidden" id="reset-card">
+    <div class="header">
+      <div class="icon">🔑</div>
+      <h1>Mot de passe</h1>
+    </div>
+    <div class="body">
+      <p>La reinitialisation du mot de passe a ete traitee.</p>
+      <div class="info-box">
+        <p>Retournez dans l'application pour vous connecter.</p>
+      </div>
+    </div>
+    <div class="footer">
+      <p>Mosquee El Mouhssinine — Bourg-en-Bresse</p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js';
+    import { getAuth, applyActionCode, checkActionCode } from 'https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: 'AIzaSyCJr6tGI9QpbWr3pf1GpYoEnvsGgkJj8j8',
+      authDomain: 'el-mouhssinine.firebaseapp.com',
+      projectId: 'el-mouhssinine',
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    function show(id) {
+      document.querySelectorAll('.card').forEach(c => c.classList.add('hidden'));
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+    const oobCode = params.get('oobCode');
+
+    if (!oobCode) {
+      show('error-card');
+      document.getElementById('error-message').textContent = 'Lien invalide.';
+    } else if (mode === 'verifyEmail') {
+      try {
+        await applyActionCode(auth, oobCode);
+        show('success-card');
+      } catch (error) {
+        if (error.code === 'auth/invalid-action-code') {
+          // Could be expired or already used — check which one
+          show('already-card');
+        } else if (error.code === 'auth/expired-action-code') {
+          show('expired-card');
+        } else {
+          show('already-card');
+        }
+      }
+    } else if (mode === 'resetPassword') {
+      // Redirect to Firebase default handler for password reset (needs form)
+      window.location.href = 'https://el-mouhssinine.firebaseapp.com/__/auth/action' + window.location.search;
+    } else {
+      // Other modes — redirect to default
+      window.location.href = 'https://el-mouhssinine.firebaseapp.com/__/auth/action' + window.location.search;
+    }
+  </script>
+</body>
+</html>
