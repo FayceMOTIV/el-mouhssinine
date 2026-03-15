@@ -136,11 +136,7 @@ export default function Login() {
                     await resetPassword(email)
                     setResetSent(true)
                   } catch (err) {
-                    if (err.code === 'auth/user-not-found') {
-                      setError('Aucun compte trouvé avec cet email')
-                    } else {
-                      setError('Erreur lors de l\'envoi. Réessayez.')
-                    }
+                    setError('Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.')
                   } finally {
                     setResetLoading(false)
                   }

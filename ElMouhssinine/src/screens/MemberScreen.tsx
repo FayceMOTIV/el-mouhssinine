@@ -760,7 +760,8 @@ const MemberScreen = () => {
   };
 
   const handleForgotPassword = async () => {
-    if (!forgotEmail.trim()) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!forgotEmail.trim() || !emailRegex.test(forgotEmail.trim())) {
       Alert.alert(t('commonError'), t('invalidEmail'));
       return;
     }

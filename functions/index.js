@@ -821,7 +821,14 @@ const fetchPrayerTimes = async () => {
   const { city, country, method, fajrAngle, ishaAngle, tune } = ALADHAN_CONFIG;
   const url = `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${method}&methodSettings=${fajrAngle},null,${ishaAngle}&tune=${tune}`;
 
-  const response = await fetch(url);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const data = await response.json();
 
   if (data.code === 200) {
@@ -986,7 +993,9 @@ exports.onNewMessage = functions
 
     // === 1. Push notification aux admins ===
     try {
-      const adminsSnapshot = await admin.firestore().collection('admins').get();
+      const adminsSnapshot = await admin.firestore().collection('admins')
+        .where('actif', '==', true)
+        .get();
 
       if (!adminsSnapshot.empty) {
         const adminIds = adminsSnapshot.docs.map(doc => doc.id);
@@ -1324,7 +1333,7 @@ exports.onMessageReply = functions
           console.error('⚠️ Erreur envoi email réponse (non bloquant):', emailError.message);
         }
 
-        return { success: true, messageId: response };
+        return { success: true };
       } catch (error) {
         console.error('❌ Erreur notification utilisateur:', error);
         return { error: error.message };
@@ -1499,6 +1508,39 @@ exports.createPaymentIntent = functions
           'Montant minimum : 1€ pour une cotisation annuelle.'
         );
       }
+
+      // SECURITE: Vérifier le montant contre le prix officiel Firestore
+      try {
+        const settingsDoc = await admin.firestore()
+          .collection('settings')
+          .doc('cotisation')
+          .get();
+
+        if (settingsDoc.exists) {
+          const officialPrices = settingsDoc.data();
+          const period = metadata.period || 'annuel';
+          const officialUnitPrice = period === 'mensuel'
+            ? Math.round((officialPrices.mensuel || 10) * 100)
+            : Math.round((officialPrices.annuel || 100) * 100);
+
+          // Nombre de membres (famille = plusieurs, individuel = 1)
+          const membersCount = parseInt(metadata.membersCount || '1', 10) || 1;
+          const expectedAmount = officialUnitPrice * membersCount;
+
+          // Tolérance ±1% pour éviter les erreurs d'arrondi
+          const tolerance = Math.ceil(expectedAmount * 0.01);
+          if (Math.abs(amount - expectedAmount) > tolerance) {
+            throw new functions.https.HttpsError(
+              'invalid-argument',
+              `Montant cotisation invalide. Attendu: ${expectedAmount} centimes, reçu: ${amount}`
+            );
+          }
+        }
+      } catch (priceCheckErr) {
+        if (priceCheckErr.code === 'functions/invalid-argument') throw priceCheckErr;
+        // Si Firestore indisponible, on laisse passer (fail open) pour ne pas bloquer les paiements
+        console.warn('createPaymentIntent: vérification prix échouée (Firestore indisponible):', priceCheckErr.message);
+      }
     }
 
     if (!currency) {
@@ -1577,6 +1619,32 @@ exports.createSubscription = functions
         'invalid-argument',
         'Montant invalide (minimum 1€, maximum 100 000€)'
       );
+    }
+
+    // SECURITE: Vérifier montant cotisation mensuelle contre prix officiel
+    try {
+      const settingsDoc = await admin.firestore()
+        .collection('settings')
+        .doc('cotisation')
+        .get();
+
+      if (settingsDoc.exists) {
+        const officialPrices = settingsDoc.data();
+        const officialMonthlyPrice = Math.round((officialPrices.mensuel || 10) * 100);
+        const membersCount = parseInt(metadata?.membersCount || '1', 10) || 1;
+        const expectedAmount = officialMonthlyPrice * membersCount;
+        const tolerance = Math.ceil(expectedAmount * 0.01);
+
+        if (Math.abs(amount - expectedAmount) > tolerance) {
+          throw new functions.https.HttpsError(
+            'invalid-argument',
+            `Montant abonnement invalide. Attendu: ${expectedAmount} centimes, reçu: ${amount}`
+          );
+        }
+      }
+    } catch (priceCheckErr) {
+      if (priceCheckErr.code === 'functions/invalid-argument') throw priceCheckErr;
+      console.warn('createSubscription: vérification prix échouée:', priceCheckErr.message);
     }
 
     // SECURITE: utiliser l'email Firebase Auth (vérifié) au lieu du client
@@ -2126,30 +2194,6 @@ exports.stripeWebhook = functions
           const memberId = memberDoc.id;
           const memberData = memberDoc.data();
 
-          // Étendre la date de fin de cotisation de 1 mois
-          const now = new Date();
-          let newEndDate;
-
-          if (memberData.cotisation?.dateFin) {
-            const currentEnd = memberData.cotisation.dateFin.toDate();
-            if (currentEnd > now) {
-              newEndDate = new Date(currentEnd);
-              const origDay1 = newEndDate.getDate();
-              newEndDate.setMonth(newEndDate.getMonth() + 1);
-              if (newEndDate.getDate() !== origDay1) newEndDate.setDate(0);
-            } else {
-              newEndDate = new Date(now);
-              const origDay2 = newEndDate.getDate();
-              newEndDate.setMonth(newEndDate.getMonth() + 1);
-              if (newEndDate.getDate() !== origDay2) newEndDate.setDate(0);
-            }
-          } else {
-            newEndDate = new Date(now);
-            const origDay3 = newEndDate.getDate();
-            newEndDate.setMonth(newEndDate.getMonth() + 1);
-            if (newEndDate.getDate() !== origDay3) newEndDate.setDate(0);
-          }
-
           // FIX BUG 2: Idempotence check INSIDE transaction (atomique)
           // Avant: check hors transaction = race condition si 2 webhooks simultanés
           const invoiceProcessedRef = admin.firestore().collection('processed_payments').doc(invoice.id);
@@ -2161,6 +2205,28 @@ exports.stripeWebhook = functions
             if (invoiceProcessedDoc.exists) {
               console.log('Invoice déjà traitée (idempotent in-transaction):', invoice.id);
               throw { alreadyProcessed: true };
+            }
+
+            // Lire le membre DANS la transaction pour éviter la race condition
+            const memberDocTx = await t.get(memberRefTx);
+            const memberDataTx = memberDocTx.exists ? memberDocTx.data() : memberData;
+            const nowTx = new Date();
+            let newEndDate;
+
+            if (memberDataTx.cotisation?.dateFin) {
+              const currentEnd = memberDataTx.cotisation.dateFin.toDate
+                ? memberDataTx.cotisation.dateFin.toDate()
+                : new Date(memberDataTx.cotisation.dateFin);
+              const baseDate = currentEnd > nowTx ? currentEnd : nowTx;
+              newEndDate = new Date(baseDate);
+              const origDay = newEndDate.getDate();
+              newEndDate.setMonth(newEndDate.getMonth() + 1);
+              if (newEndDate.getDate() !== origDay) newEndDate.setDate(0);
+            } else {
+              newEndDate = new Date(nowTx);
+              const origDay = newEndDate.getDate();
+              newEndDate.setMonth(newEndDate.getMonth() + 1);
+              if (newEndDate.getDate() !== origDay) newEndDate.setDate(0);
             }
 
             t.set(paymentRef, {
@@ -2201,12 +2267,12 @@ exports.stripeWebhook = functions
               cotisation: {
                 type: 'mensuel',
                 montant: amountEuros,
-                dateDebut: memberData.cotisation?.dateDebut || admin.firestore.Timestamp.fromDate(now),
+                dateDebut: memberDataTx.cotisation?.dateDebut || admin.firestore.Timestamp.fromDate(nowTx),
                 dateFin: admin.firestore.Timestamp.fromDate(newEndDate),
               },
             };
             // Seulement si déjà actif (validé par admin), on maintient actif
-            if (memberData.status === 'actif') {
+            if (memberDataTx.status === 'actif') {
               renewalUpdate.status = 'actif';
             }
             // Sinon on ne touche PAS au status (reste en_attente_validation, etc.)
@@ -3613,6 +3679,7 @@ exports.sendRecuFiscal = functions
       await admin.firestore().collection('recus_fiscaux').add({
         numeroRecu,
         annee,
+        userId: context.auth.uid,
         email,
         donateur,
         donorType: detectedDonorType,
@@ -3713,7 +3780,7 @@ exports.getDonsByYear = functions
       // Dons (pour projets)
       const donationsSnapshot = await admin.firestore()
         .collection('donations')
-        .where('metadata.donorEmail', '==', email.toLowerCase())
+        .where('donateurEmail', '==', email.toLowerCase())
         .where('createdAt', '>=', startDate)
         .where('createdAt', '<=', endDate)
         .where('status', '==', 'succeeded')
@@ -4662,7 +4729,7 @@ const processAnnualRecusFiscaux = async (year) => {
     const isDon = p.type === 'don' || p.eligibleRecuFiscal === true;
     if (!isDon) return;
 
-    const donorEmail = (p.metadata?.email || '').toLowerCase();
+    const donorEmail = (p.donateurEmail || p.metadata?.donorEmail || p.metadata?.email || '').toLowerCase();
     if (!donorEmail) return;
 
     if (!donorMap[donorEmail]) {
@@ -6930,17 +6997,26 @@ exports.deleteMemberByAdmin = functions
       const anonymizeLabel = 'Membre supprimé';
 
       // 4a. Anonymiser donations (garder montant, date, projet — effacer identité)
+      // Query par userId ET par email pour couvrir les dons publics sans userId
       try {
-        const donSnap = await db.collection('donations')
-          .where('userId', '==', memberUid)
-          .get();
+        const memberEmail = (memberData.email || '').toLowerCase();
+        const [donByUid, donByEmail] = await Promise.all([
+          db.collection('donations').where('userId', '==', memberUid).get(),
+          memberEmail
+            ? db.collection('donations').where('donateurEmail', '==', memberEmail).get()
+            : Promise.resolve({ empty: true, docs: [] }),
+        ]);
 
-        if (!donSnap.empty) {
+        const donDocsMap = new Map();
+        [...(donByUid.docs || []), ...(donByEmail.docs || [])].forEach(d => donDocsMap.set(d.id, d));
+        const donDocs = Array.from(donDocsMap.values());
+
+        if (donDocs.length > 0) {
           const chunks = [];
           let batch = db.batch();
           let count = 0;
 
-          donSnap.docs.forEach((doc) => {
+          donDocs.forEach((doc) => {
             batch.update(doc.ref, {
               donateur: anonymizeLabel,
               email: '',
@@ -6961,8 +7037,8 @@ exports.deleteMemberByAdmin = functions
             await b.commit();
           }
 
-          log.steps.push({ action: 'anonymized_donations', count: donSnap.size });
-          console.log(`${donSnap.size} donation(s) anonymisée(s)`);
+          log.steps.push({ action: 'anonymized_donations', count: donDocs.length });
+          console.log(`${donDocs.length} donation(s) anonymisée(s)`);
         } else {
           log.steps.push({ action: 'anonymized_donations', count: 0 });
         }
@@ -7217,14 +7293,25 @@ exports.deleteMyAccount = functions
 
       const anonymizeLabel = 'Membre supprimé';
 
-      // 4a. Anonymiser donations
+      // 4a. Anonymiser donations (par userId ET par email pour couvrir les dons publics)
       try {
-        const donSnap = await db.collection('donations').where('userId', '==', uid).get();
-        if (!donSnap.empty) {
+        const memberEmail = (memberData?.email || '').toLowerCase();
+        const [donByUid, donByEmail] = await Promise.all([
+          db.collection('donations').where('userId', '==', uid).get(),
+          memberEmail
+            ? db.collection('donations').where('donateurEmail', '==', memberEmail).get()
+            : Promise.resolve({ empty: true, docs: [] }),
+        ]);
+
+        const donDocsMap = new Map();
+        [...(donByUid.docs || []), ...(donByEmail.docs || [])].forEach(d => donDocsMap.set(d.id, d));
+        const donDocs = Array.from(donDocsMap.values());
+
+        if (donDocs.length > 0) {
           const chunks = [];
           let batch = db.batch();
           let count = 0;
-          donSnap.docs.forEach((doc) => {
+          donDocs.forEach((doc) => {
             batch.update(doc.ref, {
               donateur: anonymizeLabel, email: '', telephone: '', donateurEmail: '',
               userId: 'deleted', anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -7234,7 +7321,7 @@ exports.deleteMyAccount = functions
           });
           chunks.push(batch);
           for (const b of chunks) { await b.commit(); }
-          log.steps.push({ action: 'anonymized_donations', count: donSnap.size });
+          log.steps.push({ action: 'anonymized_donations', count: donDocs.length });
         }
       } catch (err) {
         log.steps.push({ action: 'error_donations', error: err.message });
@@ -7290,9 +7377,19 @@ exports.deleteMyAccount = functions
 
       // 4d. Anonymiser reçus fiscaux (garder montant, année — effacer identité, obligation fiscale 10 ans)
       try {
-        const recuSnap = await db.collection('recus_fiscaux')
-          .where('userId', '==', uid)
-          .get();
+        // Query par userId ET par email pour couvrir les anciens reçus sans userId
+        const [recuByUid, recuByEmail] = await Promise.all([
+          db.collection('recus_fiscaux').where('userId', '==', uid).get(),
+          memberData?.email
+            ? db.collection('recus_fiscaux').where('email', '==', memberData.email).get()
+            : Promise.resolve({ empty: true, docs: [] }),
+        ]);
+
+        const recuDocsMap = new Map();
+        [...(recuByUid.docs || []), ...(recuByEmail.docs || [])].forEach(d => recuDocsMap.set(d.id, d));
+        const recuDocs = Array.from(recuDocsMap.values());
+
+        const recuSnap = { empty: recuDocs.length === 0, docs: recuDocs, size: recuDocs.length };
 
         if (!recuSnap.empty) {
           const chunks = [];
@@ -8157,18 +8254,21 @@ exports.sendVerificationEmail = functions
       return { success: true, message: 'Email déjà vérifié' };
     }
 
-    // 3. Rate limit : max 1 email / 2 min par uid
+    // 3. Rate limit : max 1 email / 2 min par uid (atomique via transaction)
     const rateLimitRef = admin.firestore().collection('verification_emails').doc(uid);
-    const rateLimitDoc = await rateLimitRef.get();
-    if (rateLimitDoc.exists) {
-      const lastSent = rateLimitDoc.data()?.lastSent?.toDate?.();
-      if (lastSent && (Date.now() - lastSent.getTime()) < 120000) {
-        throw new functions.https.HttpsError(
-          'resource-exhausted',
-          'Veuillez patienter 2 minutes avant de renvoyer un email de vérification'
-        );
+    await admin.firestore().runTransaction(async (t) => {
+      const rateLimitDoc = await t.get(rateLimitRef);
+      if (rateLimitDoc.exists) {
+        const lastSent = rateLimitDoc.data()?.lastSent?.toDate?.();
+        if (lastSent && (Date.now() - lastSent.getTime()) < 120000) {
+          throw new functions.https.HttpsError(
+            'resource-exhausted',
+            'Veuillez patienter 2 minutes avant de renvoyer un email de vérification'
+          );
+        }
       }
-    }
+      t.set(rateLimitRef, { lastSent: admin.firestore.FieldValue.serverTimestamp() });
+    });
 
     // 4. Générer le lien de vérification Firebase → redirige vers page custom
     const firebaseLink = await admin.auth().generateEmailVerificationLink(email, {
@@ -8236,8 +8336,7 @@ exports.sendVerificationEmail = functions
       throw new functions.https.HttpsError('internal', "Erreur lors de l'envoi de l'email");
     }
 
-    // 6. Enregistrer le rate limit
-    await rateLimitRef.set({ lastSent: admin.firestore.FieldValue.serverTimestamp() });
+    // 6. Rate limit déjà enregistré dans la transaction ci-dessus
 
     console.log('📧 Email vérification Brevo envoyé à', maskEmail(email));
     return { success: true, message: 'Email de vérification envoyé' };

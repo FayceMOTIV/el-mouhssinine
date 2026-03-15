@@ -210,12 +210,10 @@
 				022B0A921CCD3EAF48D19F80 /* [CP] Copy Pods Resources */,
 				16914B39D2119131450A542F /* [CP-User] [RNFB] Core Configuration */,
 				F02EF9810B1261ACC0790708 /* [CP-User] [RNFB] Crashlytics Configuration */,
-				8526D3545B0C8FFEF74FC7DD /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				6C7F9A6416C8382CADA74C6D /* PBXTargetDependency */,
 			);
 			name = ElMouhssinine;
 			productName = ElMouhssinine;
@@ -270,7 +268,6 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* ElMouhssinine */,
-				677B72DD451B3310C35C0740 /* ElMouhssinineWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -336,7 +333,6 @@
 			files = (
 			);
 			inputPaths = (
-				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "[CP-User] [RNFB] Core Configuration";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -367,7 +363,6 @@
 			);
 			inputPaths = (
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
-				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "[CP-User] [RNFB] Crashlytics Configuration";
 			runOnlyForDeploymentPostprocessing = 0;

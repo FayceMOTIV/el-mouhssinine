@@ -272,10 +272,9 @@ const DonationsScreen = () => {
   });
 
   // Pull-to-refresh handler
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Les subscriptions Firebase se rechargent automatiquement
-    setTimeout(() => setRefreshing(false), 1000);
+    setTimeout(() => setRefreshing(false), 1500);
   }, []);
 
   // Zakat
@@ -569,13 +568,25 @@ const DonationsScreen = () => {
         try {
           await addDonation(donationData);
         } catch (firebaseError) {
-          // Retry une fois — le paiement Stripe est déjà confirmé
           if (__DEV__)
             console.warn(
               '[Donations] Firebase write failed, retrying...',
               firebaseError,
             );
-          await addDonation(donationData);
+          // Retry une fois — le paiement Stripe est déjà confirmé
+          // Le retry est protégé : si les deux tentatives échouent,
+          // le webhook Stripe aura de toute façon créé le don côté serveur
+          try {
+            await addDonation(donationData);
+          } catch (retryError) {
+            if (__DEV__)
+              console.warn(
+                '[Donations] Firebase retry also failed (paiement OK côté Stripe):',
+                retryError,
+              );
+            // Ne pas propager l'erreur — le paiement est confirmé,
+            // le webhook créera le don dans Firestore
+          }
         }
 
         // Sauvegarder infos don avant reset

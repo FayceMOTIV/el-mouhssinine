@@ -139,8 +139,8 @@ export default function Admins() {
       toast.error('Le mot de passe est requis')
       return
     }
-    if (!editingAdmin && password.length < 6) {
-      toast.error('Le mot de passe doit contenir au moins 6 caractères')
+    if (!editingAdmin && password.length < 8) {
+      toast.error('Le mot de passe doit contenir au moins 8 caractères')
       return
     }
     // Validation UID lors de l'edition (document ID = UID Firebase Auth)
@@ -194,6 +194,14 @@ export default function Admins() {
     if (deleteModal.admin.id === user?.uid) {
       toast.error('Vous ne pouvez pas supprimer votre propre compte')
       return
+    }
+
+    if (deleteModal.admin.role === 'super_admin') {
+      const superAdmins = admins.filter(a => a.role === 'super_admin')
+      if (superAdmins.length <= 1) {
+        toast.error('Impossible de supprimer le dernier super administrateur')
+        return
+      }
     }
 
     try {
