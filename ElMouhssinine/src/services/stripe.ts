@@ -9,6 +9,13 @@ import {
 import { firebase } from '@react-native-firebase/functions';
 import { logger } from '../utils';
 
+// Generateur UUID v4 sans dependance externe (idempotency keys Stripe)
+const generateIdempotencyKey = () =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+
 // Types
 export interface PaymentParams {
   amount: number; // en euros
@@ -62,11 +69,13 @@ const createPaymentIntent = async (
       .app()
       .functions('europe-west1')
       .httpsCallable('createPaymentIntent');
+    const idempotencyKey = generateIdempotencyKey();
     const result = await createPayment({
       amount: eurosToCents(amount),
       currency: 'eur',
       description,
       metadata,
+      idempotencyKey,
     });
 
     const data = result.data as {
@@ -100,10 +109,12 @@ const createSubscription = async (
       .app()
       .functions('europe-west1')
       .httpsCallable('createSubscription');
+    const subIdempotencyKey = generateIdempotencyKey();
     const result = await createSub({
       amount: eurosToCents(amount),
       description,
       metadata,
+      idempotencyKey: subIdempotencyKey,
     });
 
     const data = result.data as {

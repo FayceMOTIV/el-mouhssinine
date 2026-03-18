@@ -54,6 +54,15 @@
       "collectionGroup": "donations",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "donateurEmail", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "donations",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
@@ -70,6 +79,23 @@
           "fieldPath": "createdAt",
           "order": "DESCENDING"
         }
+      ]
+    },
+    {
+      "collectionGroup": "members",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "cotisation.dateFin", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "errors_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "alerted", "order": "ASCENDING" },
+        { "fieldPath": "screen", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {

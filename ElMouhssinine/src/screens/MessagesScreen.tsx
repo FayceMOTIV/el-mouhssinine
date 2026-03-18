@@ -119,6 +119,11 @@ const MessagesScreen = () => {
           setMemberProfile(null);
           setMessages([]);
           setLoading(false);
+          // Reset formulaire message pour éviter fuite entre comptes
+          setShowNewMessageModal(false);
+          setMessageText('');
+          setSelectedSubject('');
+          setSending(false);
         }
       } catch (err) {
         console.error('[MessagesScreen] onAuthStateChanged error:', err);

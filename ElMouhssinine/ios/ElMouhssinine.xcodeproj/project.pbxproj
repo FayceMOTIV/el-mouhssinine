@@ -7,49 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		070366E4AE4E5ADF11ECD0A3 /* ElMouhssinineWidgetsExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 88C6F454B299812C9958857C /* ElMouhssinineWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		18B056D5F466D679AA0655BB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
-		1A7E93CE9D15BFD1B1B6F088 /* ElMouhssinineWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 606D37EB814269A9149E8B4A /* ElMouhssinineWidgets.swift */; };
 		3CD364C402BF67F090519B86 /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC36084E4343C861B56A09DA /* WidgetBridge.swift */; };
 		5A55EC8D0C9FD45387291467 /* WidgetBridgeBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 23272E19EC36C97D2040B657 /* WidgetBridgeBridge.m */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
-		8ECA02B6CF22C65B6C1006A8 /* SharedData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C4FBD638F3C0BFA1DF41A9 /* SharedData.swift */; };
 		B0EA40782F140FFD00731D11 /* MosqueGeofencing.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0EA40772F140FFD00731D10 /* MosqueGeofencing.swift */; };
 		B0EA407A2F140FFD00731D13 /* MosqueGeofencingBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = B0EA40792F140FFD00731D12 /* MosqueGeofencingBridge.m */; };
-		D938BE15214053DF503CAFFE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 37C630F7CF98C3DBC16B73C9 /* Foundation.framework */; };
-		E279C7EE531B0E013A42172D /* PrayerTimesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC7701C66CF2F234D97DFB4 /* PrayerTimesWidget.swift */; };
 		EC6169C6D4D1EDE675CA23F7 /* Pods_ElMouhssinine.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 058E22059BD73F7F383C5287 /* Pods_ElMouhssinine.framework */; };
-		F12A1DB79205A528B8F97771 /* NextPrayerWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4DE43A895A3D0EC85B7C990 /* NextPrayerWidget.swift */; };
-		F69836452B051B2A49E2A73E /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9954165313D8D1FC21A3732C /* WidgetKit.framework */; };
-		F758BE6B311F1E4F151F2518 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1C2097E9932D53843EEC8547 /* SwiftUI.framework */; };
 		FIREBASE001122334455667788 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FIREBASE001122334455667799 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
-
-/* Begin PBXContainerItemProxy section */
-		4AD5697BB0D904F9DEC76909 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 677B72DD451B3310C35C0740;
-			remoteInfo = ElMouhssinineWidgetsExtension;
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		8526D3545B0C8FFEF74FC7DD /* Embed App Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				070366E4AE4E5ADF11ECD0A3 /* ElMouhssinineWidgetsExtension.appex in Embed App Extensions */,
-			);
-			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		058E22059BD73F7F383C5287 /* Pods_ElMouhssinine.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ElMouhssinine.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -86,16 +54,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				EC6169C6D4D1EDE675CA23F7 /* Pods_ElMouhssinine.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		5FA9A1C942E7015E20736FC7 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				D938BE15214053DF503CAFFE /* Foundation.framework in Frameworks */,
-				F69836452B051B2A49E2A73E /* WidgetKit.framework in Frameworks */,
-				F758BE6B311F1E4F151F2518 /* SwiftUI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -220,23 +178,6 @@
 			productReference = 13B07F961A680F5B00A75B9A /* ElMouhssinine.app */;
 			productType = "com.apple.product-type.application";
 		};
-		677B72DD451B3310C35C0740 /* ElMouhssinineWidgetsExtension */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = FC7FB08EB1CC6319D63D96E7 /* Build configuration list for PBXNativeTarget "ElMouhssinineWidgetsExtension" */;
-			buildPhases = (
-				DE4F822E198C23053D82E4AF /* Sources */,
-				5FA9A1C942E7015E20736FC7 /* Frameworks */,
-				1529CB5E4B7A2F96B67AA84B /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = ElMouhssinineWidgetsExtension;
-			productName = ElMouhssinineWidgetsExtension;
-			productReference = 88C6F454B299812C9958857C /* ElMouhssinineWidgetsExtension.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -284,13 +225,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		1529CB5E4B7A2F96B67AA84B /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -333,6 +267,7 @@
 			files = (
 			);
 			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "[CP-User] [RNFB] Core Configuration";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -363,6 +298,7 @@
 			);
 			inputPaths = (
 				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
+				"$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "[CP-User] [RNFB] Crashlytics Configuration";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -406,27 +342,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		DE4F822E198C23053D82E4AF /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				8ECA02B6CF22C65B6C1006A8 /* SharedData.swift in Sources */,
-				1A7E93CE9D15BFD1B1B6F088 /* ElMouhssinineWidgets.swift in Sources */,
-				F12A1DB79205A528B8F97771 /* NextPrayerWidget.swift in Sources */,
-				E279C7EE531B0E013A42172D /* PrayerTimesWidget.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		6C7F9A6416C8382CADA74C6D /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ElMouhssinineWidgetsExtension;
-			target = 677B72DD451B3310C35C0740 /* ElMouhssinineWidgetsExtension */;
-			targetProxy = 4AD5697BB0D904F9DEC76909 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
@@ -436,7 +352,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = ElMouhssinine/ElMouhssinine.entitlements;
-				CURRENT_PROJECT_VERSION = 288;
+				CURRENT_PROJECT_VERSION = 294;
 				DEVELOPMENT_TEAM = 5ZR87TPM89;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = ElMouhssinine/Info.plist;
@@ -467,7 +383,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = ElMouhssinine/ElMouhssinine.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 288;
+				CURRENT_PROJECT_VERSION = 294;
 				DEVELOPMENT_TEAM = 5ZR87TPM89;
 				INFOPLIST_FILE = ElMouhssinine/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -662,59 +578,6 @@
 			};
 			name = Release;
 		};
-		97DC7FE1EC974D9849D7A338 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 288;
-				DEVELOPMENT_TEAM = 5ZR87TPM89;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = ElMouhssinineWidgets/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = fr.elmouhssinine.mosquee.widgets;
-				PRODUCT_NAME = ElMouhssinineWidgetsExtension;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		A3BF1071AD30503EEA26F41C /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 288;
-				DEVELOPMENT_TEAM = 5ZR87TPM89;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = ElMouhssinineWidgets/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = fr.elmouhssinine.mosquee.widgets;
-				PRODUCT_NAME = ElMouhssinineWidgetsExtension;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -732,15 +595,6 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		FC7FB08EB1CC6319D63D96E7 /* Build configuration list for PBXNativeTarget "ElMouhssinineWidgetsExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				97DC7FE1EC974D9849D7A338 /* Release */,
-				A3BF1071AD30503EEA26F41C /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

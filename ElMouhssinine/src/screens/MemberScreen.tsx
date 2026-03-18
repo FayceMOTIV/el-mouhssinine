@@ -136,6 +136,7 @@ const MemberScreen = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const isRegistrationInProgress = useRef(false); // Empêche le changement de vue pendant l'inscription
+  const [authTrigger, setAuthTrigger] = useState(0); // Incrémenté pour forcer re-run du useEffect auth (ex: après inscription)
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [registerNom, setRegisterNom] = useState('');
@@ -231,9 +232,18 @@ const MemberScreen = () => {
   const paymentsRef = React.useRef<any[]>([]);
   const donationsRef = React.useRef<any[]>([]);
   const donationsByEmailRef = React.useRef<any[]>([]);
+  // Retry counter pour les listeners Firestore qui échouent avec PERMISSION_DENIED
+  // (le SDK Firestore peut avoir un token auth stale après switch de compte)
+  const listenerRetryRef = useRef(0);
+  const MAX_LISTENER_RETRIES = 2;
+  // Track le dernier uid pour lequel on a fait le safety-retry (évite boucle infinie)
+  const lastSafetyRetryUidRef = useRef<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = AuthService.onAuthStateChanged(async user => {
+      // Reset retry counter à chaque changement d'état auth
+      listenerRetryRef.current = 0;
+
       // Ne pas changer la vue pendant l'inscription (évite le flash modal)
       if (isRegistrationInProgress.current) {
         return;
@@ -258,6 +268,13 @@ const MemberScreen = () => {
         donationByEmailUnsubscribeRef.current();
         donationByEmailUnsubscribeRef.current = null;
       }
+
+      // Vider les données du compte précédent pour éviter le stale data
+      // (nécessaire quand onAuthStateChanged ne passe pas par null au switch de compte)
+      paymentsRef.current = [];
+      donationsRef.current = [];
+      donationsByEmailRef.current = [];
+      setPaymentHistory([]);
 
       if (user) {
         setIsLoggedIn(true);
@@ -342,6 +359,12 @@ const MemberScreen = () => {
 
         memberProfileUnsubscribeRef.current = unsubMember;
 
+        // Forcer le refresh du token auth pour que le SDK Firestore ait le bon état
+        // (évite PERMISSION_DENIED lors du switch de compte — le token met un moment à se propager)
+        try {
+          await user.getIdToken(true);
+        } catch {}
+
         // Build 249 - Historique paiements + dons fusionnés en temps réel
         setLoadingHistory(true);
 
@@ -358,8 +381,8 @@ const MemberScreen = () => {
             ...Array.from(donationsMap.values()),
           ];
           all.sort((a: any, b: any) => {
-            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
-            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+            const dateA = a.createdAt?.toDate?.() || a.date?.toDate?.() || new Date();
+            const dateB = b.createdAt?.toDate?.() || b.date?.toDate?.() || new Date();
             return dateB.getTime() - dateA.getTime();
           });
           setPaymentHistory(all);
@@ -371,6 +394,20 @@ const MemberScreen = () => {
           });
           setAvailableYears(Array.from(yearsSet).sort((a, b) => b - a));
           setLoadingHistory(false);
+        };
+
+        // Helper: retry tous les listeners si PERMISSION_DENIED (token auth stale après switch)
+        const retryOnPermissionDenied = (error: any) => {
+          if (
+            (error?.code === 'permission-denied' || error?.code === 'firestore/permission-denied') &&
+            listenerRetryRef.current < MAX_LISTENER_RETRIES
+          ) {
+            listenerRetryRef.current++;
+            console.warn(`[MemberScreen] PERMISSION_DENIED — retry ${listenerRetryRef.current}/${MAX_LISTENER_RETRIES} dans 1s`);
+            setTimeout(() => setAuthTrigger(prev => prev + 1), 1000);
+            return true; // retry scheduled
+          }
+          return false;
         };
 
         // Listener cotisations (collection payments)
@@ -387,13 +424,11 @@ const MemberScreen = () => {
               mergeAndSetHistory();
             },
             (error: any) => {
-              console.warn(
-                '[MemberScreen] payments query error:',
-                error?.code,
-                error?.message,
-              );
-              paymentsRef.current = [];
-              mergeAndSetHistory();
+              if (!retryOnPermissionDenied(error)) {
+                console.warn('[MemberScreen] payments query error:', error?.code, error?.message);
+                paymentsRef.current = [];
+                mergeAndSetHistory();
+              }
             },
           );
         paymentHistoryUnsubscribeRef.current = unsubHistory;
@@ -412,11 +447,11 @@ const MemberScreen = () => {
               }));
               mergeAndSetHistory();
             },
-            error => {
-              if (__DEV__)
-                console.error('Error loading donation history:', error);
-              donationsRef.current = [];
-              mergeAndSetHistory();
+            (error: any) => {
+              if (!retryOnPermissionDenied(error)) {
+                donationsRef.current = [];
+                mergeAndSetHistory();
+              }
             },
           );
         donationHistoryUnsubscribeRef.current = unsubDonations;
@@ -435,11 +470,34 @@ const MemberScreen = () => {
                 }));
                 mergeAndSetHistory();
               },
-              _error => {
-                donationsByEmailRef.current = [];
+              (error: any) => {
+                if (!retryOnPermissionDenied(error)) {
+                  donationsByEmailRef.current = [];
+                  mergeAndSetHistory();
+                }
               },
             );
           donationByEmailUnsubscribeRef.current = unsubDonationsByEmail;
+        }
+
+        // Safety net : si Firestore retourne des snapshots vides (auth stale, pas d'erreur),
+        // on re-trigger les listeners UNE SEULE FOIS après 2s pour ce uid.
+        // (Firebase peut retourner 0 résultats au lieu de PERMISSION_DENIED si le token n'est pas propagé)
+        if (lastSafetyRetryUidRef.current !== user.uid) {
+          lastSafetyRetryUidRef.current = user.uid;
+          setTimeout(() => {
+            // Seulement si le user est toujours le même ET les 3 refs sont vides
+            const currentUid = AuthService.getCurrentUser()?.uid;
+            if (
+              currentUid === user.uid &&
+              paymentsRef.current.length === 0 &&
+              donationsRef.current.length === 0 &&
+              donationsByEmailRef.current.length === 0
+            ) {
+              console.warn('[MemberScreen] Safety retry — all listeners returned empty after 2s');
+              setAuthTrigger(prev => prev + 1);
+            }
+          }, 2000);
         }
 
         // S'abonner aux notifications et sauvegarder le token
@@ -458,6 +516,7 @@ const MemberScreen = () => {
         setIsExpired(false);
         setInscribedMembers([]);
         setPaymentHistory([]);
+        setLoadingHistory(false);
         setAvailableYears([new Date().getFullYear()]);
         setHistoryYear(new Date().getFullYear());
         setMemberPage('sympathisant');
@@ -481,8 +540,8 @@ const MemberScreen = () => {
         donationByEmailUnsubscribeRef.current();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Runs once on mount, cleanup handled internally
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Runs on mount + après inscription (authTrigger)
+  }, [authTrigger]);
 
   useEffect(() => {
     const unsubPrices = subscribeToCotisationPrices(prices =>
@@ -713,6 +772,9 @@ const MemberScreen = () => {
       );
 
       isRegistrationInProgress.current = false; // Réactive le listener auth
+      // Force re-run du useEffect auth pour créer les listeners historique
+      // (bloqués par isRegistrationInProgress pendant l'inscription)
+      setAuthTrigger(prev => prev + 1);
 
       if (result.success && result.user) {
         // Inscription réussie - mettre à jour l'état manuellement
@@ -752,6 +814,7 @@ const MemberScreen = () => {
       }
     } catch (error) {
       isRegistrationInProgress.current = false; // Réactive le listener auth même en cas d'erreur
+      setAuthTrigger(prev => prev + 1); // Force re-run du useEffect auth
       const err = error as Error;
       Alert.alert(t('commonError'), err?.message || t('networkError'));
     } finally {

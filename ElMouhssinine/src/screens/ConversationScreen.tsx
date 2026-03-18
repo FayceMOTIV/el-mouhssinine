@@ -26,6 +26,7 @@ import {
   addUserReplyToMessage,
   UserMessage,
 } from '../services/firebase';
+import firestore from '@react-native-firebase/firestore';
 import { clearBadgeCount } from '../services/notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,9 +60,24 @@ const ConversationScreen = () => {
     }
 
     let timeoutId: ReturnType<typeof setTimeout>;
+    let markedAsRead = false;
     const unsubscribe = subscribeToMessage(messageId, msg => {
       setMessage(msg);
       setLoading(false);
+      // Marquer comme lu à la première ouverture (fire-and-forget)
+      if (msg && !markedAsRead && (msg.lu !== true || msg.status === 'non_lu')) {
+        markedAsRead = true;
+        const updateData: Record<string, any> = { lu: true };
+        // Changer le status visible "Non lu" → "En cours" pour l'UI
+        if (msg.status === 'non_lu') {
+          updateData.status = 'en_cours';
+        }
+        firestore()
+          .collection('messages')
+          .doc(messageId)
+          .update(updateData)
+          .catch(() => {}); // Non bloquant
+      }
       // Scroll to bottom when new messages arrive
       timeoutId = setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });

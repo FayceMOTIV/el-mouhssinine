@@ -475,6 +475,9 @@ export const AuthService = {
 
       await auth().signOut();
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+      // Nettoyer les données spécifiques au compte pour éviter fuite entre comptes
+      await AsyncStorage.removeItem('pendingPaymentIntentId');
+      await AsyncStorage.removeItem('messages_last_read_at');
       setUserForCrashlytics(null);
       logger.log('[Auth] Déconnexion réussie');
     } catch (error) {

@@ -124,7 +124,7 @@ export interface Donation {
   projectId: string;
   projectName: string;
   paymentMethod: 'card' | 'apple_pay' | 'sepa' | 'virement';
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'completed' | 'succeeded' | 'failed';
   stripePaymentId?: string;
   createdAt: Date;
   // Nouveaux champs reçu fiscal

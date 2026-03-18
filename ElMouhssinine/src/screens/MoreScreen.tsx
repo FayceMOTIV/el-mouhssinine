@@ -179,9 +179,7 @@ const MoreScreen = () => {
   // Récupérer l'email de l'utilisateur connecté
   useEffect(() => {
     const unsubscribe = AuthService.onAuthStateChanged(user => {
-      if (user?.email) {
-        setUserEmail(user.email);
-      }
+      setUserEmail(user?.email || null);
     });
     return () => unsubscribe();
   }, []);

@@ -122,6 +122,21 @@ const DonationsScreen = () => {
     const unsubAuth = AuthService.onAuthStateChanged(async user => {
       try {
         if (user) {
+          // Forcer refresh token pour éviter stale auth après switch de compte
+          try { await user.getIdToken(true); } catch {}
+          // Reset données sensibles du compte précédent (switch direct sans passer par null)
+          setDonorCompanyName('');
+          setDonorSiret('');
+          setDonorLegalRep('');
+          setDonorType('particulier');
+          setSelectedProject(null);
+          setSelectedAmount(null);
+          setCustomAmount('');
+          setDonPage('choix');
+          setLastDonation(null);
+          setShowPaymentModal(false);
+          setIsProcessingPayment(false);
+          processingRef.current = false;
           const profile = await AuthService.getMemberProfile(user.uid);
           if (profile) {
             setDonorFirstName(
@@ -170,15 +185,30 @@ const DonationsScreen = () => {
             setMemberProfile(null);
           }
         } else {
-          // Reset all donor info on logout
+          // Reset ALL state on logout pour éviter fuite de données entre comptes
           setDonorFirstName('');
           setDonorLastName('');
           setDonorEmail('');
           setDonorAddress('');
           setDonorPostalCode('');
           setDonorCity('');
+          setDonorCompanyName('');
+          setDonorSiret('');
+          setDonorLegalRep('');
+          setDonorType('particulier');
           setDonorFormFilled(false);
           setMemberProfile(null);
+          setSelectedProject(null);
+          setSelectedAmount(null);
+          setCustomAmount('');
+          setDonPage('choix');
+          setLastDonation(null);
+          setShowPaymentModal(false);
+          setShowRIBModal(false);
+          setShowZakatModal(false);
+          setPaymentMethod('cb');
+          setIsProcessingPayment(false);
+          processingRef.current = false;
         }
       } catch (err) {
         console.error('[DonationsScreen] onAuthStateChanged error:', err);

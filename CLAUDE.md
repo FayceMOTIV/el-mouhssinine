@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 
 ## App Mobile
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 285
+- **Build actuel** : 294
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
 - **iOS minimum** : arm64 requis
@@ -157,6 +157,27 @@ firebase deploy --only firestore:rules
 - **Branche** : main
 
 ## Bugs connus / Pieges
+
+### Switch de compte — token auth stale Firestore (Build 294)
+Le SDK Firestore ne synchronise PAS immédiatement le token auth après signOut → signIn.
+Les onSnapshot listeners créés trop tôt reçoivent PERMISSION_DENIED (listener mort définitivement)
+ou des snapshots vides silencieux (pas d'erreur). Documenté : firebase-js-sdk#4175, firebase-android-sdk#5101.
+**Fix : 5 couches de protection dans MemberScreen** :
+1. `getIdToken(true)` avant listeners (délai réseau pour SDK sync)
+2. Retry auto sur `firestore/permission-denied` (max 2x, 1s delay via authTrigger)
+3. Safety net 2s : si tous les refs sont vides après 2s, re-trigger (1x par uid)
+4. `authTrigger` state pour forcer re-run useEffect après inscription (isRegistrationInProgress bloquait les listeners)
+5. Reset complet state sur logout dans DonationsScreen, MessagesScreen, MoreScreen, auth.ts (RGPD — fuite SIRET, brouillons, etc.)
+
+### isRegistrationInProgress bloque onAuthStateChanged (Build 294)
+Pendant l'inscription, `isRegistrationInProgress=true` fait return early dans le callback onAuthStateChanged.
+Les 3 onSnapshot listeners (payments, donations uid, donations email) ne sont JAMAIS créés.
+`loadMemberData()` ne charge que le profil, pas l'historique (commentaire ligne 563 le confirme).
+**Fix** : `setAuthTrigger(prev => prev + 1)` après `isRegistrationInProgress.current = false` → force re-run du useEffect.
+
+### ConversationScreen — marquer lu (Build 293)
+Le champ `lu` n'existait pas sur les messages. Le badge "Non lu" est basé sur `msg.status`, pas `msg.lu`.
+**Fix** : ConversationScreen update `{ lu: true, status: 'en_cours' }` quand `status === 'non_lu'`.
 
 ### Validation admin obligatoire (CRITIQUE)
 **AUCUN chemin ne doit mettre status='actif' sans passer par validateMembership CF** (admin-gated).

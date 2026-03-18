@@ -651,22 +651,16 @@ export const addDonation = async (
       donateur: params.isAnonymous
         ? 'Anonyme'
         : params.donorName || params.donorEmail || 'Anonyme',
-      donateurEmail: params.isAnonymous ? null : params.donorEmail || null,
+      donateurEmail: params.isAnonymous ? null : (params.donorEmail || currentUser.email?.toLowerCase() || null),
       montant: Number(params.amount),
       projetId: params.projectId,
       projetNom: params.projectName,
       modePaiement: params.paymentMethod,
       stripePaymentIntentId: params.stripePaymentIntentId,
-      status: 'completed',
+      status: 'succeeded',
       isAnonymous: params.isAnonymous || false,
       source: 'app_mobile',
-      date: firestore.FieldValue.serverTimestamp(),
-      createdAt: firestore.FieldValue.serverTimestamp(),
-      // Champs reçu fiscal
       donorType: params.donorType || 'particulier',
-      recuFiscalGenerated: false,
-      recuFiscalYear: null,
-      recuFiscalUrl: null,
     };
     if (params.donorInfo) {
       donationData.donorInfo = params.donorInfo;
@@ -2101,6 +2095,7 @@ export interface UserMessage {
   sujet: string;
   message: string;
   status: MessageStatus;
+  lu?: boolean;
   createdAt: Date;
   updatedAt: Date;
   reponses: MessageReply[];

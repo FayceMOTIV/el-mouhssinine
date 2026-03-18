@@ -1344,7 +1344,9 @@ exports.onMessageReply = functions
 
       try {
         // Récupérer tous les admins avec leur token FCM (optimisé - évite N+1 query)
-        const adminsSnapshot = await admin.firestore().collection('admins').get();
+        const adminsSnapshot = await admin.firestore().collection('admins')
+          .where('actif', '==', true)
+          .get();
 
         if (adminsSnapshot.empty) {
           console.log('Aucun admin trouvé');
@@ -1457,7 +1459,7 @@ exports.createPaymentIntent = functions
     // Mais on log l'uid si présent pour traçabilité
     const userId = context.auth?.uid || 'anonymous';
 
-    const { amount, currency, description, metadata } = data;
+    const { amount, currency, description, metadata, idempotencyKey } = data;
 
     // Validation stricte des paramètres côté serveur
     if (!amount || typeof amount !== 'number' || isNaN(amount)) {
@@ -1538,8 +1540,12 @@ exports.createPaymentIntent = functions
         }
       } catch (priceCheckErr) {
         if (priceCheckErr.code === 'functions/invalid-argument') throw priceCheckErr;
-        // Si Firestore indisponible, on laisse passer (fail open) pour ne pas bloquer les paiements
-        console.warn('createPaymentIntent: vérification prix échouée (Firestore indisponible):', priceCheckErr.message);
+        // Fail-closed : si Firestore est indisponible, on bloque le paiement cotisation
+        // Un attaquant ne peut pas exploiter une panne Firestore pour payer 1€
+        throw new functions.https.HttpsError(
+          'unavailable',
+          'Vérification du montant impossible. Réessayez dans quelques instants.'
+        );
       }
     }
 
@@ -1563,21 +1569,27 @@ exports.createPaymentIntent = functions
     await checkRateLimit(userId, 'payment', 5, 300);
 
     try {
-      // Créer le PaymentIntent
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: amount, // déjà en centimes
-        currency: currency,
-        description: description || 'Don Mosquée El Mohsinine',
-        metadata: {
-          ...metadata,
-          userId: userId,
-          source: 'app_mobile',
-          createdAt: new Date().toISOString(),
+      // Créer le PaymentIntent (avec idempotency key si fournie par l'app)
+      const piOptions = idempotencyKey
+        ? { idempotencyKey: `pi_${idempotencyKey}` }
+        : {};
+      const paymentIntent = await stripe.paymentIntents.create(
+        {
+          amount: amount, // déjà en centimes
+          currency: currency,
+          description: description || 'Don Mosquée El Mohsinine',
+          metadata: {
+            ...metadata,
+            userId: userId,
+            source: 'app_mobile',
+            createdAt: new Date().toISOString(),
+          },
+          automatic_payment_methods: {
+            enabled: true,
+          },
         },
-        automatic_payment_methods: {
-          enabled: true,
-        },
-      });
+        piOptions
+      );
 
       console.log('PaymentIntent créé:', paymentIntent.id);
 
@@ -1611,7 +1623,7 @@ exports.createSubscription = functions
     }
 
     const uid = context.auth.uid;
-    const { amount, description, metadata } = data;
+    const { amount, description, metadata, idempotencyKey } = data;
 
     // Validation
     if (!amount || typeof amount !== 'number' || amount < 100 || amount > 10000000) {
@@ -1722,23 +1734,29 @@ exports.createSubscription = functions
 
       // 3. Créer la Subscription avec payment_behavior 'default_incomplete'
       // Cela permet de récupérer le payment_intent pour Payment Sheet
-      const subscription = await stripe.subscriptions.create({
-        customer: customer.id,
-        items: [{ price: price.id }],
-        payment_behavior: 'default_incomplete',
-        payment_settings: {
-          save_default_payment_method: 'on_subscription',
-          payment_method_types: ['card'],
+      const subOptions = idempotencyKey
+        ? { idempotencyKey: `sub_${idempotencyKey}` }
+        : {};
+      const subscription = await stripe.subscriptions.create(
+        {
+          customer: customer.id,
+          items: [{ price: price.id }],
+          payment_behavior: 'default_incomplete',
+          payment_settings: {
+            save_default_payment_method: 'on_subscription',
+            payment_method_types: ['card'],
+          },
+          expand: ['latest_invoice.payment_intent'],
+          metadata: {
+            ...metadata,
+            userId: uid,
+            source: 'app_mobile',
+            type: 'cotisation',
+            period: 'mensuel',
+          },
         },
-        expand: ['latest_invoice.payment_intent'],
-        metadata: {
-          ...metadata,
-          userId: uid,
-          source: 'app_mobile',
-          type: 'cotisation',
-          period: 'mensuel',
-        },
-      });
+        subOptions
+      );
 
       console.log('Subscription créée:', subscription.id);
 
@@ -2287,7 +2305,7 @@ exports.stripeWebhook = functions
             });
           });
 
-          console.log('Cotisation renouvelée jusqu\'au:', newEndDate.toISOString());
+          console.log('Cotisation mensuelle renouvelée avec succès');
         } catch (err) {
           // Gérer le cas d'idempotence (pas une vraie erreur)
           if (err && err.alreadyProcessed) {
@@ -3783,7 +3801,7 @@ exports.getDonsByYear = functions
         .where('donateurEmail', '==', email.toLowerCase())
         .where('createdAt', '>=', startDate)
         .where('createdAt', '<=', endDate)
-        .where('status', '==', 'succeeded')
+        .where('status', 'in', ['succeeded', 'completed'])
         .get();
 
       // Paiements (cotisations + dons libres)
@@ -6368,8 +6386,8 @@ exports.createAdmin = functions
     if (!email || !password || !nom) {
       throw new functions.https.HttpsError('invalid-argument', 'Email, mot de passe et nom sont requis');
     }
-    if (password.length < 6) {
-      throw new functions.https.HttpsError('invalid-argument', 'Le mot de passe doit contenir au moins 6 caractères');
+    if (password.length < 8) {
+      throw new functions.https.HttpsError('invalid-argument', 'Le mot de passe doit contenir au moins 8 caractères');
     }
     // Whitelist des rôles autorisés
     const allowedRoles = ['super_admin', 'admin', 'moderator'];
