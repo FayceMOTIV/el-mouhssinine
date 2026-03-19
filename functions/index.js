@@ -7996,7 +7996,7 @@ exports.createPublicCheckoutSession = functions
           },
           quantity: 1,
         }],
-        success_url: `${ALLOWED_ORIGIN}/don?success=1`,
+        success_url: `${ALLOWED_ORIGIN}/don?success=1&app_redirect=${encodeURIComponent('fr.elmouhssinine.mosquee://don-success')}`,
         cancel_url: `${ALLOWED_ORIGIN}/don`,
         metadata: {
           type: 'donation',

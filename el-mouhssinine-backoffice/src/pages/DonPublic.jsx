@@ -13,9 +13,17 @@ export default function DonPublic() {
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
-    if (window.location.search.includes('success=1')) {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('success') === '1') {
       setSuccess(true)
+      const appRedirect = params.get('app_redirect')
       window.history.replaceState({}, '', '/don')
+      if (appRedirect) {
+        // Rediriger vers l'app après affichage bref du message de succès
+        setTimeout(() => {
+          window.location.href = appRedirect
+        }, 2000)
+      }
     }
   }, [])
 

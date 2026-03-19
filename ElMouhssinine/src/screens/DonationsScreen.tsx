@@ -228,6 +228,37 @@ const DonationsScreen = () => {
     }
   }, []);
 
+  // Deep link handler — retour après don CB web (Stripe → DonPublic → app)
+  useEffect(() => {
+    const handleDeepLink = (url: string) => {
+      if (url && url.includes('don-success')) {
+        setShowPaymentModal(false);
+        setLastDonation({ amount: 0, projectName: '' });
+        checkAnimRef.setValue(0);
+        Animated.spring(checkAnimRef, {
+          toValue: 1,
+          friction: 4,
+          tension: 40,
+          useNativeDriver: true,
+        }).start();
+        setDonPage('merci');
+      }
+    };
+
+    const checkInitialURL = async () => {
+      try {
+        const url = await Linking.getInitialURL();
+        if (url) handleDeepLink(url);
+      } catch {}
+    };
+    checkInitialURL();
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+    return () => subscription.remove();
+  }, []);
+
   const validateSIRET = (siret: string): boolean => {
     const cleaned = siret.replace(/\s/g, '');
     return /^\d{14}$/.test(cleaned);
@@ -1648,7 +1679,9 @@ const DonationsScreen = () => {
 
                 <View style={styles.merciAmountBox}>
                   <Text style={styles.merciAmount}>
-                    {lastDonation.amount}€
+                    {lastDonation.amount > 0
+                      ? `${lastDonation.amount}€`
+                      : language === 'ar' ? 'تم تسجيل تبرعك' : 'Don enregistré'}
                   </Text>
                   {lastDonation.projectName ? (
                     <Text style={[styles.merciProject, isRTL && styles.rtlText]}>
