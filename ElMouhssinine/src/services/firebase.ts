@@ -2254,6 +2254,7 @@ export const subscribeToUserMessages = (
                 sujet: data.sujet,
                 message: data.message,
                 status: data.status,
+                lu: data.lu,
                 createdAt: toDate(data.createdAt),
                 updatedAt: toDate(data.updatedAt),
                 reponses: (data.reponses || []).map((r: any) => ({

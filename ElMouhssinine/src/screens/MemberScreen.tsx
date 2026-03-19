@@ -137,6 +137,7 @@ const MemberScreen = () => {
   const [authLoading, setAuthLoading] = useState(false);
   const isRegistrationInProgress = useRef(false); // Empêche le changement de vue pendant l'inscription
   const [authTrigger, setAuthTrigger] = useState(0); // Incrémenté pour forcer re-run du useEffect auth (ex: après inscription)
+  const lastLoadedUidRef = useRef<string | null>(null); // Track le uid déjà chargé pour éviter le flash loading
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [registerNom, setRegisterNom] = useState('');
@@ -249,7 +250,13 @@ const MemberScreen = () => {
         return;
       }
 
-      setIsLoading(true);
+      // Ne pas flasher l'écran de chargement si le profil est déjà affiché pour ce user
+      // (authTrigger re-run = silent refresh, pas besoin du flash loading→loaded)
+      if (user?.uid && lastLoadedUidRef.current === user.uid) {
+        // Silent refresh — listeners recréés sans flash
+      } else {
+        setIsLoading(true);
+      }
 
       // Nettoyer les anciens listeners si existants
       if (memberProfileUnsubscribeRef.current) {
@@ -354,6 +361,7 @@ const MemberScreen = () => {
               loadMemberData(user.uid);
             }
             setIsLoading(false);
+            lastLoadedUidRef.current = user.uid;
           },
         );
 
@@ -522,6 +530,7 @@ const MemberScreen = () => {
         setMemberPage('sympathisant');
         setContextMessage(null);
         setIsLoading(false);
+        lastLoadedUidRef.current = null;
       }
     });
 
@@ -782,6 +791,13 @@ const MemberScreen = () => {
         setShowLoginModal(false);
         resetLoginForm();
 
+        // Sauvegarder le FCM token IMMÉDIATEMENT (avant que onAuthStateChanged ne re-fire)
+        // Sans cela, les notifications push ne sont pas reçues tant que le token n'est pas sauvé
+        try {
+          await subscribeToMembersTopic();
+          await saveFCMTokenToFirestore(result.user.uid);
+        } catch {}
+
         // Charger le profil membre
         loadMemberData(result.user.uid);
 
@@ -921,6 +937,9 @@ const MemberScreen = () => {
     if (currentUser) {
       try {
         await currentUser.reload();
+        // Force token refresh pour syncer emailVerified depuis le serveur
+        // (reload seul ne suffit pas — firebase-js-sdk#4175, react-native-firebase#5465)
+        await currentUser.getIdToken(true);
       } catch {
         // Ignore reload error (offline, etc.)
       }
@@ -1108,9 +1127,16 @@ const MemberScreen = () => {
         setCustomAmount('');
 
         // S6: UI optimiste + onSnapshot pour confirmer le traitement webhook
+        const isMensuelPayment = selectedFormule === 'mensuel';
         Alert.alert(
           t('congratulations'),
-          'Paiement reçu ! Traitement en cours...',
+          isMensuelPayment
+            ? language === 'ar'
+              ? 'تم تفعيل اشتراككم الشهري بنجاح. سيتم الخصم تلقائياً كل شهر. جزاكم الله خيراً!'
+              : 'Votre abonnement mensuel est activé. Le renouvellement est automatique chaque mois. Jazak Allah Khayran !'
+            : language === 'ar'
+              ? 'تم تسجيل اشتراككم السنوي بنجاح. جزاكم الله خيراً!'
+              : 'Votre cotisation annuelle a été enregistrée avec succès. Jazak Allah Khayran !',
           [{ text: t('commonOk'), style: 'default' }],
         );
 
@@ -2185,8 +2211,9 @@ const MemberScreen = () => {
                 </TouchableOpacity>
               )}
 
-            {/* Renouveler si bientôt expiré */}
+            {/* Renouveler si bientôt expiré (masqué pour abonnements mensuels — renouvellement auto) */}
             {memberProfile?.cotisationExpiry &&
+              memberProfile?.cotisationType !== 'mensuel' &&
               (() => {
                 const expiryValue = memberProfile.cotisationExpiry as any;
                 const expiry =
@@ -2215,6 +2242,20 @@ const MemberScreen = () => {
                 }
                 return null;
               })()}
+
+            {/* Info renouvellement automatique pour abonnements mensuels */}
+            {memberProfile?.cotisationType === 'mensuel' &&
+              isPaid &&
+              !memberProfile?.subscriptionCancelPending && (
+                <View style={{ backgroundColor: '#dcfce7', borderRadius: 12, padding: 12, marginBottom: 12, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 16, marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 }}>{'🔄'}</Text>
+                  <Text style={{ flex: 1, fontSize: 13, color: '#166534', textAlign: isRTL ? 'right' : 'left' }}>
+                    {language === 'ar'
+                      ? 'يتم تجديد اشتراككم تلقائياً كل شهر'
+                      : 'Votre abonnement se renouvelle automatiquement chaque mois'}
+                  </Text>
+                </View>
+              )}
 
             {/* Déconnexion */}
             <TouchableOpacity

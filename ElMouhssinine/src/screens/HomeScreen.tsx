@@ -773,10 +773,21 @@ const HomeScreen = () => {
           );
           const lastReadAt = lastReadStr ? new Date(lastReadStr).getTime() : 0;
           // Compter les messages non lus :
-          // 1. Messages avec une réponse mosquée APRÈS la dernière lecture
-          // 2. Messages système (status 'non_lu') créés APRÈS la dernière lecture
+          // 1. Messages jamais ouverts (lu !== true) créés après la dernière visite
+          // 2. Messages avec une réponse mosquée après la dernière visite
           const unread = messages.filter(m => {
-            // Cas 1 : Réponse mosquée récente
+            // Déjà marqué comme lu dans ConversationScreen → pas compté
+            if (m.lu === true) return false;
+
+            const msgTime =
+              m.createdAt instanceof Date
+                ? m.createdAt.getTime()
+                : new Date(m.createdAt).getTime();
+
+            // Cas 1 : Message jamais ouvert, créé après la dernière visite
+            if (msgTime > lastReadAt) return true;
+
+            // Cas 2 : Réponse mosquée récente
             if (m.reponses && m.reponses.length > 0) {
               const mosqueeReplies = m.reponses.filter(
                 r => r.createdBy === 'mosquee',
@@ -790,14 +801,6 @@ const HomeScreen = () => {
                     : new Date(lastMosqueeReply.createdAt).getTime();
                 if (replyTime > lastReadAt) return true;
               }
-            }
-            // Cas 2 : Message système non lu (adhésion validée, refusée, etc.)
-            if (m.status === 'non_lu') {
-              const msgTime =
-                m.createdAt instanceof Date
-                  ? m.createdAt.getTime()
-                  : new Date(m.createdAt).getTime();
-              if (msgTime > lastReadAt) return true;
             }
             return false;
           }).length;

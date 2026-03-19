@@ -37,7 +37,7 @@ Bilingue FR/AR avec support RTL. En production sur l'App Store.
 
 ## App Mobile
 - **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build actuel** : 294
+- **Build actuel** : 295
 - **Stack** : React Native 0.83.1, Firebase, TypeScript
 - **Architecture** : New Architecture activee (RCTNewArchEnabled: true)
 - **iOS minimum** : arm64 requis
@@ -258,6 +258,17 @@ Toujours passer un parametre d'erreur pour distinguer "pas de donnees" de "erreu
 - Checkout Session inclut metadata (email, name) pour traçabilite complete
 - Webhook `checkout.session.completed` → cree doc donation dans Firestore
 - Historique app via fallback `where('donateurEmail', '==', email)` — fonctionne si meme email que Firebase Auth
+
+### Build 295 Fixes (4 bugs UX)
+- emailVerified stale : `reload()` seul ne met pas a jour `emailVerified` apres clic lien. Fix : `getIdToken(true)` apres `reload()` (react-native-firebase#5465, firebase-js-sdk#4175)
+- Message remerciement cotisation : ne mentionnait pas le renouvellement auto. Fix : message specifique mensuel/annuel + masquer bouton "Renouveler" pour les abonnements mensuels (renouvellement auto Stripe) + info verte "renouvellement automatique chaque mois"
+- Badge messages : ne comptait que `status === 'non_lu'`, mais les messages systeme (bienvenue, validation) ont `status: 'resolu'`. Fix : compter tous les messages ou `lu !== true` (champ ajoute Build 293)
+- Push notifications : FCM token pas sauvegarde apres inscription (bloque par `isRegistrationInProgress`). Fix : `saveFCMTokenToFirestore()` + `subscribeToMembersTopic()` immediatement apres inscription reussie
+
+### Don CB via site web (INTENTIONNEL — Apple Guideline 3.2.2(iv))
+Le paiement CB des dons ouvre `https://el-mouhssinine.web.app/don` via `Linking.openURL()`.
+C'est INTENTIONNEL : Apple interdit les dons in-app sans approbation Benevity.
+NE PAS changer ce flux pour utiliser le PaymentSheet in-app.
 
 ### Audit securite Build 285 (22 fixes)
 - P0: OpenAI API key deplacee cote serveur (CF `generateAIContent` proxy)

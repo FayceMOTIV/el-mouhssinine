@@ -2058,7 +2058,11 @@ const DonationsScreen = () => {
                 if (paymentMethod === 'virement') {
                   handlePayment();
                 } else {
+                  // Reset état formulaire AVANT d'ouvrir le web (l'user revient avec état clean)
                   setShowPaymentModal(false);
+                  setSelectedAmount(null);
+                  setCustomAmount('');
+                  setPaymentMethod('cb');
                   Linking.openURL('https://el-mouhssinine.web.app/don');
                 }
               }}
