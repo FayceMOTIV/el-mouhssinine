@@ -2206,6 +2206,7 @@ export const getUserMessages = async (
         sujet: data.sujet,
         message: data.message,
         status: data.status,
+        lu: data.lu,
         createdAt: toDate(data.createdAt),
         updatedAt: toDate(data.updatedAt),
         reponses: (data.reponses || []).map((r: any) => ({
@@ -2358,6 +2359,7 @@ export const getMessage = async (
       sujet: data?.sujet,
       message: data?.message,
       status: data?.status,
+      lu: data?.lu,
       createdAt: toDate(data?.createdAt),
       updatedAt: toDate(data?.updatedAt),
       reponses: (data?.reponses || []).map((r: any) => ({

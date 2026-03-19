@@ -361,7 +361,9 @@ const MemberScreen = () => {
               loadMemberData(user.uid);
             }
             setIsLoading(false);
-            lastLoadedUidRef.current = user.uid;
+            if (profile) {
+              lastLoadedUidRef.current = user.uid;
+            }
           },
         );
 
