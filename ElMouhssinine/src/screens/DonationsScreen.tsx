@@ -19,6 +19,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   Animated,
+  AppState,
 } from 'react-native';
 import {
   colors,
@@ -88,6 +89,7 @@ const DonationsScreen = () => {
   const [detailProject, setDetailProject] = useState<Project | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const processingRef = useRef(false); // Guard supplémentaire contre double paiement
+  const pendingDonCBRef = useRef(false); // Flag: user a ouvert la page CB web
   const [refreshing, setRefreshing] = useState(false);
   const [isApplePayAvailable, setIsApplePayAvailable] = useState(false);
 
@@ -132,8 +134,11 @@ const DonationsScreen = () => {
           setSelectedProject(null);
           setSelectedAmount(null);
           setCustomAmount('');
-          setDonPage('choix');
-          setLastDonation(null);
+          // Ne pas écraser la page merci si on revient d'un don CB web
+          if (!pendingDonCBRef.current) {
+            setDonPage('choix');
+            setLastDonation(null);
+          }
           setShowPaymentModal(false);
           setIsProcessingPayment(false);
           processingRef.current = false;
@@ -228,20 +233,27 @@ const DonationsScreen = () => {
     }
   }, []);
 
-  // Deep link handler — retour après don CB web (Stripe → DonPublic → app)
+  // Retour après don CB web — deep link + AppState fallback
   useEffect(() => {
+    const showMerciPage = () => {
+      if (!pendingDonCBRef.current) return;
+      pendingDonCBRef.current = false;
+      setShowPaymentModal(false);
+      setLastDonation({ amount: 0, projectName: '' });
+      checkAnimRef.setValue(0);
+      Animated.spring(checkAnimRef, {
+        toValue: 1,
+        friction: 4,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+      setDonPage('merci');
+    };
+
+    // Deep link : fr.elmouhssinine.mosquee://don-success
     const handleDeepLink = (url: string) => {
       if (url && url.includes('don-success')) {
-        setShowPaymentModal(false);
-        setLastDonation({ amount: 0, projectName: '' });
-        checkAnimRef.setValue(0);
-        Animated.spring(checkAnimRef, {
-          toValue: 1,
-          friction: 4,
-          tension: 40,
-          useNativeDriver: true,
-        }).start();
-        setDonPage('merci');
+        showMerciPage();
       }
     };
 
@@ -253,10 +265,27 @@ const DonationsScreen = () => {
     };
     checkInitialURL();
 
-    const subscription = Linking.addEventListener('url', ({ url }) => {
+    const linkSub = Linking.addEventListener('url', ({ url }) => {
       handleDeepLink(url);
     });
-    return () => subscription.remove();
+
+    // Fallback AppState : si le deep link ne marche pas,
+    // on détecte le retour au foreground après ouverture de la page CB
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && pendingDonCBRef.current) {
+        // Petit délai pour laisser le deep link arriver en premier si possible
+        setTimeout(() => {
+          if (pendingDonCBRef.current) {
+            showMerciPage();
+          }
+        }, 800);
+      }
+    });
+
+    return () => {
+      linkSub.remove();
+      appStateSub.remove();
+    };
   }, []);
 
   const validateSIRET = (siret: string): boolean => {
@@ -2096,6 +2125,7 @@ const DonationsScreen = () => {
                   setSelectedAmount(null);
                   setCustomAmount('');
                   setPaymentMethod('cb');
+                  pendingDonCBRef.current = true;
                   Linking.openURL('https://el-mouhssinine.web.app/don');
                 }
               }}
