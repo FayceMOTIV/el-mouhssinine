@@ -77,6 +77,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   // MARK: - Deep Linking (Linking.addEventListener in RN)
 
   func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+    // Stocker le deep link dans UserDefaults pour lecture JS (Settings)
+    // RCTLinkingManager peut rater l'event si le bridge n'écoute pas encore
+    if url.absoluteString.contains("don-success") {
+      UserDefaults.standard.set(url.absoluteString, forKey: "pendingDeepLink")
+    }
     return RCTLinkingManager.application(app, open: url, options: options)
   }
 

@@ -19,6 +19,8 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   Animated,
+  AppState,
+  Settings,
 } from 'react-native';
 import {
   colors,
@@ -231,34 +233,67 @@ const DonationsScreen = () => {
   }, []);
 
   // Deep link handler — retour après don CB web (Stripe → DonPublic → app)
+  // Double mécanisme : Linking.addEventListener + UserDefaults (Settings) fallback
+  // AppDelegate stocke l'URL dans UserDefaults au cas où Linking rate l'event
   useEffect(() => {
-    const handleDeepLink = (url: string) => {
-      if (url && url.includes('don-success')) {
-        setShowPaymentModal(false);
-        setLastDonation({ amount: 0, projectName: '' });
-        checkAnimRef.setValue(0);
-        Animated.spring(checkAnimRef, {
-          toValue: 1,
-          friction: 4,
-          tension: 40,
-          useNativeDriver: true,
-        }).start();
-        setDonPage('merci');
-      }
+    const showDonMerci = () => {
+      setShowPaymentModal(false);
+      setLastDonation({ amount: 0, projectName: '' });
+      checkAnimRef.setValue(0);
+      Animated.spring(checkAnimRef, {
+        toValue: 1,
+        friction: 4,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+      setDonPage('merci');
     };
 
+    // Vérifier UserDefaults (écrit par AppDelegate quand le deep link arrive)
+    const checkPendingDeepLink = () => {
+      const pending = Settings.get('pendingDeepLink');
+      if (pending && typeof pending === 'string' && pending.includes('don-success')) {
+        Settings.set({ pendingDeepLink: '' }); // Clear
+        showDonMerci();
+        return true;
+      }
+      return false;
+    };
+
+    // Check 1 : au mount (cold start)
     const checkInitialURL = async () => {
       try {
         const url = await Linking.getInitialURL();
-        if (url) handleDeepLink(url);
+        if (url && url.includes('don-success')) {
+          showDonMerci();
+          return;
+        }
       } catch {}
+      // Fallback UserDefaults si getInitialURL ne retourne rien
+      checkPendingDeepLink();
     };
     checkInitialURL();
 
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      handleDeepLink(url);
+    // Check 2 : Linking event (warm return — si le bridge écoute)
+    const linkSub = Linking.addEventListener('url', ({ url }) => {
+      if (url && url.includes('don-success')) {
+        Settings.set({ pendingDeepLink: '' }); // Clear si Linking marche
+        showDonMerci();
+      }
     });
-    return () => subscription.remove();
+
+    // Check 3 : AppState fallback — quand l'app revient au foreground,
+    // vérifier UserDefaults (fiable même si Linking rate l'event)
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        checkPendingDeepLink();
+      }
+    });
+
+    return () => {
+      linkSub.remove();
+      appStateSub.remove();
+    };
   }, []);
 
   const validateSIRET = (siret: string): boolean => {
