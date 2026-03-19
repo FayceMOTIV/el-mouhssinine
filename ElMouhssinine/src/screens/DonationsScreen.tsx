@@ -132,8 +132,10 @@ const DonationsScreen = () => {
           setSelectedProject(null);
           setSelectedAmount(null);
           setCustomAmount('');
-          setDonPage('choix');
-          setLastDonation(null);
+          // Ne pas écraser 'merci' (retour deep link don CB web)
+          setDonPage(prev => prev === 'merci' ? prev : 'choix');
+          // lastDonation pas reset ici — il est affiché uniquement si donPage==='merci'
+          // et sera reset au dismiss de la page merci ou au logout
           setShowPaymentModal(false);
           setIsProcessingPayment(false);
           processingRef.current = false;
