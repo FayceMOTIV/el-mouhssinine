@@ -59,7 +59,7 @@ class AppDelegate: ExpoAppDelegate, UNUserNotificationCenterDelegate, MessagingD
     window = UIWindow(frame: UIScreen.main.bounds)
 
     factory.startReactNative(
-      withModuleName: "ElMouhssinine",
+      withModuleName: "main",
       in: window,
       launchOptions: launchOptions
     )

@@ -2,12 +2,13 @@
  * @format
  */
 
-import { AppRegistry, LogBox, Platform } from 'react-native';
+import { LogBox, Platform } from 'react-native';
+import { registerRootComponent } from 'expo';
 import messaging from '@react-native-firebase/messaging';
 import notifee, { EventType } from '@notifee/react-native';
 import TrackPlayer from 'react-native-track-player';
 import App from './App';
-import { name as appName } from './app.json';
+
 import {
   addNotificationToHistory,
   detectNotificationType,
@@ -97,4 +98,4 @@ if (!__DEV__) {
   });
 }
 
-AppRegistry.registerComponent(appName, () => App);
+registerRootComponent(App);
