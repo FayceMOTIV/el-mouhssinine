@@ -11,6 +11,7 @@ export default function DonPublic() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [appRedirectUrl, setAppRedirectUrl] = useState(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -19,10 +20,12 @@ export default function DonPublic() {
       const appRedirect = params.get('app_redirect')
       window.history.replaceState({}, '', '/don')
       if (appRedirect) {
-        // Rediriger vers l'app après affichage bref du message de succès
+        setAppRedirectUrl(appRedirect)
+        // Rediriger très vite vers l'app — avant que l'user ait le temps de switcher manuellement
+        // iOS va afficher un dialog "Ouvrir dans El Mohsinine ?" par-dessus la page de succès
         setTimeout(() => {
           window.location.href = appRedirect
-        }, 2000)
+        }, 100)
       }
     }
   }, [])
@@ -92,9 +95,17 @@ export default function DonPublic() {
               <p className="font-medium mb-1">💡 Le saviez-vous ?</p>
               <p>Votre don est déductible des impôts à hauteur de 66 % dans la limite de 20 % du revenu imposable.</p>
             </div>
+            {appRedirectUrl && (
+              <button
+                onClick={() => { window.location.href = appRedirectUrl }}
+                className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 px-8 rounded-xl transition-colors text-lg shadow-md"
+              >
+                📱 Retourner à l'application
+              </button>
+            )}
             <button
               onClick={() => setSuccess(false)}
-              className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-8 rounded-xl transition-colors"
+              className="mt-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-8 rounded-xl transition-colors"
             >
               Faire un autre don
             </button>

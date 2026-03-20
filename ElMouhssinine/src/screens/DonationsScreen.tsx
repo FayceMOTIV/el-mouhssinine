@@ -237,7 +237,10 @@ const DonationsScreen = () => {
   // JS lit via NativeModules.MosqueGeofencing.getPendingDeepLink (lecture directe UserDefaults)
   // Settings.get() ne marche PAS — c'est un snapshot pris au load du module, jamais rafraîchi
   useEffect(() => {
+    let merciShown = false;
     const showDonMerci = () => {
+      if (merciShown) return;
+      merciShown = true;
       setShowPaymentModal(false);
       setLastDonation({ amount: 0, projectName: '' });
       checkAnimRef.setValue(0);
@@ -284,15 +287,22 @@ const DonationsScreen = () => {
 
     // Check 3 : AppState — quand l'app revient au foreground, lire UserDefaults
     // Pas de faux positif : UserDefaults écrit QUE par AppDelegate quand don-success arrive
+    // Retry car application:open:url: peut arriver juste APRÈS applicationDidBecomeActive
+    let retryTimer1: ReturnType<typeof setTimeout> | null = null;
+    let retryTimer2: ReturnType<typeof setTimeout> | null = null;
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         checkPendingDeepLink();
+        retryTimer1 = setTimeout(checkPendingDeepLink, 1000);
+        retryTimer2 = setTimeout(checkPendingDeepLink, 3000);
       }
     });
 
     return () => {
       linkSub.remove();
       appStateSub.remove();
+      if (retryTimer1) clearTimeout(retryTimer1);
+      if (retryTimer2) clearTimeout(retryTimer2);
     };
   }, []);
 
