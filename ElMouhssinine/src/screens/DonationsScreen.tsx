@@ -20,7 +20,7 @@ import {
   TouchableWithoutFeedback,
   Animated,
   AppState,
-  Settings,
+  NativeModules,
 } from 'react-native';
 import {
   colors,
@@ -233,8 +233,9 @@ const DonationsScreen = () => {
   }, []);
 
   // Deep link handler — retour après don CB web (Stripe → DonPublic → app)
-  // Double mécanisme : Linking.addEventListener + UserDefaults (Settings) fallback
-  // AppDelegate stocke l'URL dans UserDefaults au cas où Linking rate l'event
+  // AppDelegate écrit l'URL dans UserDefaults (synchrone, garanti)
+  // JS lit via NativeModules.MosqueGeofencing.getPendingDeepLink (lecture directe UserDefaults)
+  // Settings.get() ne marche PAS — c'est un snapshot pris au load du module, jamais rafraîchi
   useEffect(() => {
     const showDonMerci = () => {
       setShowPaymentModal(false);
@@ -249,18 +250,18 @@ const DonationsScreen = () => {
       setDonPage('merci');
     };
 
-    // Vérifier UserDefaults (écrit par AppDelegate quand le deep link arrive)
+    // Lire UserDefaults via native module (lecture directe, pas de cache)
     const checkPendingDeepLink = () => {
-      const pending = Settings.get('pendingDeepLink');
-      if (pending && typeof pending === 'string' && pending.includes('don-success')) {
-        Settings.set({ pendingDeepLink: '' }); // Clear
-        showDonMerci();
-        return true;
-      }
-      return false;
+      NativeModules.MosqueGeofencing?.getPendingDeepLink?.((result: string[]) => {
+        const url = result?.[0];
+        if (url && url.includes('don-success')) {
+          NativeModules.MosqueGeofencing.clearPendingDeepLink();
+          showDonMerci();
+        }
+      });
     };
 
-    // Check 1 : au mount (cold start)
+    // Check 1 : au mount (cold start via deep link)
     const checkInitialURL = async () => {
       try {
         const url = await Linking.getInitialURL();
@@ -269,7 +270,6 @@ const DonationsScreen = () => {
           return;
         }
       } catch {}
-      // Fallback UserDefaults si getInitialURL ne retourne rien
       checkPendingDeepLink();
     };
     checkInitialURL();
@@ -277,13 +277,13 @@ const DonationsScreen = () => {
     // Check 2 : Linking event (warm return — si le bridge écoute)
     const linkSub = Linking.addEventListener('url', ({ url }) => {
       if (url && url.includes('don-success')) {
-        Settings.set({ pendingDeepLink: '' }); // Clear si Linking marche
+        NativeModules.MosqueGeofencing?.clearPendingDeepLink?.();
         showDonMerci();
       }
     });
 
-    // Check 3 : AppState fallback — quand l'app revient au foreground,
-    // vérifier UserDefaults (fiable même si Linking rate l'event)
+    // Check 3 : AppState — quand l'app revient au foreground, lire UserDefaults
+    // Pas de faux positif : UserDefaults écrit QUE par AppDelegate quand don-success arrive
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         checkPendingDeepLink();

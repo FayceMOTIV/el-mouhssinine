@@ -7,4 +7,6 @@
 RCT_EXTERN_METHOD(start)
 RCT_EXTERN_METHOD(stop)
 RCT_EXTERN_METHOD(checkStatus:(RCTResponseSenderBlock)callback)
+RCT_EXTERN_METHOD(getPendingDeepLink:(RCTResponseSenderBlock)callback)
+RCT_EXTERN_METHOD(clearPendingDeepLink)
 @end

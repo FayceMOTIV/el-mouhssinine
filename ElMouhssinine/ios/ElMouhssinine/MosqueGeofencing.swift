@@ -185,6 +185,18 @@ class MosqueGeofencing: NSObject {
     callback([statusString])
   }
 
+  /// Lit le deep link en attente depuis UserDefaults (écrit par AppDelegate).
+  /// Retourne l'URL ou chaîne vide via callback.
+  @objc func getPendingDeepLink(_ callback: @escaping ([Any]) -> Void) {
+    let url = UserDefaults.standard.string(forKey: "pendingDeepLink") ?? ""
+    callback([url])
+  }
+
+  /// Efface le deep link en attente.
+  @objc func clearPendingDeepLink() {
+    UserDefaults.standard.removeObject(forKey: "pendingDeepLink")
+  }
+
   @objc static func requiresMainQueueSetup() -> Bool {
     return false
   }
