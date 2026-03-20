@@ -1,4 +1,30 @@
 {
   "name": "ElMouhssinine",
-  "displayName": "ElMouhssinine"
+  "displayName": "ElMouhssinine",
+  "expo": {
+    "name": "El Mouhssinine",
+    "slug": "el-mouhssinine",
+    "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 5000,
+      "url": "https://u.expo.dev/2b193d8f-2732-47c8-938a-336945c5fc84"
+    },
+    "ios": {
+      "bundleIdentifier": "fr.elmouhssinine.mosquee"
+    },
+    "android": {
+      "package": "com.elmouhssinine"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2b193d8f-2732-47c8-938a-336945c5fc84"
+      }
+    },
+    "owner": "fayce"
+  }
 }
