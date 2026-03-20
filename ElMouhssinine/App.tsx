@@ -28,6 +28,7 @@ import {
   detectNotificationType,
 } from './src/services/notificationHistory';
 import { initSentry, captureError } from './src/services/sentry';
+import { checkForOTAUpdate } from './src/utils/checkForUpdates';
 
 // =============================================================================
 // STRIPE CONFIGURATION
@@ -131,6 +132,9 @@ const App: React.FC = () => {
       } catch (e) {
         console.warn('[App] clearBadge failed:', e);
       }
+
+      // Vérifier les mises à jour OTA (silencieux, non-bloquant)
+      checkForOTAUpdate();
 
       // Attendre 2 secondes pour garder la splash visible
       await new Promise<void>(resolve => setTimeout(resolve, 2000));
