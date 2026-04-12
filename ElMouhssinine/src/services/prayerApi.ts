@@ -703,9 +703,9 @@ export const PrayerAPI = {
       const currentMinutes = today.getMinutes();
       const currentTimeInMinutes = currentHour * 60 + currentMinutes;
 
-      // Utilise calendar2026 défini au niveau module
+      // Utilise calendar2026 défini au niveau module (366 jours complets, source Mawaqit API)
 
-      // Lookup direct — tous les 365 jours sont présents
+      // Lookup direct — tous les 366 jours sont présents
       const getTimesForDay = (month: number, day: number): string[] => {
         const monthCal = calendar2026[month];
         if (!monthCal) return ['06:34','08:04','12:53','15:20','17:47','19:17'];
