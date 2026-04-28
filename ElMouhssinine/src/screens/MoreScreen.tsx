@@ -79,9 +79,7 @@ import {
   cancelRamadanNotifications,
 } from '../services/prayerNotifications';
 import {
-  initBackgroundLocation,
   stopBackgroundLocation,
-  getGeofencingStatus,
 } from '../services/backgroundLocation';
 import { PrayerAPI } from '../services/prayerApi';
 
@@ -156,7 +154,9 @@ const MoreScreen = () => {
         const authStatus = await messaging().hasPermission();
         if (authStatus === messaging.AuthorizationStatus.DENIED) {
           setPushDenied(true);
-        } else if (authStatus === messaging.AuthorizationStatus.NOT_DETERMINED) {
+        } else if (
+          authStatus === messaging.AuthorizationStatus.NOT_DETERMINED
+        ) {
           const result = await messaging().requestPermission();
           if (result === messaging.AuthorizationStatus.DENIED) {
             setPushDenied(true);
@@ -440,27 +440,7 @@ const MoreScreen = () => {
           return false;
         }
 
-        // Android 10+ (API 29+) - demander aussi ACCESS_BACKGROUND_LOCATION
-        if (typeof Platform.Version === 'number' && Platform.Version >= 29) {
-          const bgGranted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
-            {
-              title:
-                language === 'ar'
-                  ? 'إذن الموقع في الخلفية'
-                  : 'Localisation en arrière-plan',
-              message:
-                language === 'ar'
-                  ? 'للحصول على تذكير حتى عندما يكون التطبيق مغلقًا، يرجى السماح بـ "السماح طوال الوقت".'
-                  : 'Pour recevoir le rappel même quand l\'app est fermée, veuillez autoriser "Toujours".',
-              buttonNeutral: language === 'ar' ? 'اسألني لاحقًا' : 'Plus tard',
-              buttonNegative: language === 'ar' ? 'رفض' : 'Refuser',
-              buttonPositive: language === 'ar' ? 'موافق' : 'Autoriser',
-            },
-          );
-          return bgGranted === PermissionsAndroid.RESULTS.GRANTED;
-        }
-
+        // Foreground location only — no background permission needed
         return true;
       }
     } catch (error) {
@@ -479,8 +459,8 @@ const MoreScreen = () => {
       Alert.alert(
         `📍 ${t('geolocation')}`,
         language === 'ar'
-          ? 'هذه الميزة ترسل لك تذكيرًا عندما تكون على بعد 100 متر من المسجد لوضع هاتفك في الوضع الصامت.\n\n⚠️ تحتاج إلى إذن "دائمًا" للعمل في الخلفية.'
-          : 'Cette fonctionnalité vous enverra un rappel quand vous serez à moins de 100m de la mosquée.\n\n⚠️ Nécessite la permission "Toujours" pour fonctionner en arrière-plan.',
+          ? 'هذه الميزة ترسل لك تذكيرًا عندما تكون على بعد 100 متر من المسجد لوضع هاتفك في الوضع الصامت.'
+          : 'Cette fonctionnalité vous enverra un rappel quand vous serez à moins de 100m de la mosquée.',
         [
           {
             text: t('commonCancel'),
@@ -493,44 +473,18 @@ const MoreScreen = () => {
               if (hasPermission) {
                 setMosqueProximitySettings(newSettings);
                 await saveMosqueProximitySettings(newSettings);
-                // IMPORTANT: Démarrer le service de localisation en arrière-plan
-                await initBackgroundLocation();
-
-                // Vérifier que la permission est bien "Toujours" (pas juste "When In Use")
-                if (Platform.OS === 'ios') {
-                  // Attendre que iOS traite la demande de permission
-                  await new Promise<void>(r => setTimeout(r, 2000));
-                  const status = await getGeofencingStatus();
-                  if (status === 'whenInUse') {
-                    Alert.alert(
-                      language === 'ar' ? '⚠️ إذن غير كامل' : '⚠️ Permission incomplete',
-                      language === 'ar'
-                        ? 'لقد منحت إذن "أثناء الاستخدام" فقط. للحصول على التنبيه حتى عند إغلاق التطبيق:\n\n1. افتح الإعدادات\n2. El Mouhssinine\n3. الموقع → "دائمًا"'
-                        : 'Vous avez autorise "Lorsque l\'app est active" uniquement. Pour recevoir le rappel meme app fermee :\n\n1. Ouvrez Reglages\n2. El Mouhssinine\n3. Position → "Toujours"',
-                      [
-                        { text: 'OK' },
-                        {
-                          text: language === 'ar' ? 'فتح الإعدادات' : 'Ouvrir Reglages',
-                          onPress: () => Linking.openSettings(),
-                        },
-                      ],
-                    );
-                    return;
-                  }
-                }
-
                 Alert.alert(
                   `✅ ${t('activated')}`,
                   language === 'ar'
-                    ? 'ستتلقى تذكيرًا عند اقترابك من المسجد (حتى عندما يكون التطبيق مغلقًا)'
-                    : 'Vous recevrez un rappel quand vous approcherez de la mosquee (meme app fermee)',
+                    ? 'ستتلقى تذكيرًا عند اقترابك من المسجد عندما يكون التطبيق مفتوحًا'
+                    : 'Vous recevrez un rappel quand vous approcherez de la mosquée (app ouverte)',
                 );
               } else {
                 Alert.alert(
                   `❌ ${t('permissionDenied')}`,
                   language === 'ar'
-                    ? 'يرجى تفعيل الموقع "دائمًا" في إعدادات هاتفك لاستخدام هذه الميزة'
-                    : 'Veuillez autoriser la localisation "Toujours" dans les parametres pour utiliser cette fonctionnalite',
+                    ? 'يرجى تفعيل الموقع في إعدادات هاتفك لاستخدام هذه الميزة'
+                    : 'Veuillez autoriser la localisation dans les paramètres pour utiliser cette fonctionnalité',
                 );
               }
             },
@@ -640,11 +594,29 @@ const MoreScreen = () => {
             >
               <Text style={{ fontSize: 22 }}>🔔</Text>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: '#ff9800', fontWeight: '700', fontSize: 14, textAlign: isRTL ? 'right' : 'left' }}>
-                  {language === 'ar' ? 'الإشعارات معطلة' : 'Notifications désactivées'}
+                <Text
+                  style={{
+                    color: '#ff9800',
+                    fontWeight: '700',
+                    fontSize: 14,
+                    textAlign: isRTL ? 'right' : 'left',
+                  }}
+                >
+                  {language === 'ar'
+                    ? 'الإشعارات معطلة'
+                    : 'Notifications désactivées'}
                 </Text>
-                <Text style={{ color: '#ffffff90', fontSize: 12, marginTop: 2, textAlign: isRTL ? 'right' : 'left' }}>
-                  {language === 'ar' ? 'اضغط لتفعيلها من الإعدادات' : 'Appuyez pour les activer dans les Réglages'}
+                <Text
+                  style={{
+                    color: '#ffffff90',
+                    fontSize: 12,
+                    marginTop: 2,
+                    textAlign: isRTL ? 'right' : 'left',
+                  }}
+                >
+                  {language === 'ar'
+                    ? 'اضغط لتفعيلها من الإعدادات'
+                    : 'Appuyez pour les activer dans les Réglages'}
                 </Text>
               </View>
             </TouchableOpacity>

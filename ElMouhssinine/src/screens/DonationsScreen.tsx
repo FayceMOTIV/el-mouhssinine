@@ -20,7 +20,6 @@ import {
   TouchableWithoutFeedback,
   Animated,
   AppState,
-  NativeModules,
 } from 'react-native';
 import {
   colors,
@@ -233,9 +232,6 @@ const DonationsScreen = () => {
   }, []);
 
   // Deep link handler — retour après don CB web (Stripe → DonPublic → app)
-  // AppDelegate écrit l'URL dans UserDefaults (synchrone, garanti)
-  // JS lit via NativeModules.MosqueGeofencing.getPendingDeepLink (lecture directe UserDefaults)
-  // Settings.get() ne marche PAS — c'est un snapshot pris au load du module, jamais rafraîchi
   useEffect(() => {
     let merciShown = false;
     const showDonMerci = () => {
@@ -253,56 +249,26 @@ const DonationsScreen = () => {
       setDonPage('merci');
     };
 
-    // Lire UserDefaults via native module (lecture directe, pas de cache)
-    const checkPendingDeepLink = () => {
-      NativeModules.MosqueGeofencing?.getPendingDeepLink?.((result: string[]) => {
-        const url = result?.[0];
-        if (url && url.includes('don-success')) {
-          NativeModules.MosqueGeofencing.clearPendingDeepLink();
-          showDonMerci();
-        }
-      });
-    };
-
     // Check 1 : au mount (cold start via deep link)
     const checkInitialURL = async () => {
       try {
         const url = await Linking.getInitialURL();
         if (url && url.includes('don-success')) {
           showDonMerci();
-          return;
         }
       } catch {}
-      checkPendingDeepLink();
     };
     checkInitialURL();
 
-    // Check 2 : Linking event (warm return — si le bridge écoute)
+    // Check 2 : Linking event (warm return)
     const linkSub = Linking.addEventListener('url', ({ url }) => {
       if (url && url.includes('don-success')) {
-        NativeModules.MosqueGeofencing?.clearPendingDeepLink?.();
         showDonMerci();
-      }
-    });
-
-    // Check 3 : AppState — quand l'app revient au foreground, lire UserDefaults
-    // Pas de faux positif : UserDefaults écrit QUE par AppDelegate quand don-success arrive
-    // Retry car application:open:url: peut arriver juste APRÈS applicationDidBecomeActive
-    let retryTimer1: ReturnType<typeof setTimeout> | null = null;
-    let retryTimer2: ReturnType<typeof setTimeout> | null = null;
-    const appStateSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        checkPendingDeepLink();
-        retryTimer1 = setTimeout(checkPendingDeepLink, 1000);
-        retryTimer2 = setTimeout(checkPendingDeepLink, 3000);
       }
     });
 
     return () => {
       linkSub.remove();
-      appStateSub.remove();
-      if (retryTimer1) clearTimeout(retryTimer1);
-      if (retryTimer2) clearTimeout(retryTimer2);
     };
   }, []);
 

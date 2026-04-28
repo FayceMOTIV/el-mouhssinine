@@ -99,7 +99,6 @@ export const Events = {
   PAYMENT_SUCCESS: 'payment_success',
   PAYMENT_FAILED: 'payment_failed',
   DONATION_SUCCESS: 'donation_success',
-  GEOFENCE_ENTER: 'geofence_mosque_enter',
   QURAN_PLAY: 'quran_play',
   JANAZA_VIEW: 'janaza_view',
 } as const;

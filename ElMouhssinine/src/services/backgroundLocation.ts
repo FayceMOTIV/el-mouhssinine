@@ -1,31 +1,24 @@
 /**
- * Background Location Service — Geofencing natif iOS + Android
+ * Location Service — Foreground only
  *
- * iOS : CLCircularRegion via MosqueGeofencing.swift (Core Location natif)
- *   → iOS gère la zone au niveau OS, relance l'app même si fermée
- * Android : GeofencingClient via MosqueGeofencingModule.kt + BroadcastReceiver statique
- *   → Android déclenche le BroadcastReceiver même si l'app est tuée
- *
- * Les notifications sont envoyées NATIVEMENT (Swift/Kotlin), pas via JS.
- * Seuls start() et stop() passent par le pont NativeModules.
+ * Checks mosque proximity when the app is in the foreground.
+ * No background location is used.
  */
 
 import Geolocation from '@react-native-community/geolocation';
-import { NativeModules, Platform, PermissionsAndroid } from 'react-native';
+import { Platform } from 'react-native';
 import {
   checkMosqueProximity,
   getMosqueProximitySettings,
 } from './prayerNotifications';
 
-// Configurer Geolocation pour le foreground check (checkMosqueProximityForeground)
 Geolocation.setRNConfiguration({
   skipPermissionRequests: false,
-  authorizationLevel: 'always',
-  enableBackgroundLocationUpdates: true,
+  authorizationLevel: 'whenInUse',
+  enableBackgroundLocationUpdates: false,
   locationProvider: 'auto',
 });
 
-// Translations pour la notification de proximité (utilisé par checkMosqueProximityForeground)
 const PROXIMITY_TRANSLATIONS = {
   fr: {
     title: '🕌 Vous êtes à la mosquée',
@@ -37,91 +30,10 @@ const PROXIMITY_TRANSLATIONS = {
   },
 };
 
-/**
- * Démarre le geofencing natif (iOS CLCircularRegion / Android GeofencingClient).
- * Sur Android 10+, demande ACCESS_BACKGROUND_LOCATION avant.
- */
-export const initBackgroundLocation = async (): Promise<void> => {
-  try {
-    const settings = await getMosqueProximitySettings();
-    if (!settings.enabled) {
-      console.log('[MosqueGeofencing] Désactivé dans les paramètres');
-      return;
-    }
-
-    // Android 10+ : permission ACCESS_BACKGROUND_LOCATION nécessaire
-    if (Platform.OS === 'android' && Platform.Version >= 29) {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
-        {
-          title: 'Localisation en arrière-plan',
-          message:
-            'Nécessaire pour vous rappeler de mettre votre téléphone en silencieux à la mosquée',
-          buttonPositive: 'Autoriser',
-        },
-      );
-      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-        console.log('[MosqueGeofencing] Permission background refusée');
-        return;
-      }
-    }
-
-    NativeModules.MosqueGeofencing.start();
-    console.log('[MosqueGeofencing] Geofencing natif démarré');
-
-    // Vérifier que la permission est suffisante (iOS)
-    if (Platform.OS === 'ios') {
-      const status = await getGeofencingStatus();
-      if (status === 'whenInUse') {
-        console.warn('[MosqueGeofencing] Permission "When In Use" seulement — geofencing background inactif');
-      } else if (status === 'denied' || status === 'restricted') {
-        console.warn('[MosqueGeofencing] Permission refusée — geofencing inactif');
-      } else {
-        console.log('[MosqueGeofencing] Permission "Always" OK');
-      }
-    }
-  } catch (error) {
-    console.log('[MosqueGeofencing] initBackgroundLocation error:', error);
-  }
-};
+export const stopBackgroundLocation = async (): Promise<void> => {};
 
 /**
- * Vérifie le statut d'autorisation de localisation iOS.
- * Retourne: "always" | "whenInUse" | "denied" | "restricted" | "notDetermined" | "unknown"
- * Sur Android, retourne toujours "always" (géré via PermissionsAndroid).
- */
-export const getGeofencingStatus = (): Promise<string> => {
-  return new Promise(resolve => {
-    try {
-      if (Platform.OS === 'ios' && NativeModules.MosqueGeofencing?.checkStatus) {
-        NativeModules.MosqueGeofencing.checkStatus((status: string) => {
-          resolve(status);
-        });
-      } else {
-        resolve('always'); // Android: vérifié via PermissionsAndroid, pas via ce module
-      }
-    } catch {
-      resolve('unknown');
-    }
-  });
-};
-
-/**
- * Arrête le geofencing natif.
- */
-export const stopBackgroundLocation = async (): Promise<void> => {
-  try {
-    NativeModules.MosqueGeofencing.stop();
-    console.log('[MosqueGeofencing] Geofencing natif arrêté');
-  } catch (error) {
-    console.log('[MosqueGeofencing] stopBackgroundLocation error:', error);
-  }
-};
-
-/**
- * Vérification immédiate de proximité (appelée quand l'app passe au premier plan).
- * Utilise Geolocation.getCurrentPosition avec haute précision.
- * INCHANGÉ — HomeScreen l'utilise pour le foreground check.
+ * Foreground-only proximity check — called when the app comes to foreground.
  */
 export const checkMosqueProximityForeground = async (
   language: 'fr' | 'ar' = 'fr',
@@ -129,7 +41,6 @@ export const checkMosqueProximityForeground = async (
   try {
     const settings = await getMosqueProximitySettings();
     if (!settings.enabled) {
-      console.log('[BackgroundLocation] Mode silencieux mosquée désactivé');
       return false;
     }
 
@@ -146,10 +57,7 @@ export const checkMosqueProximityForeground = async (
             });
           },
           (error) => {
-            console.log(
-              '[BackgroundLocation] Foreground geoloc error:',
-              error.message,
-            );
+            console.log('[Location] Foreground geoloc error:', error.message);
             resolve(null);
           },
           {
@@ -165,7 +73,7 @@ export const checkMosqueProximityForeground = async (
           () => getPos(),
           (err) => {
             if (__DEV__)
-              console.log('[BackgroundLocation] Foreground auth error:', err);
+              console.log('[Location] Foreground auth error:', err);
             resolve(null);
           },
         );
@@ -187,7 +95,7 @@ export const checkMosqueProximityForeground = async (
 
     return sent;
   } catch (error) {
-    console.error('[BackgroundLocation] Foreground check error:', error);
+    console.error('[Location] Foreground check error:', error);
     return false;
   }
 };

@@ -1,8 +1,8 @@
 {
-  "name": "ElMouhssinine",
-  "displayName": "ElMouhssinine",
+  "name": "ElMouhssinineCCI",
+  "displayName": "El Mouhssinine - Centre Culturel Islamique",
   "expo": {
-    "name": "El Mouhssinine",
+    "name": "El Mouhssinine - Centre Culturel Islamique",
     "slug": "el-mouhssinine",
     "version": "1.0.0",
     "runtimeVersion": {
@@ -18,7 +18,7 @@
       "bundleIdentifier": "fr.elmouhssinine.mosquee"
     },
     "android": {
-      "package": "com.elmouhssinine"
+      "package": "fr.elmouhssinine.mosquee"
     },
     "extra": {
       "eas": {

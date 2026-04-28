@@ -872,10 +872,6 @@ const HomeScreen = () => {
     }
   }, []);
 
-  // Proximité mosquée : géré entièrement par le geofencing natif iOS/Android
-  // (MosqueGeofencing.swift / MosqueGeofencingReceiver.kt)
-  // Plus besoin de check JS foreground — le natif gère background + foreground
-
   // Gérer le clic sur "J'ai prié" - annule les notifications boost et masque le bouton
   const handlePrayed = useCallback(async () => {
     if (!currentPrayer || !boostSettings?.enabled) return;
