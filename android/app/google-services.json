@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "658931173250",
+    "project_id": "el-mouhssinine",
+    "storage_bucket": "el-mouhssinine.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:658931173250:android:cff2dcd1cf172f682f319b",
+        "android_client_info": {
+          "package_name": "fr.elmouhssinine.mosquee"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "658931173250-2ki3sctkdh2d1rcsmeogd6eiiov6q1f6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbJNtxpGEUz7_7o3iGB0_bsIX_5Ew8LWc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "658931173250-2ki3sctkdh2d1rcsmeogd6eiiov6q1f6.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "658931173250-06gcpsnq4aik9bjuhfm37pndm5csqlhl.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "fr.elmouhssinine.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
