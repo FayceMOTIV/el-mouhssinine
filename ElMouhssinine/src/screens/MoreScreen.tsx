@@ -15,7 +15,12 @@ import {
 import messaging from '@react-native-firebase/messaging';
 import Geolocation from '@react-native-community/geolocation';
 import { useNavigation } from '@react-navigation/native';
-import CompassHeading from 'react-native-compass-heading';
+let CompassHeading: any = null;
+try {
+  CompassHeading = require('react-native-compass-heading').default;
+} catch (e) {
+  console.warn('[Compass] Module not available:', e);
+}
 import Clipboard from '@react-native-clipboard/clipboard';
 import {
   colors,
@@ -188,15 +193,19 @@ const MoreScreen = () => {
   useEffect(() => {
     const degree_update_rate = 3; // Mise à jour toutes les 3 degrés
 
+    if (!CompassHeading) {
+      setCompassError(
+        language === 'ar' ? 'البوصلة غير متوفرة' : 'Boussole non disponible',
+      );
+      return;
+    }
+
     CompassHeading.start(
       degree_update_rate,
       ({ heading, accuracy }: { heading: number; accuracy: number }) => {
         setCompassHeading(heading);
         setCompassError(null);
 
-        // Calculer la rotation de l'aiguille vers la Qibla
-        // L'aiguille doit pointer vers qiblaDirection depuis le Nord
-        // Donc on soustrait le heading actuel pour compenser l'orientation du téléphone
         const qiblaRotation = qiblaDirection - heading;
 
         Animated.timing(rotateAnim, {

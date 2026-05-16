@@ -1,13 +1,27 @@
 // Text-to-Speech service using react-native-tts
-import Tts from 'react-native-tts';
+import { Platform } from 'react-native';
 import { logger } from '../utils';
 
+let Tts: any = null;
 let ttsInitialized = false;
 let listenersAdded = false;
+
+const loadTts = () => {
+  if (Platform.OS !== 'ios') return false;
+  if (Tts) return true;
+  try {
+    Tts = require('react-native-tts').default;
+    return true;
+  } catch (e) {
+    logger.error('[TTS] Native module failed to load:', e);
+    return false;
+  }
+};
 
 // Initialize TTS - exported for App.tsx
 export const initTTS = async (): Promise<boolean> => {
   if (ttsInitialized) return true;
+  if (!loadTts()) return false;
 
   try {
     // Ajouter les listeners une seule fois
@@ -38,19 +52,17 @@ export const initTTS = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     logger.error('[TTS] Initialization error:', error);
-    // Ne PAS marquer comme failed définitivement - retenter au prochain appel
     return false;
   }
 };
 
 export const speakArabic = async (text: string): Promise<void> => {
   try {
-    // Initialize on first use (retente à chaque fois si pas encore initialisé)
     if (!ttsInitialized) {
       await initTTS();
     }
+    if (!Tts) return;
 
-    // Stop any current speech
     await Tts.stop();
 
     // Speak the text
@@ -74,9 +86,9 @@ export const isTtsAvailable = (): boolean => {
   return true;
 };
 
-// Stop current speech
 export const stopSpeaking = async (): Promise<void> => {
   try {
+    if (!Tts) return;
     await Tts.stop();
   } catch (error) {
     logger.error('[TTS] Error stopping:', error);

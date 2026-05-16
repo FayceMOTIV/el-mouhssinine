@@ -3430,29 +3430,6 @@ const MemberScreen = () => {
               </TouchableOpacity>
             )}
 
-            {Platform.OS !== 'ios' && (
-              <TouchableOpacity
-                style={[styles.paymentMethod, styles.googlePayMethod]}
-                onPress={() => handlePayment('card')}
-                disabled={isProcessingPayment}
-              >
-                <Image
-                  source={require('../assets/google-logo.png')}
-                  style={styles.googleLogo}
-                />
-                <View style={styles.paymentMethodContent}>
-                  <Text style={styles.paymentMethodTitle}>Google Pay</Text>
-                  <Text style={styles.paymentMethodSubtitle}>
-                    Paiement rapide
-                  </Text>
-                </View>
-                {isProcessingPayment ? (
-                  <ActivityIndicator />
-                ) : (
-                  <Text style={styles.paymentMethodArrow}>→</Text>
-                )}
-              </TouchableOpacity>
-            )}
 
             <TouchableOpacity
               style={styles.paymentMethod}

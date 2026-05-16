@@ -7,17 +7,28 @@
 
 import Geolocation from '@react-native-community/geolocation';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   checkMosqueProximity,
   getMosqueProximitySettings,
 } from './prayerNotifications';
 
-Geolocation.setRNConfiguration({
-  skipPermissionRequests: false,
-  authorizationLevel: 'whenInUse',
-  enableBackgroundLocationUpdates: false,
-  locationProvider: 'auto',
-});
+let geolocationConfigured = false;
+
+const ensureGeolocationConfigured = () => {
+  if (geolocationConfigured) return;
+  try {
+    Geolocation.setRNConfiguration({
+      skipPermissionRequests: false,
+      authorizationLevel: 'whenInUse',
+      enableBackgroundLocationUpdates: false,
+      locationProvider: 'auto',
+    });
+    geolocationConfigured = true;
+  } catch (e) {
+    console.warn('[Location] setRNConfiguration failed:', e);
+  }
+};
 
 const PROXIMITY_TRANSLATIONS = {
   fr: {
@@ -30,6 +41,11 @@ const PROXIMITY_TRANSLATIONS = {
   },
 };
 
+export const initBackgroundLocation = async (): Promise<void> => {
+  // No-op: foreground-only location checks.
+  // This function exists to satisfy the import in App.tsx.
+};
+
 export const stopBackgroundLocation = async (): Promise<void> => {};
 
 /**
@@ -39,9 +55,29 @@ export const checkMosqueProximityForeground = async (
   language: 'fr' | 'ar' = 'fr',
 ): Promise<boolean> => {
   try {
+    const disclosureChoice = await AsyncStorage.getItem('@el_mouhssinine/prominent_disclosure_v1');
+    if (disclosureChoice !== 'accepted') {
+      return false;
+    }
+
+    ensureGeolocationConfigured();
     const settings = await getMosqueProximitySettings();
     if (!settings.enabled) {
       return false;
+    }
+
+    if (Platform.OS === 'android') {
+      try {
+        const { PermissionsAndroid } = require('react-native');
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          return false;
+        }
+      } catch {
+        // Permission API unavailable, try anyway
+      }
     }
 
     const position = await new Promise<{

@@ -32,7 +32,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>300</string>
+	<string>311</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
@@ -54,8 +54,6 @@
 	<string>El Mouhssinine utilise votre position pour calculer la direction de la Qibla et les horaires de prière. Votre position n'est jamais enregistrée sur nos serveurs.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>El Mouhssinine accède à vos photos pour votre photo de profil</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>El Mouhssinine utilise ces données pour améliorer votre expérience</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

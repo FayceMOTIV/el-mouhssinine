@@ -316,10 +316,13 @@ const QuranReadScreen: React.FC = () => {
       }
 
       // 2. Pas de cache valide, fetch depuis l'API
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
       const [arResponse, frResponse] = await Promise.all([
-        fetch(`${QURAN_API}/page/${page}/ar.alafasy`),
-        fetch(`${QURAN_API}/page/${page}/fr.hamidullah`),
+        fetch(`${QURAN_API}/page/${page}/ar.alafasy`, { signal: controller.signal }),
+        fetch(`${QURAN_API}/page/${page}/fr.hamidullah`, { signal: controller.signal }),
       ]);
+      clearTimeout(timeout);
 
       if (!arResponse.ok || !frResponse.ok) {
         throw new Error('Erreur API');

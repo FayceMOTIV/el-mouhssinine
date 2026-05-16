@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Text, I18nManager } from 'react-native';
+import { View, Text, I18nManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import OnboardingConsentScreen from '../screens/OnboardingConsentScreen';
+import ProminentDisclosure from '../components/ProminentDisclosure';
 import {
   NavigationContainer,
   NavigationContainerRef,
@@ -233,12 +234,17 @@ const AppNavigator = () => {
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
   const [consentChecked, setConsentChecked] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [disclosureDone, setDisclosureDone] = useState(false);
 
-  // Vérifier le consentement RGPD au démarrage
+  // Vérifier le consentement RGPD + disclosure au démarrage
   useEffect(() => {
-    AsyncStorage.getItem('rgpd_accepted')
-      .then(value => {
-        setConsentAccepted(!!value);
+    Promise.all([
+      AsyncStorage.getItem('rgpd_accepted'),
+      AsyncStorage.getItem('@el_mouhssinine/prominent_disclosure_v1'),
+    ])
+      .then(([rgpd, disclosure]) => {
+        setConsentAccepted(!!rgpd);
+        setDisclosureDone(disclosure === 'accepted' || disclosure === 'declined');
         setConsentChecked(true);
       })
       .catch(() => {
@@ -274,11 +280,19 @@ const AppNavigator = () => {
     });
   }, []);
 
-  if (!consentChecked) return null;
+  if (!consentChecked) return (
+    <View style={{ flex: 1, backgroundColor: '#1a3a2a' }} />
+  );
 
   if (!consentAccepted) {
     return (
       <OnboardingConsentScreen onAccept={() => setConsentAccepted(true)} />
+    );
+  }
+
+  if (!disclosureDone) {
+    return (
+      <ProminentDisclosure onDone={() => setDisclosureDone(true)} />
     );
   }
 

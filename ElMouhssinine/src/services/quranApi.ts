@@ -4,6 +4,12 @@ import { logger } from '../utils';
 
 const BASE_URL = 'https://api.alquran.cloud/v1';
 
+const fetchWithTimeout = (url: string, ms = 15000): Promise<Response> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+};
+
 export interface Surah {
   number: number;
   name: string;
@@ -85,7 +91,7 @@ export const QuranAPI = {
     if (cached) return cached;
 
     try {
-      const response = await fetch(`${BASE_URL}/surah`);
+      const response = await fetchWithTimeout(`${BASE_URL}/surah`);
       const json = await response.json();
       if (json.code === 200) {
         setCache(cacheKey, json.data);
@@ -105,7 +111,7 @@ export const QuranAPI = {
     if (cached) return cached;
 
     try {
-      const response = await fetch(`${BASE_URL}/surah/${surahNumber}`);
+      const response = await fetchWithTimeout(`${BASE_URL}/surah/${surahNumber}`);
       const json = await response.json();
       if (json.code === 200) {
         setCache(cacheKey, json.data);
@@ -125,7 +131,7 @@ export const QuranAPI = {
     if (cached) return cached;
 
     try {
-      const response = await fetch(`${BASE_URL}/surah/${surahNumber}/fr.hamidullah`);
+      const response = await fetchWithTimeout(`${BASE_URL}/surah/${surahNumber}/fr.hamidullah`);
       const json = await response.json();
       if (json.code === 200) {
         setCache(cacheKey, json.data);
@@ -150,7 +156,7 @@ export const QuranAPI = {
 
     try {
       const editions = 'quran-uthmani,fr.hamidullah,ar.alafasy';
-      const response = await fetch(`${BASE_URL}/surah/${surahNumber}/editions/${editions}`);
+      const response = await fetchWithTimeout(`${BASE_URL}/surah/${surahNumber}/editions/${editions}`);
       const json = await response.json();
       if (json.code === 200 && json.data.length === 3) {
         const result = {
@@ -175,7 +181,7 @@ export const QuranAPI = {
     if (cached) return cached;
 
     try {
-      const response = await fetch(`${BASE_URL}/surah/${surahNumber}/${reciter}`);
+      const response = await fetchWithTimeout(`${BASE_URL}/surah/${surahNumber}/${reciter}`);
       const json = await response.json();
       if (json.code === 200) {
         setCache(cacheKey, json.data);
@@ -192,7 +198,7 @@ export const QuranAPI = {
   search: async (query: string, language: string = 'fr'): Promise<SearchResult> => {
     try {
       const edition = language === 'fr' ? 'fr.hamidullah' : 'quran-uthmani';
-      const response = await fetch(`${BASE_URL}/search/${encodeURIComponent(query)}/all/${edition}`);
+      const response = await fetchWithTimeout(`${BASE_URL}/search/${encodeURIComponent(query)}/all/${edition}`);
       const json = await response.json();
       if (json.code === 200) {
         return json.data;
@@ -210,7 +216,7 @@ export const QuranAPI = {
     translation: Ayah;
   }> => {
     try {
-      const response = await fetch(`${BASE_URL}/ayah/${surahNumber}:${ayahNumber}/editions/quran-uthmani,fr.hamidullah`);
+      const response = await fetchWithTimeout(`${BASE_URL}/ayah/${surahNumber}:${ayahNumber}/editions/quran-uthmani,fr.hamidullah`);
       const json = await response.json();
       if (json.code === 200 && json.data.length === 2) {
         return {
@@ -228,7 +234,7 @@ export const QuranAPI = {
   // Page du Coran
   getPage: async (pageNumber: number): Promise<Ayah[]> => {
     try {
-      const response = await fetch(`${BASE_URL}/page/${pageNumber}/quran-uthmani`);
+      const response = await fetchWithTimeout(`${BASE_URL}/page/${pageNumber}/quran-uthmani`);
       const json = await response.json();
       if (json.code === 200) {
         return json.data.ayahs;
@@ -243,7 +249,7 @@ export const QuranAPI = {
   // Juz (partie du Coran)
   getJuz: async (juzNumber: number): Promise<Ayah[]> => {
     try {
-      const response = await fetch(`${BASE_URL}/juz/${juzNumber}/quran-uthmani`);
+      const response = await fetchWithTimeout(`${BASE_URL}/juz/${juzNumber}/quran-uthmani`);
       const json = await response.json();
       if (json.code === 200) {
         return json.data.ayahs;

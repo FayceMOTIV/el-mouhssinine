@@ -6,7 +6,6 @@ import { LogBox, Platform } from 'react-native';
 import { registerRootComponent } from 'expo';
 import messaging from '@react-native-firebase/messaging';
 import notifee, { EventType } from '@notifee/react-native';
-import TrackPlayer from 'react-native-track-player';
 import App from './App';
 
 import {
@@ -14,8 +13,14 @@ import {
   detectNotificationType,
 } from './src/services/notificationHistory';
 
-// IMPORTANT: Enregistrer le service de lecture audio (Coran)
-TrackPlayer.registerPlaybackService(() => require('./service'));
+if (Platform.OS === 'ios') {
+  try {
+    const TrackPlayer = require('react-native-track-player').default;
+    TrackPlayer.registerPlaybackService(() => require('./service'));
+  } catch (e) {
+    console.warn('[TrackPlayer] init failed (non-fatal):', e);
+  }
+}
 
 // Ignore specific warnings
 LogBox.ignoreLogs(['Firebase', 'AsyncStorage', 'Require cycle']);

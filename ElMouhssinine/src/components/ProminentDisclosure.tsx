@@ -93,9 +93,14 @@ const ProminentDisclosure: React.FC<ProminentDisclosureProps> = ({
 
             <Text style={styles.paragraph}>
               El Mouhssinine souhaite accéder à la position de votre appareil
-              lorsque vous utilisez l'application, uniquement pour détecter
-              lorsque vous approchez de la mosquée et vous envoyer un rappel de
-              mettre votre téléphone en mode silencieux avant d'entrer.
+              lorsque vous utilisez l'application pour :
+            </Text>
+            <Text style={styles.paragraph}>
+              • Calculer les horaires de prière précis selon votre position
+              géographique{'\n'}
+              • Déterminer la direction de la Qibla (boussole){'\n'}
+              • Détecter lorsque vous approchez de la mosquée et vous rappeler
+              de mettre votre téléphone en mode silencieux
             </Text>
 
             <View style={styles.bulletBlock}>

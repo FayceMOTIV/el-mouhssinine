@@ -33,12 +33,14 @@ const EventsScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 10000);
     const unsubscribe = subscribeToEvents((data) => {
+      clearTimeout(timer);
       setEvents(data as Event[]);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => { unsubscribe(); clearTimeout(timer); };
   }, []);
 
   const filteredEvents =

@@ -597,143 +597,47 @@ const calendar2026: Record<number, Record<string, string[]>> = {
 };
 
 export const PrayerAPI = {
-  // Récupérer les horaires depuis Mawaqit
+  // Horaires depuis le calendrier local 2026 (source: PDF officiel mosquée El Mohsinine)
   getTimesByCity: async (
     city: string = 'Bourg-en-Bresse',
     country: string = 'France'
   ): Promise<PrayerTimings> => {
-    // Cache key basé sur date/heure Paris pour gérer le basculement après Isha
     const now = getParisDate();
-    const hourBlock = now.getHours() >= 20 ? 'night' : 'day'; // Après ~Isha
+    const hourBlock = now.getHours() >= 20 ? 'night' : 'day';
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const cacheKey = `mawaqit-times-${dateStr}-${hourBlock}`;
+    const cacheKey = `local-times-${dateStr}-${hourBlock}`;
     const cached = getCached<PrayerTimings>(cacheKey);
     if (cached) return cached;
 
+    const today = getParisDate();
+    const currentHour = today.getHours();
+    const currentMinutes = today.getMinutes();
+    const currentTimeInMinutes = currentHour * 60 + currentMinutes;
+
+    const getTimesForDay = (month: number, day: number): string[] => {
+      const monthCal = calendar2026[month];
+      if (!monthCal) return ['06:34','08:04','12:53','15:20','17:47','19:17'];
+      return monthCal[day.toString()] || ['06:34','08:04','12:53','15:20','17:47','19:17'];
+    };
+
+    const todayTimes = getTimesForDay(today.getMonth(), today.getDate());
+    const [ishaH, ishaM] = todayTimes[5].split(':').map(Number);
+    const ishaInMinutes = ishaH * 60 + ishaM;
+
+    let targetMonth = today.getMonth();
+    let targetDay = today.getDate();
+
+    if (currentTimeInMinutes >= ishaInMinutes) {
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      targetMonth = tomorrow.getMonth();
+      targetDay = tomorrow.getDate();
+    }
+
+    const times = getTimesForDay(targetMonth, targetDay);
+
+    let iqamaOffsets = ['+10', '+10', '+10', '+7', '+10'];
     try {
-      const response = await fetchWithTimeout(`${MAWAQIT_API}/mosque/${MOSQUE_UUID}/prayer-times`);
-
-      if (!response.ok) {
-        throw new Error(`Mawaqit API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Récupérer la date du jour en timezone Paris
-      const today = getParisDate();
-      let month = today.getMonth(); // 0-indexed
-      let day = today.getDate();
-      const currentHour = today.getHours();
-      const currentMinutes = today.getMinutes();
-      const currentTimeInMinutes = currentHour * 60 + currentMinutes;
-
-      // Récupérer d'abord les horaires d'aujourd'hui pour savoir si Isha est passé
-      const todayStr = day.toString();
-      let todayTimes: string[] | null = null;
-      if (data.calendar && data.calendar[month] && data.calendar[month][todayStr]) {
-        todayTimes = data.calendar[month][todayStr];
-      }
-
-      // Vérifier si Isha est passé (comme Mawaqit, basculer sur demain après Isha)
-      if (todayTimes) {
-        const ishaTime = todayTimes[5]; // Index 5 = Isha
-        const [ishaH, ishaM] = ishaTime.split(':').map(Number);
-        const ishaInMinutes = ishaH * 60 + ishaM;
-
-        if (currentTimeInMinutes >= ishaInMinutes) {
-          // Isha est passé, utiliser les horaires de demain
-          const tomorrow = new Date(today);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          month = tomorrow.getMonth();
-          day = tomorrow.getDate();
-        }
-      }
-
-      const dayStr = day.toString();
-
-      // Utiliser le CALENDAR au lieu de times pour avoir les horaires EXACTS de Mawaqit
-      // Le champ "times" contient des valeurs ajustées en temps réel (décalage de ~1 min)
-      // Le champ "calendar" contient les horaires bruts publiés par Mawaqit
-      let times: string[];
-      let shuruq: string;
-
-      if (data.calendar && data.calendar[month] && data.calendar[month][dayStr]) {
-        // calendar[month][day] = [Fajr, Shuruq, Dhuhr, Asr, Maghrib, Isha] (6 valeurs)
-        const calendarTimes = data.calendar[month][dayStr];
-        times = [calendarTimes[0], calendarTimes[2], calendarTimes[3], calendarTimes[4], calendarTimes[5]];
-        shuruq = calendarTimes[1];
-      } else {
-        // Fallback sur times si calendar non disponible
-        times = data.times;
-        shuruq = data.shuruq;
-      }
-
-      let iqamaOffsets = ['+10', '+10', '+10', '+7', '+10']; // Défaut
-      if (data.iqamaCalendar && data.iqamaCalendar[month] && data.iqamaCalendar[month][dayStr]) {
-        iqamaOffsets = data.iqamaCalendar[month][dayStr];
-      }
-
-      const timings: PrayerTimings = {
-        Fajr: times[0],
-        Sunrise: shuruq,
-        Dhuhr: times[1],
-        Asr: times[2],
-        Sunset: times[3], // Maghrib = Sunset
-        Maghrib: times[3],
-        Isha: times[4],
-        Imsak: times[0], // Même que Fajr pour simplifier
-        Midnight: '00:00',
-        Firstthird: '00:00',
-        Lastthird: '00:00',
-        Jumua: data.jumua || '13:30',
-        IqamaFajr: calculateIqamaTime(times[0], iqamaOffsets[0]),
-        IqamaDhuhr: calculateIqamaTime(times[1], iqamaOffsets[1]),
-        IqamaAsr: calculateIqamaTime(times[2], iqamaOffsets[2]),
-        IqamaMaghrib: calculateIqamaTime(times[3], iqamaOffsets[3]),
-        IqamaIsha: calculateIqamaTime(times[4], iqamaOffsets[4]),
-      };
-
-      setCache(cacheKey, timings);
-      return timings;
-    } catch (error) {
-      logger.error('[PrayerAPI] Erreur Mawaqit:', error);
-      // Fallback: utiliser les horaires du jour depuis le calendrier local
-      const today = getParisDate();
-      const currentHour = today.getHours();
-      const currentMinutes = today.getMinutes();
-      const currentTimeInMinutes = currentHour * 60 + currentMinutes;
-
-      // Utilise calendar2026 défini au niveau module (366 jours complets, source Mawaqit API)
-
-      // Lookup direct — tous les 366 jours sont présents
-      const getTimesForDay = (month: number, day: number): string[] => {
-        const monthCal = calendar2026[month];
-        if (!monthCal) return ['06:34','08:04','12:53','15:20','17:47','19:17'];
-        return monthCal[day.toString()] || ['06:34','08:04','12:53','15:20','17:47','19:17'];
-      };
-
-      // 1. D'abord, obtenir les horaires d'aujourd'hui (interpolés si nécessaire)
-      const todayTimes = getTimesForDay(today.getMonth(), today.getDate());
-      const [ishaH, ishaM] = todayTimes[5].split(':').map(Number);
-      const ishaInMinutes = ishaH * 60 + ishaM;
-
-      // 2. Déterminer si on doit afficher demain (après Isha)
-      let targetMonth = today.getMonth();
-      let targetDay = today.getDate();
-
-      if (currentTimeInMinutes >= ishaInMinutes) {
-        // Isha passé, basculer sur demain
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        targetMonth = tomorrow.getMonth();
-        targetDay = tomorrow.getDate();
-      }
-
-      // 3. Obtenir les horaires du jour cible (interpolés si nécessaire)
-      let fallbackTimes = getTimesForDay(targetMonth, targetDay);
-
-      // Charger les délais Iqama depuis Firebase (si disponible)
-      let iqamaOffsets = ['+10', '+10', '+10', '+7', '+10']; // Défaut
       const firebaseIqama = await getIqamaDelaysFromFirebase();
       if (firebaseIqama) {
         iqamaOffsets = [
@@ -743,32 +647,31 @@ export const PrayerAPI = {
           delayToOffset(firebaseIqama.maghrib),
           delayToOffset(firebaseIqama.isha),
         ];
-        logger.log('[PrayerAPI] Iqama depuis Firebase:', iqamaOffsets);
       }
+    } catch {}
 
-      const fallbackTimings: PrayerTimings = {
-        Fajr: fallbackTimes[0],
-        Sunrise: fallbackTimes[1],
-        Dhuhr: fallbackTimes[2],
-        Asr: fallbackTimes[3],
-        Sunset: fallbackTimes[4],
-        Maghrib: fallbackTimes[4],
-        Isha: fallbackTimes[5],
-        Imsak: fallbackTimes[0],
-        Midnight: '00:00',
-        Firstthird: '00:00',
-        Lastthird: '00:00',
-        Jumua: '13:30',
-        IqamaFajr: calculateIqamaTime(fallbackTimes[0], iqamaOffsets[0]),
-        IqamaDhuhr: calculateIqamaTime(fallbackTimes[2], iqamaOffsets[1]),
-        IqamaAsr: calculateIqamaTime(fallbackTimes[3], iqamaOffsets[2]),
-        IqamaMaghrib: calculateIqamaTime(fallbackTimes[4], iqamaOffsets[3]),
-        IqamaIsha: calculateIqamaTime(fallbackTimes[5], iqamaOffsets[4]),
-      };
+    const timings: PrayerTimings = {
+      Fajr: times[0],
+      Sunrise: times[1],
+      Dhuhr: times[2],
+      Asr: times[3],
+      Sunset: times[4],
+      Maghrib: times[4],
+      Isha: times[5],
+      Imsak: times[0],
+      Midnight: '00:00',
+      Firstthird: '00:00',
+      Lastthird: '00:00',
+      Jumua: '13:30',
+      IqamaFajr: calculateIqamaTime(times[0], iqamaOffsets[0]),
+      IqamaDhuhr: calculateIqamaTime(times[2], iqamaOffsets[1]),
+      IqamaAsr: calculateIqamaTime(times[3], iqamaOffsets[2]),
+      IqamaMaghrib: calculateIqamaTime(times[4], iqamaOffsets[3]),
+      IqamaIsha: calculateIqamaTime(times[5], iqamaOffsets[4]),
+    };
 
-      logger.log('[PrayerAPI] Utilisation fallback local:', fallbackTimings);
-      return fallbackTimings;
-    }
+    setCache(cacheKey, timings);
+    return timings;
   },
 
   // Alias pour compatibilité
@@ -776,7 +679,7 @@ export const PrayerAPI = {
     return PrayerAPI.getTimesByCity();
   },
 
-  // Calendrier mensuel depuis Mawaqit
+  // Calendrier mensuel depuis le calendrier local 2026 (source: PDF officiel mosquée)
   getMonthlyCalendar: async (
     year: number,
     month: number,
@@ -787,63 +690,68 @@ export const PrayerAPI = {
     const cached = getCached<DayData[]>(cacheKey);
     if (cached) return cached;
 
-    try {
-      const response = await fetchWithTimeout(`${MAWAQIT_API}/mosque/${MOSQUE_UUID}/prayer-times`);
+    const monthIndex = month - 1;
+    const monthCalendar = calendar2026[monthIndex];
 
-      if (!response.ok) throw new Error('Mawaqit API error');
-
-      const data = await response.json();
-      const monthIndex = month - 1; // API uses 0-indexed
-      const monthCalendar = data.calendar[monthIndex];
-      const iqamaCalendar = data.iqamaCalendar?.[monthIndex];
-
-      const result: DayData[] = [];
-
-      for (const [dayStr, times] of Object.entries(monthCalendar)) {
-        const dayNum = parseInt(dayStr, 10);
-        const timesArr = times as string[];
-        const iqamaOffsets = iqamaCalendar?.[dayStr] || ['+10', '+10', '+10', '+7', '+10'];
-
-        result.push({
-          timings: {
-            Fajr: timesArr[0],
-            Sunrise: timesArr[1],
-            Dhuhr: timesArr[2],
-            Asr: timesArr[3],
-            Sunset: timesArr[4],
-            Maghrib: timesArr[4],
-            Isha: timesArr[5],
-            Imsak: timesArr[0],
-            Midnight: '00:00',
-            Firstthird: '00:00',
-            Lastthird: '00:00',
-            IqamaFajr: calculateIqamaTime(timesArr[0], iqamaOffsets[0]),
-            IqamaDhuhr: calculateIqamaTime(timesArr[2], iqamaOffsets[1]),
-            IqamaAsr: calculateIqamaTime(timesArr[3], iqamaOffsets[2]),
-            IqamaMaghrib: calculateIqamaTime(timesArr[4], iqamaOffsets[3]),
-            IqamaIsha: calculateIqamaTime(timesArr[5], iqamaOffsets[4]),
-          },
-          date: {
-            readable: `${dayNum} ${month} ${year}`,
-            timestamp: new Date(year, month - 1, dayNum).getTime().toString(),
-            hijri: {} as HijriDate,
-            gregorian: {} as GregorianDate,
-          },
-          meta: {
-            latitude: 46.2055668,
-            longitude: 5.2477947,
-            timezone: 'Europe/Paris',
-            method: { id: 99, name: 'Mawaqit', params: { Fajr: 12, Isha: 12 } },
-          },
-        });
-      }
-
-      setCache(cacheKey, result);
-      return result;
-    } catch (error) {
-      logger.error('[PrayerAPI] Erreur calendrier:', error);
-      throw error;
+    if (!monthCalendar) {
+      return [];
     }
+
+    let iqamaOffsets = ['+10', '+10', '+10', '+7', '+10'];
+    try {
+      const firebaseIqama = await getIqamaDelaysFromFirebase();
+      if (firebaseIqama) {
+        iqamaOffsets = [
+          delayToOffset(firebaseIqama.fajr),
+          delayToOffset(firebaseIqama.dhuhr),
+          delayToOffset(firebaseIqama.asr),
+          delayToOffset(firebaseIqama.maghrib),
+          delayToOffset(firebaseIqama.isha),
+        ];
+      }
+    } catch {}
+
+    const result: DayData[] = [];
+
+    for (const [dayStr, timesArr] of Object.entries(monthCalendar)) {
+      const dayNum = parseInt(dayStr, 10);
+
+      result.push({
+        timings: {
+          Fajr: timesArr[0],
+          Sunrise: timesArr[1],
+          Dhuhr: timesArr[2],
+          Asr: timesArr[3],
+          Sunset: timesArr[4],
+          Maghrib: timesArr[4],
+          Isha: timesArr[5],
+          Imsak: timesArr[0],
+          Midnight: '00:00',
+          Firstthird: '00:00',
+          Lastthird: '00:00',
+          IqamaFajr: calculateIqamaTime(timesArr[0], iqamaOffsets[0]),
+          IqamaDhuhr: calculateIqamaTime(timesArr[2], iqamaOffsets[1]),
+          IqamaAsr: calculateIqamaTime(timesArr[3], iqamaOffsets[2]),
+          IqamaMaghrib: calculateIqamaTime(timesArr[4], iqamaOffsets[3]),
+          IqamaIsha: calculateIqamaTime(timesArr[5], iqamaOffsets[4]),
+        },
+        date: {
+          readable: `${dayNum} ${month} ${year}`,
+          timestamp: new Date(year, month - 1, dayNum).getTime().toString(),
+          hijri: {} as HijriDate,
+          gregorian: {} as GregorianDate,
+        },
+        meta: {
+          latitude: 46.2055668,
+          longitude: 5.2477947,
+          timezone: 'Europe/Paris',
+          method: { id: 99, name: 'Calendrier local', params: { Fajr: 12, Isha: 12 } },
+        },
+      });
+    }
+
+    setCache(cacheKey, result);
+    return result;
   },
 
   // Date Hijri depuis Firestore (cache serveur) puis Aladhan (fallback)

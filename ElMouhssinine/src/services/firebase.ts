@@ -1910,18 +1910,17 @@ export const subscribeToMemberProfile = (
       .doc(uid)
       .onSnapshot(
         async docSnap => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            // Ajouter uid si manquant
-            if (data && !data.uid) {
-              await docSnap.ref.update({ uid });
-            }
-            callback(buildMemberProfile(docSnap.id, data || {}));
-            return;
-          }
-
-          // 2. Fallback : chercher par champ uid (ancien format)
           try {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (data && !data.uid) {
+                try { await docSnap.ref.update({ uid }); } catch {}
+              }
+              callback(buildMemberProfile(docSnap.id, data || {}));
+              return;
+            }
+
+            // 2. Fallback : chercher par champ uid (ancien format)
             const uidSnap = await firestore()
               .collection('members')
               .where('uid', '==', uid)
@@ -1945,22 +1944,17 @@ export const subscribeToMemberProfile = (
               if (!emailSnap.empty) {
                 const doc = emailSnap.docs[0];
                 const data = doc.data();
-                // Lier le UID au document
-                if (!data.uid) {
-                  await doc.ref.update({ uid });
-                }
+                try { if (!data.uid) await doc.ref.update({ uid }); } catch {}
                 callback(buildMemberProfile(doc.id, data));
                 return;
               }
             }
-          } catch (fallbackError) {
-            logger.error(
-              '[Firebase] subscribeToMemberProfile fallback error:',
-              fallbackError,
-            );
-          }
 
-          callback(null);
+            callback(null);
+          } catch (error) {
+            logger.error('[Firebase] subscribeToMemberProfile snapshot error:', error);
+            callback(null);
+          }
         },
         error => {
           logger.error('[Firebase] subscribeToMemberProfile error:', error);

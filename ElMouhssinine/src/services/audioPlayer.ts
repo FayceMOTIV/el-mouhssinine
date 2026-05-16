@@ -1,19 +1,27 @@
-import TrackPlayer, {
-  Capability,
-  State,
-  AppKilledPlaybackBehavior,
-  IOSCategoryMode,
-  IOSCategory,
-  IOSCategoryOptions,
-} from 'react-native-track-player';
+import { Platform } from 'react-native';
 import { logger } from '../utils';
+
+let TrackPlayer: any = null;
+let TrackPlayerEnums: any = {};
+
+if (Platform.OS === 'ios') {
+  try {
+    const mod = require('react-native-track-player');
+    TrackPlayer = mod.default;
+    TrackPlayerEnums = mod;
+  } catch (e) {
+    logger.error('[AudioPlayer] Failed to load track-player:', e);
+  }
+}
+
+const { Capability, State, AppKilledPlaybackBehavior, IOSCategoryMode, IOSCategory, IOSCategoryOptions } = TrackPlayerEnums;
 
 let isSetup = false;
 let setupPromise: Promise<void> | null = null;
 
 // Build 249 - Fix: deadlock setupPromise + iOS audio category explicite
 export const setupPlayer = async (): Promise<boolean> => {
-  // Si déjà configuré, retourner immédiatement
+  if (!TrackPlayer) return false;
   if (isSetup) return true;
 
   // Si une configuration est en cours, attendre qu'elle se termine
@@ -102,6 +110,7 @@ export const playAudio = async (
   title: string,
   artist: string = 'Coran',
 ) => {
+  if (!TrackPlayer) return;
   try {
     await setupPlayer();
 
@@ -126,10 +135,12 @@ export const playAudio = async (
 };
 
 export const pauseAudio = async () => {
+  if (!TrackPlayer) return;
   await TrackPlayer.pause();
 };
 
 export const stopAudio = async () => {
+  if (!TrackPlayer) return;
   try {
     await TrackPlayer.stop();
     await TrackPlayer.reset();
@@ -139,9 +150,10 @@ export const stopAudio = async () => {
 };
 
 export const getIsPlaying = async () => {
+  if (!TrackPlayer) return false;
   try {
     const state = await TrackPlayer.getPlaybackState();
-    return state.state === State.Playing;
+    return state.state === State?.Playing;
   } catch {
     return false;
   }
@@ -153,6 +165,7 @@ export const getIsPlaying = async () => {
  * Appeler dans le cleanup de useEffect du composant Coran.
  */
 export const resetPlayer = async () => {
+  if (!TrackPlayer) return;
   try {
     await TrackPlayer.reset();
   } catch {

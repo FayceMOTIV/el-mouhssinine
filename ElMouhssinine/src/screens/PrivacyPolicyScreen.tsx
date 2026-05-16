@@ -44,7 +44,7 @@ const PrivacyPolicyScreen: React.FC<Props> = ({ onBack }) => {
         contentContainerStyle={styles.scrollContent}
       >
         <Text style={styles.lastUpdate}>
-          Dernière mise à jour : février 2025
+          Dernière mise à jour : mai 2026
         </Text>
 
         <Text style={styles.sectionTitle}>1. Responsable du traitement</Text>
@@ -55,18 +55,26 @@ const PrivacyPolicyScreen: React.FC<Props> = ({ onBack }) => {
 
         <Text style={styles.sectionTitle}>2. Données collectées</Text>
         <Text style={styles.paragraph}>
-          • Identité : nom, prénom, email, téléphone{'\n'}• Localisation :
-          calcul de la Qibla et horaires de prière (non stockée sur nos
-          serveurs){'\n'}• Paiements : gérés par Stripe (nous ne stockons pas
-          vos données bancaires){'\n'}• Token de notification : pour les rappels
-          de prière et messages{'\n'}• Photo de profil (optionnelle)
+          • Identité : nom, prénom, email, téléphone{'\n'}• Localisation
+          précise (GPS) : utilisée uniquement sur votre appareil pour le calcul
+          des horaires de prière, la direction de la Qibla, et la détection de
+          proximité avec la mosquée. Vos coordonnées GPS ne sont jamais
+          envoyées à nos serveurs ni partagées avec des tiers.{'\n'}• Paiements
+          : gérés par Stripe (nous ne stockons pas vos données bancaires){'\n'}
+          • Token de notification : pour les rappels de prière et messages
+          {'\n'}• Photo de profil (optionnelle){'\n'}• Données de diagnostic :
+          rapports de crash anonymisés (Firebase Crashlytics) et statistiques
+          d'utilisation agrégées (Firebase Analytics)
         </Text>
 
         <Text style={styles.sectionTitle}>3. Finalités</Text>
         <Text style={styles.paragraph}>
           • Gestion des adhésions et cotisations{'\n'}• Envoi de notifications
           de prière{'\n'}• Communication entre l'association et ses membres
-          {'\n'}• Calcul des horaires de prière et direction de la Qibla
+          {'\n'}• Calcul des horaires de prière selon votre position
+          géographique{'\n'}• Direction de la Qibla (boussole){'\n'}• Rappel de
+          mise en silencieux à l'approche de la mosquée (optionnel){'\n'}•
+          Amélioration de la stabilité (rapports de crash)
         </Text>
 
         <Text style={styles.sectionTitle}>4. Base légale</Text>
@@ -77,9 +85,14 @@ const PrivacyPolicyScreen: React.FC<Props> = ({ onBack }) => {
 
         <Text style={styles.sectionTitle}>5. Durée de conservation</Text>
         <Text style={styles.paragraph}>
-          Vos données sont conservées tant que votre compte est actif. En cas de
-          suppression de compte, vos données personnelles sont supprimées et vos
-          contributions sont anonymisées.
+          • Données de compte : conservées tant que votre compte est actif. En
+          cas de suppression, vos données personnelles sont effacées sous 30
+          jours et vos contributions sont anonymisées.{'\n'}• Données de
+          localisation : jamais stockées (traitement instantané sur l'appareil
+          uniquement).{'\n'}• Rapports de crash : conservés 90 jours.{'\n'}•
+          Données de paiement : conservées conformément aux obligations légales
+          (10 ans pour les reçus fiscaux).{'\n'}• Token de notification :
+          supprimé à la suppression du compte.
         </Text>
 
         <Text style={styles.sectionTitle}>6. Vos droits</Text>
@@ -94,9 +107,13 @@ const PrivacyPolicyScreen: React.FC<Props> = ({ onBack }) => {
 
         <Text style={styles.sectionTitle}>7. Sous-traitants</Text>
         <Text style={styles.paragraph}>
-          • Firebase (Google) : hébergement et base de données{'\n'}• Stripe :
-          traitement des paiements{'\n'}• Sentry : monitoring des erreurs
-          (données anonymisées)
+          • Firebase Authentication : gestion des comptes utilisateurs{'\n'}•
+          Firebase Firestore : base de données{'\n'}• Firebase Cloud Messaging
+          : notifications push{'\n'}• Firebase Crashlytics : rapports de crash
+          anonymisés{'\n'}• Firebase Analytics : statistiques d'utilisation
+          agrégées{'\n'}• Firebase Performance : monitoring de performance
+          {'\n'}• Stripe : traitement sécurisé des paiements{'\n'}• Brevo :
+          envoi d'emails transactionnels
         </Text>
 
         <Text style={styles.sectionTitle}>8. Transferts hors UE</Text>

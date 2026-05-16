@@ -1031,34 +1031,26 @@ const HomeScreen = () => {
 
   // Fermer le popup et enregistrer qu'il a été vu selon sa fréquence
   // Puis afficher la popup suivante dans la file d'attente
-  const closePopup = async () => {
+  const closePopup = () => {
     if (activePopup) {
       const frequence = activePopup.frequence || 'always';
       const today = new Date().toISOString().split('T')[0];
 
       switch (frequence) {
         case 'daily':
-          // Stocker la date d'aujourd'hui
-          await AsyncStorage.setItem(`popup_${activePopup.id}_shown`, today);
+        case 'weekly':
+          AsyncStorage.setItem(`popup_${activePopup.id}_shown`, today).catch(() => {});
           break;
         case 'once':
-          // Marquer comme vu définitivement
-          await AsyncStorage.setItem(`popup_seen_${activePopup.id}`, 'true');
+          AsyncStorage.setItem(`popup_seen_${activePopup.id}`, 'true').catch(() => {});
           break;
-        case 'weekly':
-          // Stocker la date pour vérification hebdomadaire
-          await AsyncStorage.setItem(`popup_${activePopup.id}_shown`, today);
-          break;
-        // 'always' n'enregistre rien
       }
     }
 
-    // Afficher la popup suivante dans la file d'attente
     if (popupQueue.length > 0) {
       const nextPopup = popupQueue[0];
       setPopupQueue(popupQueue.slice(1));
       setActivePopup(nextPopup);
-      // showPopup reste true
     } else {
       setShowPopup(false);
       setActivePopup(null);
