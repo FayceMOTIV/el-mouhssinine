@@ -1625,15 +1625,6 @@ const DonationsScreen = () => {
                           />
                           <Text style={styles.applePayText}>Pay</Text>
                         </View>
-                        {Platform.OS !== 'ios' && (
-                          <View style={styles.googlePayButton}>
-                            <Image
-                              source={require('../assets/google-logo.png')}
-                              style={styles.googleLogo}
-                            />
-                            <Text style={styles.googlePayText}>Pay</Text>
-                          </View>
-                        )}
                         <View style={styles.paymentItem}>
                           <Text style={styles.paymentItemIcon}>🏦</Text>
                           <Text
