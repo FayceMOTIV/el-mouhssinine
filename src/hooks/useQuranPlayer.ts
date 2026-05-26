@@ -1,19 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let TrackPlayer: any = null;
 let State: any = {};
 let Event: any = {};
 
-if (Platform.OS === 'ios') {
-  try {
-    const mod = require('react-native-track-player');
-    TrackPlayer = mod.default;
-    State = mod.State;
-    Event = mod.Event;
-  } catch {}
-}
+try {
+  const mod = require('react-native-track-player');
+  TrackPlayer = mod.default;
+  State = mod.State;
+  Event = mod.Event;
+} catch {}
 import { setupPlayer, resetPlayer } from '../services/audioPlayer';
 import { getVerseAudioUrl, reciters } from '../services/quranApi';
 
