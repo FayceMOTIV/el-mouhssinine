@@ -50,10 +50,12 @@ describe('TTS Service', () => {
   describe('stopSpeaking', () => {
     it('devrait arreter la lecture', (done) => {
       jest.isolateModules(() => {
-        const { stopSpeaking } = require('../tts');
-        stopSpeaking().then(() => {
-          expect(Tts.stop).toHaveBeenCalled();
-          done();
+        const { initTTS, stopSpeaking } = require('../tts');
+        initTTS().then(() => {
+          stopSpeaking().then(() => {
+            expect(Tts.stop).toHaveBeenCalled();
+            done();
+          });
         });
       });
     });

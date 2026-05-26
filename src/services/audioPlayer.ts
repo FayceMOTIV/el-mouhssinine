@@ -46,6 +46,7 @@ export const setupPlayer = async (): Promise<boolean> => {
 
       await TrackPlayer.setupPlayer({
         waitForBuffer: true,
+        autoHandleInterruptions: true,
         // iOS: catégorie Playback pour que l'audio joue même en mode silencieux
         iosCategory: IOSCategory.Playback,
         iosCategoryMode: IOSCategoryMode.SpokenAudio,
