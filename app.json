@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "fr.elmouhssinine.mosquee",
-      "versionCode": 35
+      "versionCode": 36
     },
     "extra": {
       "eas": {
