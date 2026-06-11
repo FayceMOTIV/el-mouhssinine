@@ -2005,7 +2005,7 @@ const DonationsScreen = () => {
               // Projets internes : choix CB (site sécurisé) ou virement
               return (
                 <View>
-                  {/* Option 1 : CB / Apple Pay via site */}
+                  {/* Option 1 : CB (+ Apple Pay sur iOS) via site */}
                   <TouchableOpacity
                     style={[
                       styles.paymentOption,
@@ -2020,7 +2020,13 @@ const DonationsScreen = () => {
                       <Text
                         style={[styles.paymentTitle, isRTL && styles.rtlText]}
                       >
-                        {language === 'ar' ? 'بطاقة ائتمان / Apple Pay' : 'CB / Apple Pay'}
+                        {Platform.OS === 'ios'
+                          ? language === 'ar'
+                            ? 'بطاقة ائتمان / Apple Pay'
+                            : 'CB / Apple Pay'
+                          : language === 'ar'
+                            ? 'بطاقة ائتمان'
+                            : 'Carte bancaire'}
                       </Text>
                       <Text
                         style={[styles.paymentDesc, isRTL && styles.rtlText]}

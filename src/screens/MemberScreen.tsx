@@ -3780,7 +3780,7 @@ const MemberScreen = () => {
                 </TouchableOpacity>
 
                 <View style={styles.familyPaymentOptions}>
-                  {isApplePayAvailable && (
+                  {Platform.OS === 'ios' && isApplePayAvailable && (
                     <TouchableOpacity
                       style={styles.familyPayOptionButton}
                       onPress={() => handlePayFamily('apple')}
