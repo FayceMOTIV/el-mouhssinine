@@ -884,13 +884,15 @@ const DonationsScreen = () => {
                         {t('creditCard')}
                       </Text>
                     </View>
-                    <View style={styles.applePayButton}>
-                      <Image
-                        source={require('../assets/apple-logo.png')}
-                        style={styles.appleLogo}
-                      />
-                      <Text style={styles.applePayText}>Pay</Text>
-                    </View>
+                    {Platform.OS === 'ios' && (
+                      <View style={styles.applePayButton}>
+                        <Image
+                          source={require('../assets/apple-logo.png')}
+                          style={styles.appleLogo}
+                        />
+                        <Text style={styles.applePayText}>Pay</Text>
+                      </View>
+                    )}
                     <View style={styles.paymentItem}>
                       <Text style={styles.paymentItemIcon}>🏦</Text>
                       <Text
@@ -1609,13 +1611,15 @@ const DonationsScreen = () => {
                             {t('creditCard')}
                           </Text>
                         </View>
-                        <View style={styles.applePayButton}>
-                          <Image
-                            source={require('../assets/apple-logo.png')}
-                            style={styles.appleLogo}
-                          />
-                          <Text style={styles.applePayText}>Pay</Text>
-                        </View>
+                        {Platform.OS === 'ios' && (
+                          <View style={styles.applePayButton}>
+                            <Image
+                              source={require('../assets/apple-logo.png')}
+                              style={styles.appleLogo}
+                            />
+                            <Text style={styles.applePayText}>Pay</Text>
+                          </View>
+                        )}
                         <View style={styles.paymentItem}>
                           <Text style={styles.paymentItemIcon}>🏦</Text>
                           <Text
