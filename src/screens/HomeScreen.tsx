@@ -1999,7 +1999,7 @@ const HomeScreen = () => {
                   const adresseCimetiere = janazaItem.cemeteryAddress || '';
                   const heure = janazaItem.prayerTime || janazaItem.heure;
                   const phraseAr =
-                    janazaItem.deceasedNameAr ||
+                    janazaItem.messageAr ||
                     janazaItem.phraseAr ||
                     'إِنَّا لِلَّهِ وَإِنَّا إِلَيْهِ رَاجِعُونَ';
                   const phraseFr =

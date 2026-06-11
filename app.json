@@ -5,9 +5,9 @@
     "name": "El Mouhssinine - Centre Culturel Islamique",
     "slug": "el-mouhssinine",
     "version": "1.1.7",
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": "1.1.7",
     "updates": {
-      "enabled": false,
+      "enabled": true,
       "checkAutomatically": "ON_ERROR_RECOVERY",
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/2b193d8f-2732-47c8-938a-336945c5fc84"

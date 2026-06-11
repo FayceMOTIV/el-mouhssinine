@@ -38,6 +38,7 @@ import {
   subscribeToMosqueeInfo,
   createDonation,
   addDonation,
+  getRecuFiscalInfoUrl,
 } from '../services/firebase';
 import { Project, ProjectFile, MosqueeInfo } from '../types';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -78,6 +79,9 @@ const DonationsScreen = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showZakatModal, setShowZakatModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('cb');
+  const [recuFiscalInfoUrl, setRecuFiscalInfoUrl] = useState<string | null>(
+    null,
+  );
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
   const [copied, setCopied] = useState('');
   const [showFilesModal, setShowFilesModal] = useState(false);
@@ -408,6 +412,9 @@ const DonationsScreen = () => {
         setMosqueeInfo(info);
       }
     });
+
+    // PDF "Infos reçu fiscal" (uploadé par l'admin) pour le bouton en bas de page
+    getRecuFiscalInfoUrl().then(setRecuFiscalInfoUrl);
 
     return () => {
       unsubProjects?.();
@@ -835,6 +842,25 @@ const DonationsScreen = () => {
                     </Text>
                   </View>
                 </View>
+
+                {/* INFOS REÇU FISCAL — ouvre le PDF d'info uploadé par l'admin */}
+                {recuFiscalInfoUrl ? (
+                  <TouchableOpacity
+                    style={[styles.secondaryBtn, { marginTop: spacing.md }]}
+                    onPress={() =>
+                      Linking.openURL(recuFiscalInfoUrl).catch(() => {})
+                    }
+                  >
+                    <Text
+                      style={[styles.secondaryBtnText, isRTL && styles.rtlText]}
+                    >
+                      🧾{' '}
+                      {language === 'ar'
+                        ? 'معلومات الإيصال الضريبي'
+                        : 'INFOS REÇU FISCAL'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
 
                 {/* Moyens de paiement acceptes */}
                 <View style={styles.paymentSection}>

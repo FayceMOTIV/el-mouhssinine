@@ -951,6 +951,19 @@ export const subscribeToMosqueeInfo = (
   }
 };
 
+// Récupère l'URL du PDF "Infos reçu fiscal" uploadé par l'admin (settings/general.recuFiscalInfoUrl)
+export const getRecuFiscalInfoUrl = async (): Promise<string | null> => {
+  if (FORCE_DEMO_MODE) return null;
+  try {
+    const doc = await firestore().collection('settings').doc('general').get();
+    const url = doc.data()?.recuFiscalInfoUrl as string | undefined;
+    return url || null;
+  } catch (error) {
+    logger.error('[Firebase] getRecuFiscalInfoUrl error:', error);
+    return null;
+  }
+};
+
 // ==================== RAMADAN SETTINGS ====================
 // Collection Firestore: "settings/ramadan"
 
