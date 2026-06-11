@@ -23,6 +23,7 @@ export interface StoredNotification {
 
 const NOTIFICATION_HISTORY_KEY = '@notification_history';
 const READ_IDS_KEY = '@notification_read_ids';
+const DELETED_IDS_KEY = '@notification_deleted_ids';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 heures (notifs locales foreground)
 const DISPLAY_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours (centre de notif Firestore)
 
@@ -38,6 +39,24 @@ const addLocalReadIds = async (ids: string[]): Promise<void> => {
     const set = await getLocalReadIds();
     ids.forEach(id => set.add(id));
     await AsyncStorage.setItem(READ_IDS_KEY, JSON.stringify([...set].slice(-300)));
+  } catch {}
+};
+
+// --- Suivi local des notifs SUPPRIMÉES (tombstones) ---
+// Les rules Firestore interdisent au client de supprimer un doc user_notifications
+// (et impossible sur les broadcasts audience=='all'). On garde donc localement la liste
+// des ids supprimés et on les filtre à l'affichage, comme le pattern READ_IDS_KEY.
+const getLocalDeletedIds = async (): Promise<Set<string>> => {
+  try {
+    const raw = await AsyncStorage.getItem(DELETED_IDS_KEY);
+    return new Set<string>(raw ? JSON.parse(raw) : []);
+  } catch { return new Set<string>(); }
+};
+const addLocalDeletedIds = async (ids: string[]): Promise<void> => {
+  try {
+    const set = await getLocalDeletedIds();
+    ids.forEach(id => set.add(id));
+    await AsyncStorage.setItem(DELETED_IDS_KEY, JSON.stringify([...set].slice(-500)));
   } catch {}
 };
 
@@ -106,9 +125,10 @@ export const getNotificationHistory = async (): Promise<StoredNotification[]> =>
     // 3. Fusion + déduplication par id (Firestore prioritaire)
     const byId = new Map<string, StoredNotification>();
     [...remote, ...local].forEach(n => { if (!byId.has(n.id)) byId.set(n.id, n); });
-    // 4. Filtrer sur 30 jours + trier
+    // 4. Filtrer sur 30 jours + retirer les notifs supprimées localement + trier
     const cutoff = Date.now() - DISPLAY_AGE_MS;
-    const merged = [...byId.values()].filter(n => n.timestamp > cutoff);
+    const deletedIds = await getLocalDeletedIds();
+    const merged = [...byId.values()].filter(n => n.timestamp > cutoff && !deletedIds.has(n.id));
     merged.sort((a, b) => b.timestamp - a.timestamp);
     return merged.slice(0, 60);
   } catch (error) {
@@ -229,9 +249,15 @@ export const getUnreadCount = async (): Promise<number> => {
  */
 export const deleteNotificationById = async (notificationId: string): Promise<void> => {
   try {
-    const history = await getNotificationHistory();
-    const filtered = history.filter(n => n.id !== notificationId);
-    await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(filtered));
+    // Tombstone persistant : empêche la réapparition depuis Firestore au rechargement
+    await addLocalDeletedIds([notificationId]);
+    // Nettoyage du cache local (lecture directe, sans re-fusionner le distant)
+    const stored = await AsyncStorage.getItem(NOTIFICATION_HISTORY_KEY);
+    const local: StoredNotification[] = stored ? JSON.parse(stored) : [];
+    await AsyncStorage.setItem(
+      NOTIFICATION_HISTORY_KEY,
+      JSON.stringify(local.filter(n => n.id !== notificationId)),
+    );
     logger.log('[NotifHistory] Notification supprimée:', notificationId);
   } catch (error) {
     logger.error('[NotifHistory] Erreur deleteById:', error);
@@ -243,6 +269,9 @@ export const deleteNotificationById = async (notificationId: string): Promise<vo
  */
 export const clearNotificationHistory = async (): Promise<void> => {
   try {
+    // Tombstone tous les ids actuellement visibles (local + distant) pour qu'aucun ne réapparaisse
+    const history = await getNotificationHistory();
+    await addLocalDeletedIds(history.map(n => n.id));
     await AsyncStorage.removeItem(NOTIFICATION_HISTORY_KEY);
     logger.log('[NotifHistory] Historique effacé');
   } catch (error) {
