@@ -813,26 +813,6 @@ const DonationsScreen = () => {
                   <Text style={styles.donChoiceArrow}>{isRTL ? '←' : '→'}</Text>
                 </TouchableOpacity>
 
-                {/* Calculateur Zakat */}
-                <TouchableOpacity
-                  style={[
-                    styles.secondaryBtn,
-                    styles.zakatBtn,
-                    { marginTop: spacing.xl },
-                  ]}
-                  onPress={() => setShowZakatModal(true)}
-                >
-                  <Text
-                    style={[
-                      styles.secondaryBtnText,
-                      styles.zakatBtnText,
-                      isRTL && styles.rtlText,
-                    ]}
-                  >
-                    🧮 {t('calculateZakat')}
-                  </Text>
-                </TouchableOpacity>
-
                 {/* Reçu fiscal */}
                 <View style={styles.receiptInfoCard}>
                   <Text style={styles.receiptInfoIcon}>🧾</Text>
@@ -1541,21 +1521,6 @@ const DonationsScreen = () => {
                     </Text>
                   </TouchableOpacity>
                 )}
-
-                <TouchableOpacity
-                  style={[styles.secondaryBtn, styles.zakatBtn]}
-                  onPress={() => setShowZakatModal(true)}
-                >
-                  <Text
-                    style={[
-                      styles.secondaryBtnText,
-                      styles.zakatBtnText,
-                      isRTL && styles.rtlText,
-                    ]}
-                  >
-                    🧮 {t('calculateZakat')}
-                  </Text>
-                </TouchableOpacity>
 
                 {/* Moyens de paiement */}
                 <View style={styles.paymentSection}>
