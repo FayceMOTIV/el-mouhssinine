@@ -83,3 +83,6 @@ yarn-error.log
 .expo
 dist/
 web-build/
+pc-api-key.json
+*.jks
+android/app/upload-keystore.jks

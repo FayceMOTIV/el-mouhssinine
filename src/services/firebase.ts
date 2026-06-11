@@ -1435,7 +1435,7 @@ export interface CreateMemberData {
 
 export const createMember = async (
   member: CreateMemberData | Omit<Member, 'id' | 'createdAt' | 'memberId'>,
-): Promise<string> => {
+): Promise<string | null> => {
   if (FORCE_DEMO_MODE) {
     return `mock-member-${Date.now()}`;
   }
@@ -1538,8 +1538,10 @@ export const createMember = async (
     const docRef = await firestore().collection('members').add(docData);
     return docRef.id;
   } catch (error) {
-    logger.error('[Firebase] createMember error:', error);
-    return `error-member-${Date.now()}`;
+    // Échec réel de création d'adhérent : retourner null (et non un faux ID trompeur)
+    // pour que l'appelant puisse détecter et signaler l'échec.
+    logger.error('[Firebase] createMember ÉCHEC création adhérent:', error);
+    return null;
   }
 };
 
@@ -1669,19 +1671,21 @@ export const getMyMembership = async (
       (data.cotisation.dateFin.toDate
         ? data.cotisation.dateFin.toDate()
         : new Date(data.cotisation.dateFin)) > new Date();
+    // Les statuts d'attente explicites priment sur hasValidCotisation
+    // (cohérent avec computeMemberStatus : data.status fait foi).
     const memberStatus =
-      data.status === 'actif' || hasValidCotisation
-        ? 'actif'
+      data.status === 'en_attente_validation'
+        ? 'en_attente_validation'
         : data.status === 'en_attente_paiement'
         ? 'en_attente_paiement'
-        : data.status === 'en_attente_validation'
-        ? 'en_attente_validation'
         : data.status === 'en_attente_signature'
         ? 'en_attente_signature'
         : data.status === 'sympathisant'
         ? 'sympathisant'
         : data.status === 'annule'
         ? 'annule'
+        : data.status === 'actif' || hasValidCotisation
+        ? 'actif'
         : data.status || 'en_attente_signature';
 
     return {

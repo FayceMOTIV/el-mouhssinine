@@ -4,6 +4,8 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { logger } from '../utils';
 
 // ==================== TYPES ====================
@@ -20,7 +22,66 @@ export interface StoredNotification {
 // ==================== CONSTANTES ====================
 
 const NOTIFICATION_HISTORY_KEY = '@notification_history';
-const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 heures
+const READ_IDS_KEY = '@notification_read_ids';
+const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 heures (notifs locales foreground)
+const DISPLAY_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours (centre de notif Firestore)
+
+// --- Suivi local des notifs marquées lues (couvre les broadcasts non modifiables côté Firestore) ---
+const getLocalReadIds = async (): Promise<Set<string>> => {
+  try {
+    const raw = await AsyncStorage.getItem(READ_IDS_KEY);
+    return new Set<string>(raw ? JSON.parse(raw) : []);
+  } catch { return new Set<string>(); }
+};
+const addLocalReadIds = async (ids: string[]): Promise<void> => {
+  try {
+    const set = await getLocalReadIds();
+    ids.forEach(id => set.add(id));
+    await AsyncStorage.setItem(READ_IDS_KEY, JSON.stringify([...set].slice(-300)));
+  } catch {}
+};
+
+// --- Récupère les notifs depuis Firestore (user_notifications) : perso + broadcasts ---
+const fetchFirestoreNotifs = async (): Promise<StoredNotification[]> => {
+  try {
+    const uid = auth().currentUser?.uid;
+    const cutoffTs = firestore.Timestamp.fromMillis(Date.now() - DISPLAY_AGE_MS);
+    const queries: Promise<any>[] = [];
+    if (uid) {
+      queries.push(
+        firestore().collection('user_notifications')
+          .where('userId', '==', uid)
+          .where('createdAt', '>=', cutoffTs)
+          .orderBy('createdAt', 'desc').limit(50).get(),
+      );
+    }
+    queries.push(
+      firestore().collection('user_notifications')
+        .where('audience', '==', 'all')
+        .where('createdAt', '>=', cutoffTs)
+        .orderBy('createdAt', 'desc').limit(50).get(),
+    );
+    const snaps = await Promise.all(queries);
+    const readIds = await getLocalReadIds();
+    const out: StoredNotification[] = [];
+    snaps.forEach(snap => snap.forEach((doc: any) => {
+      const d = doc.data();
+      const ts = d.createdAt && d.createdAt.toMillis ? d.createdAt.toMillis() : Date.now();
+      out.push({
+        id: doc.id,
+        title: d.title || '',
+        body: d.body || '',
+        timestamp: ts,
+        type: (d.type as StoredNotification['type']) || 'other',
+        read: d.read === true || readIds.has(doc.id),
+      });
+    }));
+    return out;
+  } catch (error) {
+    logger.error('[NotifHistory] Erreur Firestore:', error);
+    return [];
+  }
+};
 
 // ==================== FUNCTIONS ====================
 
@@ -37,20 +98,19 @@ const cleanOldNotifications = (notifications: StoredNotification[]): StoredNotif
  */
 export const getNotificationHistory = async (): Promise<StoredNotification[]> => {
   try {
+    // 1. Notifs locales (reçues app ouverte)
     const stored = await AsyncStorage.getItem(NOTIFICATION_HISTORY_KEY);
-    if (!stored) return [];
-
-    const notifications: StoredNotification[] = JSON.parse(stored);
-    // Nettoyer les anciennes et trier par timestamp décroissant (plus récent en premier)
-    const cleaned = cleanOldNotifications(notifications);
-    cleaned.sort((a, b) => b.timestamp - a.timestamp);
-
-    // Si on a nettoyé des notifications, sauvegarder
-    if (cleaned.length !== notifications.length) {
-      await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(cleaned));
-    }
-
-    return cleaned;
+    const local: StoredNotification[] = stored ? JSON.parse(stored) : [];
+    // 2. Notifs Firestore (reçues même app fermée : perso + broadcasts)
+    const remote = await fetchFirestoreNotifs();
+    // 3. Fusion + déduplication par id (Firestore prioritaire)
+    const byId = new Map<string, StoredNotification>();
+    [...remote, ...local].forEach(n => { if (!byId.has(n.id)) byId.set(n.id, n); });
+    // 4. Filtrer sur 30 jours + trier
+    const cutoff = Date.now() - DISPLAY_AGE_MS;
+    const merged = [...byId.values()].filter(n => n.timestamp > cutoff);
+    merged.sort((a, b) => b.timestamp - a.timestamp);
+    return merged.slice(0, 60);
   } catch (error) {
     logger.error('[NotifHistory] Erreur lecture:', error);
     return [];
@@ -109,11 +169,19 @@ export const addNotificationToHistory = async (
  */
 export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
   try {
-    const history = await getNotificationHistory();
-    const updated = history.map(n =>
-      n.id === notificationId ? { ...n, read: true } : n
-    );
-    await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(updated));
+    await addLocalReadIds([notificationId]);
+    // MAJ historique local
+    const stored = await AsyncStorage.getItem(NOTIFICATION_HISTORY_KEY);
+    if (stored) {
+      const arr: StoredNotification[] = JSON.parse(stored);
+      await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(
+        arr.map(n => n.id === notificationId ? { ...n, read: true } : n),
+      ));
+    }
+    // MAJ Firestore (best-effort, fonctionne pour les notifs perso de l'utilisateur)
+    if (auth().currentUser?.uid) {
+      firestore().collection('user_notifications').doc(notificationId).update({ read: true }).catch(() => {});
+    }
   } catch (error) {
     logger.error('[NotifHistory] Erreur markAsRead:', error);
   }
@@ -125,8 +193,18 @@ export const markNotificationAsRead = async (notificationId: string): Promise<vo
 export const markAllNotificationsAsRead = async (): Promise<void> => {
   try {
     const history = await getNotificationHistory();
-    const updated = history.map(n => ({ ...n, read: true }));
-    await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(updated));
+    const ids = history.map(n => n.id);
+    await addLocalReadIds(ids);
+    // MAJ historique local
+    const stored = await AsyncStorage.getItem(NOTIFICATION_HISTORY_KEY);
+    if (stored) {
+      const arr: StoredNotification[] = JSON.parse(stored);
+      await AsyncStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(arr.map(n => ({ ...n, read: true }))));
+    }
+    // MAJ Firestore best-effort pour les notifs perso
+    if (auth().currentUser?.uid) {
+      ids.forEach(id => firestore().collection('user_notifications').doc(id).update({ read: true }).catch(() => {}));
+    }
     logger.log('[NotifHistory] Toutes les notifications marquées comme lues');
   } catch (error) {
     logger.error('[NotifHistory] Erreur markAllAsRead:', error);

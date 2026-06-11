@@ -1633,6 +1633,51 @@ const MoreScreen = () => {
             </View>
           </TouchableOpacity>
 
+          {/* Compte connecté */}
+          {userEmail && (
+            <View
+              style={[
+                styles.logoutButton,
+                {
+                  backgroundColor: 'rgba(212, 175, 55, 0.08)',
+                  borderColor: 'rgba(212, 175, 55, 0.25)',
+                  marginBottom: spacing.sm,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.settingRow,
+                  isRTL && { flexDirection: 'row-reverse' },
+                ]}
+              >
+                <Text style={{ fontSize: 20, marginRight: spacing.sm }}>👤</Text>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.settingLabel,
+                      { fontSize: fontSize.sm, opacity: 0.7 },
+                      isRTL && { textAlign: 'right' },
+                    ]}
+                  >
+                    {language === 'ar' ? 'الحساب المتصل' : 'Compte connecté'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.settingLabel,
+                      { color: colors.accent, fontWeight: '600' },
+                      isRTL && { textAlign: 'right' },
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="middle"
+                  >
+                    {userEmail}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
           {/* Exporter mes données (RGPD Article 20) */}
           {userEmail && (
             <TouchableOpacity

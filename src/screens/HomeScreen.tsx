@@ -3241,8 +3241,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    maxHeight: '85%',
-    minHeight: 400,
+    height: '82%',
+    maxHeight: '92%',
   },
   historyCloseBtn: {
     position: 'absolute',

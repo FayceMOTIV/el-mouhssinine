@@ -106,12 +106,26 @@ const MemberScreen = () => {
   );
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  // 3 pages : 'sympathisant' | 'devenir_adherent' | 'membre_actif'
+  // 4 pages : 'sympathisant' | 'devenir_adherent' | 'membre_actif' | 'en_attente_validation'
   const [memberPage, setMemberPage] = useState<
-    'sympathisant' | 'devenir_adherent' | 'membre_actif'
+    'sympathisant' | 'devenir_adherent' | 'membre_actif' | 'en_attente_validation'
   >('sympathisant');
   const [isExpired, setIsExpired] = useState(false);
   const [contextMessage, setContextMessage] = useState<string | null>(null);
+
+  // Crée un adhérent (famille) en signalant clairement tout échec à l'utilisateur
+  // (createMember renvoie null en cas d'erreur — on ne laisse plus l'échec silencieux).
+  const createMemberOrFlag = async (data: any) => {
+    const id = await createMember(data);
+    if (!id) {
+      console.error('[MemberScreen] Échec création adhérent famille:', data?.prenom, data?.nom);
+      Alert.alert(
+        'Adhérent non enregistré',
+        `L'inscription de ${data?.prenom || ''} ${data?.nom || ''} a échoué. Votre paiement est bien pris en compte — contactez la mosquée pour finaliser son inscription.`,
+      );
+    }
+    return id;
+  };
 
   // Prix et infos
   const [formulePrices, setFormulePrices] = useState<CotisationPrices>({
@@ -349,8 +363,11 @@ const MemberScreen = () => {
                 resolvedStatus === 'aucun'
               ) {
                 setMemberPage('sympathisant');
+              } else if (resolvedStatus === 'en_attente_validation') {
+                setMemberPage('en_attente_validation');
+                setContextMessage(null);
               } else {
-                // en_attente_validation, en_attente_signature, en_attente_paiement
+                // en_attente_signature, en_attente_paiement
                 setMemberPage('devenir_adherent');
               }
 
@@ -1142,9 +1159,11 @@ const MemberScreen = () => {
           [{ text: t('commonOk'), style: 'default' }],
         );
 
-        setMemberPage('membre_actif');
+        // Le backend pose 'en_attente_validation' (jamais 'actif' sans validation bureau).
+        // On affiche donc un écran d'attente, pas la carte de membre.
+        setMemberPage('en_attente_validation');
         setContextMessage(null);
-        setIsPaid(true);
+        setIsPaid(false);
         setIsExpired(false);
 
         // Paiement optimiste dans l'historique (visible immédiatement, remplacé par le webhook)
@@ -1332,7 +1351,7 @@ const MemberScreen = () => {
       const payeurNom = nameParts.slice(1).join(' ') || memberProfile.name;
 
       for (const member of familyMembers) {
-        await createMember({
+        await createMemberOrFlag({
           email: '',
           nom: member.nom,
           prenom: member.prenom,
@@ -1414,7 +1433,7 @@ const MemberScreen = () => {
           // BUG FIX: 'en_attente_validation' n'est PAS dans la liste autorisée du allow create
           // Firestore rules autorisent: en_attente_paiement, en_attente_signature, pending, sympathisant
           // Le webhook payment_intent.succeeded mettra 'en_attente_validation' via admin SDK
-          await createMember({
+          await createMemberOrFlag({
             email: '',
             nom: member.nom,
             prenom: member.prenom,
@@ -1962,6 +1981,44 @@ const MemberScreen = () => {
         {/* ============================================ */}
         {/* PAGE 3 : MEMBRE ACTIF (adhérent)            */}
         {/* ============================================ */}
+        {memberPage === 'en_attente_validation' && (
+          <>
+            <View style={styles.pageTitleContainer}>
+              <Text style={styles.pageTitle}>EN ATTENTE DE VALIDATION</Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: 'rgba(245,158,11,0.12)',
+                borderColor: 'rgba(245,158,11,0.4)',
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 24,
+                margin: 16,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 44, marginBottom: 10 }}>⏳</Text>
+              <Text
+                style={[
+                  { color: '#fff', fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 10 },
+                  isRTL && styles.rtlText,
+                ]}
+              >
+                Paiement reçu — Barak Allahu fik !
+              </Text>
+              <Text
+                style={[
+                  { color: 'rgba(255,255,255,0.75)', fontSize: 14, textAlign: 'center', lineHeight: 21 },
+                  isRTL && styles.rtlText,
+                ]}
+              >
+                Votre adhésion est en attente de validation par le bureau de la mosquée.
+                Vous recevrez une notification dès qu'elle sera validée.
+              </Text>
+            </View>
+          </>
+        )}
+
         {memberPage === 'membre_actif' && (
           <>
             {/* Titre page */}
