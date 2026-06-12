@@ -86,3 +86,10 @@ web-build/
 pc-api-key.json
 *.jks
 android/app/upload-keystore.jks
+
+# Artefacts buildés (ne jamais committer — générés au build)
+ios/main.jsbundle
+ios/main.jsbundle.map
+android/app/src/main/assets/index.android.bundle
+*.jsbundle.map
+*.hprof

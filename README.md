@@ -1,137 +1,120 @@
-# El Mouhssinine - Application Mobile
+# El Mouhssinine — Application mosquée (Bourg-en-Bresse)
 
-Application mobile React Native pour la Mosquee El Mouhssinine.
+Application mobile iOS + Android de la mosquée El Mouhssinine (Centre Culturel Islamique).
+React Native 0.83 / Expo. Bilingue FR/AR. En production sur l'App Store et Google Play.
 
-## Informations
+---
 
-- **Bundle ID** : fr.elmouhssinine.mosquee
-- **Build** : 167
-- **React Native** : 0.83.1
-- **TypeScript** : Oui
+## ⭐ Source de vérité (À LIRE EN PREMIER)
 
-## Fonctionnalites
+- **Branche canonique : `main`** — c'est la SEULE branche officielle.
+- **L'app est à la RACINE du dépôt** (`src/`, `ios/`, `android/`, `app.json`…).
+- Backoffice web : `el-mouhssinine-backoffice/` · Cloud Functions : `functions/`
 
-### Priere
-- Horaires de priere (methode Mawaqit/UOIF - 12 degres)
-- Notifications configurables (avant/a l'heure)
-- Boost de priere ("J'ai prie")
-- Notification speciale Jumu'a le vendredi
+> ⚠️ Les anciens états (app dans un sous-dossier `ElMouhssinine/`, branche `master`) sont
+> **archivés dans des tags Git** (`archive/main-2026-04-12`, `archive/master-1.1.6-2026-05-28`)
+> et ne doivent plus servir.
 
-### Coran
-- 114 sourates avec audio
-- Mode lecture page par page (604 pages du Mushaf)
-- Marque-pages et sauvegarde de progression
-- Affichage arabe seul ou francais seul
+---
 
-### Adhesion
-- Inscription membre avec paiement Stripe
-- Multi-adherents (inscrire plusieurs personnes)
-- Carte membre digitale avec QR code
-- Gestion des cotisations
+## 🔑 RÈGLE D'OR
 
-### Autres
-- Messages prives avec la mosquee
-- Adhkar et invocations
-- Apprentissage alphabet arabe
-- Dates islamiques avec countdown
-- Rappels du jour (hadiths)
-- Recus fiscaux par email
+> **TOUJOURS committer + pusher sur GitHub AVANT de builder. Jamais l'inverse.**
 
-## Installation
+Si on build sans pusher, GitHub prend du retard et on ne sait plus quelle version est en ligne.
+C'est exactement ce qui a causé le désordre des branches en juin 2026.
 
-### Prerequisites
+---
 
-- Node.js 18+
-- Xcode 15+ (pour iOS)
-- CocoaPods
-- Compte Apple Developer (pour TestFlight)
+## 🚀 Process de livraison (complet)
 
-### Lancer en developpement
+### Android (Google Play)
+```bash
+git add -A && git commit -m "..." && git push          # 1. d'abord GitHub
+eas build --platform android --profile production       # 2. build (.aab)
+# 3. Google Play Console → Production → nouvelle release → téléverser le .aab → Envoyer pour examen
+```
+
+### iOS (App Store)
+⚠️ Apple impose le **SDK iOS 26 (Xcode 26+)**. Patches appliqués : Stripe via `patches/`, fmt via
+`ios/Podfile` (post_install). 
+```bash
+git add -A && git commit -m "..." && git push          # 1. d'abord GitHub
+cd ios && pod install
+xcodebuild archive -workspace ElMouhssinine.xcworkspace -scheme ElMouhssinine \
+  -configuration Release -destination 'generic/platform=iOS' \
+  -archivePath /tmp/ElMouhssinine.xcarchive -allowProvisioningUpdates
+xcodebuild -exportArchive -archivePath /tmp/ElMouhssinine.xcarchive \
+  -exportPath /tmp/export -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates
+xcrun altool --upload-app -f /tmp/export/*.ipa -t ios --apiKey <KEY> --apiIssuer <ISSUER>
+```
+
+### 🚨 L'étape qui avait été OUBLIÉE (cause du cafouillage)
+Après l'upload, le build n'est **PAS** automatiquement en vente. Il faut, dans **App Store Connect** :
+créer/ouvrir la version → **attacher le build** → **« Ajouter pour examen »** → **« Soumettre pour
+examen »**. **Tant que ce n'est pas soumis ET approuvé par Apple, l'app n'est pas mise à jour.**
+
+---
+
+## 📦 Versions (où changer les numéros)
+
+`eas.json` → `appVersionSource: "local"` : les numéros sont **dans le code**.
+
+| Numéro | Fichier |
+|---|---|
+| Version marketing (1.1.8) | `app.json` `expo.version` + iOS `MARKETING_VERSION` + Android `versionName` |
+| Build iOS (316) | `ios/.../project.pbxproj` `CURRENT_PROJECT_VERSION` |
+| Build Android (38) | `android/app/build.gradle` `versionCode` |
+
+Bundle ID : `fr.elmouhssinine.mosquee`
+
+---
+
+## 🔒 Sécurité — ⚠️ DÉPÔT PUBLIC
+
+Ne **JAMAIS** committer : `pc-api-key.json` (clé admin Firebase), `functions/.env` (Stripe/Brevo),
+keystores upload `*.jks`, clés `sk_live`/`sk_test`. Le `.gitignore` les bloque.
+Les clés CLIENT (`google-services.json`, `GoogleService-Info.plist`) sont publiques par design → OK.
+
+---
+
+## 🛠️ Développement
 
 ```bash
-# Installer les dependances
 npm install
-
-# Installer les pods iOS
 cd ios && pod install && cd ..
-
-# Lancer Metro
-npm start
-
-# Lancer sur iOS
-npm run ios
-
-# Lancer sur Android
-npm run android
+npm start          # Metro
+npm run ios        # iOS
+npm run android    # Android
 ```
 
-### Build iOS Production
-
-```bash
-cd ios
-pod install
-xcodebuild archive \
-  -workspace ElMouhssinine.xcworkspace \
-  -scheme ElMouhssinine \
-  -configuration Release \
-  -destination 'generic/platform=iOS' \
-  -archivePath ./build/ElMouhssinine.xcarchive
-
-xcodebuild -exportArchive \
-  -archivePath ./build/ElMouhssinine.xcarchive \
-  -exportOptionsPlist ExportOptions.plist \
-  -exportPath ./build/export
-
-# Upload TestFlight
-xcrun altool --upload-app \
-  -f ./build/export/ElMouhssinine.ipa \
-  -t ios \
-  -u EMAIL \
-  -p APP_SPECIFIC_PASSWORD
-```
-
-## Architecture
+## 📂 Structure
 
 ```
-src/
-├── components/          # Composants reutilisables
-├── screens/             # Ecrans de l'app
-├── services/            # Services (Firebase, API, notifications)
-├── i18n/                # Traductions FR/AR
-├── navigation/          # React Navigation
-├── theme/               # Couleurs et styles
-└── types/               # Types TypeScript
+.
+├── src/                          # App RN (screens/, services/, components/, i18n/, theme/…)
+├── ios/                          # Xcode + CocoaPods
+├── android/                      # Gradle
+├── el-mouhssinine-backoffice/    # Backoffice admin (Vite/React) → el-mouhssinine.web.app
+├── functions/                    # Cloud Functions Firebase (Node 20)
+├── patches/                      # Patches node_modules (patch-package)
+├── app.json / eas.json           # Config Expo / EAS
+├── CLAUDE.md                     # Contexte détaillé projet
+└── CHANGELOG.md                  # Historique des builds
 ```
 
-## Services principaux
+## ✨ Fonctionnalités
 
-- `auth.ts` - Authentification Firebase
-- `firebase.ts` - Operations Firestore
-- `notifications.ts` - Push notifications FCM
-- `prayerNotifications.ts` - Notifications de priere locales
-- `prayerApi.ts` - API horaires de priere
-- `stripe.ts` - Paiements Stripe
+Horaires de prière (Mawaqit/UOIF) · Coran 114 sourates + audio + mode page · Adhésion membre
+(Stripe, multi-adhérents, carte digitale) · Dons + reçus fiscaux · Messages privés · Annonces ·
+Événements · Salat Janaza (notif prioritaire) · Adhkar · Alphabet arabe · Dates islamiques ·
+Rappels du jour.
 
-## Configuration
+---
 
-### Firebase
+## Services clés (`src/services/`)
 
-Le fichier `GoogleService-Info.plist` doit etre present dans `ios/`.
+`firebase.ts` (Firestore/Auth/FCM) · `prayerApi.ts` (horaires) · `stripe.ts` (paiements) ·
+`notifications.ts` (FCM) · `notificationHistory.ts` (centre de notifs in-app).
 
-### Stripe
-
-La cle publishable est configuree dans `App.tsx`.
-
-### APNs
-
-- Key ID : 4YY44LG5M5
-- Team ID : 5ZR87TPM89
-
-## Dependances principales
-
-- `@react-navigation/native` - Navigation
-- `@react-native-firebase/*` - Firebase
-- `@stripe/stripe-react-native` - Paiements
-- `@notifee/react-native` - Notifications locales
-- `react-native-localize` - i18n
-- `@react-native-async-storage/async-storage` - Stockage local
+APNs — Key ID `4YY44LG5M5` · Team ID `5ZR87TPM89` · Firebase region `europe-west1`.
