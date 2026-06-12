@@ -1247,49 +1247,13 @@ const DonationsScreen = () => {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Toggle interne/externe */}
-                <View style={[styles.tabToggle, isRTL && styles.tabToggleRTL]}>
-                  <TouchableOpacity
-                    style={[
-                      styles.tabBtn,
-                      projectType === 'interne' && styles.tabBtnActive,
-                    ]}
-                    onPress={() => {
-                      setProjectType('interne');
-                      setSelectedProject(null);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.tabBtnText,
-                        projectType === 'interne' && styles.tabBtnTextActive,
-                        isRTL && styles.rtlText,
-                      ]}
-                    >
-                      🕌 {t('ourMosque')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.tabBtn,
-                      projectType === 'externe' && styles.tabBtnActive,
-                    ]}
-                    onPress={() => {
-                      setProjectType('externe');
-                      setSelectedProject(null);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.tabBtnText,
-                        projectType === 'externe' && styles.tabBtnTextActive,
-                        isRTL && styles.rtlText,
-                      ]}
-                    >
-                      🌍 {t('otherCauses')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                {/* Titre de section (le type est déjà choisi via la carte précédente :
+                    'Projet local' = mosquée, 'Cause externe' = externe — pas de toggle ici) */}
+                <Text style={[styles.donSectionHeader, isRTL && styles.rtlText]}>
+                  {projectType === 'interne'
+                    ? `🕌 ${t('ourMosque')}`
+                    : `🌍 ${t('otherCauses')}`}
+                </Text>
 
                 {/* Projets */}
                 <View style={styles.section}>
@@ -1482,8 +1446,8 @@ const DonationsScreen = () => {
                   </View>
                 )}
 
-                {/* Message sélection projet */}
-                {!selectedProject && (
+                {/* Message sélection projet — seulement s'il existe des projets à choisir */}
+                {displayProjects.length > 0 && !selectedProject && (
                   <View style={styles.selectProjectHint}>
                     <Text style={styles.selectProjectHintIcon}>☝️</Text>
                     <Text
@@ -1499,7 +1463,10 @@ const DonationsScreen = () => {
                   </View>
                 )}
 
-                {/* Boutons - Differents selon le type de projet */}
+                {/* Boutons + moyens de paiement — seulement s'il existe des projets.
+                    Si la liste est vide, on n'affiche QUE le message "Aucun projet disponible". */}
+                {displayProjects.length > 0 && (
+                <>
                 {projectType === 'interne' ? (
                   <>
                     <TouchableOpacity
@@ -1640,6 +1607,8 @@ const DonationsScreen = () => {
                     </View>
                   )}
                 </View>
+                </>
+                )}
 
                 <Text style={[styles.disclaimer, isRTL && styles.rtlText]}>
                   {t('donationDisclaimer')}
@@ -3613,6 +3582,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     marginBottom: 2,
+  },
+  donSectionHeader: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.accent,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
   donChoiceDesc: {
     fontSize: fontSize.sm,
