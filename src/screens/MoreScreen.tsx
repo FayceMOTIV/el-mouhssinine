@@ -15,11 +15,23 @@ import {
 import messaging from '@react-native-firebase/messaging';
 import Geolocation from '@react-native-community/geolocation';
 import { useNavigation } from '@react-navigation/native';
-let CompassHeading: any = null;
-try {
-  CompassHeading = require('react-native-compass-heading').default;
-} catch (e) {
-  console.warn('[Compass] Module not available:', e);
+import * as Location from 'expo-location';
+
+// Coordonnées de la Kaaba (La Mecque)
+const KAABA_LAT = 21.4225;
+const KAABA_LON = 39.8262;
+
+// Cap (bearing) grand-cercle vers la Kaaba depuis une position donnée — fiable partout.
+function computeQiblaBearing(lat: number, lon: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const phiK = toRad(KAABA_LAT);
+  const phi = toRad(lat);
+  const dLon = toRad(KAABA_LON - lon);
+  const y = Math.sin(dLon);
+  const x =
+    Math.cos(phi) * Math.tan(phiK) - Math.sin(phi) * Math.cos(dLon);
+  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+  return (bearing + 360) % 360;
 }
 import Clipboard from '@react-native-clipboard/clipboard';
 import {
@@ -147,7 +159,9 @@ const MoreScreen = () => {
   const [compassHeading, setCompassHeading] = useState(0);
   const [compassError, setCompassError] = useState<string | null>(null);
   const rotateAnim = useRef(new Animated.Value(0)).current;
-  const qiblaDirection = 119; // Direction Qibla pour Bourg-en-Bresse
+  // Direction Qibla : calculée par GPS (défaut = Bourg-en-Bresse 119° si pas de position)
+  const [qiblaDirection, setQiblaDirection] = useState(119);
+  const qiblaDirectionRef = useRef(119);
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [pushDenied, setPushDenied] = useState(false);
@@ -189,40 +203,76 @@ const MoreScreen = () => {
     return () => unsubscribe();
   }, []);
 
-  // Initialiser la boussole
+  // Boussole Qibla — via expo-location (cap "trueHeading" fiable iOS + Android,
+  // déjà corrigé de la déclinaison magnétique). Qibla calculée par GPS.
   useEffect(() => {
-    const degree_update_rate = 3; // Mise à jour toutes les 3 degrés
+    let headingSub: Location.LocationSubscription | null = null;
+    let cancelled = false;
 
-    if (!CompassHeading) {
-      setCompassError(
-        language === 'ar' ? 'البوصلة غير متوفرة' : 'Boussole non disponible',
-      );
-      return;
-    }
+    const init = async () => {
+      try {
+        // 1. Permission localisation (déjà demandée ailleurs, mais on s'assure)
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          if (!cancelled)
+            setCompassError(
+              language === 'ar'
+                ? 'يرجى السماح بالوصول إلى الموقع'
+                : "Autorisez l'accès à la position pour la Qibla",
+            );
+          return;
+        }
 
-    CompassHeading.start(
-      degree_update_rate,
-      ({ heading, accuracy }: { heading: number; accuracy: number }) => {
-        setCompassHeading(heading);
-        setCompassError(null);
+        // 2. Position GPS -> cap Qibla précis (fallback 119° Bourg-en-Bresse)
+        try {
+          const pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          if (pos?.coords) {
+            const bearing = computeQiblaBearing(
+              pos.coords.latitude,
+              pos.coords.longitude,
+            );
+            const rounded = Math.round(bearing);
+            qiblaDirectionRef.current = rounded;
+            if (!cancelled) setQiblaDirection(rounded);
+          }
+        } catch (posErr) {
+          // garde le défaut 119°
+        }
 
-        const qiblaRotation = qiblaDirection - heading;
+        // 3. Cap de la boussole en continu (trueHeading)
+        headingSub = await Location.watchHeadingAsync(data => {
+          if (cancelled) return;
+          // trueHeading = nord géographique (corrigé déclinaison) ; fallback magHeading
+          const heading =
+            data.trueHeading != null && data.trueHeading >= 0
+              ? data.trueHeading
+              : data.magHeading;
+          setCompassHeading(heading);
+          setCompassError(null);
 
-        Animated.timing(rotateAnim, {
-          toValue: qiblaRotation,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      },
-    ).catch((error: any) => {
-      console.error('Compass error:', error);
-      setCompassError(
-        language === 'ar' ? 'البوصلة غير متوفرة' : 'Boussole non disponible',
-      );
-    });
+          const qiblaRotation = qiblaDirectionRef.current - heading;
+          Animated.timing(rotateAnim, {
+            toValue: qiblaRotation,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        });
+      } catch (error) {
+        console.error('Compass error:', error);
+        if (!cancelled)
+          setCompassError(
+            language === 'ar' ? 'البوصلة غير متوفرة' : 'Boussole non disponible',
+          );
+      }
+    };
+
+    init();
 
     return () => {
-      CompassHeading.stop();
+      cancelled = true;
+      headingSub?.remove();
     };
   }, [rotateAnim]);
 
@@ -721,7 +771,14 @@ const MoreScreen = () => {
               {/* Direction en degrés */}
               <View style={styles.qiblaDegreesContainer}>
                 <Text style={styles.qiblaDegreesValue}>{qiblaDirection}°</Text>
-                <Text style={styles.qiblaDegreesLabel}>{t('southEast')}</Text>
+                <Text style={styles.qiblaDegreesLabel}>
+                  {(() => {
+                    const dirs = isRTL
+                      ? ['شمال', 'شمال شرق', 'شرق', 'جنوب شرق', 'جنوب', 'جنوب غرب', 'غرب', 'شمال غرب']
+                      : ['Nord', 'Nord-Est', 'Est', 'Sud-Est', 'Sud', 'Sud-Ouest', 'Ouest', 'Nord-Ouest'];
+                    return dirs[Math.round(qiblaDirection / 45) % 8];
+                  })()}
+                </Text>
               </View>
 
               <Text style={[styles.qiblaCity, isRTL && styles.textRTL]}>
