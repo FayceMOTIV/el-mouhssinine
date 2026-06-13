@@ -16,10 +16,21 @@ import messaging from '@react-native-firebase/messaging';
 import Geolocation from '@react-native-community/geolocation';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import { Magnetometer } from 'expo-sensors';
 
 // Coordonnées de la Kaaba (La Mecque)
 const KAABA_LAT = 21.4225;
 const KAABA_LON = 39.8262;
+
+// Cap boussole depuis le magnétomètre (méthode éprouvée react-native-qibla-compass).
+// Le téléphone doit être tenu à plat. atan2(y,x) + offset -90.
+function magnetometerToHeading(x: number, y: number): number {
+  let angle = Math.atan2(y, x);
+  if (angle < 0) angle += 2 * Math.PI;
+  angle = (angle * 180) / Math.PI; // 0..360
+  const heading = angle - 90 >= 0 ? angle - 90 : angle + 271;
+  return Math.round(heading);
+}
 
 // Cap (bearing) grand-cercle vers la Kaaba depuis une position donnée — fiable partout.
 function computeQiblaBearing(lat: number, lon: number): number {
@@ -203,76 +214,82 @@ const MoreScreen = () => {
     return () => unsubscribe();
   }, []);
 
-  // Boussole Qibla — via expo-location (cap "trueHeading" fiable iOS + Android,
-  // déjà corrigé de la déclinaison magnétique). Qibla calculée par GPS.
+  // Boussole Qibla — cap lu via le MAGNÉTOMÈTRE (expo-sensors), méthode éprouvée
+  // par la lib react-native-qibla-compass (fiable sur Android). Qibla calculée par GPS.
+  // ⚠️ Tenir le téléphone À PLAT pour une lecture correcte.
   useEffect(() => {
-    let headingSub: Location.LocationSubscription | null = null;
+    let magSub: { remove: () => void } | null = null;
     let cancelled = false;
 
-    const init = async () => {
+    // 1. Position GPS -> cap Qibla précis (fallback 119° Bourg-en-Bresse)
+    (async () => {
       try {
-        // 1. Permission localisation (déjà demandée ailleurs, mais on s'assure)
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          if (!cancelled)
-            setCompassError(
-              language === 'ar'
-                ? 'يرجى السماح بالوصول إلى الموقع'
-                : "Autorisez l'accès à la position pour la Qibla",
-            );
-          return;
-        }
-
-        // 2. Position GPS -> cap Qibla précis (fallback 119° Bourg-en-Bresse)
-        try {
+        if (status === 'granted') {
           const pos = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
           });
-          if (pos?.coords) {
-            const bearing = computeQiblaBearing(
-              pos.coords.latitude,
-              pos.coords.longitude,
+          if (pos?.coords && !cancelled) {
+            const rounded = Math.round(
+              computeQiblaBearing(pos.coords.latitude, pos.coords.longitude),
             );
-            const rounded = Math.round(bearing);
             qiblaDirectionRef.current = rounded;
-            if (!cancelled) setQiblaDirection(rounded);
+            setQiblaDirection(rounded);
           }
-        } catch (posErr) {
-          // garde le défaut 119°
         }
+      } catch (e) {
+        // garde le défaut 119° (Bourg-en-Bresse)
+      }
+    })();
 
-        // 3. Cap de la boussole en continu (trueHeading)
-        headingSub = await Location.watchHeadingAsync(data => {
+    // 2. Cap boussole via magnétomètre (lissage léger pour réduire le tremblement)
+    let smoothed: number | null = null;
+    Magnetometer.isAvailableAsync()
+      .then(available => {
+        if (!available) {
+          if (!cancelled)
+            setCompassError(
+              language === 'ar'
+                ? 'البوصلة غير متوفرة على هذا الجهاز'
+                : 'Boussole non disponible sur cet appareil',
+            );
+          return;
+        }
+        Magnetometer.setUpdateInterval(100);
+        magSub = Magnetometer.addListener(({ x, y }) => {
           if (cancelled) return;
-          // trueHeading = nord géographique (corrigé déclinaison) ; fallback magHeading
-          const heading =
-            data.trueHeading != null && data.trueHeading >= 0
-              ? data.trueHeading
-              : data.magHeading;
-          setCompassHeading(heading);
+          const heading = magnetometerToHeading(x, y);
+          // lissage circulaire simple
+          if (smoothed == null) smoothed = heading;
+          else {
+            let diff = heading - smoothed;
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+            smoothed = (smoothed + diff * 0.25 + 360) % 360;
+          }
+          const h = Math.round(smoothed);
+          setCompassHeading(h);
           setCompassError(null);
 
-          const qiblaRotation = qiblaDirectionRef.current - heading;
+          const qiblaRotation = qiblaDirectionRef.current - h;
           Animated.timing(rotateAnim, {
             toValue: qiblaRotation,
-            duration: 200,
+            duration: 120,
             useNativeDriver: true,
           }).start();
         });
-      } catch (error) {
-        console.error('Compass error:', error);
+      })
+      .catch(error => {
+        console.error('Magnetometer error:', error);
         if (!cancelled)
           setCompassError(
             language === 'ar' ? 'البوصلة غير متوفرة' : 'Boussole non disponible',
           );
-      }
-    };
-
-    init();
+      });
 
     return () => {
       cancelled = true;
-      headingSub?.remove();
+      magSub?.remove();
     };
   }, [rotateAnim]);
 
