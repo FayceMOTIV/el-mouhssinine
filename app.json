@@ -4,8 +4,8 @@
   "expo": {
     "name": "El Mouhssinine - Centre Culturel Islamique",
     "slug": "el-mouhssinine",
-    "version": "1.1.9",
-    "runtimeVersion": "1.1.9",
+    "version": "1.2.0",
+    "runtimeVersion": "1.2.0",
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_ERROR_RECOVERY",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "fr.elmouhssinine.mosquee",
-      "versionCode": 39
+      "versionCode": 40
     },
     "extra": {
       "eas": {
