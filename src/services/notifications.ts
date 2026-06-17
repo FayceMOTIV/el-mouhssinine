@@ -3,7 +3,6 @@ import notifee, {
   RepeatFrequency,
   AndroidImportance,
   AndroidStyle,
-  AndroidStyle,
   TimestampTrigger,
   EventType,
 } from '@notifee/react-native';
