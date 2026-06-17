@@ -87,7 +87,7 @@ android {
         applicationId "fr.elmouhssinine.mosquee"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 46
+        versionCode 47
         versionName "1.2.0"
     }
     signingConfigs {
