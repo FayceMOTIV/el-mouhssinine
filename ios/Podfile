@@ -54,8 +54,7 @@ target 'ElMouhssinine' do
         config.build_settings['CODE_SIGN_IDENTITY'] = ''
         config.build_settings['DEVELOPMENT_TEAM'] = '5ZR87TPM89'
         config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
-        config.build_settings['SWIFT_VERSION'] = '5.0'
-        config.build_settings['OTHER_SWIFT_FLAGS'] = '$(inherited) -swift-version 5'
+        config.build_settings['SWIFT_VERSION'] = '5.9'
       end
     end
   end
