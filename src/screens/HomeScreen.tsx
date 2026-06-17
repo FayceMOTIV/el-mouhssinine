@@ -49,6 +49,8 @@ import {
   subscribeToMosqueeInfo,
   subscribeToGeneralSettings,
   subscribeToRamadanSettings,
+  subscribeToServices,
+  MosqueService,
   IqamaDelays,
   JumuaTimes,
   addMinutesToTime,
@@ -169,6 +171,7 @@ const HomeScreen = () => {
 
   const [showCalendar, setShowCalendar] = useState(false);
   const [showServicesModal, setShowServicesModal] = useState(false);
+  const [mosqueServices, setMosqueServices] = useState<MosqueService[]>([]);
   const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null);
   const [parisTime, setParisTime] = useState('');
   const [rawPrayerTimings, setRawPrayerTimings] =
@@ -510,6 +513,8 @@ const HomeScreen = () => {
       }
     });
 
+    const unsubServices = subscribeToServices(setMosqueServices);
+
     // Subscriptions aux popups Firebase - File d'attente multi-popups
     const unsubPopups = subscribeToPopups(async popups => {
       logger.log(`[HomeScreen] Popups reçus: ${popups?.length || 0}`);
@@ -528,6 +533,7 @@ const HomeScreen = () => {
       unsubGeneralSettings?.();
       unsubRamadan?.();
       unsubPopups?.();
+      unsubServices?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1454,35 +1460,8 @@ const HomeScreen = () => {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.servicesModalGrid}>
-                {[
-                  { icon: '🅿️', labelKey: 'parking', descKey: 'parkingDesc' },
-                  {
-                    icon: '♿',
-                    labelKey: 'accessHandicapes',
-                    descKey: 'accessHandicapesDesc',
-                  },
-                  {
-                    icon: '💧',
-                    labelKey: 'salleAblution',
-                    descKey: 'salleAblutionDesc',
-                  },
-                  {
-                    icon: '👩',
-                    labelKey: 'espaceFemmes',
-                    descKey: 'espaceFemmesDesc',
-                  },
-                  {
-                    icon: '📚',
-                    labelKey: 'coursAdultes',
-                    descKey: 'coursAdultesDesc',
-                  },
-                  {
-                    icon: '👶',
-                    labelKey: 'coursEnfants',
-                    descKey: 'coursEnfantsDesc',
-                  },
-                ].map((service, index) => (
-                  <View key={index} style={styles.servicesModalItem}>
+                {mosqueServices.map(service => (
+                  <View key={service.id} style={styles.servicesModalItem}>
                     <View style={styles.servicesModalItemIcon}>
                       <Text style={styles.servicesModalItemIconText}>
                         {service.icon}
@@ -1495,18 +1474,25 @@ const HomeScreen = () => {
                           isRTL && styles.rtlText,
                         ]}
                       >
-                        {t(service.labelKey as any)}
+                        {isRTL ? service.labelAr : service.label}
                       </Text>
                       <Text
                         style={[
                           styles.servicesModalItemDesc,
                           isRTL && styles.rtlText,
+                          !service.available && {color: '#e74c3c'},
                         ]}
                       >
-                        {isRTL ? 'متوفر' : 'Disponible'}
+                        {service.available
+                          ? (isRTL ? 'متوفر' : 'Disponible')
+                          : (isRTL ? 'غير متوفر' : 'Indisponible')}
                       </Text>
                     </View>
-                    <Text style={styles.servicesModalItemCheck}>✓</Text>
+                    {service.available ? (
+                      <Text style={styles.servicesModalItemCheck}>✓</Text>
+                    ) : (
+                      <Text style={[styles.servicesModalItemCheck, {color: '#e74c3c'}]}>✗</Text>
+                    )}
                   </View>
                 ))}
               </View>

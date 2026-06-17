@@ -2076,6 +2076,38 @@ export const subscribeToReglement = (
   }
 };
 
+// ==================== SERVICES & ACTIVITÉS ====================
+
+export interface MosqueService {
+  id: string;
+  icon: string;
+  label: string;
+  labelAr: string;
+  available: boolean;
+  order: number;
+}
+
+export const subscribeToServices = (
+  callback: (services: MosqueService[]) => void,
+): (() => void) => {
+  return firestore()
+    .collection('services')
+    .orderBy('order', 'asc')
+    .onSnapshot(
+      snapshot => {
+        const services = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as MosqueService[];
+        callback(services);
+      },
+      error => {
+        logger.error('[Firebase] subscribeToServices error:', error);
+        callback(mockServices.map((s, i) => ({ ...s, id: `mock-${i}`, order: i })));
+      },
+    );
+};
+
 // ==================== SERVICES & ACTIVITÉS (statiques) ====================
 
 export const getServices = () => mockServices;
