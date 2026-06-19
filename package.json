@@ -30,6 +30,7 @@
     "@stripe/stripe-react-native": "^0.57.2",
     "expo": "~55.0.0",
     "expo-location": "~55.1.10",
+    "expo-modules-core": "55.0.17",
     "expo-sensors": "~55.0.15",
     "expo-updates": "~55.0.15",
     "react": "19.2.0",
