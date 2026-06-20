@@ -57,11 +57,19 @@ target 'ElMouhssinine' do
         if target.name.start_with?("Expo") || target.name.start_with?("EX")
           config.build_settings["OTHER_SWIFT_FLAGS"] = "$(inherited) -Xfrontend -strict-concurrency=minimal"
         end
-        # Fix fmt 11.0.2 "consteval not a constant expression" with Xcode 26 / iOS 26 SDK clang.
-        # Disable fmt compile-time format-string check (FMT_CONSTEVAL becomes empty -> runtime check).
-        existing_defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
-        existing_defs = [existing_defs] unless existing_defs.is_a?(Array)
-        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = existing_defs + ['FMT_USE_CONSTEVAL=0']
+      end
+    end
+
+    # Fix fmt 11.0.2 "consteval not a constant expression" with Xcode 26 / iOS 26 SDK clang.
+    # Patch the fmt header directly so FMT_USE_CONSTEVAL=0 applies to EVERY consumer
+    # (app target + all pods), disabling compile-time format-string consteval check.
+    fmt_headers = Dir.glob(File.join(installer.sandbox.root.to_s, 'fmt', 'include', 'fmt', '{base,core}.h'))
+    fmt_headers.each do |header|
+      contents = File.read(header)
+      unless contents.include?('FMT_USE_CONSTEVAL forced to 0')
+        File.chmod(0644, header)
+        File.write(header, "// FMT_USE_CONSTEVAL forced to 0 for Xcode 26 / iOS 26 SDK compat\n#ifndef FMT_USE_CONSTEVAL\n#define FMT_USE_CONSTEVAL 0\n#endif\n" + contents)
+        Pod::UI.puts "[fmt-patch] FMT_USE_CONSTEVAL=0 injected into #{header}"
       end
     end
   end
