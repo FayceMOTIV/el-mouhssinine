@@ -66,10 +66,14 @@ target 'ElMouhssinine' do
     fmt_headers = Dir.glob(File.join(installer.sandbox.root.to_s, 'fmt', 'include', 'fmt', '{base,core}.h'))
     fmt_headers.each do |header|
       contents = File.read(header)
-      unless contents.include?('FMT_USE_CONSTEVAL forced to 0')
+      # fmt's own detection block (#elif defined(__cpp_consteval)) sets it to 1 on
+      # Xcode 26 clang, overriding any external -D. Force the detection result to 0.
+      if contents.include?('#  define FMT_USE_CONSTEVAL 1')
         File.chmod(0644, header)
-        File.write(header, "// FMT_USE_CONSTEVAL forced to 0 for Xcode 26 / iOS 26 SDK compat\n#ifndef FMT_USE_CONSTEVAL\n#define FMT_USE_CONSTEVAL 0\n#endif\n" + contents)
-        Pod::UI.puts "[fmt-patch] FMT_USE_CONSTEVAL=0 injected into #{header}"
+        patched = contents.gsub('#  define FMT_USE_CONSTEVAL 1',
+                                '#  define FMT_USE_CONSTEVAL 0  // forced off: Xcode 26 clang consteval incompat')
+        File.write(header, patched)
+        Pod::UI.puts "[fmt-patch] FMT_USE_CONSTEVAL forced to 0 in #{header}"
       end
     end
   end
