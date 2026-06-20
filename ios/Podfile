@@ -57,6 +57,11 @@ target 'ElMouhssinine' do
         if target.name.start_with?("Expo") || target.name.start_with?("EX")
           config.build_settings["OTHER_SWIFT_FLAGS"] = "$(inherited) -Xfrontend -strict-concurrency=minimal"
         end
+        # Fix fmt 11.0.2 "consteval not a constant expression" with Xcode 26 / iOS 26 SDK clang.
+        # Disable fmt compile-time format-string check (FMT_CONSTEVAL becomes empty -> runtime check).
+        existing_defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+        existing_defs = [existing_defs] unless existing_defs.is_a?(Array)
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = existing_defs + ['FMT_USE_CONSTEVAL=0']
       end
     end
   end
