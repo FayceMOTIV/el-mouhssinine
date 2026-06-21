@@ -17,13 +17,16 @@
     },
     "android": {
       "package": "fr.elmouhssinine.mosquee",
-      "versionCode": 47
+      "versionCode": 48
     },
     "extra": {
       "eas": {
         "projectId": "2b193d8f-2732-47c8-938a-336945c5fc84"
       }
     },
-    "owner": "fayce"
+    "owner": "fayce",
+    "plugins": [
+      "react-native-edge-to-edge"
+    ]
   }
 }
