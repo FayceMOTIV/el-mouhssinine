@@ -74,6 +74,7 @@ import {
   markPrayerAsPrayed,
   getRamadanNotificationSettings,
   scheduleRamadanNotifications,
+  cancelRamadanNotifications,
 } from '../services/prayerNotifications';
 import { setInAppNotificationCallback } from '../services/notifications';
 import auth from '@react-native-firebase/auth';
@@ -615,7 +616,13 @@ const HomeScreen = () => {
   useFocusEffect(
     useCallback(() => {
       const scheduleRamadan = async () => {
-        if (!rawPrayerTimings || !ramadanSettings?.enabled) return;
+        if (!rawPrayerTimings) return;
+        // Mode Ramadan desactive cote serveur : annuler tout rappel residuel
+        // deja programme sur l'appareil (arret immediat, pas d'attente du tail).
+        if (!ramadanSettings?.enabled) {
+          await cancelRamadanNotifications();
+          return;
+        }
         try {
           const settings = await getRamadanNotificationSettings();
           const anyEnabled =
@@ -646,6 +653,7 @@ const HomeScreen = () => {
             ramadanSettings.tarawihTime,
             settings,
             translations,
+            ramadanSettings.endDate,
           );
           logger.log('[HomeScreen] Ramadan notifications auto-schedulées');
         } catch (error) {

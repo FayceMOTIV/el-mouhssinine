@@ -456,6 +456,7 @@ const MoreScreen = () => {
             ramadanSettings.tarawihTime,
             newSettings,
             translations,
+            ramadanSettings.endDate,
           );
         } catch (error) {
           console.warn('[MoreScreen] Erreur Ramadan scheduling:', error);
