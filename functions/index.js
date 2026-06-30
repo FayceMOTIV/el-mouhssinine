@@ -34,10 +34,11 @@ const STRIPE_SECRET_KEY = defineString('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineString('STRIPE_WEBHOOK_SECRET');
 // OpenAI key optionnelle — via .env ou firebase functions:secrets:set
 const OPENAI_API_KEY_ENV = process.env.OPENAI_API_KEY || '';
+const MISTRAL_API_KEY_ENV = process.env.MISTRAL_API_KEY || '';
 const BREVO_SMTP_USER = process.env.BREVO_SMTP_USER || '';
 const BREVO_SMTP_PASS = process.env.BREVO_SMTP_PASS || '';
 const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || '';
-const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'Mosquée El Mohsinine';
+const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'Mosquée El Mouhssinine';
 
 // Initialiser Stripe de manière lazy (évite le warning "value() invoked during deployment")
 let _stripe;
@@ -140,6 +141,67 @@ const createNotifBO = async ({ type, titre, message, membreId = null, membreNom 
 };
 
 /**
+ * Envoie un push aux ADMINS actifs (patron + équipe) sur leurs appareils.
+ * Utilisé pour les événements business (don reçu, etc.). Ne bloque jamais le flux.
+ */
+const sendPushToAdmins = async (title, body, data = {}, apnsOptions = {}) => {
+  try {
+    const adminsSnap = await admin.firestore().collection('admins').where('actif', '==', true).get();
+    if (adminsSnap.empty) return;
+    const adminIds = adminsSnap.docs.map((d) => d.id);
+    const tokens = [];
+    for (let i = 0; i < adminIds.length; i += 30) {
+      const batchIds = adminIds.slice(i, i + 30);
+      const membersSnap = await admin.firestore()
+        .collection('members')
+        .where(admin.firestore.FieldPath.documentId(), 'in', batchIds)
+        .get();
+      membersSnap.docs.forEach((mDoc) => {
+        const md = mDoc.data();
+        if (Array.isArray(md.fcmTokens)) tokens.push(...md.fcmTokens);
+        else if (md.fcmToken) tokens.push(md.fcmToken);
+      });
+    }
+    const uniqueTokens = [...new Set(tokens)];
+    if (uniqueTokens.length === 0) {
+      console.log('[PushAdmins] Aucun token admin — skip (normal si app non installée)');
+      return;
+    }
+    const apsPayload = { sound: 'default', badge: 1 };
+    if (apnsOptions.category) apsPayload.category = apnsOptions.category;
+    if (apnsOptions.threadId) apsPayload['thread-id'] = apnsOptions.threadId;
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens: uniqueTokens,
+      notification: { title, body },
+      data: { ...data },
+      apns: { payload: { aps: apsPayload } },
+      android: { priority: 'high' },
+    });
+    console.log(`[PushAdmins] Push envoyé à ${uniqueTokens.length} appareil(s) admin`);
+    // Nettoyage des tokens FCM invalides (sinon accumulation indéfinie)
+    const invalidAdminTokens = [];
+    response.responses.forEach((resp, i) => {
+      if (!resp.success) {
+        const code = resp.error && resp.error.code;
+        if (code === 'messaging/invalid-registration-token' || code === 'messaging/registration-token-not-registered') {
+          invalidAdminTokens.push(uniqueTokens[i]);
+        }
+      }
+    });
+    if (invalidAdminTokens.length > 0) {
+      await Promise.all(adminIds.map((id) =>
+        admin.firestore().collection('members').doc(id)
+          .update({ fcmTokens: admin.firestore.FieldValue.arrayRemove(...invalidAdminTokens) })
+          .catch(() => {})
+      ));
+      console.log(`[PushAdmins] ${invalidAdminTokens.length} token(s) invalide(s) nettoyé(s)`);
+    }
+  } catch (err) {
+    console.log('[PushAdmins] Push admin non envoyé:', err.message);
+  }
+};
+
+/**
  * Envoie une notification push à un membre via ses tokens FCM (multi-device)
  * Supporte le fallback depuis l'ancien champ fcmToken (string) vers fcmTokens (array)
  * Auto-cleanup des tokens invalides
@@ -148,11 +210,36 @@ const createNotifBO = async ({ type, titre, message, membreId = null, membreNom 
  * @param {string} body - Corps de la notification
  * @param {Object} data - Données supplémentaires (optionnel)
  */
+/**
+ * Écrit une notification dans le centre de notifications (Firestore).
+ * target = { uid } pour un utilisateur précis, ou { audience: 'all' } pour un broadcast.
+ * Permet à l'app mobile d'afficher l'historique des notifs même app fermée (contourne limite iOS).
+ */
+const writeUserNotif = async (target, { title, body, type = 'other', data = {} }) => {
+  try {
+    await admin.firestore().collection('user_notifications').add({
+      userId: target.uid || null,
+      audience: target.audience || (target.uid ? 'user' : 'all'),
+      title: title || '',
+      body: body || '',
+      type,
+      data: data || {},
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.error('writeUserNotif error:', e.message);
+  }
+};
+
 const sendPushToMember = async (uid, title, body, data = {}, apnsOptions = {}) => {
   if (!uid) return;
   try {
     const memberDoc = await admin.firestore().collection('members').doc(uid).get();
     if (!memberDoc.exists) return;
+
+    // Centre de notifications in-app : enregistrer la notif (visible même app fermée)
+    await writeUserNotif({ uid }, { title, body, type: data.type || 'other', data });
 
     const memberData = memberDoc.data();
     // Multi-device: utiliser fcmTokens (array) avec fallback fcmToken (string rétrocompat)
@@ -164,11 +251,10 @@ const sendPushToMember = async (uid, title, body, data = {}, apnsOptions = {}) =
     }
 
     if (tokens.length === 0) {
-      await logServerError(
-        'Push non envoyé — aucun token FCM valide pour ce membre',
-        'sendPushToMember_no_tokens',
-        { uid, title }
-      );
+      // Condition NORMALE (membre sans app / notifs non activées / donateur web).
+      // Le centre de notifs in-app a déjà enregistré la notif via writeUserNotif.
+      // -> simple log, surtout pas une alerte bug.
+      console.log(`[FCM] Pas de token pour ${uid.substring(0, 8)}... (${title}) — notif in-app uniquement`);
       return;
     }
 
@@ -369,7 +455,7 @@ const textToEmailHtml = (body, options = {}) => {
   if (headerTitle) {
     headerHtml = `
       <div style="background: linear-gradient(135deg, ${headerGradient}); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-        <h1 style="color: white; margin: 0;">${headerTitle}</h1>
+        <h1 style="color: white; margin: 0;">${escapeHtml(headerTitle)}</h1>
       </div>`;
   }
 
@@ -378,9 +464,9 @@ const textToEmailHtml = (body, options = {}) => {
     footerHtml = `
       <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
       <div style="font-size: 13px; color: #888; text-align: center;">
-        <p style="margin: 5px 0;"><strong>${footerAssociation}</strong></p>
-        ${footerAdresse ? `<p style="margin: 5px 0;">📍 ${footerAdresse}</p>` : ''}
-        ${footerTelephone ? `<p style="margin: 5px 0;">📞 ${footerTelephone}</p>` : ''}
+        <p style="margin: 5px 0;"><strong>${escapeHtml(footerAssociation)}</strong></p>
+        ${footerAdresse ? `<p style="margin: 5px 0;">📍 ${escapeHtml(footerAdresse)}</p>` : ''}
+        ${footerTelephone ? `<p style="margin: 5px 0;">📞 ${escapeHtml(footerTelephone)}</p>` : ''}
       </div>`;
   }
 
@@ -411,40 +497,237 @@ exports.onNewAnnouncement = functions
   .document('announcements/{announcementId}')
   .onCreate(async (snap, context) => {
     const announcement = snap.data();
-    console.log('Nouvelle annonce créée:', context.params.announcementId, '- actif:', announcement.actif);
+    const docId = context.params.announcementId;
+    console.log('Nouvelle annonce créée:', docId, '- actif:', announcement.actif);
+
+    if (!announcement.actif) {
+      console.log('Annonce inactive, pas de notification push');
+      return null;
+    }
+
+    const title = '🕌 ' + (announcement.titre || 'Nouvelle annonce');
+    const fullBody = String(announcement.contenu || announcement.message || '').slice(0, 1000);
+    const body = truncate(fullBody, 150);
+
+    const message = {
+      notification: { title, body },
+      data: { type: 'announcement', id: docId, fullBody },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+            category: 'ANNOUNCEMENT',
+            'thread-id': 'announcements',
+          },
+        },
+      },
+      android: {
+        priority: 'high',
+        notification: { sound: 'default', channelId: 'announcements' },
+      },
+      topic: 'announcements',
+    };
+
+    try {
+      const response = await admin.messaging().send(message);
+      console.log('Notification annonce envoyée:', response);
+      await writeUserNotif({ audience: 'all' }, { title, body: String(announcement.contenu || announcement.message || '').slice(0, 2000), type: 'announcement', data: { type: 'announcement', id: docId } });
+
+      await snap.ref.update({
+        notificationSent: true,
+        notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await admin.firestore().collection('notifications_history').add({
+        titre: title,
+        message: body,
+        topic: 'announcements',
+        type: 'auto_announcement',
+        envoyeePar: 'system',
+        envoyeeA: new Date(),
+        messageId: response,
+      });
+    } catch (error) {
+      console.error('Erreur notification annonce:', error);
+    }
+
     return null;
   });
 
 // ==================== NOTIFICATION ÉVÉNEMENT ====================
 // Trigger : quand un nouvel événement est créé
 
-// NOTE: Pas d'envoi push auto — l'admin envoie via le bouton backoffice
 exports.onNewEvent = functions
   .region('europe-west1')
   .firestore
   .document('events/{eventId}')
   .onCreate(async (snap, context) => {
     const event = snap.data();
-    console.log('Nouvel événement créé:', context.params.eventId, '- actif:', event.actif);
+    const docId = context.params.eventId;
+    console.log('Nouvel événement créé:', docId, '- actif:', event.actif);
+
+    if (!event.actif) {
+      console.log('Événement inactif, pas de notification push');
+      return null;
+    }
+
+    const title = '📅 ' + (event.titre || 'Nouvel événement');
+    const fullBody = String(event.description || event.contenu || '').slice(0, 1000);
+    const body = truncate(fullBody, 150);
+
+    const message = {
+      notification: { title, body },
+      data: { type: 'event', id: docId, fullBody },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+            category: 'EVENT',
+            'thread-id': 'events',
+          },
+        },
+      },
+      android: {
+        priority: 'high',
+        notification: { sound: 'default', channelId: 'events' },
+      },
+      topic: 'events',
+    };
+
+    try {
+      const response = await admin.messaging().send(message);
+      console.log('Notification événement envoyée:', response);
+      await writeUserNotif({ audience: 'all' }, { title, body: String(event.description || event.contenu || '').slice(0, 2000), type: 'event', data: { type: 'event', id: docId } });
+
+      await snap.ref.update({
+        notificationSent: true,
+        notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await admin.firestore().collection('notifications_history').add({
+        titre: title,
+        message: body,
+        topic: 'events',
+        type: 'auto_event',
+        envoyeePar: 'system',
+        envoyeeA: new Date(),
+        messageId: response,
+      });
+    } catch (error) {
+      console.error('Erreur notification événement:', error);
+    }
+
     return null;
   });
 
 // ==================== NOTIFICATION JANAZA ====================
 // Trigger : quand une nouvelle Salat Janaza est créée (URGENT)
 
-// NOTE: Pas d'envoi push auto — l'admin envoie via le bouton backoffice
+// Helper partage : envoie le push janaza vers le topic + ecrit l'historique.
+// Pose un garde idempotent via notificationSent (evite tout double envoi /
+// toute recursion sur le onUpdate ci-dessous).
+async function sendJanazaPush(ref, docId, janaza) {
+  const title = '🕌 Salat Janaza' + (janaza.nomDefunt ? ' — ' + janaza.nomDefunt : '');
+  const bodyParts = [];
+  if (janaza.nomDefunt) bodyParts.push(janaza.nomDefunt);
+  if (janaza.heurePriere) bodyParts.push('à ' + janaza.heurePriere);
+  if (janaza.lieu) bodyParts.push(janaza.lieu);
+  const fullBody = bodyParts.length > 0 ? bodyParts.join(' · ') : 'Un avis de Janaza a été publié';
+
+  const message = {
+    notification: { title, body: truncate(fullBody, 150) },
+    data: { type: 'janaza', id: docId, fullBody },
+    apns: {
+      payload: {
+        aps: {
+          sound: 'default',
+          badge: 1,
+          category: 'JANAZA',
+          'thread-id': 'janaza',
+          'interruption-level': 'time-sensitive',
+        },
+      },
+    },
+    android: {
+      priority: 'high',
+      notification: { sound: 'default', channelId: 'janaza_channel' },
+    },
+    topic: 'janaza',
+  };
+
+  try {
+    const response = await admin.messaging().send(message);
+    console.log('Notification janaza envoyée:', response);
+    await writeUserNotif({ audience: 'all' }, { title, body: String(fullBody).slice(0, 2000), type: 'janaza', data: { type: 'janaza', id: docId } });
+
+    await ref.update({
+      notificationSent: true,
+      notificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await admin.firestore().collection('notifications_history').add({
+      titre: title,
+      message: fullBody,
+      topic: 'janaza',
+      type: 'auto_janaza',
+      envoyeePar: 'system',
+      envoyeeA: new Date(),
+      messageId: response,
+    });
+  } catch (error) {
+    console.error('Erreur notification janaza:', error);
+  }
+}
+
 exports.onNewJanaza = functions
   .region('europe-west1')
   .firestore
   .document('janaza/{janazaId}')
   .onCreate(async (snap, context) => {
     const janaza = snap.data();
-    console.log('Nouvelle janaza créée:', context.params.janazaId, '- actif:', janaza.actif);
+    const docId = context.params.janazaId;
+    console.log('Nouvelle janaza créée:', docId, '- actif:', janaza.actif);
+
     await createNotifBO({
       type: 'janaza',
       titre: '🕌 Avis de Janaza',
-      message: `Un avis de Janaza a été publié${janaza.nom ? ' (' + janaza.nom + ')' : ''}`,
+      message: `Un avis de Janaza a été publié${janaza.nomDefunt ? ' (' + janaza.nomDefunt + ')' : ''}`,
     });
+
+    if (!janaza.actif) {
+      console.log('Janaza inactive, pas de notification push');
+      return null;
+    }
+
+    await sendJanazaPush(snap.ref, docId, janaza);
+    return null;
+  });
+
+// Trigger : quand une janaza existante est ACTIVEE (actif false -> true).
+// Couvre le cas "creee en masque puis affichee", ou editee/republiee :
+// onCreate ne se declenche pas sur un update, donc la notif n'etait jamais
+// envoyee. Le garde notificationSent !== true evite tout double envoi et
+// toute recursion (l'update notificationSent=true repasse ici mais sort).
+exports.onJanazaActivated = functions
+  .region('europe-west1')
+  .firestore
+  .document('janaza/{janazaId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    const docId = context.params.janazaId;
+
+    const becameActive = before.actif !== true && after.actif === true;
+    const alreadyNotified = after.notificationSent === true;
+
+    if (!becameActive || alreadyNotified) {
+      return null;
+    }
+
+    console.log('Janaza activée (update), envoi notif:', docId);
+    await sendJanazaPush(change.after.ref, docId, after);
     return null;
   });
 
@@ -469,14 +752,16 @@ exports.onNewPopup = functions
       return null;
     }
 
+    const popupFullBody = String(popup.contenu || popup.message || '').slice(0, 1000);
     const message = {
       notification: {
         title: '🕌 ' + (popup.titre || 'Nouveau message'),
-        body: truncate(popup.contenu || popup.message, 150),
+        body: truncate(popupFullBody, 150),
       },
       data: {
         type: 'popup',
         id: context.params.popupId,
+        fullBody: popupFullBody,
       },
       apns: {
         payload: {
@@ -500,6 +785,7 @@ exports.onNewPopup = functions
     try {
       const response = await admin.messaging().send(message);
       console.log('Notification popup envoyée:', response);
+      await writeUserNotif({ audience: 'all' }, { title: '🕌 ' + (popup.titre || 'Nouveau message'), body: String(popup.contenu || popup.message || '').slice(0, 2000), type: 'popup', data: { type: 'popup', id: context.params.popupId } });
 
       await snap.ref.update({
         notificationSent: true,
@@ -567,7 +853,8 @@ exports.onNotificationFromBackoffice = functions
 
     const fcmTopic = topicMapping[notification.topic] || 'general';
     const notifTitle = notification.titre || 'Notification';
-    const notifBody = truncate(notification.message, 200);
+    const notifBody = truncate(notification.message, 120); // PUSH (ecran verrouille) : apercu court
+    const notifBodyFull = String(notification.message || '').slice(0, 2000); // IN-APP : message complet developpe (affiche au tap)
 
     // Map topic to APNs category + thread-id for Apple Watch actions
     const categoryMapping = {
@@ -589,6 +876,7 @@ exports.onNotificationFromBackoffice = functions
         type: 'backoffice_notification',
         id: context.params.notificationId,
         click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        fullBody: notifBodyFull,
       },
       // Configuration spécifique iOS/APNs
       apns: {
@@ -625,6 +913,7 @@ exports.onNotificationFromBackoffice = functions
     try {
       const response = await admin.messaging().send(message);
       console.log('🔔 Notification backoffice envoyée:', response);
+      await writeUserNotif({ audience: 'all' }, { title: notifTitle, body: notifBodyFull, type: notification.topic || 'other' });
 
       // Marquer comme envoyée
       await change.after.ref.update({
@@ -693,26 +982,39 @@ exports.sendManualNotification = functions
       );
     }
 
+    // SECURITE: whitelist des topics FCM autorisés (empêche l'envoi sur un topic arbitraire)
+    const ALLOWED_TOPICS = new Set(['general', 'announcements', 'events', 'janaza', 'members', 'non_members']);
+    const safeTopic = (topic && ALLOWED_TOPICS.has(topic)) ? topic : 'general';
+    const safeTitle = sanitizeString(title, 100);
+    const safeBody = sanitizeString(body, 500);
+
     // SECURITE: whitelist des clés customData autorisées dans le payload FCM
-    const ALLOWED_DATA_KEYS = new Set(['screen', 'eventId', 'announcementId', 'url', 'category']);
+    const ALLOWED_DATA_KEYS = new Set(['screen', 'eventId', 'announcementId', 'url', 'category', 'type', 'id', 'fullBody']);
     const safeCustomData = {};
     if (customData && typeof customData === 'object') {
       for (const [k, v] of Object.entries(customData)) {
-        if (ALLOWED_DATA_KEYS.has(k) && typeof v === 'string' && v.length <= 200) {
+        const maxLen = k === 'fullBody' ? 1000 : 200;
+        if (ALLOWED_DATA_KEYS.has(k) && typeof v === 'string' && v.length <= maxLen) {
           safeCustomData[k] = v;
         }
       }
     }
 
+    // Un avis de décès (janaza) doit partir en priorité haute / time-sensitive,
+    // pas comme une annonce banale (sinon silencé en mode Focus iOS / mauvais channel Android).
+    // Les autres sujets gardent le comportement existant.
+    const isJanaza = safeTopic === 'janaza';
+    const manualFullBody = String(safeBody).slice(0, 1000);
     const message = {
       notification: {
-        title: title,
-        body: truncate(body, 200),
+        title: safeTitle,
+        body: truncate(safeBody, 200),
       },
       data: {
-        type: 'manual',
+        type: isJanaza ? 'janaza' : 'manual',
         sentBy: context.auth.uid,
         sentAt: new Date().toISOString(),
+        fullBody: manualFullBody,
         ...safeCustomData,
       },
       apns: {
@@ -720,8 +1022,9 @@ exports.sendManualNotification = functions
           aps: {
             sound: 'default',
             badge: 1,
-            category: 'ANNOUNCEMENT',
-            'thread-id': 'announcements',
+            category: isJanaza ? 'JANAZA' : 'ANNOUNCEMENT',
+            'thread-id': isJanaza ? 'janaza' : 'announcements',
+            ...(isJanaza && { 'interruption-level': 'time-sensitive' }),
           },
         },
       },
@@ -729,21 +1032,22 @@ exports.sendManualNotification = functions
         priority: 'high',
         notification: {
           sound: 'default',
-          channelId: 'general',
+          channelId: isJanaza ? 'janaza_channel' : 'general',
         },
       },
-      topic: topic || 'general',
+      topic: safeTopic,
     };
 
     try {
       const response = await admin.messaging().send(message);
       console.log('Notification manuelle envoyée:', response);
+      await writeUserNotif({ audience: 'all' }, { title, body: String(body || '').slice(0, 2000), type: 'manual', data: safeCustomData });
 
       // Enregistrer dans Firestore pour historique
       await admin.firestore().collection('notifications_history').add({
         title,
         body,
-        topic: topic || 'general',
+        topic: safeTopic,
         sentBy: context.auth.uid,
         sentAt: admin.firestore.FieldValue.serverTimestamp(),
         messageId: response,
@@ -758,7 +1062,7 @@ exports.sendManualNotification = functions
       await admin.firestore().collection('notifications_history').add({
         title,
         body,
-        topic: topic || 'general',
+        topic: safeTopic,
         sentBy: context.auth.uid,
         sentAt: admin.firestore.FieldValue.serverTimestamp(),
         error: error.message,
@@ -966,6 +1270,7 @@ exports.getNotificationStats = functions
 
 exports.onNewMessage = functions
   .region('europe-west1')
+  .runWith({ secrets: ['BREVO_SMTP_PASS'] })
   .firestore
   .document('messages/{messageId}')
   .onCreate(async (snap, context) => {
@@ -991,66 +1296,28 @@ exports.onNewMessage = functions
 
     console.log('📩 Nouveau message de', userName, '- sujet:', sujet);
 
-    // === 1. Push notification aux admins ===
+    // === 1. Notification backoffice (cloche) — PAS de push mobile (option B) ===
+    // Les messages des usagers sont privés : les admins les consultent uniquement
+    // depuis le backoffice (cloche + page Messages), pas de push sur leur téléphone perso.
     try {
-      const adminsSnapshot = await admin.firestore().collection('admins')
-        .where('actif', '==', true)
-        .get();
-
-      if (!adminsSnapshot.empty) {
-        const adminIds = adminsSnapshot.docs.map(doc => doc.id);
-        const adminTokens = [];
-        const batchSize = 30;
-
-        for (let i = 0; i < adminIds.length; i += batchSize) {
-          const batchIds = adminIds.slice(i, i + batchSize);
-          const membersSnapshot = await admin.firestore()
-            .collection('members')
-            .where(admin.firestore.FieldPath.documentId(), 'in', batchIds)
-            .get();
-
-          membersSnapshot.docs.forEach(memberDoc => {
-            const md = memberDoc.data();
-            if (Array.isArray(md.fcmTokens)) {
-              adminTokens.push(...md.fcmTokens);
-            } else if (md.fcmToken) {
-              adminTokens.push(md.fcmToken);
-            }
-          });
-        }
-
-        if (adminTokens.length > 0) {
-          const pushMessage = {
-            notification: {
-              title: '📩 Nouveau message',
-              body: `${userName} : ${sujet}`,
-            },
-            data: {
-              type: 'new_message',
-              messageId: messageId,
-              click_action: 'FLUTTER_NOTIFICATION_CLICK',
-            },
-            apns: {
-              headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
-              payload: { aps: { sound: 'default', badge: 1, category: 'MESSAGE', 'thread-id': 'messages' } },
-            },
-            android: {
-              priority: 'high',
-              notification: { sound: 'default', channelId: 'messages' },
-            },
-          };
-
-          const responses = await admin.messaging().sendEachForMulticast({
-            tokens: adminTokens,
-            ...pushMessage,
-          });
-
-          console.log('🔔 Push admins:', responses.successCount, '/', adminTokens.length);
-        }
-      }
-    } catch (pushError) {
-      console.error('⚠️ Erreur push nouveau message:', pushError.message);
+      await createNotifBO({
+        type: 'message',
+        titre: '📩 Nouveau message',
+        message: `${userName} a envoyé un message : ${sujet}`,
+        membreNom: userName,
+      });
+    } catch (notifErr) {
+      console.error('⚠️ Erreur notif BO nouveau message:', notifErr.message);
     }
+
+    // Notif PUSH sur l'iPhone/desktop des admins (aperçu seulement, contenu privé non inclus)
+    try {
+      await require('./pushNotif').sendAdminPush(
+        '📩 Nouveau message',
+        `${userName} : ${sujet}`,
+        'https://el-mouhssinine.web.app',
+      );
+    } catch (e) { console.error('sendAdminPush message:', e.message); }
 
     // === 2. Email aux admins ===
     try {
@@ -1183,6 +1450,7 @@ exports.onNewMessage = functions
 
 exports.onMessageReply = functions
   .region('europe-west1')
+  .runWith({ secrets: ['BREVO_SMTP_PASS'] })
   .firestore
   .document('messages/{messageId}')
   .onUpdate(async (change, context) => {
@@ -1573,13 +1841,21 @@ exports.createPaymentIntent = functions
       const piOptions = idempotencyKey
         ? { idempotencyKey: `pi_${idempotencyKey}` }
         : {};
+      // SECURITE [22]: ne propager que les clés metadata attendues (pas de spread brut du client)
+      const ALLOWED_PI_META = ['type','memberId','memberIdDisplay','memberName','email','period','montantCotisation','montantDon','donorType','donorInfo','donorName','donorEmail','donateurEmail','donorUid','isAnonymous','projectId','projectName','membersCount','uid'];
+      const safeMeta = {};
+      if (metadata && typeof metadata === 'object') {
+        for (const k of ALLOWED_PI_META) {
+          if (metadata[k] !== undefined && metadata[k] !== null) safeMeta[k] = String(metadata[k]).slice(0, 500);
+        }
+      }
       const paymentIntent = await stripe.paymentIntents.create(
         {
           amount: amount, // déjà en centimes
           currency: currency,
           description: description || 'Don Mosquée El Mohsinine',
           metadata: {
-            ...metadata,
+            ...safeMeta,
             userId: userId,
             source: 'app_mobile',
             createdAt: new Date().toISOString(),
@@ -1656,7 +1932,9 @@ exports.createSubscription = functions
       }
     } catch (priceCheckErr) {
       if (priceCheckErr.code === 'functions/invalid-argument') throw priceCheckErr;
-      console.warn('createSubscription: vérification prix échouée:', priceCheckErr.message);
+      // Fail-closed (cohérent avec createPaymentIntent) : ne jamais laisser passer un montant non vérifié
+      console.error('createSubscription: vérification prix impossible:', priceCheckErr.message);
+      throw new functions.https.HttpsError('failed-precondition', 'Vérification du montant impossible. Veuillez réessayer.');
     }
 
     // SECURITE: utiliser l'email Firebase Auth (vérifié) au lieu du client
@@ -1818,7 +2096,7 @@ exports.createSubscription = functions
 // Avec idempotence et transactions atomiques
 
 exports.stripeWebhook = functions
-  .runWith({
+  .runWith({ secrets: ['BREVO_SMTP_PASS'],
     timeoutSeconds: 60,
     memory: '256MB',
     minInstances: 1,
@@ -1841,7 +2119,7 @@ exports.stripeWebhook = functions
     } catch (err) {
       console.error('Erreur signature webhook:', err.message);
       await logServerError(err.message ?? String(err), 'stripeWebhook', { stack: err.stack });
-      return res.status(400).send(`Webhook Error: ${err.message}`);
+      return res.status(400).send('Webhook Error');
     }
 
     // Gérer les différents événements
@@ -2010,7 +2288,7 @@ exports.stripeWebhook = functions
                   donateurEmail: (metadata.email || metadata.donorEmail || metadata.donateurEmail || '').toLowerCase() || null,
                   userId: (() => {
                     const uid = metadata.memberId || metadata.userId || metadata.donorUid || paymentIntent.metadata?.memberId || paymentIntent.metadata?.userId || '';
-                    if (!uid) logServerError('Don créé sans userId — historique membre ne s\'affichera pas', 'stripeWebhook_donation_no_userId', { paymentIntentId, donateurEmail: (metadata.email || metadata.donorEmail || '').toLowerCase() || null });
+                    if (!uid) console.log('[Don web] Don ' + paymentIntentId + ' sans userId (donateur web/anonyme) — normal');
                     return uid;
                   })(),
                   donorType: metadata.donorType || 'particulier',
@@ -2102,7 +2380,7 @@ exports.stripeWebhook = functions
                 })()),
                 userId: (() => {
                   const uid = metadata.userId || metadata.donorUid || metadata.memberId || paymentIntent.metadata?.userId || paymentIntent.metadata?.memberId || '';
-                  if (!uid) logServerError('Don créé sans userId — historique membre ne s\'affichera pas', 'stripeWebhook_donation_no_userId', { paymentIntentId, donateurEmail: (metadata.donorEmail || metadata.email || '').toLowerCase() || null });
+                  if (!uid) console.log('[Don web] Don ' + paymentIntentId + ' sans userId (donateur web/anonyme) — normal');
                   return uid;
                 })(),
                 donorType: metadata.donorType || 'particulier',
@@ -2151,7 +2429,7 @@ exports.stripeWebhook = functions
           }
           console.error('Erreur enregistrement Firestore:', dbError);
           // Retourner 500 pour que Stripe réessaie
-          return res.status(500).send(`Database Error: ${dbError.message || 'Unknown error'}`);
+          return res.status(500).send('Database Error');
         }
         break;
 
@@ -2182,6 +2460,13 @@ exports.stripeWebhook = functions
         // Guard: ignorer les invoices sans subscription (one-off invoices, premier paiement géré par payment_intent.succeeded)
         if (!subscriptionId) {
           console.log('Invoice sans subscription (premier paiement ou one-off), skip — géré par payment_intent.succeeded');
+          break;
+        }
+        // Guard: le PREMIER paiement d'un abonnement (billing_reason=subscription_create) est déjà
+        // traité par payment_intent.succeeded (qui récupère les metadata de la subscription).
+        // Sans ce guard, le 1er paiement serait compté DEUX fois (clés d'idempotence différentes).
+        if (invoice.billing_reason === 'subscription_create') {
+          console.log('Première invoice (subscription_create) — déjà gérée par payment_intent.succeeded, skip');
           break;
         }
 
@@ -2274,6 +2559,22 @@ exports.stripeWebhook = functions
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
 
+            // Si le membre a demandé l'annulation, ce paiement est le dernier
+            // de la période en cours. On l'enregistre mais on NE prolonge PAS.
+            if (memberDataTx.subscriptionCancelPending) {
+              console.log('⚠️ Paiement reçu pour membre avec annulation pending — enregistrement sans prolongation');
+              // On enregistre le payment doc (déjà fait ci-dessus via t.set(paymentRef))
+              // mais on ne met PAS à jour le membre (pas de prolongation dateFin)
+              t.set(invoiceProcessedRef, {
+                processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                type: 'invoice_payment_cancel_pending',
+                invoiceId: invoice.id,
+                subscriptionId: subscriptionId,
+                note: 'Paiement enregistré mais non prolongé (annulation en cours)',
+              });
+              throw { alreadyProcessed: true }; // Sort de la transaction proprement
+            }
+
             // Ne PAS forcer status: 'actif' — respecter le statut existant
             // Un renouvellement mensuel ne doit PAS bypasser la validation admin
             // Seul un membre déjà 'actif' (validé par admin) reste 'actif'
@@ -2313,6 +2614,8 @@ exports.stripeWebhook = functions
             break;
           }
           console.error('Erreur traitement invoice.payment_succeeded:', err);
+          // Fail-closed : renvoyer 500 pour que Stripe réessaie (sinon paiement récurrent perdu)
+          return res.status(500).send('Internal Error');
         }
         break;
 
@@ -2354,10 +2657,12 @@ exports.stripeWebhook = functions
               paymentFailedCount: attemptCount,
             };
 
-            if (attemptCount >= 3) {
+            if (attemptCount >= 3 && failedMemberDoc.data()?.status === 'actif') {
+              // Ne passer en 'expire' que si le membre était réellement actif
+              // (évite qu'un membre en attente de validation devienne 'expire' sans avoir été actif)
               statusUpdate.status = 'expire';
               statusUpdate.paymentFailed = true;
-              console.log('3 tentatives échouées, membre passé en expire pour renouvellement');
+              console.log('3 tentatives échouées, membre actif passé en expire pour renouvellement');
             }
 
             await failedMemberDoc.ref.update(statusUpdate);
@@ -3036,7 +3341,7 @@ const generateCERFAParticulier = async (data) => {
     // Numéro et date (sur une seule ligne)
     doc.fontSize(9).font('Helvetica-Bold');
     doc.text(`Reçu n° : ${numeroRecu}`, boxLeft, doc.y, { continued: true, width: contentWidth });
-    doc.font('Helvetica').text(`Date d'émission : ${new Date().toLocaleDateString('fr-FR')}`, { align: 'right' });
+    doc.font('Helvetica').text(`Date d'émission : ${new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`, { align: 'right' });
     doc.moveDown(0.6);
 
     // === CADRE 1 : Organisme bénéficiaire ===
@@ -3121,7 +3426,7 @@ const generateCERFAParticulier = async (data) => {
     const sigBlockY = 610; // position fixe en bas de page (après contrepartie, avant tampon)
 
     doc.fontSize(9).font('Helvetica');
-    doc.text(`Fait à ${association.ville || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR')}`, sigBlockX, sigBlockY, { width: 200, align: 'right' });
+    doc.text(`Fait à ${association.ville || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`, sigBlockX, sigBlockY, { width: 200, align: 'right' });
     doc.moveDown(0.3);
     doc.text(`${association.signataire || 'Le Président'}`, sigBlockX, doc.y, { width: 200, align: 'right' });
     doc.text(`${association.nomSignataire || '[Nom du signataire]'}`, sigBlockX, doc.y, { width: 200, align: 'right' });
@@ -3221,7 +3526,7 @@ const generateCERFAEntreprise = async (data) => {
     // Numéro et date (sur une seule ligne)
     doc.fontSize(9).font('Helvetica-Bold');
     doc.text(`Reçu n° : ${numeroRecu}`, boxLeft, doc.y, { continued: true, width: contentWidth });
-    doc.font('Helvetica').text(`Date d'émission : ${new Date().toLocaleDateString('fr-FR')}`, { align: 'right' });
+    doc.font('Helvetica').text(`Date d'émission : ${new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`, { align: 'right' });
     doc.moveDown(0.6);
 
     // === CADRE 1 : Organisme bénéficiaire ===
@@ -3307,7 +3612,7 @@ const generateCERFAEntreprise = async (data) => {
     const sigBlockY = 610;
 
     doc.fontSize(9).font('Helvetica');
-    doc.text(`Fait à ${association.ville || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR')}`, sigBlockX, sigBlockY, { width: 200, align: 'right' });
+    doc.text(`Fait à ${association.ville || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' })}`, sigBlockX, sigBlockY, { width: 200, align: 'right' });
     doc.moveDown(0.3);
     doc.text(`${association.signataire || 'Le Président'}`, sigBlockX, doc.y, { width: 200, align: 'right' });
     doc.text(`${association.nomSignataire || '[Nom du signataire]'}`, sigBlockX, doc.y, { width: 200, align: 'right' });
@@ -3377,7 +3682,7 @@ const generateRecuFiscalPDF = async (data) => {
  * Cloud Function: Générer et envoyer un reçu fiscal par email
  */
 exports.sendRecuFiscal = functions
-  .runWith({
+  .runWith({ secrets: ['BREVO_SMTP_PASS'],
     timeoutSeconds: 120,
     memory: '512MB', // PDFKit nécessite plus de mémoire
   })
@@ -3400,19 +3705,23 @@ exports.sendRecuFiscal = functions
       );
     }
 
-    // Vérifier que l'utilisateur demande son propre reçu fiscal
-    const userEmail = context.auth.token.email;
-    if (!userEmail) {
-      throw new functions.https.HttpsError(
-        'permission-denied',
-        'Votre compte n\'a pas d\'email associé'
-      );
-    }
-    if (userEmail.toLowerCase() !== email.toLowerCase()) {
-      throw new functions.https.HttpsError(
-        'permission-denied',
-        'Vous ne pouvez demander que votre propre reçu fiscal'
-      );
+    // Un ADMIN peut générer le reçu de n'importe quel donateur (envoi manuel backoffice).
+    // Un utilisateur normal ne peut demander que son propre reçu.
+    const callerIsAdmin = await isAdmin(context.auth.uid);
+    if (!callerIsAdmin) {
+      const userEmail = context.auth.token.email;
+      if (!userEmail) {
+        throw new functions.https.HttpsError(
+          'permission-denied',
+          'Votre compte n\'a pas d\'email associé'
+        );
+      }
+      if (userEmail.toLowerCase() !== email.toLowerCase()) {
+        throw new functions.https.HttpsError(
+          'permission-denied',
+          'Vous ne pouvez demander que votre propre reçu fiscal'
+        );
+      }
     }
 
     // Rate limiting: max 3 reçus fiscaux par heure (évite le spam d'emails)
@@ -3602,8 +3911,39 @@ exports.sendRecuFiscal = functions
         }
       }
 
-      // 4. Générer le numéro de reçu unique
+      // 3bis. Override adresse fiscale corrigée depuis le backoffice (priorité MAX)
+      try {
+        const ovSnap = await admin.firestore()
+          .collection('members')
+          .where('email', '==', email.toLowerCase())
+          .limit(1)
+          .get();
+        if (!ovSnap.empty) {
+          const mo = ovSnap.docs[0].data();
+          if (mo.recuFiscalAdresse && String(mo.recuFiscalAdresse).trim()) {
+            donateur.adresse = String(mo.recuFiscalAdresse).trim();
+            donateur.codePostal = String(mo.recuFiscalCP || donateur.codePostal || '').trim();
+            donateur.ville = String(mo.recuFiscalVille || donateur.ville || '').trim();
+            console.log('🏠 Adresse fiscale corrigée (override backoffice) appliquée');
+          }
+        }
+      } catch (ovErr) {
+        console.error('override adresse fiscale (send):', ovErr.message);
+      }
+
+      // CERFA: l'adresse du donateur est OBLIGATOIRE (art. 200 CGI / BOFiP).
+      // Un reçu sans adresse n'est pas valable -> on bloque et on demande de la compléter.
+      if (!donateur.adresse || !String(donateur.adresse).trim()) {
+        throw new functions.https.HttpsError(
+          'failed-precondition',
+          "Adresse du donateur manquante. Renseigne-la dans la fiche du membre (bloc « Adresse pour le reçu fiscal ») avant d'envoyer le reçu fiscal."
+        );
+      }
+
+      // 4. Numéro de reçu + création du document DANS la même transaction.
+      // Garantit qu'un numéro consommé est TOUJOURS associé à un document (aucun trou possible).
       const recuCounterRef = admin.firestore().collection('counters').doc('recusFiscaux');
+      const recuDocRef = admin.firestore().collection('recus_fiscaux').doc();
       const newNumber = await admin.firestore().runTransaction(async (transaction) => {
         const counterDoc = await transaction.get(recuCounterRef);
         let currentNumber = 0;
@@ -3611,7 +3951,21 @@ exports.sendRecuFiscal = functions
           currentNumber = counterDoc.data()[`year_${annee}`] || 0;
         }
         const nextNumber = currentNumber + 1;
+        const numero = `RF-${annee}-${String(nextNumber).padStart(5, '0')}`;
         transaction.set(recuCounterRef, { [`year_${annee}`]: nextNumber }, { merge: true });
+        transaction.set(recuDocRef, {
+          numeroRecu: numero,
+          annee,
+          userId: context.auth.uid,
+          email,
+          donateur,
+          donorType: detectedDonorType,
+          montantTotal: totalDons,
+          donsDetails,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          status: 'generating', // passera à 'sent' une fois PDF + email OK
+          source: 'manual',
+        });
         return nextNumber;
       });
 
@@ -3693,26 +4047,20 @@ exports.sendRecuFiscal = functions
         ],
       });
 
-      // 7. Enregistrer dans Firestore
-      await admin.firestore().collection('recus_fiscaux').add({
-        numeroRecu,
-        annee,
-        userId: context.auth.uid,
-        email,
-        donateur,
-        donorType: detectedDonorType,
-        montantTotal: totalDons,
-        donsDetails,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
-        status: 'sent',
-      });
+      // 7. (Le document a déjà été créé dans la transaction du numéro — voir étape 4)
 
       // 8. Sauvegarder le PDF dans Storage
       const bucket = admin.storage().bucket();
       const filePath = `recus_fiscaux/${annee}/${numeroRecu}.pdf`;
       await bucket.file(filePath).save(pdfBuffer, {
         metadata: { contentType: 'application/pdf' },
+      });
+
+      // 8bis. Finaliser : le reçu passe de 'generating' à 'sent'
+      await recuDocRef.update({
+        status: 'sent',
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        recuFiscalUrl: filePath,
       });
 
       console.log('Reçu fiscal envoyé:', numeroRecu, 'à', email.replace(/(.{2}).*(@.*)/, '$1***$2'));
@@ -3820,11 +4168,11 @@ exports.getDonsByYear = functions
       // Dons pour projets (toujours éligibles)
       donationsSnapshot.docs.forEach(doc => {
         const d = doc.data();
-        totalDonsEligibles += d.amount || 0;
+        totalDonsEligibles += d.amount || d.montant || 0;
         dons.push({
           id: doc.id,
           type: 'don_projet',
-          montant: d.amount || 0,
+          montant: d.amount || d.montant || 0,
           date: d.createdAt?.toDate?.()?.toISOString() || null,
           projet: d.projectName || null,
           eligibleRecuFiscal: true,
@@ -3877,6 +4225,7 @@ exports.getDonsByYear = functions
 
 exports.onNewSympathisant = functions
   .region('europe-west1')
+  .runWith({ secrets: ['BREVO_SMTP_PASS'] })
   .firestore
   .document('members/{memberId}')
   .onCreate(async (snap, context) => {
@@ -4045,6 +4394,14 @@ exports.onNewSympathisant = functions
         membreNom: `${prenom} ${member.nom || ''}`.trim(),
       });
 
+      // Notif PUSH sur l'iPhone/desktop des admins (Web Push)
+      try {
+        await require('./pushNotif').sendAdminPush(
+          '🆕 Nouvelle inscription',
+          `${prenom} ${member.nom || ''} vient de s'inscrire`.trim(),
+        );
+      } catch (e) { console.error('sendAdminPush:', e.message); }
+
       // Push notification bienvenue (multi-device)
       await sendPushToMember(snap.id, '🕌 Bienvenue chez El Mouhssinine !',
         'Votre compte a bien été créé. Complétez votre adhésion en réglant votre cotisation.',
@@ -4070,6 +4427,7 @@ exports.onNewSympathisant = functions
 
 exports.validateMembership = functions
   .region('europe-west1')
+  .runWith({ secrets: ['BREVO_SMTP_PASS'] })
   .https.onCall(async (data, context) => {
     // Vérifier l'authentification
     if (!context.auth) {
@@ -4276,6 +4634,8 @@ exports.validateMembership = functions
             origine: 'conversion_adhesion_refusee',
             membreId: memberId,
             eligibleRecuFiscal: true,
+            donateurEmail: (email || '').toLowerCase(),
+            status: 'succeeded',
             date: admin.firestore.FieldValue.serverTimestamp(),
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
@@ -4581,6 +4941,7 @@ exports.cachePrayerTimesDaily = functions
 // Fonction pour forcer le cache (callable depuis le backoffice si besoin)
 exports.forceCachePrayerTimes = functions
   .region('europe-west1')
+  .runWith({ secrets: ['BREVO_SMTP_PASS'] })
   .https.onCall(async (data, context) => {
     // Vérifier admin
     if (!context.auth) {
@@ -4684,6 +5045,15 @@ const processAnnualRecusFiscaux = async (year) => {
     return { success: false, error: 'Nom du signataire non configuré dans Paramètres > Association' };
   }
 
+  // Vérifier les infos essentielles de l'association (obligatoires pour validité CERFA)
+  // Évite d'envoyer en masse des reçus avec "[À compléter]" si les paramètres sont vides
+  if (!association.nom || !association.nom.trim()
+      || !association.adresse || !association.adresse.trim()
+      || !association.siren || !association.siren.trim()) {
+    console.error('❌ Infos association incomplètes (nom/adresse/SIREN) — Reçus fiscaux non générés');
+    return { success: false, error: 'Infos association incomplètes (nom, adresse ou SIREN) dans Paramètres > Reçus fiscaux' };
+  }
+
   // 2. Récupérer tous les dons de l'année
   const startDate = new Date(year, 0, 1);
   const endDate = new Date(year, 11, 31, 23, 59, 59);
@@ -4770,6 +5140,20 @@ const processAnnualRecusFiscaux = async (year) => {
   const emails = Object.keys(donorMap);
   console.log(`📊 ${emails.length} donateur(s) trouvé(s) pour ${year}`);
 
+  // Traitement PROGRESSIF (scalable 5000+) : on ne (re)génère que les reçus PAS encore
+  // émis cette année, par paquets de MAX_PER_RUN. Le cron tourne chaque jour de janvier
+  // et reprend là où il s'est arrêté (idempotent) → tout est couvert avant fin janvier.
+  const MAX_PER_RUN = 300;
+  const alreadyDone = new Set();
+  try {
+    const doneSnap = await admin.firestore().collection('recus_fiscaux')
+      .where('annee', '==', year).get();
+    doneSnap.forEach((d) => { const dd = d.data() || {}; if (dd.status === 'sent' && dd.email) alreadyDone.add(String(dd.email).toLowerCase()); });
+  } catch (e) { console.error('lecture recus_fiscaux existants:', e.message); }
+  const pending = emails.filter((e) => !alreadyDone.has(String(e).toLowerCase()));
+  const toProcess = pending.slice(0, MAX_PER_RUN);
+  console.log(`🧾 ${alreadyDone.size} déjà émis · ${pending.length} en attente · ${toProcess.length} traités ce run`);
+
   if (emails.length === 0) {
     return { success: true, count: 0, message: 'Aucun donateur trouvé' };
   }
@@ -4794,6 +5178,7 @@ const processAnnualRecusFiscaux = async (year) => {
   let successCount = 0;
   let errorCount = 0;
   const errors = [];
+  const skippedNoAddress = []; // CERFA: adresse donateur obligatoire (art. 200 CGI / BOFiP)
 
   // Bug 13 Fix: Traiter par batch de 3 en parallèle (au lieu de séquentiel)
   // Promise.allSettled = chaque erreur est isolée, pas de crash global
@@ -4807,11 +5192,10 @@ const processAnnualRecusFiscaux = async (year) => {
       .collection('recus_fiscaux')
       .where('email', '==', email)
       .where('annee', '==', year)
-      .limit(1)
       .get();
-
-    if (!existingRecu.empty) {
-      console.log(`⏭️ Reçu fiscal déjà existant pour ${maskEmail(email)} (${year}), skip`);
+    // Ne bloquer que si un reçu FINALISÉ (sent) existe — un doc 'generating'/'failed' d'un essai raté doit pouvoir être réessayé (auto-guérison).
+    if (existingRecu.docs.some((d) => (d.data() || {}).status === 'sent')) {
+      console.log(`⏭️ Reçu fiscal déjà émis pour ${maskEmail(email)} (${year}), skip`);
       return 'already_exists';
     }
 
@@ -4853,8 +5237,37 @@ const processAnnualRecusFiscaux = async (year) => {
       }
     }
 
-    // Numéro de reçu (transaction atomique sur le compteur)
+    // Override adresse fiscale corrigée depuis le backoffice (priorité MAX)
+    try {
+      const ovSnap = await admin.firestore()
+        .collection('members')
+        .where('email', '==', email)
+        .limit(1)
+        .get();
+      if (!ovSnap.empty) {
+        const mo = ovSnap.docs[0].data();
+        if (mo.recuFiscalAdresse && String(mo.recuFiscalAdresse).trim()) {
+          donateur.adresse = String(mo.recuFiscalAdresse).trim();
+          donateur.codePostal = String(mo.recuFiscalCP || donateur.codePostal || '').trim();
+          donateur.ville = String(mo.recuFiscalVille || donateur.ville || '').trim();
+          console.log('🏠 [annuel] Adresse fiscale corrigée (override) appliquée pour', email);
+        }
+      }
+    } catch (ovErr) {
+      console.error('override adresse fiscale (annuel):', ovErr.message);
+    }
+
+    // CERFA: adresse obligatoire -> on saute ce donateur (pas de reçu invalide) et on le signale.
+    if (!donateur.adresse || !String(donateur.adresse).trim()) {
+      console.warn('CERFA sauté (adresse manquante) pour', maskEmail(email));
+      skippedNoAddress.push(email);
+      return 'skipped_no_address';
+    }
+
+    // Numéro de reçu + création du document DANS la même transaction (zéro trou).
+    const annualUserRecord = await admin.auth().getUserByEmail(email).catch(() => null);
     const recuCounterRef = admin.firestore().collection('counters').doc('recusFiscaux');
+    const recuDocRef = admin.firestore().collection('recus_fiscaux').doc();
     const newNumber = await admin.firestore().runTransaction(async (transaction) => {
       const counterDoc = await transaction.get(recuCounterRef);
       let currentNumber = 0;
@@ -4862,12 +5275,27 @@ const processAnnualRecusFiscaux = async (year) => {
         currentNumber = counterDoc.data()[`year_${year}`] || 0;
       }
       const nextNumber = currentNumber + 1;
+      const numero = `RF-${year}-${String(nextNumber).padStart(5, '0')}`;
       transaction.set(recuCounterRef, { [`year_${year}`]: nextNumber }, { merge: true });
+      transaction.set(recuDocRef, {
+        numeroRecu: numero,
+        annee: year,
+        email,
+        userId: annualUserRecord ? annualUserRecord.uid : null,
+        donateur,
+        donorType: donor.donorType,
+        montantTotal: donor.total,
+        donsDetails: donor.donsDetails,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        status: 'generating',
+        source: 'auto_annual',
+      });
       return nextNumber;
     });
     const numeroRecu = `RF-${year}-${String(newNumber).padStart(5, '0')}`;
 
-    // Générer PDF
+    // Générer PDF (+ storage + email + finalisation) avec gestion d'échec : marque 'failed' (réessai au prochain run).
+    try {
     const pdfBuffer = await generateRecuFiscalPDF({
       association,
       donateur,
@@ -4922,20 +5350,16 @@ const processAnnualRecusFiscaux = async (year) => {
       });
     }
 
-    // Sauvegarder dans Firestore
-    await admin.firestore().collection('recus_fiscaux').add({
-      numeroRecu,
-      annee: year,
-      email,
-      donateur,
-      donorType: donor.donorType,
-      montantTotal: donor.total,
-      donsDetails: donor.donsDetails,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+    // Le document a déjà été créé dans la transaction du numéro -> on le finalise en 'sent'.
+    await recuDocRef.update({
       status: 'sent',
-      source: 'auto_annual',
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      recuFiscalUrl: filePath,
     });
+    } catch (genErr) {
+      await recuDocRef.update({ status: 'failed', failedAt: admin.firestore.FieldValue.serverTimestamp(), error: String((genErr && genErr.message) || genErr).slice(0, 200) }).catch(() => {});
+      throw genErr;
+    }
 
     // Message in-app
     try {
@@ -4994,8 +5418,8 @@ const processAnnualRecusFiscaux = async (year) => {
 
   // Traiter par batch de 3 en parallèle
   const batchSize = 3;
-  for (let i = 0; i < emails.length; i += batchSize) {
-    const batch = emails.slice(i, i + batchSize);
+  for (let i = 0; i < toProcess.length; i += batchSize) {
+    const batch = toProcess.slice(i, i + batchSize);
     const results = await Promise.allSettled(batch.map(email => processDonor(email)));
 
     results.forEach((result, idx) => {
@@ -5013,9 +5437,13 @@ const processAnnualRecusFiscaux = async (year) => {
     success: true,
     year,
     totalDonors: emails.length,
+    processedThisRun: toProcess.length,
+    remaining: Math.max(0, pending.length - successCount),
     successCount,
     errorCount,
     errors: errors.length > 0 ? errors : undefined,
+    skippedNoAddress: skippedNoAddress.length > 0 ? skippedNoAddress : undefined,
+    skippedNoAddressCount: skippedNoAddress.length,
   };
 
   console.log(`🧾 Fin génération : ${successCount} succès, ${errorCount} erreur(s)`);
@@ -5032,7 +5460,7 @@ exports.generateAnnualRecusFiscaux = functions
     memory: '512MB',
   })
   .region('europe-west1')
-  .pubsub.schedule('0 6 2 1 *')
+  .pubsub.schedule('0 6 2-31 1 *')
   .timeZone('Europe/Paris')
   .onRun(async (context) => {
     const lastYear = new Date().getFullYear() - 1;
@@ -5110,6 +5538,7 @@ exports.forceGenerateRecusFiscaux = functions
 
 exports.onDonationConfirmation = functions
   .region('europe-west1')
+  .runWith({ secrets: ['BREVO_SMTP_PASS'] })
   .firestore
   .document('donations/{donationId}')
   .onCreate(async (snap, context) => {
@@ -5348,7 +5777,24 @@ exports.onDonationConfirmation = functions
       });
 
       // Push notification FCM (multi-device)
-      const donorUid = donation.userId || donation.metadata?.userId;
+      let donorUid = donation.userId || donation.metadata?.userId;
+      // Fallback dons web (page /don sans connexion) : retrouver le membre par email
+      // pour pouvoir lui envoyer le push de remerciement même sans userId sur le don.
+      if (!donorUid && email) {
+        try {
+          const memberByEmail = await admin.firestore()
+            .collection('members')
+            .where('email', '==', email)
+            .limit(1)
+            .get();
+          if (!memberByEmail.empty) {
+            donorUid = memberByEmail.docs[0].id;
+            console.log(`📲 Push don : membre retrouvé par email ${maskEmail(email)} → ${donorUid}`);
+          }
+        } catch (e) {
+          console.error('onDonationConfirmation — lookup membre (push) échoué:', e.message);
+        }
+      }
       if (donorUid) {
         const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
         await sendPushToMember(donorUid, '✅ Don reçu — Merci !',
@@ -5378,6 +5824,7 @@ exports.onDonationConfirmation = functions
 
 exports.onCotisationConfirmation = functions
   .region('europe-west1')
+  .runWith({ secrets: ['BREVO_SMTP_PASS'] })
   .firestore
   .document('payments/{paymentId}')
   .onCreate(async (snap, context) => {
@@ -5562,7 +6009,23 @@ exports.onCotisationConfirmation = functions
       });
 
       // Push notification FCM (multi-device)
-      const memberUidForPush = payment.metadata?.memberId || '';
+      let memberUidForPush = payment.metadata?.memberId || payment.membreId || payment.memberId || '';
+      // Fallback : retrouver le membre par email si aucun identifiant sur le paiement
+      if (!memberUidForPush && email) {
+        try {
+          const memberByEmail = await admin.firestore()
+            .collection('members')
+            .where('email', '==', email.toLowerCase())
+            .limit(1)
+            .get();
+          if (!memberByEmail.empty) {
+            memberUidForPush = memberByEmail.docs[0].id;
+            console.log(`📲 Push cotisation : membre retrouvé par email ${maskEmail(email)} → ${memberUidForPush}`);
+          }
+        } catch (e) {
+          console.error('onCotisationConfirmation — lookup membre (push) échoué:', e.message);
+        }
+      }
       if (memberUidForPush) {
         const pushMontant = montant > 0 ? `${montant.toFixed(0)}€` : '';
         await sendPushToMember(memberUidForPush, '✅ Paiement reçu — Merci !',
@@ -5593,7 +6056,7 @@ exports.onCotisationConfirmation = functions
 // ========================================================================
 exports.refundPayment = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 60, memory: '256MB' })
   .https.onCall(async (data, context) => {
     // Vérifier admin
     if (!context.auth) {
@@ -5669,7 +6132,7 @@ exports.refundPayment = functions
           // Annuler le lock si Stripe échoue
           await memberRef.update({ refundProcessing: false });
           if (stripeError.code !== 'charge_already_refunded') {
-            throw new functions.https.HttpsError('internal', `Erreur Stripe: ${stripeError.message}`);
+            throw new functions.https.HttpsError('internal', 'Erreur lors du remboursement. Vérifiez le tableau de bord Stripe.');
           }
         }
       }
@@ -5975,7 +6438,7 @@ exports.syncProfileToStripe = functions
 // ========================================================================
 exports.cancelSubscription = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 30, memory: '256MB' })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
@@ -6000,23 +6463,35 @@ exports.cancelSubscription = functions
         throw new functions.https.HttpsError('failed-precondition', 'Pas d\'abonnement mensuel actif');
       }
 
-      // Annuler l'abonnement Stripe si un ID est présent
+      // Annuler l'abonnement Stripe — DOIT réussir, sinon on ne touche pas Firestore
       if (stripeSubscriptionId) {
+        // Vérifier l'état réel de la subscription avant d'agir
+        let sub;
         try {
-          // Option 1: Annulation immédiate
-          // await stripe.subscriptions.cancel(stripeSubscriptionId);
+          sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+        } catch (retrieveErr) {
+          console.error('Subscription introuvable sur Stripe:', stripeSubscriptionId, retrieveErr.message);
+          throw new functions.https.HttpsError('not-found',
+            'Abonnement introuvable sur Stripe. Contactez la mosquée.');
+        }
 
-          // Option 2: Annulation à la fin de la période (recommandé)
-          // Le membre garde l'accès jusqu'à la fin de la période payée
+        // Si déjà annulé ou expiré, on met juste à jour Firestore
+        if (sub.status === 'canceled' || sub.cancel_at_period_end) {
+          console.log('Subscription déjà annulée sur Stripe:', stripeSubscriptionId, 'status:', sub.status);
+        } else {
+          // Annulation à la fin de la période (le membre garde l'accès)
           await stripe.subscriptions.update(stripeSubscriptionId, {
             cancel_at_period_end: true,
           });
-
           console.log('Abonnement Stripe annulé à la fin de la période:', stripeSubscriptionId);
-        } catch (stripeError) {
-          console.error('Erreur annulation Stripe:', stripeError);
-          // On continue quand même pour mettre à jour Firestore
-          // (l'abonnement pourrait déjà être annulé côté Stripe)
+
+          // Vérifier que Stripe a bien pris en compte l'annulation
+          const verified = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+          if (!verified.cancel_at_period_end) {
+            console.error('CRITIQUE: Stripe n\'a pas enregistré cancel_at_period_end pour:', stripeSubscriptionId);
+            throw new functions.https.HttpsError('internal',
+              'L\'annulation n\'a pas été confirmée par Stripe. Réessayez ou contactez la mosquée.');
+          }
         }
       }
 
@@ -6172,7 +6647,19 @@ exports.adminCancelSubscription = functions
         console.log('Abonnement Stripe annulé immédiatement par admin:', stripeSubscriptionId);
       } catch (stripeError) {
         console.error('Erreur annulation Stripe:', stripeError.message);
-        // Continuer quand même pour mettre à jour Firestore
+        // Si l'abonnement est DÉJÀ annulé/terminé/inexistant côté Stripe, on autorise le nettoyage Firestore.
+        let alreadyGone = false;
+        try {
+          const subCheck = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+          alreadyGone = (subCheck.status === 'canceled' || subCheck.status === 'incomplete_expired');
+        } catch (retrErr) {
+          if (retrErr.code === 'resource_missing') alreadyGone = true;
+        }
+        if (!alreadyGone) {
+          // Fail-closed : Stripe encore actif et annulation échouée -> NE PAS marquer annulé (sinon prélèvements invisibles)
+          throw new functions.https.HttpsError('internal', 'L\'annulation Stripe a échoué. Réessayez ou vérifiez le tableau de bord Stripe.');
+        }
+        console.log('Abonnement déjà annulé/inexistant côté Stripe — nettoyage Firestore autorisé:', stripeSubscriptionId);
       }
 
       // Mettre à jour Firestore
@@ -6201,7 +6688,7 @@ exports.adminCancelSubscription = functions
 // ========================================================================
 exports.refundDonation = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 60, memory: '256MB' })
   .https.onCall(async (data, context) => {
     // Vérifier admin
     if (!context.auth) {
@@ -6273,7 +6760,7 @@ exports.refundDonation = functions
         console.error('⚠️ Erreur remboursement Stripe:', stripeError.message);
         // Annuler le lock si Stripe échoue
         await donRef.update({ refundProcessing: false });
-        throw new functions.https.HttpsError('internal', `Erreur Stripe: ${stripeError.message}`);
+        throw new functions.https.HttpsError('internal', 'Erreur lors du remboursement. Vérifiez le tableau de bord Stripe.');
       }
 
       // ÉTAPE 3 : Confirmer le remboursement dans Firestore
@@ -6376,10 +6863,12 @@ exports.createAdmin = functions
     if (!callerDoc.exists) {
       throw new functions.https.HttpsError('permission-denied', 'Seuls les administrateurs peuvent créer des admins');
     }
-    const callerRole = callerDoc.data().role;
-    if (callerRole !== 'super_admin') {
-      throw new functions.https.HttpsError('permission-denied', 'Seul un super_admin peut créer des admins');
+    const callerData = callerDoc.data();
+    if (callerData.role !== 'super_admin' || callerData.actif !== true) {
+      throw new functions.https.HttpsError('permission-denied', 'Seul un super_admin actif peut créer des admins');
     }
+    // Anti-abus : limiter la création de comptes admin
+    await checkRateLimit(context.auth.uid, 'createAdmin', 10, 3600);
 
     const { email, password, nom, role, permissions, actif } = data;
 
@@ -6432,13 +6921,59 @@ exports.createAdmin = functions
     }
   });
 
+// ==================== SUPPRESSION ADMIN ====================
+// Supprime le document Firestore ET le compte Firebase Auth (evite les comptes orphelins).
+exports.deleteAdmin = functions
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .region('europe-west1')
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Authentification requise');
+    }
+    const callerDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
+    if (!callerDoc.exists || callerDoc.data().role !== 'super_admin' || callerDoc.data().actif !== true) {
+      throw new functions.https.HttpsError('permission-denied', 'Seul un super_admin actif peut supprimer un admin');
+    }
+    await checkRateLimit(context.auth.uid, 'deleteAdmin', 10, 3600);
+
+    const { uid } = data;
+    if (!uid || typeof uid !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'UID requis');
+    }
+    if (uid === context.auth.uid) {
+      throw new functions.https.HttpsError('failed-precondition', 'Vous ne pouvez pas supprimer votre propre compte');
+    }
+
+    // Garde-fou : ne pas supprimer le dernier super_admin
+    const targetDoc = await admin.firestore().collection('admins').doc(uid).get();
+    if (targetDoc.exists && targetDoc.data().role === 'super_admin') {
+      const supers = await admin.firestore().collection('admins').where('role', '==', 'super_admin').get();
+      if (supers.size <= 1) {
+        throw new functions.https.HttpsError('failed-precondition', 'Impossible de supprimer le dernier super administrateur');
+      }
+    }
+
+    // 1. Supprimer le document Firestore
+    await admin.firestore().collection('admins').doc(uid).delete();
+    // 2. Supprimer le compte Firebase Auth (ignore si deja absent)
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (authErr) {
+      if (authErr.code !== 'auth/user-not-found') {
+        console.error('deleteAdmin: echec suppression Auth', authErr.message);
+      }
+    }
+    console.log('Admin supprime (doc + Auth):', uid);
+    return { success: true };
+  });
+
 // ==================== VÉRIFICATION COTISATIONS EXPIRANTES ====================
 // Cron quotidien à 08h00 : vérifie les cotisations qui expirent bientôt ou déjà expirées
 // Envoie des emails de rappel à 30 jours, 7 jours, et le jour de l'expiration
 
 exports.checkExpiringCotisations = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 300, memory: '512MB' })
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 300, memory: '512MB' })
   .pubsub.schedule('0 8 * * *')
   .timeZone('Europe/Paris')
   .onRun(async (context) => {
@@ -6761,7 +7296,7 @@ exports.checkExpiringCotisations = functions
 
 exports.reconcileStripePayments = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 120, memory: '256MB' })
   .pubsub.schedule('every sunday 03:00')
   .timeZone('Europe/Paris')
   .onRun(async (context) => {
@@ -7249,7 +7784,7 @@ exports.deleteMemberByAdmin = functions
 // ==================== DELETE MY ACCOUNT (SELF-SERVICE RGPD) ====================
 exports.deleteMyAccount = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 120, memory: '256MB' })
   .https.onCall(async (data, context) => {
     // 1. Auth obligatoire
     if (!context.auth) {
@@ -7595,7 +8130,7 @@ exports.exportMyData = functions
 // NOTE: functions.auth.user() ne supporte PAS .region()
 // ════════════════════════════════════════
 exports.onAuthUserDeleted = functions
-  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 60, memory: '256MB' })
   .auth.user().onDelete(async (user) => {
     const uid = user.uid;
     const email = user.email || '';
@@ -7700,12 +8235,39 @@ exports.onAuthUserDeleted = functions
 // et membres bloques en en_attente_validation > 30 min.
 // Envoie un WhatsApp si des anomalies sont detectees.
 
+// Alerte technique (dev) par EMAIL via Brevo — canal fiable pour les bugs
+// (le WhatsApp sandbox Twilio expire toutes les 24-72h, l'email reste fiable).
+const DEV_ALERT_EMAIL = 'faicalkriouar@gmail.com';
+const sendDevAlertEmail = async (subject, bodyText) => {
+  try {
+    if (!BREVO_SMTP_USER || !BREVO_SMTP_PASS || !BREVO_FROM_EMAIL) {
+      console.error('sendDevAlertEmail: Brevo non configuré');
+      return;
+    }
+    const t = nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com', port: 587, secure: false,
+      auth: { user: BREVO_SMTP_USER, pass: BREVO_SMTP_PASS },
+    });
+    await t.sendMail({
+      from: `"${BREVO_FROM_NAME || 'El Mouhssinine'} — Alertes" <${BREVO_FROM_EMAIL}>`,
+      to: DEV_ALERT_EMAIL,
+      subject,
+      html: textToEmailHtml(bodyText, { headerTitle: subject, headerGradient: '#dc2626, #ef4444' }),
+    });
+    console.log('Alerte dev email envoyée:', subject);
+  } catch (e) {
+    console.error('Echec alerte dev email:', e.message);
+  }
+};
+
 exports.monitorSilentBugs = functions
+  .runWith({ secrets: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO', 'BREVO_SMTP_PASS'] })
   .region('europe-west1')
   .pubsub.schedule('every 10 minutes')
   .timeZone('Europe/Paris')
   .onRun(async (_context) => {
     const issues = [];
+    let hasFreshAlerts = false; // erreurs nouvelles (errors_log) -> toujours envoyees
     const db = admin.firestore();
     const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
 
@@ -7719,6 +8281,7 @@ exports.monitorSilentBugs = functions
 
       if (!errorsSnap.empty) {
         issues.push(`⚠️ ${errorsSnap.size} erreur(s) silencieuse(s)`);
+        hasFreshAlerts = true;
 
         // Marquer comme alertees
         const batch = db.batch();
@@ -7761,27 +8324,10 @@ exports.monitorSilentBugs = functions
       console.error('monitorSilentBugs paymentFailed:', err.message);
     }
 
-    // 3. Membres bloques en en_attente_validation > 30 min
-    try {
-      const stuckSnap = await db
-        .collection('members')
-        .where('status', '==', 'en_attente_validation')
-        .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(thirtyMinAgo))
-        .limit(10)
-        .get();
-
-      if (!stuckSnap.empty) {
-        const names = stuckSnap.docs
-          .slice(0, 3)
-          .map((d) => `${d.data().prenom ?? ''} ${d.data().nom ?? ''}`.trim())
-          .join(', ');
-        issues.push(
-          `⏳ ${stuckSnap.size} membre(s) bloques validation >30min: ${names}${stuckSnap.size > 3 ? '...' : ''}`,
-        );
-      }
-    } catch (err) {
-      console.error('monitorSilentBugs stuck validation:', err.message);
-    }
+    // 3. [DÉSACTIVÉ] Alerte "membre en attente de validation > 30 min".
+    // La validation est manuelle (le bureau valide à la main, peut prendre des jours)
+    // -> ce contrôle générait du bruit. Retiré sur décision de Faiçal (2026-06-09).
+    // La cloche backoffice "Validation requise" reste, elle, active.
 
     // 4. Dons sans userId créés dans les 90 dernières minutes
     try {
@@ -7794,7 +8340,14 @@ exports.monitorSilentBugs = functions
         .get();
 
       if (!donsNoUserSnap.empty) {
-        issues.push(`💸 ${donsNoUserSnap.size} don(s) sans userId (90 dernières min)`);
+        // userId vide est NORMAL pour les dons web publics et anonymes -> ne pas alerter
+        const reels = donsNoUserSnap.docs.filter((doc) => {
+          const dd = doc.data();
+          return dd.source !== "web_don_public" && dd.isAnonymous !== true;
+        });
+        if (reels.length > 0) {
+          issues.push(`💸 ${reels.length} don(s) app sans userId (90 dernières min)`);
+        }
       }
     } catch (err) {
       console.error('monitorSilentBugs dons_no_userId:', err.message);
@@ -7836,6 +8389,7 @@ exports.monitorSilentBugs = functions
 
       if (!cfErrorsSnap.empty) {
         issues.push(`⚙️ ${cfErrorsSnap.size} erreur(s) CF récente(s) (10 dernières min)`);
+        hasFreshAlerts = true;
         const batch = db.batch();
         cfErrorsSnap.docs.forEach((doc) => {
           batch.update(doc.ref, {
@@ -7857,6 +8411,29 @@ exports.monitorSilentBugs = functions
     if (issues.length === 0) {
       console.log('monitorSilentBugs: OK — aucune anomalie');
       return null;
+    }
+
+    // Anti-spam : ne pas re-alerter une anomalie persistante identique trop souvent.
+    // Les erreurs fraiches (errors_log) sont toujours envoyees (deja dedupliquees par alerted).
+    const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 h
+    const signature = issues
+      .filter((l) => !l.startsWith('   '))
+      .map((l) => l.split(':')[0].trim())
+      .sort()
+      .join(' | ');
+    const monitorStateRef = db.collection('system').doc('monitoring_state');
+    try {
+      const stateSnap = await monitorStateRef.get();
+      const prev = stateSnap.exists ? stateSnap.data() : {};
+      const lastAt = prev.lastAlertAt && prev.lastAlertAt.toMillis ? prev.lastAlertAt.toMillis() : 0;
+      const sameSignature = prev.lastSignature === signature;
+      const withinCooldown = Date.now() - lastAt < ALERT_COOLDOWN_MS;
+      if (!hasFreshAlerts && sameSignature && withinCooldown) {
+        console.log('monitorSilentBugs: anomalies persistantes inchangees — alerte deja envoyee, skip (cooldown 6h)');
+        return null;
+      }
+    } catch (err) {
+      console.error('monitorSilentBugs: lecture etat anti-spam echouee, on alerte par securite:', err.message);
     }
 
     // Envoyer WhatsApp
@@ -7886,6 +8463,19 @@ exports.monitorSilentBugs = functions
       console.error('monitorSilentBugs: echec WhatsApp:', err.message);
     }
 
+    // Alerte EMAIL (canal fiable, indépendant du WhatsApp sandbox)
+    await sendDevAlertEmail(`🔍 Monitoring El Mouhssinine — ${issues.length} anomalie(s)`, message);
+
+    try {
+      await monitorStateRef.set({
+        lastSignature: signature,
+        lastAlertAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastIssuesCount: issues.length,
+      }, { merge: true });
+    } catch (err) {
+      console.error('monitorSilentBugs: ecriture etat anti-spam echouee:', err.message);
+    }
+
     return null;
   });
 
@@ -7901,7 +8491,7 @@ const { onNewFatalIssuePublished } = require('firebase-functions/v2/alerts/crash
 exports.alertCrashWhatsApp = onNewFatalIssuePublished(
   {
     region: 'europe-west1',
-    secrets: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO'],
+    secrets: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO', 'BREVO_SMTP_PASS'],
   },
   async (event) => {
     const issue = event.data.payload.issue;
@@ -7938,6 +8528,9 @@ exports.alertCrashWhatsApp = onNewFatalIssuePublished(
       // Ne jamais laisser l'alert crasher — juste logger
       console.error('Echec envoi WhatsApp crash alert:', err.message);
     }
+
+    // Alerte EMAIL (canal fiable)
+    await sendDevAlertEmail('🚨 Crash El Mouhssinine', message);
   },
 );
 
@@ -8144,22 +8737,24 @@ exports.backfillWebDonations = functions
 // ════════════════════════════════════════
 // OpenAI Proxy — Empêche l'exposition de la clé API côté client
 // ════════════════════════════════════════
+const MOSQUE_CONTEXT = `CONTEXTE: Tu ecris AU NOM de la Mosquee El Mouhssinine (Bourg-en-Bresse) qui s'adresse a ses fideles, comme une famille spirituelle. Le ton est CHALEUREUX, BIENVEILLANT, FRATERNEL et RESPECTUEUX. Tu peux employer avec parcimonie et naturel des formules islamiques (ex: As-salamu alaykum, qu'Allah vous recompense, barak Allahu fikoum, in cha Allah) quand c'est approprie, sans jamais en abuser. Evite absolument le ton sec, commercial ou impersonnel. Reste sobre, humble et digne. Ecris en francais correct.\nREGLE DE SORTIE ABSOLUE: reponds UNIQUEMENT par le texte final demande. JAMAIS d'etiquette comme "Titre:" ou "Message:", JAMAIS de guillemets, JAMAIS d'asterisques ni de markdown (pas de **). Donne directement le contenu, rien d'autre.`;
+
 const OPENAI_PROMPTS = {
-  notification: `Tu es un assistant pour une mosquee. Tu rediges des notifications push TRES COURTES.\nREGLES STRICTES:\n- Titre: MAX 50 caracteres\n- Message: MAX 2 phrases (100 caracteres)\n- Style DIRECT, pas de formules de politesse longues\n- Un emoji max au debut\nNE JAMAIS depasser ces limites.`,
-  annonce: `Tu es un assistant pour une mosquee. Tu rediges des annonces CONCISES.\nREGLES STRICTES:\n- Titre: MAX 60 caracteres\n- Contenu: MAX 3 phrases courtes\n- Va droit au but, pas de blabla\n- Infos essentielles: quoi, quand, ou\n- Style direct et clair`,
-  popup: `Tu es un assistant pour une mosquee. Tu rediges des popups ULTRA COURTS.\nREGLES STRICTES:\n- Titre: MAX 40 caracteres\n- Message: MAX 2 phrases (80 caracteres)\n- Style DIRECT et impactant\n- Un seul emoji si necessaire\nNE JAMAIS faire de longs textes.`,
-  evenement: `Tu es un assistant pour une mosquee. Tu rediges des descriptions d'evenements.\nREGLES STRICTES:\n- Titre: MAX 60 caracteres\n- Description: MAX 4 phrases courtes\n- Inclure: date, heure, lieu\n- Style engageant mais concis`,
-  rappel: `Tu es un assistant pour une mosquee. Tu rediges des rappels spirituels.\nREGLES STRICTES:\n- MAX 3 phrases\n- Hadith + source courte si applicable\n- Peut etre en francais ET arabe\n- Ton inspirant mais bref`,
-  janaza: `Tu es un assistant pour une mosquee. Tu rediges des annonces de Salat Janaza.\nREGLES STRICTES:\n- Titre: Nom + "Salat Janaza"\n- Message: MAX 3 phrases\n- Inclure: nom, date, heure, lieu\n- Formule de condoleances courte`,
-  projet: `Tu es un assistant pour une mosquee. Tu rediges des descriptions de projets.\nREGLES STRICTES:\n- Titre: MAX 50 caracteres, accrocheur\n- Description: MAX 3 phrases\n- Expliquer l'impact concretement\n- Appel a l'action clair`,
-  general: `Tu es un assistant pour une mosquee. Tu aides a rediger du contenu.\nREGLES STRICTES:\n- MAX 3 phrases par reponse\n- Style direct et concis\n- Pas de formules de politesse longues\n- Va droit au but`,
+  notification: `${MOSQUE_CONTEXT}\n\nTu rediges une notification PUSH lue d'un coup d'oeil sur l'ecran verrouille d'un telephone. Elle doit etre TRES COURTE.\nFORMAT STRICT (a respecter absolument):\n- Titre: MAX 40 caracteres, commence par un emoji\n- Message: UNE SEULE phrase, MAX 80 caracteres, directe et bienveillante\n- INTERDIT: preambule du type "Chers freres et soeurs", signature, longues formules religieuses. Va droit a l'essentiel, chaleureusement mais en tres peu de mots.`,
+  annonce: `${MOSQUE_CONTEXT}\n\nTu rediges une annonce pour la communaute.\nFORMAT:\n- Titre: MAX 60 caracteres\n- Contenu: 2 a 4 phrases, ton accueillant et fraternel\n- Infos essentielles (quoi, quand, ou) presentees avec chaleur\n- Une breve formule bienveillante en ouverture ou cloture est la bienvenue.`,
+  popup: `${MOSQUE_CONTEXT}\n\nTu rediges le CONTENU d'un popup : un message affiche en MODAL plein ecran dans l'app, lu EN ENTIER (ce n'est PAS une notification courte).\nFORMAT:\n- 2 a 5 phrases chaleureuses, claires et bienveillantes\n- Message complet et accueillant, qui va a l'essentiel sans etre sec\n- Tu peux ouvrir par un salam et clore par une formule bienveillante.`,
+  evenement: `${MOSQUE_CONTEXT}\n\nTu rediges la description d'un evenement de la mosquee.\nFORMAT:\n- Titre: MAX 60 caracteres, donnant envie de venir\n- Description: 2 a 5 phrases chaleureuses\n- Inclure date, heure, lieu\n- Invite la communaute avec convivialite (ex: "Nous serions heureux de vous accueillir").`,
+  rappel: `${MOSQUE_CONTEXT}\n\nTu rediges un rappel spirituel doux et inspirant.\nFORMAT:\n- 2 a 4 phrases\n- Si pertinent, un verset ou hadith avec sa source courte (et l'arabe si utile)\n- Ton apaisant, qui rapproche d'Allah et reconforte le coeur.`,
+  janaza: `${MOSQUE_CONTEXT}\n\nTu rediges une annonce de Salat Janaza, avec gravite et compassion.\nFORMAT:\n- Titre: Nom du defunt + "Salat Janaza"\n- Message: 2 a 3 phrases\n- Inclure nom, date, heure, lieu\n- Une formule de condoleances et d'invocation (ex: "Inna lillahi wa inna ilayhi raji'un. Qu'Allah lui fasse misericorde").`,
+  projet: `${MOSQUE_CONTEXT}\n\nTu rediges la presentation d'un projet de la mosquee pour encourager les dons.\nFORMAT:\n- Titre: MAX 50 caracteres, porteur d'esperance\n- Description: 2 a 4 phrases\n- Expliquer l'impact concret pour la communaute\n- Appel a la generosite avec coeur (ex: "Chaque don, meme modeste, compte. Qu'Allah recompense votre generosite").`,
+  general: `${MOSQUE_CONTEXT}\n\nTu aides a rediger du contenu pour la mosquee.\nFORMAT:\n- Reste concis (2 a 5 phrases selon le besoin)\n- Ton chaleureux, fraternel et clair, fidele a l'esprit de la mosquee.`,
 };
 
-const OPENAI_TITLE_PROMPT = `Tu generes des TITRES pour une application mobile de mosquee.\nREGLES STRICTES:\n- Maximum 40 caracteres (5-6 mots)\n- Pas de ponctuation finale (pas de point, pas de !)\n- Commence par un emoji pertinent\n- Ton direct et informatif\n- Pas de formules ("Chers freres", "Rappel important", etc.)\n- Pas de ":" dans le titre\nGenere UN SEUL titre court et percutant, sans guillemets.`;
+const OPENAI_TITLE_PROMPT = `${MOSQUE_CONTEXT}\n\nTu generes UN SEUL titre court pour l'application de la mosquee.\nFORMAT:\n- Maximum 25 caracteres (2 a 4 mots) pour qu il ne soit JAMAIS coupe sur l ecran verrouille\n- Commence par un emoji pertinent\n- Pas de ponctuation finale, pas de ":" dans le titre\n- Ton chaleureux mais clair\nReponds uniquement par le titre, sans guillemets.`
 
 exports.generateAIContent = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .runWith({ timeoutSeconds: 30, memory: '256MB', secrets: ['MISTRAL_API_KEY'] })
   .https.onCall(async (data, context) => {
     // Admin requis
     if (!context.auth) {
@@ -8169,6 +8764,8 @@ exports.generateAIContent = functions
     if (!adminDoc.exists || adminDoc.data()?.actif !== true) {
       throw new functions.https.HttpsError('permission-denied', 'Accès réservé aux administrateurs actifs');
     }
+    // Anti-abus coûts IA : max 20 générations/heure/admin
+    await checkRateLimit(context.auth.uid, 'generateAI', 20, 3600);
 
     const { type, userPrompt, contentContext } = data;
     if (!userPrompt || typeof userPrompt !== 'string' || userPrompt.length > 2000) {
@@ -8178,9 +8775,11 @@ exports.generateAIContent = functions
     const allowedTypes = Object.keys(OPENAI_PROMPTS);
     const safeType = allowedTypes.includes(type) ? type : 'general';
 
-    const apiKey = OPENAI_API_KEY_ENV;
+    // Mistral prioritaire (clé dans Secret Manager), fallback OpenAI si présent
+    const useMistral = !!MISTRAL_API_KEY_ENV;
+    const apiKey = useMistral ? MISTRAL_API_KEY_ENV : OPENAI_API_KEY_ENV;
     if (!apiKey) {
-      throw new functions.https.HttpsError('failed-precondition', 'Clé OpenAI non configurée');
+      throw new functions.https.HttpsError('failed-precondition', 'Clé IA non configurée');
     }
 
     // Construire messages
@@ -8205,7 +8804,7 @@ exports.generateAIContent = functions
 
     // Appel OpenAI via https natif
     const payload = JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: useMistral ? 'mistral-small-latest' : 'gpt-4o-mini',
       messages,
       max_tokens: 500,
       temperature: 0.7,
@@ -8213,7 +8812,7 @@ exports.generateAIContent = functions
 
     const result = await new Promise((resolve, reject) => {
       const req = https.request({
-        hostname: 'api.openai.com',
+        hostname: useMistral ? 'api.mistral.ai' : 'api.openai.com',
         path: '/v1/chat/completions',
         method: 'POST',
         headers: {
@@ -8255,7 +8854,7 @@ exports.generateAIContent = functions
 
 exports.sendVerificationEmail = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 30, memory: '256MB' })
   .https.onCall(async (data, context) => {
     // 1. Auth check
     if (!context.auth) {
@@ -8292,19 +8891,20 @@ exports.sendVerificationEmail = functions
     const firebaseLink = await admin.auth().generateEmailVerificationLink(email, {
       url: 'https://el-mouhssinine.web.app',
     });
-    // Remplacer la page par défaut Firebase par notre page custom (UX propre)
-    const verificationLink = firebaseLink.replace(
-      'https://el-mouhssinine.firebaseapp.com/__/auth/action',
-      'https://el-mouhssinine.web.app/auth/action'
-    );
+    // Garder le handler Firebase (firebaseapp.com) et NON web.app : l'app mobile
+    // revendique web.app (Universal Link) et intercepterait le lien sur iPhone.
+    // firebaseapp.com s'ouvre dans Safari → vérification email directe.
+    const verificationLink = firebaseLink
+      .replace('https://el-mouhssinine.web.app/auth/action', 'https://el-mouhssinine.firebaseapp.com/__/auth/action')
+      .replace('https://el-mouhssinine.web.app/__/auth/action', 'https://el-mouhssinine.firebaseapp.com/__/auth/action');
 
     // 5. Envoyer via Brevo SMTP
     const brevoUser = BREVO_SMTP_USER;
     const brevoPass = BREVO_SMTP_PASS;
-    const fromEmail = BREVO_FROM_EMAIL || 'centreculturelislamique@orange.fr';
-    const fromName = BREVO_FROM_NAME || 'Mosquée El Mohsinine';
+    const fromEmail = BREVO_FROM_EMAIL;
+    const fromName = BREVO_FROM_NAME || 'Mosquée El Mouhssinine';
 
-    if (!brevoUser || !brevoPass) {
+    if (!brevoUser || !brevoPass || !fromEmail) {
       await logServerError('BREVO_SMTP non configuré pour sendVerificationEmail', 'sendVerificationEmail', { uid });
       throw new functions.https.HttpsError('failed-precondition', 'Service email non configuré');
     }
@@ -8359,3 +8959,340 @@ exports.sendVerificationEmail = functions
     console.log('📧 Email vérification Brevo envoyé à', maskEmail(email));
     return { success: true, message: 'Email de vérification envoyé' };
   });
+
+
+// ==================== RESET MOT DE PASSE VIA BREVO ====================
+// Envoie l'email de réinitialisation via Brevo (domaine authentifié) au lieu
+// de l'email Firebase par défaut (noreply@firebaseapp.com) qui finit en spam.
+// Callable SANS auth (l'utilisateur a oublié son mot de passe = déconnecté).
+exports.requestPasswordReset = functions
+  .region('europe-west1')
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data) => {
+    const email = (data && data.email ? String(data.email) : '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new functions.https.HttpsError('invalid-argument', 'Adresse email invalide');
+    }
+
+    // Rate limit : 1 email / 2 min par adresse (atomique)
+    const rlRef = admin.firestore().collection('password_reset_requests').doc(email.replace(/[^a-z0-9]/g, '_'));
+    await admin.firestore().runTransaction(async (t) => {
+      const doc = await t.get(rlRef);
+      if (doc.exists) {
+        const last = doc.data() && doc.data().lastSent && doc.data().lastSent.toDate ? doc.data().lastSent.toDate() : null;
+        if (last && (Date.now() - last.getTime()) < 120000) {
+          throw new functions.https.HttpsError('resource-exhausted', 'Veuillez patienter 2 minutes avant de redemander un lien.');
+        }
+      }
+      t.set(rlRef, { lastSent: admin.firestore.FieldValue.serverTimestamp() });
+    });
+
+    // Générer le lien de reset (échoue si email inconnu → on masque, anti-énumération)
+    let resetLink = null;
+    try {
+      resetLink = await admin.auth().generatePasswordResetLink(email, { url: 'https://el-mouhssinine.web.app' });
+      // Forcer le handler sur firebaseapp.com (PAS un domaine Universal Link de l'app)
+      // pour que le lien s'ouvre dans Safari, pas dans l'app mobile.
+      resetLink = resetLink
+        .replace('https://el-mouhssinine.web.app/auth/action', 'https://el-mouhssinine.firebaseapp.com/__/auth/action')
+        .replace('https://el-mouhssinine.web.app/__/auth/action', 'https://el-mouhssinine.firebaseapp.com/__/auth/action');
+    } catch (e) {
+      console.log('requestPasswordReset — email non trouvé:', maskEmail(email));
+      return { success: true, message: 'Si un compte existe, un email a été envoyé.' };
+    }
+
+    // Envoi via Brevo
+    const brevoUser = BREVO_SMTP_USER;
+    const brevoPass = BREVO_SMTP_PASS;
+    const fromEmail = BREVO_FROM_EMAIL;
+    const fromName = BREVO_FROM_NAME || 'Mosquée El Mouhssinine';
+    if (!brevoUser || !brevoPass || !fromEmail) {
+      await logServerError('BREVO_SMTP non configuré pour requestPasswordReset', 'requestPasswordReset', { email: maskEmail(email) });
+      throw new functions.https.HttpsError('failed-precondition', 'Service email non configuré');
+    }
+    const transporter = nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com', port: 587, secure: false,
+      auth: { user: brevoUser, pass: brevoPass },
+    });
+    const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #2e7d32 0%, #4caf50 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 22px;">🔑 Réinitialisation du mot de passe</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+        <p style="font-size: 16px;">Assalamu alaykum,</p>
+        <p style="font-size: 16px;">Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous :</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetLink}" style="background: #2e7d32; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+            🔑 Réinitialiser mon mot de passe
+          </a>
+        </div>
+        <p style="font-size: 14px; color: #666;">Si le bouton ne fonctionne pas, copiez ce lien :</p>
+        <p style="font-size: 12px; color: #999; word-break: break-all;">${resetLink}</p>
+        <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff9800;">
+          <p style="margin: 0; font-size: 14px;">⚠️ Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+        </div>
+        <p style="font-size: 14px; color: #444;">Barakallahu fik,<br><strong>L'équipe El Mouhssinine</strong></p>
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
+          <p style="color: #aaa; font-size: 11px;">Mosquée El Mouhssinine — Bourg-en-Bresse</p>
+        </div>
+      </div>
+    </div>`;
+    try {
+      await transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to: email,
+        replyTo: 'centreculturelislamique@orange.fr',
+        subject: '🔑 Réinitialisation de votre mot de passe — El Mouhssinine',
+        html: emailHtml,
+      });
+    } catch (smtpError) {
+      await logServerError(`SMTP requestPasswordReset échoué: ${smtpError.message}`, 'requestPasswordReset', { email: maskEmail(email) });
+      throw new functions.https.HttpsError('internal', "Erreur lors de l'envoi de l'email");
+    }
+    console.log('🔑 Email reset password Brevo envoyé à', maskEmail(email));
+    return { success: true, message: 'Email de réinitialisation envoyé' };
+  });
+
+
+// ==================== RELANCE AUTO DES ADHÉSIONS EN ATTENTE ====================
+// Relance les membres bloqués en attente d'une action de LEUR part (paiement/signature)
+// après 3 jours (une seule relance), + rappelle au backoffice les validations en attente
+// côté admin. Comble le trou : le cron checkExpiringCotisations ne balaie que les 'actif'.
+exports.relancePendingMemberships = functions
+  .region('europe-west1')
+  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 300, memory: '256MB' })
+  .pubsub.schedule('0 9 * * *')
+  .timeZone('Europe/Paris')
+  .onRun(async () => {
+    const db = admin.firestore();
+    const RELANCE_DELAY_DAYS = 3;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - RELANCE_DELAY_DAYS);
+
+    const brevoUser = BREVO_SMTP_USER;
+    const brevoPass = BREVO_SMTP_PASS;
+    const fromEmail = BREVO_FROM_EMAIL;
+    const fromName = BREVO_FROM_NAME || 'Mosquée El Mouhssinine';
+    let transporter = null;
+    if (brevoUser && brevoPass && fromEmail) {
+      transporter = nodemailer.createTransport({
+        host: 'smtp-relay.brevo.com', port: 587, secure: false,
+        auth: { user: brevoUser, pass: brevoPass },
+      });
+    }
+
+    let relanced = 0;
+
+    // a) Membres devant agir : paiement / signature non finalisé depuis > 3 jours
+    try {
+      const snap = await db.collection('members')
+        .where('status', 'in', ['en_attente_paiement', 'en_attente_signature'])
+        .get();
+      for (const doc of snap.docs) {
+        const m = doc.data();
+        if (m.relanceAttenteSent === true) continue; // une seule relance
+        const created = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate()
+          : (m.createdAt ? new Date(m.createdAt) : null);
+        if (!created || created > cutoff) continue; // trop récent
+        const prenom = m.prenom || 'Membre';
+        const isPaiement = m.status === 'en_attente_paiement';
+        const subject = isPaiement ? '⏳ Finalisez votre adhésion' : '⏳ Finalisez votre adhésion';
+        const bodyText = isPaiement
+          ? `Assalamu alaykum ${prenom},\n\nVotre adhésion à la Mosquée El Mouhssinine est en attente de paiement. Pour la finaliser, ouvrez l'application El Mouhssinine et complétez votre cotisation.\n\nBarakallahu fik,\nL'équipe El Mouhssinine`
+          : `Assalamu alaykum ${prenom},\n\nVotre adhésion à la Mosquée El Mouhssinine est en attente de finalisation. Ouvrez l'application El Mouhssinine pour la compléter.\n\nBarakallahu fik,\nL'équipe El Mouhssinine`;
+        if (transporter && m.email) {
+          try {
+            await transporter.sendMail({
+              from: `"${fromName}" <${fromEmail}>`,
+              to: m.email,
+              subject,
+              html: textToEmailHtml(bodyText, {
+                headerTitle: subject,
+                headerGradient: '#f59e0b, #fbbf24',
+                footerAssociation: 'Mosquée El Mouhssinine',
+              }),
+            });
+          } catch (e) { console.error('relance email échouée:', e.message); }
+        }
+        await sendPushToMember(
+          doc.id, subject,
+          isPaiement ? "Finalisez votre cotisation dans l'application." : "Finalisez votre adhésion dans l'application.",
+          { type: 'relance_attente' },
+        );
+        await doc.ref.update({
+          relanceAttenteSent: true,
+          relanceAttenteSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        relanced++;
+      }
+    } catch (e) { console.error('relancePendingMemberships (membres):', e.message); }
+
+    // b) Validations en attente côté ADMIN → rappel backoffice (1x/jour tant que pending)
+    try {
+      const pendingVal = await db.collection('members')
+        .where('status', '==', 'en_attente_validation').get();
+      if (!pendingVal.empty) {
+        await createNotifBO({
+          type: 'validation_requise',
+          titre: '⏳ Validations en attente',
+          message: `${pendingVal.size} adhésion(s) en attente de validation au bureau`,
+        });
+      }
+    } catch (e) { console.error('relancePendingMemberships (BO):', e.message); }
+
+    console.log(`relancePendingMemberships: ${relanced} membre(s) relancé(s)`);
+    return null;
+  });
+
+
+// ==================== HEALTH CHECK AUTOMATIQUE (niveau pro) ====================
+// Teste chaque jour TOUS les systèmes critiques de bout en bout et envoie un
+// rapport par email. Alerte immédiate si une défaillance, bilan vert le lundi.
+// Couvre exactement ce qui a déjà cassé un jour : Brevo, Stripe, paramètres
+// reçus fiscaux, Twilio, admins, index Firestore, backoffice en ligne, AASA.
+exports.healthCheck = functions
+  .runWith({
+    timeoutSeconds: 120,
+    memory: '256MB',
+    secrets: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO', 'BREVO_SMTP_PASS'],
+  })
+  .region('europe-west1')
+  .pubsub.schedule('0 7 * * *')
+  .timeZone('Europe/Paris')
+  .onRun(async () => {
+    const db = admin.firestore();
+    const checks = [];
+    const add = (name, ok, detail) => checks.push({ name, ok: !!ok, detail: detail || '' });
+
+    // 1. Email Brevo (connexion SMTP réelle)
+    try {
+      if (BREVO_SMTP_USER && BREVO_SMTP_PASS && BREVO_FROM_EMAIL) {
+        const t = nodemailer.createTransport({ host: 'smtp-relay.brevo.com', port: 587, secure: false, auth: { user: BREVO_SMTP_USER, pass: BREVO_SMTP_PASS } });
+        await t.verify();
+        add('Email (Brevo SMTP)', true, BREVO_FROM_EMAIL);
+      } else { add('Email (Brevo SMTP)', false, 'Identifiants Brevo manquants'); }
+    } catch (e) { add('Email (Brevo SMTP)', false, e.message); }
+
+    // 2. Paiements Stripe (clé valide)
+    try {
+      const k = process.env.STRIPE_SECRET_KEY;
+      if (k) { const stripe = require('stripe')(k); await stripe.balance.retrieve(); add('Paiements (Stripe)', true, 'API OK'); }
+      else { add('Paiements (Stripe)', false, 'Clé Stripe manquante'); }
+    } catch (e) { add('Paiements (Stripe)', false, e.message); }
+
+    // 3. Paramètres reçus fiscaux (sinon CERFA invalides le 2 janvier)
+    try {
+      const rf = await db.collection('settings').doc('recusFiscaux').get();
+      const d = rf.data() || {};
+      const ok = rf.exists && d.nom && d.adresse && d.siren && d.nomSignataire;
+      add('Reçus fiscaux (paramètres assoc.)', ok, ok ? 'Complet' : 'Champs manquants (nom/adresse/SIREN/signataire)');
+    } catch (e) { add('Reçus fiscaux (paramètres assoc.)', false, e.message); }
+
+    // 4. Tarifs cotisation
+    try {
+      const c = await db.collection('settings').doc('cotisation').get();
+      add('Tarifs cotisation', c.exists, c.exists ? 'OK' : 'settings/cotisation manquant');
+    } catch (e) { add('Tarifs cotisation', false, e.message); }
+
+    // 5. Super admins actifs
+    try {
+      const a = await db.collection('admins').where('actif', '==', true).get();
+      add('Super admins actifs', a.size >= 1, a.size + ' admin(s) actif(s)');
+    } catch (e) { add('Super admins actifs', false, e.message); }
+
+    // 6. Twilio config (canal bonus)
+    add('WhatsApp (Twilio)', !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+      process.env.TWILIO_WHATSAPP_FROM === '+14155238886' ? 'Sandbox (bonus — email = canal principal)' : 'Configuré');
+
+    // 7. Index Firestore critiques (relances + reçus fiscaux)
+    try {
+      await db.collection('payments').where('status', '==', 'succeeded')
+        .where('createdAt', '>=', admin.firestore.Timestamp.fromMillis(0)).limit(1).get();
+      add('Index Firestore (reçus fiscaux)', true, 'OK');
+    } catch (e) { add('Index Firestore (reçus fiscaux)', false, 'Index manquant ? ' + e.message.slice(0, 50)); }
+    try {
+      await db.collection('members').where('status', '==', 'actif')
+        .where('gracePeriodEnd', '<=', admin.firestore.Timestamp.fromMillis(Date.now())).limit(1).get();
+      add('Index Firestore (relances cotisation)', true, 'OK');
+    } catch (e) { add('Index Firestore (relances cotisation)', false, 'Index manquant ? ' + e.message.slice(0, 50)); }
+
+    // 8. Backoffice en ligne
+    try {
+      const r = await fetch('https://el-mouhssinine.web.app/login');
+      add('Backoffice en ligne', r.ok, 'HTTP ' + r.status);
+    } catch (e) { add('Backoffice en ligne', false, e.message); }
+
+    // 9. Universal Links AASA (le lien backoffice ne doit PAS ouvrir l'app)
+    try {
+      const r = await fetch('https://el-mouhssinine.web.app/.well-known/apple-app-site-association');
+      const j = await r.json();
+      const paths = (j && j.applinks && j.applinks.details && j.applinks.details[0] && j.applinks.details[0].paths) || [];
+      const ok = paths.length === 0 || JSON.stringify(paths).includes('NOT /*');
+      add('Universal Links (AASA)', ok, ok ? 'Restreint (OK)' : '⚠️ Trop large (/*)');
+    } catch (e) { add('Universal Links (AASA)', false, e.message); }
+
+    // ===== Bilan =====
+    const failed = checks.filter((c) => !c.ok);
+    const allOk = failed.length === 0;
+    const date = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'full', timeStyle: 'short' });
+    const isMonday = new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long' }).toLowerCase().startsWith('lun');
+
+    // Sauvegarde du dernier résultat (visible côté backoffice si besoin)
+    try {
+      await db.collection('settings').doc('healthCheck').set({
+        lastRun: admin.firestore.FieldValue.serverTimestamp(),
+        allOk,
+        failedCount: failed.length,
+        checks,
+      });
+    } catch (e) { console.error('healthCheck save:', e.message); }
+
+    console.log(`healthCheck: ${allOk ? 'TOUT OK' : failed.length + ' ÉCHEC(S)'}`);
+
+    // Email : si défaillance (tous les jours) OU bilan vert (lundi)
+    if (!allOk || isMonday) {
+      const rows = checks.map((c) =>
+        `<tr><td style="padding:8px 10px;border-bottom:1px solid #eee;font-size:14px;">${c.ok ? '✅' : '🔴'} ${c.name}</td>` +
+        `<td style="padding:8px 10px;border-bottom:1px solid #eee;font-size:13px;color:#666;">${c.detail}</td></tr>`).join('');
+      const headerColor = allOk ? '#2e7d32, #4caf50' : '#dc2626, #ef4444';
+      const titre = allOk ? '✅ Santé El Mouhssinine — Tout va bien' : `🔴 Santé El Mouhssinine — ${failed.length} problème(s) !`;
+      const html = `
+      <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;">
+        <div style="background:linear-gradient(135deg,${headerColor});padding:24px;text-align:center;border-radius:10px 10px 0 0;">
+          <h1 style="color:#fff;margin:0;font-size:20px;">${titre}</h1>
+          <p style="color:rgba(255,255,255,0.9);margin:6px 0 0;font-size:13px;">${date}</p>
+        </div>
+        <div style="background:#fafafa;padding:16px;border-radius:0 0 10px 10px;">
+          <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;">${rows}</table>
+          ${allOk ? '<p style="text-align:center;color:#2e7d32;margin:16px 0 0;font-size:14px;">Tous les systèmes sont opérationnels. 🌙</p>'
+            : '<p style="text-align:center;color:#dc2626;margin:16px 0 0;font-size:14px;font-weight:bold;">Action requise sur les points en rouge ci-dessus.</p>'}
+          <p style="text-align:center;color:#aaa;margin:16px 0 0;font-size:11px;">Health-check automatique quotidien — El Mouhssinine</p>
+        </div>
+      </div>`;
+      try {
+        if (BREVO_SMTP_USER && BREVO_SMTP_PASS && BREVO_FROM_EMAIL) {
+          const t = nodemailer.createTransport({ host: 'smtp-relay.brevo.com', port: 587, secure: false, auth: { user: BREVO_SMTP_USER, pass: BREVO_SMTP_PASS } });
+          await t.sendMail({
+            from: `"${BREVO_FROM_NAME || 'El Mouhssinine'} — Santé" <${BREVO_FROM_EMAIL}>`,
+            to: 'faicalkriouar@gmail.com',
+            subject: titre,
+            html,
+          });
+          console.log('healthCheck: rapport email envoyé');
+        }
+      } catch (e) { console.error('healthCheck email:', e.message); }
+    }
+
+    return null;
+  });
+
+// ==================== STATS TÉLÉCHARGEMENTS (App Store + Google Play) ====================
+const storeStats = require('./storeStats');
+exports.updateStoreStats = storeStats.updateStoreStats;
+exports.refreshStoreStats = storeStats.refreshStoreStats;
+
+// ==================== NOTIFS PUSH ADMIN (Web Push backoffice) ====================
+const pushNotif = require('./pushNotif');
+exports.saveAdminPushSub = pushNotif.saveAdminPushSub;
+exports.testAdminPush = pushNotif.testAdminPush;

@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-toastify'
-import { Moon, Calendar, Bell, Settings2, Clock, Utensils, Sunrise, Save } from 'lucide-react'
+import { Moon, Calendar, Bell, BellOff, Settings2, Clock, Utensils, Sunrise, Save } from 'lucide-react'
 import {
   Card,
   Button,
-  Loading
+  Loading,
+  ConfirmModal
 } from '../components/common'
 import { subscribeToDocument, setDocument } from '../services/firebase'
 import { format, addDays, parse, differenceInDays, isWithinInterval } from 'date-fns'
@@ -54,7 +55,10 @@ export default function Ramadan() {
   const [settings, setSettings] = useState(defaultRamadanSettings)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [showKillSwitch, setShowKillSwitch] = useState(false)
+  const [killing, setKilling] = useState(false)
   const [activeTab, setActiveTab] = useState('settings')
+  const [realTimes, setRealTimes] = useState({}) // vrais horaires Aladhan (Fajr/Maghrib) par jour
 
   // Charger les paramètres Ramadan
   useEffect(() => {
@@ -67,6 +71,37 @@ export default function Ramadan() {
     return () => unsubscribe()
   }, [])
 
+  // Recuperer les VRAIS horaires (Fajr/Maghrib) via l'API Aladhan, comme la page Horaires
+  useEffect(() => {
+    if (!settings.startDate) return
+    let cancelled = false
+    const fetchTimes = async () => {
+      try {
+        const start = parse(settings.startDate, 'yyyy-MM-dd', new Date())
+        const results = await Promise.all(
+          Array.from({ length: 30 }, (_, i) => {
+            const d = addDays(start, i)
+            const ddmmyyyy = format(d, 'dd-MM-yyyy')
+            return fetch(`https://api.aladhan.com/v1/timingsByCity/${ddmmyyyy}?city=Bourg-en-Bresse&country=France&method=12&tune=0,-20,0,2,4,8,0,27,0`)
+              .then(r => (r.ok ? r.json() : null))
+              .then(j => ({ key: format(d, 'yyyy-MM-dd'), t: j && j.data ? j.data.timings : null }))
+              .catch(() => ({ key: format(d, 'yyyy-MM-dd'), t: null }))
+          })
+        )
+        if (cancelled) return
+        const map = {}
+        results.forEach(({ key, t }) => {
+          if (t) map[key] = { fajr: t.Fajr.substring(0, 5), maghrib: t.Maghrib.substring(0, 5) }
+        })
+        setRealTimes(map)
+      } catch (e) {
+        console.error('Ramadan: echec recuperation horaires Aladhan', e)
+      }
+    }
+    fetchTimes()
+    return () => { cancelled = true }
+  }, [settings.startDate])
+
   // Calculer les 30 jours de Ramadan
   const ramadanDays = useMemo(() => {
     if (!settings.startDate) return []
@@ -76,7 +111,8 @@ export default function Ramadan() {
 
     for (let i = 0; i < 30; i++) {
       const date = addDays(start, i)
-      const times = getDefaultPrayerTimes(i)
+      const key = format(date, 'yyyy-MM-dd')
+      const times = realTimes[key] || getDefaultPrayerTimes(i)
 
       days.push({
         day: i + 1,
@@ -89,7 +125,7 @@ export default function Ramadan() {
     }
 
     return days
-  }, [settings.startDate])
+  }, [settings.startDate, realTimes])
 
   // Jour courant de Ramadan
   const currentRamadanDay = useMemo(() => {
@@ -105,6 +141,16 @@ export default function Ramadan() {
   }, [settings.startDate, settings.endDate, settings.enabled])
 
   const handleSave = async () => {
+    if (settings.enabled) {
+      if (!settings.startDate || !settings.endDate) {
+        toast.error('Veuillez renseigner les dates de début et fin du Ramadan')
+        return
+      }
+      if (settings.endDate < settings.startDate) {
+        toast.error('La date de fin doit être postérieure à la date de début')
+        return
+      }
+    }
     setSaving(true)
     try {
       await setDocument('settings', 'ramadan', {
@@ -148,6 +194,29 @@ export default function Ramadan() {
         }
       }
     })
+  }
+
+  // Kill-switch global : coupe les notifications Ramadan pour TOUS les utilisateurs.
+  // Met settings/ramadan.enabled = false (seul levier distant lu par l'app installee
+  // pour decider de programmer Suhoor/Iftar/Tarawih). Les apps arretent de re-programmer
+  // au prochain lancement ; les rappels deja programmes s'eteignent en quelques jours.
+  const handleDisableAllNotifications = async () => {
+    setKilling(true)
+    try {
+      const newSettings = { ...settings, enabled: false }
+      await setDocument('settings', 'ramadan', {
+        ...newSettings,
+        updatedAt: new Date()
+      })
+      setSettings(newSettings)
+      toast.success('Notifications Ramadan coupées pour tous les utilisateurs')
+      setShowKillSwitch(false)
+    } catch (error) {
+      console.error('Error disabling ramadan notifications:', error)
+      toast.error('Erreur lors de la coupure des notifications')
+    } finally {
+      setKilling(false)
+    }
   }
 
   if (loading) {
@@ -377,6 +446,37 @@ export default function Ramadan() {
 
       {activeTab === 'notifications' && (
         <div className="space-y-6">
+          {/* Kill-switch global : couper les notifications Ramadan pour tous */}
+          <Card className="border-red-500/30 bg-red-500/5 hover:border-red-500/40">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-red-500/20 shrink-0">
+                  <BellOff className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <h4 className="text-white font-semibold">Couper les notifications Ramadan (tout le monde)</h4>
+                  <p className="text-white/50 text-sm max-w-xl">
+                    Désactive le mode Ramadan côté serveur. Les applications arrêtent de programmer
+                    les rappels Suhoor / Iftar / Tarawih. Les rappels déjà programmés sur les téléphones
+                    s'éteignent en quelques jours.
+                  </p>
+                </div>
+              </div>
+              {settings.enabled ? (
+                <button
+                  onClick={() => setShowKillSwitch(true)}
+                  className="px-4 py-2.5 rounded-lg font-medium bg-red-500 hover:bg-red-600 text-white transition-colors whitespace-nowrap"
+                >
+                  Couper maintenant
+                </button>
+              ) : (
+                <span className="px-4 py-2.5 rounded-lg font-medium bg-white/10 text-white/50 whitespace-nowrap">
+                  Déjà coupées
+                </span>
+              )}
+            </div>
+          </Card>
+
           {/* Notification Suhoor */}
           <Card>
             <div className="flex items-center justify-between mb-4">
@@ -523,6 +623,18 @@ export default function Ramadan() {
           </div>
         </div>
       )}
+
+      {/* Confirmation kill-switch notifications Ramadan */}
+      <ConfirmModal
+        isOpen={showKillSwitch}
+        onClose={() => setShowKillSwitch(false)}
+        onConfirm={handleDisableAllNotifications}
+        title="Couper les notifications Ramadan"
+        message={'Désactiver le mode Ramadan et couper les rappels Suhoor / Iftar / Tarawih pour TOUS les utilisateurs ?\n\nLes applications arrêtent de programmer de nouveaux rappels. Les rappels déjà programmés s’éteignent en quelques jours.'}
+        confirmText="Couper maintenant"
+        danger
+        loading={killing}
+      />
     </div>
   )
 }

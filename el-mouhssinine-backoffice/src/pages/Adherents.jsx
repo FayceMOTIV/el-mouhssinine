@@ -24,7 +24,8 @@ import {
   getPaymentStats,
   PaymentType,
   subscribeToMessages,
-  checkDuplicateMemberEmail
+  checkDuplicateMemberEmail,
+  getRecusFiscauxByEmail
 } from '../services/firebase'
 import { useAuth } from '../context/AuthContext'
 import { getFunctions, httpsCallable } from 'firebase/functions'
@@ -123,6 +124,11 @@ export default function Adherents() {
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, membre: null })
   const [cotisationModal, setCotisationModal] = useState({ open: false, membre: null })
+  const [memberRecus, setMemberRecus] = useState([])
+  const [fiscalAddr, setFiscalAddr] = useState({ adresse: '', codePostal: '', ville: '' })
+  const [savingFiscal, setSavingFiscal] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const MEMBERS_PER_PAGE = 25
   const [messageModal, setMessageModal] = useState({ open: false, membre: null, message: '' })
   const [editingMembre, setEditingMembre] = useState(null)
   const [formData, setFormData] = useState(defaultMembre)
@@ -199,7 +205,7 @@ export default function Adherents() {
 
     // Type de cotisation
     const mensuels = membres.filter(m => (m.cotisation?.type || m.formule) === 'mensuel').length
-    const annuels = membres.filter(m => (m.cotisation?.type || m.formule) === 'annuel' || (!m.cotisation?.type && !m.formule)).length
+    const annuels = membres.filter(m => (m.cotisation?.type || m.formule) === 'annuel').length
 
     // Inscriptions récentes (ce mois)
     const now = new Date()
@@ -799,26 +805,69 @@ export default function Adherents() {
   }
 
   // ========== COLONNES TABLEAU SIMPLIFIÉ ==========
+  // Charger les reçus fiscaux du membre à l'ouverture de sa fiche
+  useEffect(() => {
+    if (cotisationModal.open && cotisationModal.membre?.email) {
+      getRecusFiscauxByEmail(cotisationModal.membre.email).then(setMemberRecus)
+    } else {
+      setMemberRecus([])
+    }
+    const mb = cotisationModal.membre
+    setFiscalAddr({
+      adresse: mb?.recuFiscalAdresse || '',
+      codePostal: mb?.recuFiscalCP || '',
+      ville: mb?.recuFiscalVille || '',
+    })
+  }, [cotisationModal.open, cotisationModal.membre?.email])
+
+  // Pagination liste adhérents (perf à grande échelle)
+  useEffect(() => { setCurrentPage(1) }, [filteredMembres.length])
+  const totalMemberPages = Math.max(1, Math.ceil(filteredMembres.length / MEMBERS_PER_PAGE))
+  const paginatedMembres = useMemo(
+    () => filteredMembres.slice((currentPage - 1) * MEMBERS_PER_PAGE, currentPage * MEMBERS_PER_PAGE),
+    [filteredMembres, currentPage],
+  )
+
   const columns = [
     {
       key: 'nom',
       label: 'Membre',
-      render: (row) => (
-        <div>
-          <p className="font-medium text-white">{row.prenom} {row.nom}</p>
-          <p className="text-sm text-white/50">{row.email || row.telephone || '-'}</p>
-        </div>
-      )
+      render: (row) => {
+        const inscrit = row.createdAt?.toDate?.() || (row.createdAt ? new Date(row.createdAt) : null)
+        // Règle: membre inscrit depuis plus d'un an -> nom affiché en vert (ancienneté)
+        const oneYearAgo = new Date()
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+        const isAncien = inscrit && !isNaN(inscrit) && inscrit <= oneYearAgo
+        return (
+          <div>
+            <p className={`font-medium ${isAncien ? 'text-green-400' : 'text-white'}`}>
+              {row.prenom} {row.nom}
+            </p>
+            <p className="text-sm text-white/50">{row.email || row.telephone || '-'}</p>
+            {inscrit && !isNaN(inscrit) && (
+              <p className="text-xs text-white/30 flex items-center gap-1 mt-0.5">
+                <Calendar className="w-3 h-3" /> Inscrit le {format(inscrit, 'dd/MM/yyyy')}
+                {isAncien && <span className="text-green-400/70 ml-1">• +1 an</span>}
+              </p>
+            )}
+          </div>
+        )
+      }
     },
     {
       key: 'cotisation',
       label: 'Cotisation',
-      render: (row) => (
-        <div>
-          <p className="text-white capitalize">{row.cotisation?.type || 'Annuel'}</p>
-          <p className="text-sm text-white/50">{row.cotisation?.montant || 100} €</p>
-        </div>
-      )
+      render: (row) => {
+        // Refléter la base : pas de valeur inventée si la cotisation n'existe pas
+        const type = row.cotisation?.type
+        const montant = row.cotisation?.montant
+        return (
+          <div>
+            <p className="text-white capitalize">{type || '—'}</p>
+            <p className="text-sm text-white/50">{montant != null ? `${montant} €` : '—'}</p>
+          </div>
+        )
+      }
     },
     {
       key: 'statut',
@@ -1178,7 +1227,29 @@ export default function Adherents() {
       {filteredMembres.length === 0 ? (
         <EmptyState icon={Users} title="Aucun membre" description="Ajoutez votre premier membre." action={() => handleOpenModal()} actionLabel="Ajouter" />
       ) : (
-        <Card><Table columns={columns} data={filteredMembres} /></Card>
+        <Card>
+          <Table columns={columns} data={paginatedMembres} />
+          {totalMemberPages > 1 && (
+            <div className="flex items-center justify-between mt-4 px-2">
+              <p className="text-white/40 text-sm">
+                {(currentPage - 1) * MEMBERS_PER_PAGE + 1}–{Math.min(currentPage * MEMBERS_PER_PAGE, filteredMembres.length)} sur {filteredMembres.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-sm disabled:opacity-40 hover:bg-white/20 transition-colors"
+                >← Précédent</button>
+                <span className="text-white/60 text-sm">Page {currentPage} / {totalMemberPages}</span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalMemberPages, p + 1))}
+                  disabled={currentPage === totalMemberPages}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-sm disabled:opacity-40 hover:bg-white/20 transition-colors"
+                >Suivant →</button>
+              </div>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* ========== MODAL GESTION COTISATION ========== */}
@@ -1336,6 +1407,137 @@ export default function Adherents() {
                     {m.cotisation?.dateFin ? format(m.cotisation.dateFin?.toDate?.() || new Date(m.cotisation.dateFin), 'dd/MM/yyyy') : '-'}
                   </p>
                 </div>
+              </div>
+
+              {/* ===== INFORMATIONS MEMBRE ===== */}
+              <div className="space-y-3">
+                <h4 className="text-white font-medium flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-secondary" />
+                  Informations
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {(() => {
+                    const insc = m.createdAt?.toDate?.() || (m.createdAt ? new Date(m.createdAt) : null)
+                    const maj = m.updatedAt?.toDate?.() || (m.updatedAt ? new Date(m.updatedAt) : null)
+                    const debut = m.cotisation?.dateDebut?.toDate?.() || (m.cotisation?.dateDebut ? new Date(m.cotisation.dateDebut) : null)
+                    const fmt = (d) => (d && !isNaN(d)) ? format(d, 'dd/MM/yyyy') : '—'
+                    const sourceLabel = m.source === 'app' ? '📱 Application' : m.source === 'backoffice' ? '🖥️ Backoffice' : (m.source || '—')
+                    const infos = [
+                      ["Date d'inscription", fmt(insc)],
+                      ['N° membre', m.memberId || '—'],
+                      ['Email', m.email || '—'],
+                      ['Téléphone', m.telephone || '—'],
+                      ['Adresse', m.adresse || '—'],
+                      ['Formule', m.formule || m.cotisation?.type || '—'],
+                      ['Début cotisation', fmt(debut)],
+                      ['Montant attendu', m.montantAttendu ? m.montantAttendu + ' €' : (m.cotisation?.montant ? m.cotisation.montant + ' €' : '—')],
+                      ['Réf. virement', m.referenceVirement || '—'],
+                      ['Membres liés', linkedMembers && linkedMembers.length ? linkedMembers.length + ' membre(s)' : 'Aucun'],
+                      ['Dernière MAJ', fmt(maj)],
+                      ['ID technique', m.uid || m.id || '—'],
+                    ]
+                    return infos.map(([label, val]) => (
+                      <div key={label} className="p-3 bg-white/5 rounded-lg">
+                        <p className="text-white/40 text-xs uppercase mb-0.5">{label}</p>
+                        <p className="text-white text-sm font-medium break-words">{val}</p>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              </div>
+
+              {/* ===== REÇUS FISCAUX ===== */}
+              <div className="space-y-2">
+                <h4 className="text-white font-medium flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-secondary" />
+                  Reçus fiscaux
+                </h4>
+                {memberRecus.length === 0 ? (
+                  <p className="text-white/40 text-sm">Aucun reçu fiscal émis pour ce membre.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {memberRecus.map(r => {
+                      const sent = r.sentAt?.toDate?.() || (r.sentAt ? new Date(r.sentAt) : null)
+                      return (
+                        <div key={r.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                          <div>
+                            <p className="text-white text-sm font-medium">
+                              Année {r.annee}{r.numero ? ` — ${r.numero}` : ''}
+                            </p>
+                            <p className="text-white/50 text-xs">
+                              {r.montantTotal ? `${r.montantTotal} €` : ''}
+                              {sent && !isNaN(sent) ? ` • envoyé le ${format(sent, 'dd/MM/yyyy')}` : ''}
+                            </p>
+                          </div>
+                          <span className="text-green-400 text-xs font-medium">
+                            {r.status === 'sent' ? '✓ Envoyé' : (r.status || '✓')}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ===== ADRESSE POUR LE REÇU FISCAL (override) ===== */}
+              <div className="space-y-2 p-4 bg-white/5 rounded-lg border border-white/10">
+                <h4 className="text-white font-medium flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-secondary" />
+                  Adresse pour le reçu fiscal
+                </h4>
+                <p className="text-white/40 text-xs">
+                  Laisse vide pour utiliser l'adresse saisie lors du don. Remplis uniquement pour <strong>corriger</strong> l'adresse qui apparaîtra sur le reçu fiscal.
+                </p>
+                {(m.adresse || m.codePostal || m.ville) && (
+                  <p className="text-white/30 text-xs">
+                    Adresse profil : {[m.adresse, m.codePostal, m.ville].filter(Boolean).join(' ') || '—'}
+                  </p>
+                )}
+                <Input
+                  label="Adresse (rue)"
+                  value={fiscalAddr.adresse}
+                  onChange={(e) => setFiscalAddr({ ...fiscalAddr, adresse: e.target.value })}
+                  placeholder="12 rue de la Paix"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    label="Code postal"
+                    value={fiscalAddr.codePostal}
+                    onChange={(e) => setFiscalAddr({ ...fiscalAddr, codePostal: e.target.value })}
+                    placeholder="01000"
+                  />
+                  <Input
+                    label="Ville"
+                    value={fiscalAddr.ville}
+                    onChange={(e) => setFiscalAddr({ ...fiscalAddr, ville: e.target.value })}
+                    placeholder="Bourg-en-Bresse"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  loading={savingFiscal}
+                  onClick={async () => {
+                    setSavingFiscal(true)
+                    try {
+                      await updateDocument('members', m.id, {
+                        recuFiscalAdresse: fiscalAddr.adresse.trim(),
+                        recuFiscalCP: fiscalAddr.codePostal.trim(),
+                        recuFiscalVille: fiscalAddr.ville.trim(),
+                      })
+                      toast.success(
+                        fiscalAddr.adresse.trim()
+                          ? 'Adresse fiscale corrigée enregistrée'
+                          : 'Adresse fiscale réinitialisée (adresse du don utilisée)'
+                      )
+                    } catch (err) {
+                      toast.error("Erreur lors de l'enregistrement")
+                    } finally {
+                      setSavingFiscal(false)
+                    }
+                  }}
+                >
+                  Enregistrer l'adresse fiscale
+                </Button>
               </div>
 
               {/* ===== SECTION PAIEMENT ===== */}
