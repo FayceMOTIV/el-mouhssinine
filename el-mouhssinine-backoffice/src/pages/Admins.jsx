@@ -67,6 +67,7 @@ export default function Admins() {
   const [formData, setFormData] = useState(defaultAdmin)
   const [password, setPassword] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const unsubscribe = subscribeToAdmins((data) => {
@@ -204,13 +205,17 @@ export default function Admins() {
       }
     }
 
+    setDeleting(true)
     try {
-      await deleteDocument('admins', deleteModal.admin.id)
+      const deleteAdmin = httpsCallable(functions, 'deleteAdmin')
+      await deleteAdmin({ uid: deleteModal.admin.id })
       toast.success('Administrateur supprimé')
       setDeleteModal({ open: false, admin: null })
     } catch (err) {
       console.error('Error deleting admin:', err)
       toast.error('Erreur lors de la suppression')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -426,7 +431,7 @@ export default function Admins() {
                 label="Mot de passe"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimum 6 caractères"
+                placeholder="Minimum 8 caractères"
                 required
               />
             </>
@@ -491,6 +496,7 @@ export default function Admins() {
         message={`Êtes-vous sûr de vouloir supprimer ${deleteModal.admin?.nom} ? Cette action est irréversible.`}
         confirmText="Supprimer"
         danger
+        loading={deleting}
       />
     </div>
   )

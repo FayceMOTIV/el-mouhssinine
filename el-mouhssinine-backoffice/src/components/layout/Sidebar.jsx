@@ -20,7 +20,8 @@ import {
   Bell,
   Moon,
   Mail,
-  ClipboardList
+  ClipboardList,
+  Briefcase
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { subscribeToUnreadMessagesCount } from '../../services/firebase'
@@ -40,6 +41,7 @@ const menuItems = [
   { path: '/messages', icon: MessageCircle, label: 'Messages', hasBadge: true },
   { path: '/notifications', icon: Bell, label: 'Notifications' },
   { path: '/ramadan', icon: Moon, label: 'Mode Ramadan' },
+  { path: '/services', icon: Briefcase, label: 'Services' },
   { path: '/emails', icon: Mail, label: 'Emails envoyés' },
   { path: '/audit-logs', icon: ClipboardList, label: 'Journal d\'audit', adminOnly: true },
   { path: '/admins', icon: Shield, label: 'Gestion Admins', adminOnly: true },
@@ -75,10 +77,11 @@ export default function Sidebar({ isOpen, onClose }) {
 
       {/* Sidebar */}
       <aside
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
         className={`
           fixed top-0 left-0 h-full w-64 bg-bg-dark border-r border-white/10
           transform transition-transform duration-300 z-50
-          lg:translate-x-0 lg:static
+          lg:translate-x-0 lg:static lg:!pt-0
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >

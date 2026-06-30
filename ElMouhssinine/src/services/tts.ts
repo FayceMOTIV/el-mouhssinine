@@ -1,5 +1,4 @@
 // Text-to-Speech service using react-native-tts
-import { Platform } from 'react-native';
 import { logger } from '../utils';
 
 let Tts: any = null;
@@ -7,7 +6,6 @@ let ttsInitialized = false;
 let listenersAdded = false;
 
 const loadTts = () => {
-  if (Platform.OS !== 'ios') return false;
   if (Tts) return true;
   try {
     Tts = require('react-native-tts').default;

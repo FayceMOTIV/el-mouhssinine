@@ -2,6 +2,7 @@ import notifee, {
   TriggerType,
   RepeatFrequency,
   AndroidImportance,
+  AndroidStyle,
   TimestampTrigger,
   EventType,
 } from '@notifee/react-native';
@@ -256,9 +257,10 @@ export const setupForegroundHandler = () => {
         else if (data?.type === 'jumua_reminder') channelId = 'jumua';
         else if (data?.type === 'fajr_reminder') channelId = 'fajr';
 
+        const fullBody = (data?.fullBody as string) || body;
         await notifee.displayNotification({
           title,
-          body,
+          body: fullBody,
           android: {
             channelId,
             importance:
@@ -266,6 +268,7 @@ export const setupForegroundHandler = () => {
                 ? AndroidImportance.HIGH
                 : AndroidImportance.DEFAULT,
             pressAction: { id: 'default' },
+            style: { type: AndroidStyle.BIGTEXT, text: fullBody },
           },
           data: data as Record<string, string>,
         });

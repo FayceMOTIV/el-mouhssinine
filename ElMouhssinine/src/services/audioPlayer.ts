@@ -1,17 +1,14 @@
-import { Platform } from 'react-native';
 import { logger } from '../utils';
 
 let TrackPlayer: any = null;
 let TrackPlayerEnums: any = {};
 
-if (Platform.OS === 'ios') {
-  try {
-    const mod = require('react-native-track-player');
-    TrackPlayer = mod.default;
-    TrackPlayerEnums = mod;
-  } catch (e) {
-    logger.error('[AudioPlayer] Failed to load track-player:', e);
-  }
+try {
+  const mod = require('react-native-track-player');
+  TrackPlayer = mod.default;
+  TrackPlayerEnums = mod;
+} catch (e) {
+  logger.error('[AudioPlayer] Failed to load track-player:', e);
 }
 
 const { Capability, State, AppKilledPlaybackBehavior, IOSCategoryMode, IOSCategory, IOSCategoryOptions } = TrackPlayerEnums;
@@ -49,6 +46,7 @@ export const setupPlayer = async (): Promise<boolean> => {
 
       await TrackPlayer.setupPlayer({
         waitForBuffer: true,
+        autoHandleInterruptions: true,
         // iOS: catégorie Playback pour que l'audio joue même en mode silencieux
         iosCategory: IOSCategory.Playback,
         iosCategoryMode: IOSCategoryMode.SpokenAudio,

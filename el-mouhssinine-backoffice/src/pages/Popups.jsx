@@ -70,6 +70,7 @@ export default function Popups() {
   const [editingPopup, setEditingPopup] = useState(null)
   const [formData, setFormData] = useState(defaultPopup)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const unsubscribe = subscribeToPopups((data) => {
@@ -150,6 +151,7 @@ export default function Popups() {
   const handleDelete = async () => {
     if (!deleteModal.popup) return
 
+    setDeleting(true)
     try {
       await deleteDocument('popups', deleteModal.popup.id)
       toast.success('Popup supprimée')
@@ -157,6 +159,8 @@ export default function Popups() {
     } catch (err) {
       console.error('Error deleting popup:', err)
       toast.error('Erreur lors de la suppression')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -469,6 +473,7 @@ export default function Popups() {
         message={`Êtes-vous sûr de vouloir supprimer la popup "${deleteModal.popup?.titre}" ?`}
         confirmText="Supprimer"
         danger
+        loading={deleting}
       />
     </div>
   )

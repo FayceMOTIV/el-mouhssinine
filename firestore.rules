@@ -51,6 +51,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Centre de notifications in-app par utilisateur (écrit par le serveur uniquement)
+    match /user_notifications/{docId} {
+      allow read: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || resource.data.audience == 'all');
+      // L'utilisateur peut seulement marquer SA notif comme lue
+      allow update: if request.auth != null &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create, delete: if false;
+    }
+
     // Dates islamiques - Lecture publique, écriture admin
     match /dates_islamiques/{docId} {
       allow read: if true;
@@ -60,6 +71,11 @@ service cloud.firestore {
     // Settings (horaires, infos mosquée) - Lecture publique, sauf 'association' (contient IBAN)
     // Bug 11 Fix: IBAN protégé - lecture admin uniquement pour le doc association
     // SECURITE Build 285b: cotisation et reglement = super_admin uniquement en écriture
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /settings/{docId} {
       allow read: if docId != 'association' || isAdmin();
       allow write: if docId in ['cotisation', 'reglement', 'association']
@@ -126,11 +142,16 @@ service cloud.firestore {
                           'stripePaymentId', 'cotisation', 'subscriptionCancelPending',
                           'stripeSubscriptionId', 'stripeCustomerId', 'validatedAt', 'validatedBy'
                         ]));
-      // Suppression: admin uniquement
-      allow delete: if isAdmin();
+      // Suppression: admin OU le proprietaire de son propre doc (nettoyage des doublons par l app)
+      allow delete: if isAdmin() ||
+                       request.auth.uid == memberId ||
+                       resource.data.uid == request.auth.uid ||
+                       (request.auth.token.email != null &&
+                        request.auth.token.email_verified == true &&
+                        resource.data.email == request.auth.token.email);
     }
 
-    // Dons - Lecture restreinte (RGPD), écriture par propriétaire ou admin
+    // Dons - Lecture restreinte (RGPD), écriture par proprietaire ou admin
     match /donations/{docId} {
       // Lecture: admin OU propriétaire du don uniquement (RGPD)
       allow read: if isAdmin() ||
@@ -159,6 +180,9 @@ service cloud.firestore {
       // SÉCURITÉ: Empêcher modification des champs financiers par le client
       allow update: if isAdmin() ||
         (isAuthenticated() &&
+          // SECURITE: verifier la propriete sur le doc EXISTANT (resource.data), pas sur la donnee client.
+          // Autorise aussi le claim d un don non encore attribue (webhook cree en premier sans userId).
+          (resource.data.userId == request.auth.uid || resource.data.userId == "" || !("userId" in resource.data)) &&
           request.resource.data.userId == request.auth.uid &&
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             'montant', 'amount', 'status', 'statut', 'stripePaymentIntentId',
@@ -208,7 +232,12 @@ service cloud.firestore {
         (isAuthenticated() && isMessageOwner() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['deletedAt', 'deletedByUser', 'deletedByUserAt', 'lu', 'reponses', 'updatedAt', 'status']) &&
-          (!('reponses' in request.resource.data) || request.resource.data.reponses.size() <= 50));
+          (!('reponses' in request.resource.data) || request.resource.data.reponses.size() <= 50) &&
+          // SECURITE [17]: verifier l usurpation mosquee UNIQUEMENT si l update modifie reellement reponses
+          // (sinon le marquage-lu / soft-delete d un message ou la mosquee a repondu en dernier serait bloque)
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reponses']) ||
+           request.resource.data.reponses.size() == 0 ||
+           request.resource.data.reponses[request.resource.data.reponses.size() - 1].get('createdBy', 'user') != 'mosquee'));
 
       // Suppression: admin uniquement (les users font du soft delete)
       allow delete: if isAdmin();

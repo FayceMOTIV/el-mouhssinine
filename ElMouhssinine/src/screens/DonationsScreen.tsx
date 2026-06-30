@@ -38,6 +38,7 @@ import {
   subscribeToMosqueeInfo,
   createDonation,
   addDonation,
+  getRecuFiscalInfoUrl,
 } from '../services/firebase';
 import { Project, ProjectFile, MosqueeInfo } from '../types';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -78,6 +79,9 @@ const DonationsScreen = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showZakatModal, setShowZakatModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('cb');
+  const [recuFiscalInfoUrl, setRecuFiscalInfoUrl] = useState<string | null>(
+    null,
+  );
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
   const [copied, setCopied] = useState('');
   const [showFilesModal, setShowFilesModal] = useState(false);
@@ -408,6 +412,9 @@ const DonationsScreen = () => {
         setMosqueeInfo(info);
       }
     });
+
+    // PDF "Infos reçu fiscal" (uploadé par l'admin) pour le bouton en bas de page
+    getRecuFiscalInfoUrl().then(setRecuFiscalInfoUrl);
 
     return () => {
       unsubProjects?.();
@@ -813,26 +820,6 @@ const DonationsScreen = () => {
                   <Text style={styles.donChoiceArrow}>{isRTL ? '←' : '→'}</Text>
                 </TouchableOpacity>
 
-                {/* Calculateur Zakat */}
-                <TouchableOpacity
-                  style={[
-                    styles.secondaryBtn,
-                    styles.zakatBtn,
-                    { marginTop: spacing.xl },
-                  ]}
-                  onPress={() => setShowZakatModal(true)}
-                >
-                  <Text
-                    style={[
-                      styles.secondaryBtnText,
-                      styles.zakatBtnText,
-                      isRTL && styles.rtlText,
-                    ]}
-                  >
-                    🧮 {t('calculateZakat')}
-                  </Text>
-                </TouchableOpacity>
-
                 {/* Reçu fiscal */}
                 <View style={styles.receiptInfoCard}>
                   <Text style={styles.receiptInfoIcon}>🧾</Text>
@@ -856,6 +843,25 @@ const DonationsScreen = () => {
                   </View>
                 </View>
 
+                {/* INFOS REÇU FISCAL — ouvre le PDF d'info uploadé par l'admin */}
+                {recuFiscalInfoUrl ? (
+                  <TouchableOpacity
+                    style={[styles.secondaryBtn, { marginTop: spacing.md }]}
+                    onPress={() =>
+                      Linking.openURL(recuFiscalInfoUrl).catch(() => {})
+                    }
+                  >
+                    <Text
+                      style={[styles.secondaryBtnText, isRTL && styles.rtlText]}
+                    >
+                      🧾{' '}
+                      {language === 'ar'
+                        ? 'معلومات الإيصال الضريبي'
+                        : 'INFOS REÇU FISCAL'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+
                 {/* Moyens de paiement acceptes */}
                 <View style={styles.paymentSection}>
                   <Text
@@ -878,13 +884,15 @@ const DonationsScreen = () => {
                         {t('creditCard')}
                       </Text>
                     </View>
-                    <View style={styles.applePayButton}>
-                      <Image
-                        source={require('../assets/apple-logo.png')}
-                        style={styles.appleLogo}
-                      />
-                      <Text style={styles.applePayText}>Pay</Text>
-                    </View>
+                    {Platform.OS === 'ios' && (
+                      <View style={styles.applePayButton}>
+                        <Image
+                          source={require('../assets/apple-logo.png')}
+                          style={styles.appleLogo}
+                        />
+                        <Text style={styles.applePayText}>Pay</Text>
+                      </View>
+                    )}
                     <View style={styles.paymentItem}>
                       <Text style={styles.paymentItemIcon}>🏦</Text>
                       <Text
@@ -1239,49 +1247,13 @@ const DonationsScreen = () => {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Toggle interne/externe */}
-                <View style={[styles.tabToggle, isRTL && styles.tabToggleRTL]}>
-                  <TouchableOpacity
-                    style={[
-                      styles.tabBtn,
-                      projectType === 'interne' && styles.tabBtnActive,
-                    ]}
-                    onPress={() => {
-                      setProjectType('interne');
-                      setSelectedProject(null);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.tabBtnText,
-                        projectType === 'interne' && styles.tabBtnTextActive,
-                        isRTL && styles.rtlText,
-                      ]}
-                    >
-                      🕌 {t('ourMosque')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.tabBtn,
-                      projectType === 'externe' && styles.tabBtnActive,
-                    ]}
-                    onPress={() => {
-                      setProjectType('externe');
-                      setSelectedProject(null);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.tabBtnText,
-                        projectType === 'externe' && styles.tabBtnTextActive,
-                        isRTL && styles.rtlText,
-                      ]}
-                    >
-                      🌍 {t('otherCauses')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                {/* Titre de section (le type est déjà choisi via la carte précédente :
+                    'Projet local' = mosquée, 'Cause externe' = externe — pas de toggle ici) */}
+                <Text style={[styles.donSectionHeader, isRTL && styles.rtlText]}>
+                  {projectType === 'interne'
+                    ? `🕌 ${t('ourMosque')}`
+                    : `🌍 ${t('otherCauses')}`}
+                </Text>
 
                 {/* Projets */}
                 <View style={styles.section}>
@@ -1474,8 +1446,8 @@ const DonationsScreen = () => {
                   </View>
                 )}
 
-                {/* Message sélection projet */}
-                {!selectedProject && (
+                {/* Message sélection projet — seulement s'il existe des projets à choisir */}
+                {displayProjects.length > 0 && !selectedProject && (
                   <View style={styles.selectProjectHint}>
                     <Text style={styles.selectProjectHintIcon}>☝️</Text>
                     <Text
@@ -1491,7 +1463,10 @@ const DonationsScreen = () => {
                   </View>
                 )}
 
-                {/* Boutons - Differents selon le type de projet */}
+                {/* Boutons + moyens de paiement — seulement s'il existe des projets.
+                    Si la liste est vide, on n'affiche QUE le message "Aucun projet disponible". */}
+                {displayProjects.length > 0 && (
+                <>
                 {projectType === 'interne' ? (
                   <>
                     <TouchableOpacity
@@ -1541,21 +1516,6 @@ const DonationsScreen = () => {
                     </Text>
                   </TouchableOpacity>
                 )}
-
-                <TouchableOpacity
-                  style={[styles.secondaryBtn, styles.zakatBtn]}
-                  onPress={() => setShowZakatModal(true)}
-                >
-                  <Text
-                    style={[
-                      styles.secondaryBtnText,
-                      styles.zakatBtnText,
-                      isRTL && styles.rtlText,
-                    ]}
-                  >
-                    🧮 {t('calculateZakat')}
-                  </Text>
-                </TouchableOpacity>
 
                 {/* Moyens de paiement */}
                 <View style={styles.paymentSection}>
@@ -1618,20 +1578,13 @@ const DonationsScreen = () => {
                             {t('creditCard')}
                           </Text>
                         </View>
-                        <View style={styles.applePayButton}>
-                          <Image
-                            source={require('../assets/apple-logo.png')}
-                            style={styles.appleLogo}
-                          />
-                          <Text style={styles.applePayText}>Pay</Text>
-                        </View>
-                        {Platform.OS !== 'ios' && (
-                          <View style={styles.googlePayButton}>
+                        {Platform.OS === 'ios' && (
+                          <View style={styles.applePayButton}>
                             <Image
-                              source={require('../assets/google-logo.png')}
-                              style={styles.googleLogo}
+                              source={require('../assets/apple-logo.png')}
+                              style={styles.appleLogo}
                             />
-                            <Text style={styles.googlePayText}>Pay</Text>
+                            <Text style={styles.applePayText}>Pay</Text>
                           </View>
                         )}
                         <View style={styles.paymentItem}>
@@ -1654,6 +1607,8 @@ const DonationsScreen = () => {
                     </View>
                   )}
                 </View>
+                </>
+                )}
 
                 <Text style={[styles.disclaimer, isRTL && styles.rtlText]}>
                   {t('donationDisclaimer')}
@@ -2019,7 +1974,7 @@ const DonationsScreen = () => {
               // Projets internes : choix CB (site sécurisé) ou virement
               return (
                 <View>
-                  {/* Option 1 : CB / Apple Pay via site */}
+                  {/* Option 1 : CB (+ Apple Pay sur iOS) via site */}
                   <TouchableOpacity
                     style={[
                       styles.paymentOption,
@@ -2034,7 +1989,13 @@ const DonationsScreen = () => {
                       <Text
                         style={[styles.paymentTitle, isRTL && styles.rtlText]}
                       >
-                        {language === 'ar' ? 'بطاقة ائتمان / Apple Pay' : 'CB / Apple Pay'}
+                        {Platform.OS === 'ios'
+                          ? language === 'ar'
+                            ? 'بطاقة ائتمان / Apple Pay'
+                            : 'CB / Apple Pay'
+                          : language === 'ar'
+                            ? 'بطاقة ائتمان'
+                            : 'Carte bancaire'}
                       </Text>
                       <Text
                         style={[styles.paymentDesc, isRTL && styles.rtlText]}
@@ -3621,6 +3582,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     marginBottom: 2,
+  },
+  donSectionHeader: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.accent,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
   donChoiceDesc: {
     fontSize: fontSize.sm,

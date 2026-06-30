@@ -19,7 +19,7 @@ export default function DonPublic() {
       setSuccess(true)
       const appRedirect = params.get('app_redirect')
       window.history.replaceState({}, '', '/don')
-      if (appRedirect) {
+      if (appRedirect && appRedirect.startsWith('fr.elmouhssinine.mosquee://')) {
         setAppRedirectUrl(appRedirect)
         // Rediriger très vite vers l'app — avant que l'user ait le temps de switcher manuellement
         // iOS va afficher un dialog "Ouvrir dans El Mohsinine ?" par-dessus la page de succès

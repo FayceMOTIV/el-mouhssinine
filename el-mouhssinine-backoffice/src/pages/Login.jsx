@@ -11,8 +11,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [resetSent, setResetSent] = useState(false)
+  const [showReset, setShowReset] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
+  const [resetMsg, setResetMsg] = useState(null) // { type: 'success' | 'error' | 'info', text }
   const { login } = useAuth()
   const navigate = useNavigate()
 
@@ -31,10 +33,35 @@ export default function Login() {
       } else if (err.code === 'auth/too-many-requests') {
         setError('Trop de tentatives. Veuillez réessayer plus tard.')
       } else {
-        setError(err.message || 'Une erreur est survenue')
+        setError('Une erreur est survenue. Réessayez.')
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleReset = async () => {
+    const targetEmail = (resetEmail || email).trim()
+    if (!targetEmail) {
+      setResetMsg({ type: 'error', text: 'Entrez votre adresse email.' })
+      return
+    }
+    setResetLoading(true)
+    setResetMsg(null)
+    try {
+      await resetPassword(targetEmail)
+      setResetMsg({ type: 'success', text: 'Email envoyé ! Vérifiez votre boîte de réception (et les spams).' })
+    } catch (err) {
+      const code = err?.code || ''
+      if (code.includes('resource-exhausted')) {
+        setResetMsg({ type: 'info', text: 'Patientez 2 minutes avant de redemander un lien.' })
+      } else if (code.includes('invalid-argument')) {
+        setResetMsg({ type: 'error', text: 'Adresse email invalide.' })
+      } else {
+        setResetMsg({ type: 'success', text: 'Si un compte existe, un email a été envoyé (pensez à vérifier les spams).' })
+      }
+    } finally {
+      setResetLoading(false)
     }
   }
 
@@ -46,7 +73,7 @@ export default function Login() {
           <div className="w-20 h-20 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-bold text-3xl">EM</span>
           </div>
-          <h1 className="text-2xl font-bold text-white">El Mohsinine</h1>
+          <h1 className="text-2xl font-bold text-white">El Mouhssinine</h1>
           <p className="text-white/50 mt-1">Backoffice Administration</p>
         </div>
 
@@ -116,41 +143,55 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-4 text-center">
-            {resetSent ? (
-              <p className="text-green-400 text-sm">
-                Email de réinitialisation envoyé ! Vérifiez votre boîte mail.
-              </p>
-            ) : (
+          {/* Mot de passe oublié */}
+          <div className="mt-5 pt-5 border-t border-white/10">
+            {!showReset ? (
               <button
                 type="button"
-                disabled={resetLoading}
-                onClick={async () => {
-                  if (!email) {
-                    setError('Entrez votre email pour réinitialiser le mot de passe')
-                    return
-                  }
-                  setResetLoading(true)
-                  setError('')
-                  try {
-                    await resetPassword(email)
-                    setResetSent(true)
-                  } catch (err) {
-                    setError('Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.')
-                  } finally {
-                    setResetLoading(false)
-                  }
-                }}
-                className="text-sm text-white/50 hover:text-secondary transition-colors"
+                onClick={() => { setShowReset(true); setResetEmail(email); setResetMsg(null) }}
+                className="w-full text-center text-sm text-secondary hover:underline"
               >
-                {resetLoading ? 'Envoi en cours...' : 'Mot de passe oublié ?'}
+                Mot de passe oublié ?
               </button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-white/70">
+                  Entrez votre email, vous recevrez un lien de réinitialisation.
+                </p>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="votre@email.fr"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-secondary"
+                  />
+                </div>
+                {resetMsg && (
+                  <p className={`text-sm ${resetMsg.type === 'success' ? 'text-green-400' : resetMsg.type === 'info' ? 'text-amber-400' : 'text-red-400'}`}>
+                    {resetMsg.text}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <Button type="button" onClick={handleReset} loading={resetLoading} className="flex-1">
+                    {resetMsg?.type === 'success' ? 'Renvoyer le lien' : 'Envoyer le lien'}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowReset(false); setResetMsg(null) }}
+                    className="px-4 py-2 text-sm text-white/50 hover:text-white/80"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
 
         <p className="text-center text-white/30 text-sm mt-6">
-          Mosquée El Mohsinine - Pantin © 2024
+          Mosquée El Mouhssinine — Bourg-en-Bresse © 2026
         </p>
       </div>
     </div>

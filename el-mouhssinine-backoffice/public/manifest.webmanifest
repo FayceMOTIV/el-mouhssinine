@@ -1,0 +1,14 @@
+{
+  "name": "El Mouhssinine — Admin",
+  "short_name": "EM Admin",
+  "description": "Backoffice de la mosquée El Mouhssinine",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#1a1a1a",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/elm-logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/elm-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

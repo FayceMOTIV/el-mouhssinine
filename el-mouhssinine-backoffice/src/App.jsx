@@ -27,6 +27,7 @@ import EmailTemplates from './pages/EmailTemplates'
 import AuditLogs from './pages/AuditLogs'
 import Privacy from './pages/Privacy'
 import DonPublic from './pages/DonPublic'
+import Services from './pages/Services'
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
@@ -106,6 +107,7 @@ function AppRoutes() {
         <Route path="notifications" element={<Notifications />} />
         <Route path="ramadan" element={<Ramadan />} />
         <Route path="emails" element={<EmailTemplates />} />
+        <Route path="services" element={<Services />} />
         <Route
           path="audit-logs"
           element={

@@ -2,7 +2,7 @@ export default function Card({ children, className = '', title, icon: Icon, acti
   return (
     <div
       className={`
-        bg-white/5 border border-border-gold rounded-xl p-6
+        bg-white/5 border border-border-gold rounded-xl p-4 sm:p-6
         transition-all duration-300 hover:border-secondary/50
         ${className}
       `}
@@ -44,15 +44,15 @@ export function StatCard({ icon: Icon, label, title, value, subvalue, trend, tre
 
   return (
     <Card className={className}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-white/60 text-sm mb-1">{displayLabel}</p>
-          <p className="text-3xl font-bold text-white">{value}</p>
-          {subvalue && <p className="text-white/50 text-sm mt-1">{subvalue}</p>}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-white/60 text-xs sm:text-sm mb-1 truncate">{displayLabel}</p>
+          <p className="text-2xl sm:text-3xl font-bold text-white">{value}</p>
+          {subvalue && <p className="text-white/50 text-xs sm:text-sm mt-1">{subvalue}</p>}
         </div>
         {Icon && (
-          <div className={`w-12 h-12 rounded-xl ${style.bg} flex items-center justify-center`}>
-            <Icon className={`w-6 h-6 ${style.text}`} />
+          <div className={`shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${style.bg} flex items-center justify-center`}>
+            <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${style.text}`} />
           </div>
         )}
       </div>

@@ -4,10 +4,10 @@
   "expo": {
     "name": "El Mouhssinine - Centre Culturel Islamique",
     "slug": "el-mouhssinine",
-    "version": "1.1.3",
-    "runtimeVersion": "1.0.0",
+    "version": "1.2.1",
+    "runtimeVersion": "1.2.0",
     "updates": {
-      "enabled": false,
+      "enabled": true,
       "checkAutomatically": "ON_ERROR_RECOVERY",
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/2b193d8f-2732-47c8-938a-336945c5fc84"
@@ -17,13 +17,16 @@
     },
     "android": {
       "package": "fr.elmouhssinine.mosquee",
-      "versionCode": 28
+      "versionCode": 48
     },
     "extra": {
       "eas": {
         "projectId": "2b193d8f-2732-47c8-938a-336945c5fc84"
       }
     },
-    "owner": "fayce"
+    "owner": "fayce",
+    "plugins": [
+      "react-native-edge-to-edge"
+    ]
   }
 }

@@ -22,6 +22,11 @@
     "production": {
       "ios": {
         "ascAppId": "6757600924"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./pc-api-key.json",
+        "track": "production",
+        "releaseStatus": "completed"
       }
     }
   }

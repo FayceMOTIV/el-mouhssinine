@@ -16,7 +16,8 @@ const pageTitles = {
   '/notifications': 'Notifications',
   '/audit-logs': 'Journal d\'audit',
   '/admins': 'Gestion Admins',
-  '/parametres': 'Paramètres'
+  '/parametres': 'Paramètres',
+  '/services': 'Services'
 }
 
 export default function Layout() {

@@ -11,7 +11,7 @@
  * Réf. : https://support.google.com/googleplay/android-developer/answer/9799150
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   View,
@@ -54,14 +54,7 @@ export const getProminentDisclosureChoice =
 const ProminentDisclosure: React.FC<ProminentDisclosureProps> = ({
   onDone,
 }) => {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      const seen = await hasSeenProminentDisclosure();
-      if (!seen) setVisible(true);
-    })();
-  }, []);
+  const [visible, setVisible] = useState(true);
 
   const persistChoice = async (choice: DisclosureChoice) => {
     try {

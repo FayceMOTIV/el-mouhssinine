@@ -67,6 +67,10 @@ export default function EmailTemplates() {
 
   const handleSave = async () => {
     if (!selectedTemplate) return
+    if (!editedSubject.trim() || !editedBody.trim()) {
+      toast.error('Le sujet et le contenu sont obligatoires')
+      return
+    }
     setSaving(true)
     try {
       await updateDoc(doc(db, 'email_templates', selectedTemplate.id), {

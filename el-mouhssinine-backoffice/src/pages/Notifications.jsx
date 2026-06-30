@@ -60,6 +60,7 @@ export default function Notifications() {
   const [notifHistory, setNotifHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [sendConfirmModal, setSendConfirmModal] = useState({ open: false, notification: null })
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const unsubscribe = subscribeToNotifications((data) => {
@@ -165,6 +166,7 @@ export default function Notifications() {
   const handleDelete = async () => {
     if (!deleteModal.notification) return
 
+    setDeleting(true)
     try {
       await deleteDocument('notifications', deleteModal.notification.id)
       toast.success('Notification supprimée')
@@ -172,6 +174,8 @@ export default function Notifications() {
     } catch (err) {
       console.error('Error deleting notification:', err)
       toast.error('Erreur lors de la suppression')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -397,7 +401,7 @@ export default function Notifications() {
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-white">Message</label>
               <AIWriteButton
-                type="notification"
+                type="annonce"
                 field="message"
                 existingTitle={formData.titre}
                 existingContent={formData.message}
@@ -560,6 +564,7 @@ export default function Notifications() {
         title="Envoyer la notification"
         message={`Envoyer "${sendConfirmModal.notification?.titre}" à ${getTopicLabel(sendConfirmModal.notification?.topic || '')} maintenant ?`}
         confirmText="Envoyer"
+        loading={!!sendingNotifId}
       />
 
       {/* Delete Confirmation */}
@@ -571,6 +576,7 @@ export default function Notifications() {
         message={`Êtes-vous sûr de vouloir supprimer la notification "${deleteModal.notification?.titre}" ?`}
         confirmText="Supprimer"
         danger
+        loading={deleting}
       />
     </div>
   )

@@ -1628,6 +1628,10 @@ export const scheduleRamadanNotifications = async (
     tarawihTitle: string;
     tarawihBody: string;
   },
+  // Date de fin du Ramadan (yyyy-MM-dd). Si fournie, aucun rappel n'est
+  // programme au-dela : evite les notifs Suhoor/Iftar/Tarawih hors saison
+  // quand le mode Ramadan reste actif cote serveur apres la fin du mois.
+  ramadanEndDate?: string | null,
 ): Promise<void> => {
   try {
     logger.log('[RamadanNotif] ======== SCHEDULING START ========');
@@ -1653,6 +1657,17 @@ export const scheduleRamadanNotifications = async (
     // Scheduler pour les 7 prochains jours (dates en timezone Paris)
     for (let i = 0; i < 7; i++) {
       const baseDate = addDays(parisToday, i);
+
+      // Ne jamais programmer au-dela de la fin du Ramadan
+      if (ramadanEndDate) {
+        const baseDateStr = `${baseDate.getFullYear()}-${String(
+          baseDate.getMonth() + 1,
+        ).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`;
+        if (baseDateStr > ramadanEndDate) {
+          continue;
+        }
+      }
+
       const daySuffix = `day${i}`;
 
       // ========== SUHOOR (avant Fajr) ==========

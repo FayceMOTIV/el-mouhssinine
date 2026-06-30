@@ -20,6 +20,16 @@ export default function Modal({
     }
   }, [isOpen])
 
+  // Fermeture au clavier (Escape)
+  useEffect(() => {
+    if (!isOpen) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose?.()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const sizes = {
@@ -28,7 +38,7 @@ export default function Modal({
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
     full: 'max-w-6xl',
-    preview: 'max-w-[80vw] min-w-[600px]'
+    preview: 'max-w-[80vw] md:min-w-[600px]'
   }
 
   return (
@@ -41,6 +51,9 @@ export default function Modal({
 
       {/* Modal */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
         className={`
           relative w-full ${sizes[size]} bg-bg-dark border border-border-gold
           rounded-2xl shadow-2xl transform transition-all duration-300
@@ -49,10 +62,11 @@ export default function Modal({
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h2 className="text-xl font-semibold text-white">{title}</h2>
+          <h2 id="modal-title" className="text-xl font-semibold text-white">{title}</h2>
           {showClose && (
             <button
               onClick={onClose}
+              aria-label="Fermer"
               className="p-2 rounded-lg hover:bg-white/10 transition-colors"
             >
               <X className="w-5 h-5 text-white/60" />

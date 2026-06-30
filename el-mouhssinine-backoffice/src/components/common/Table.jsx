@@ -47,9 +47,53 @@ export default function Table({
     )
   }
 
+  // Détecte la colonne "actions" (rendue pleine largeur en bas de la carte mobile)
+  const isActionCol = (col) =>
+    !col.label || /action/i.test(col.key || '') || /action/i.test(col.label || '')
+
   return (
     <div className="bg-white/5 border border-border-gold rounded-xl overflow-hidden">
-      <div className="overflow-x-auto">
+      {/* ===== Vue MOBILE : cartes empilées (md:hidden) ===== */}
+      <div className="md:hidden divide-y divide-white/5">
+        {sortedData.map((row, idx) => {
+          const main = columns[0]
+          const middle = columns.slice(1).filter((c) => !isActionCol(c))
+          const actions = columns.filter(isActionCol)
+          return (
+            <div
+              key={row.id || idx}
+              className={`p-4 ${onRowClick ? 'active:bg-white/5' : ''}`}
+              onClick={() => onRowClick?.(row)}
+            >
+              {/* Identité principale (1ère colonne) */}
+              <div className="mb-3">{main.render ? main.render(row) : row[main.key]}</div>
+              {/* Détails (label: valeur) */}
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {middle.map((col) => {
+                  const val = col.render ? col.render(row) : row[col.key]
+                  return (
+                    <div key={col.key} className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-wide text-white/30">{col.label}</p>
+                      <div className="text-sm text-white/80">{val ?? '-'}</div>
+                    </div>
+                  )
+                })}
+              </div>
+              {/* Actions pleine largeur */}
+              {actions.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                  {actions.map((col) => (
+                    <div key={col.key}>{col.render ? col.render(row) : row[col.key]}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ===== Vue DESKTOP : tableau (hidden md:block) ===== */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-white/10">

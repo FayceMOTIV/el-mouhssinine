@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
+import PushNotifCard from '../components/PushNotifCard'
 import {
   Settings, Save, Building2, MapPin, Phone, Mail, Globe, Clock,
   Palette, Database, Landmark, Image, Upload, CreditCard, ScrollText, Trash2, Check, X, Stamp
@@ -371,6 +372,9 @@ export default function Parametres() {
 
   return (
     <div className="space-y-6">
+      {/* Notifications push admin (en haut, toujours visible) */}
+      <PushNotifCard />
+
       {/* Tabs */}
       <div className="flex gap-2 border-b border-white/10 pb-4 overflow-x-auto">
         {tabs.map(tab => (
@@ -498,7 +502,7 @@ export default function Parametres() {
               label="N° SIREN ou RNA"
               value={associationInfo.siren}
               onChange={(e) => {
-                const value = e.target.value.replace(/\D/g, '').slice(0, 14)
+                const value = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 14)
                 setAssociationInfo({ ...associationInfo, siren: value })
               }}
               placeholder="123456789 ou W012345678"

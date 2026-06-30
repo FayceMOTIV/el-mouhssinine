@@ -47,6 +47,7 @@ export default function Evenements() {
   const [editingEvenement, setEditingEvenement] = useState(null)
   const [formData, setFormData] = useState(defaultEvenement)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
   // Filtrer les événements par recherche
@@ -71,13 +72,19 @@ export default function Evenements() {
   const handleOpenModal = (evenement = null) => {
     if (evenement) {
       setEditingEvenement(evenement)
-      const date = evenement.date?.toDate?.() || new Date(evenement.date)
+      let formattedDate = ''
+      try {
+        const date = evenement.date?.toDate?.() || new Date(evenement.date)
+        formattedDate = format(date, 'yyyy-MM-dd')
+      } catch {
+        formattedDate = ''
+      }
       setFormData({
         titre: evenement.titre || '',
         titreAr: evenement.titreAr || '',
         description: evenement.description || '',
         descriptionAr: evenement.descriptionAr || '',
-        date: format(date, 'yyyy-MM-dd'),
+        date: formattedDate,
         heure: evenement.heure || '',
         lieu: evenement.lieu || '',
         lieuAr: evenement.lieuAr || '',
@@ -132,6 +139,7 @@ export default function Evenements() {
   const handleDelete = async () => {
     if (!deleteModal.evenement) return
 
+    setDeleting(true)
     try {
       await deleteDocument('events', deleteModal.evenement.id)
       toast.success('Événement supprimé')
@@ -139,6 +147,8 @@ export default function Evenements() {
     } catch (err) {
       console.error('Error deleting evenement:', err)
       toast.error('Erreur lors de la suppression')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -500,6 +510,7 @@ export default function Evenements() {
         message={`Êtes-vous sûr de vouloir supprimer l'événement "${deleteModal.evenement?.titre}" ?`}
         confirmText="Supprimer"
         danger
+        loading={deleting}
       />
 
       {/* Notification Confirmation Modal */}

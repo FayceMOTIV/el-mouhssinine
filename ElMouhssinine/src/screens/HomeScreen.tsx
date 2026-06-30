@@ -49,6 +49,8 @@ import {
   subscribeToMosqueeInfo,
   subscribeToGeneralSettings,
   subscribeToRamadanSettings,
+  subscribeToServices,
+  MosqueService,
   IqamaDelays,
   JumuaTimes,
   addMinutesToTime,
@@ -72,6 +74,7 @@ import {
   markPrayerAsPrayed,
   getRamadanNotificationSettings,
   scheduleRamadanNotifications,
+  cancelRamadanNotifications,
 } from '../services/prayerNotifications';
 import { setInAppNotificationCallback } from '../services/notifications';
 import auth from '@react-native-firebase/auth';
@@ -169,6 +172,7 @@ const HomeScreen = () => {
 
   const [showCalendar, setShowCalendar] = useState(false);
   const [showServicesModal, setShowServicesModal] = useState(false);
+  const [mosqueServices, setMosqueServices] = useState<MosqueService[]>([]);
   const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null);
   const [parisTime, setParisTime] = useState('');
   const [rawPrayerTimings, setRawPrayerTimings] =
@@ -510,6 +514,8 @@ const HomeScreen = () => {
       }
     });
 
+    const unsubServices = subscribeToServices(setMosqueServices);
+
     // Subscriptions aux popups Firebase - File d'attente multi-popups
     const unsubPopups = subscribeToPopups(async popups => {
       logger.log(`[HomeScreen] Popups reçus: ${popups?.length || 0}`);
@@ -528,6 +534,7 @@ const HomeScreen = () => {
       unsubGeneralSettings?.();
       unsubRamadan?.();
       unsubPopups?.();
+      unsubServices?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -609,7 +616,13 @@ const HomeScreen = () => {
   useFocusEffect(
     useCallback(() => {
       const scheduleRamadan = async () => {
-        if (!rawPrayerTimings || !ramadanSettings?.enabled) return;
+        if (!rawPrayerTimings) return;
+        // Mode Ramadan desactive cote serveur : annuler tout rappel residuel
+        // deja programme sur l'appareil (arret immediat, pas d'attente du tail).
+        if (!ramadanSettings?.enabled) {
+          await cancelRamadanNotifications();
+          return;
+        }
         try {
           const settings = await getRamadanNotificationSettings();
           const anyEnabled =
@@ -640,6 +653,7 @@ const HomeScreen = () => {
             ramadanSettings.tarawihTime,
             settings,
             translations,
+            ramadanSettings.endDate,
           );
           logger.log('[HomeScreen] Ramadan notifications auto-schedulées');
         } catch (error) {
@@ -1454,35 +1468,8 @@ const HomeScreen = () => {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.servicesModalGrid}>
-                {[
-                  { icon: '🅿️', labelKey: 'parking', descKey: 'parkingDesc' },
-                  {
-                    icon: '♿',
-                    labelKey: 'accessHandicapes',
-                    descKey: 'accessHandicapesDesc',
-                  },
-                  {
-                    icon: '💧',
-                    labelKey: 'salleAblution',
-                    descKey: 'salleAblutionDesc',
-                  },
-                  {
-                    icon: '👩',
-                    labelKey: 'espaceFemmes',
-                    descKey: 'espaceFemmesDesc',
-                  },
-                  {
-                    icon: '📚',
-                    labelKey: 'coursAdultes',
-                    descKey: 'coursAdultesDesc',
-                  },
-                  {
-                    icon: '👶',
-                    labelKey: 'coursEnfants',
-                    descKey: 'coursEnfantsDesc',
-                  },
-                ].map((service, index) => (
-                  <View key={index} style={styles.servicesModalItem}>
+                {mosqueServices.map(service => (
+                  <View key={service.id} style={styles.servicesModalItem}>
                     <View style={styles.servicesModalItemIcon}>
                       <Text style={styles.servicesModalItemIconText}>
                         {service.icon}
@@ -1495,18 +1482,25 @@ const HomeScreen = () => {
                           isRTL && styles.rtlText,
                         ]}
                       >
-                        {t(service.labelKey as any)}
+                        {isRTL ? service.labelAr : service.label}
                       </Text>
                       <Text
                         style={[
                           styles.servicesModalItemDesc,
                           isRTL && styles.rtlText,
+                          !service.available && {color: '#e74c3c'},
                         ]}
                       >
-                        {isRTL ? 'متوفر' : 'Disponible'}
+                        {service.available
+                          ? (isRTL ? 'متوفر' : 'Disponible')
+                          : (isRTL ? 'غير متوفر' : 'Indisponible')}
                       </Text>
                     </View>
-                    <Text style={styles.servicesModalItemCheck}>✓</Text>
+                    {service.available ? (
+                      <Text style={styles.servicesModalItemCheck}>✓</Text>
+                    ) : (
+                      <Text style={[styles.servicesModalItemCheck, {color: '#e74c3c'}]}>✗</Text>
+                    )}
                   </View>
                 ))}
               </View>
@@ -1999,7 +1993,7 @@ const HomeScreen = () => {
                   const adresseCimetiere = janazaItem.cemeteryAddress || '';
                   const heure = janazaItem.prayerTime || janazaItem.heure;
                   const phraseAr =
-                    janazaItem.deceasedNameAr ||
+                    janazaItem.messageAr ||
                     janazaItem.phraseAr ||
                     'إِنَّا لِلَّهِ وَإِنَّا إِلَيْهِ رَاجِعُونَ';
                   const phraseFr =
@@ -3241,8 +3235,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    maxHeight: '85%',
-    minHeight: 400,
+    height: '82%',
+    maxHeight: '92%',
   },
   historyCloseBtn: {
     position: 'absolute',

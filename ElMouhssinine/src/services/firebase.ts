@@ -35,12 +35,11 @@ import {
 // MODE DÉMO : true = données mock uniquement, false = Firebase avec fallback mock
 const FORCE_DEMO_MODE = false;
 
-// Helper pour fusionner Firebase + Mock (Firebase prioritaire, mock en fallback)
-const mergeWithMock = <T>(firebaseData: T[], mockData: T[]): T[] => {
-  if (firebaseData && firebaseData.length > 0) {
-    return firebaseData as T[];
-  }
-  return mockData as T[];
+// PROD: refléter la base — jamais de données de démo (les mocks sont réservés à FORCE_DEMO_MODE).
+// Avant, ce helper retombait sur les mocks quand la base était vide => l'app affichait de
+// faux events / dates islamiques / etc. On renvoie désormais toujours la vraie donnée (même vide).
+const mergeWithMock = <T>(firebaseData: T[], _mock: T[]): T[] => {
+  return firebaseData || [];
 };
 
 // Helper: Convert Firestore timestamp to Date
@@ -173,19 +172,18 @@ export const subscribeToAnnouncements = (
             (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime(),
           );
           logger.firebase('📢 Annonces finales:', data.length);
-          callback(
-            data.length > 0 ? data : (mockAnnouncements as Announcement[]),
-          );
+          // PROD: refléter la base (même vide) — jamais de données de démo
+          callback(data);
         },
         error => {
           logger.error('❌ [Firebase] Announcements error:', error.message);
-          callback(mockAnnouncements as Announcement[]);
+          callback([]);
         },
       );
   } catch (error) {
     const err = error as Error;
     logger.error('❌ [Firebase] Announcements catch:', err?.message);
-    callback(mockAnnouncements as Announcement[]);
+    callback([]);
     return () => {};
   }
 };
@@ -259,17 +257,18 @@ export const subscribeToEvents = (callback: (data: Event[]) => void) => {
           // Tri côté client (plus proche en premier)
           data.sort((a, b) => a.date.getTime() - b.date.getTime());
           logger.firebase('📅 Events finaux:', data.length);
-          callback(data.length > 0 ? data : (mockEvents as Event[]));
+          // PROD: refléter la base (même vide) — jamais de données de démo
+          callback(data);
         },
         error => {
           logger.error('❌ [Firebase] Events error:', error.message);
-          callback(mockEvents as Event[]);
+          callback([]);
         },
       );
   } catch (error) {
     const err = error as Error;
     logger.error('❌ [Firebase] Events catch:', err?.message);
-    callback(mockEvents as Event[]);
+    callback([]);
     return () => {};
   }
 };
@@ -451,8 +450,8 @@ export const getActiveJanaza = async (): Promise<Janaza | null> => {
       .limit(1)
       .get();
     if (snapshot.empty) {
-      const mockActive = mockJanaza.find(j => j.isActive);
-      return mockActive ? (mockActive as Janaza) : null;
+      // PROD: jamais de faux avis de décès — refléter la base (vide = null)
+      return null;
     }
     const doc = snapshot.docs[0];
     const docData = doc.data();
@@ -474,8 +473,7 @@ export const getActiveJanaza = async (): Promise<Janaza | null> => {
     };
   } catch (error) {
     logger.error('[Firebase] getActiveJanaza error:', error);
-    const mockActive = mockJanaza.find(j => j.isActive);
-    return mockActive ? (mockActive as Janaza) : null;
+    return null;
   }
 };
 
@@ -508,16 +506,17 @@ export const subscribeToProjects = (callback: (data: Project[]) => void) => {
             iban: doc.data().iban,
             fichiers: doc.data().fichiers || [],
           }));
-          callback(mergeWithMock(data, mockProjects as Project[]));
+          // PROD: refléter la base (même vide) — jamais de données de démo
+          callback(data);
         },
         error => {
           logger.error('[Firebase] Projects error:', error);
-          callback(mockProjects as Project[]);
+          callback([]);
         },
       );
   } catch (error) {
     logger.error('[Firebase] Projects catch:', error);
-    callback(mockProjects as Project[]);
+    callback([]);
     return () => {};
   }
 };
@@ -830,12 +829,12 @@ export const subscribeToPopups = (callback: (data: Popup[]) => void) => {
         },
         error => {
           logger.error('[Firebase] Popups error:', error);
-          callback(mockPopups as Popup[]);
+          callback([]);
         },
       );
   } catch (error) {
     logger.error('[Firebase] Popups catch:', error);
-    callback(mockPopups as Popup[]);
+    callback([]);
     return () => {};
   }
 };
@@ -867,12 +866,12 @@ export const subscribeToRappels = (callback: (data: Rappel[]) => void) => {
         },
         error => {
           logger.error('[Firebase] Rappels error:', error);
-          callback(mockRappels as Rappel[]);
+          callback([]);
         },
       );
   } catch (error) {
     logger.error('[Firebase] Rappels catch:', error);
-    callback(mockRappels as Rappel[]);
+    callback([]);
     return () => {};
   }
 };
@@ -948,6 +947,19 @@ export const subscribeToMosqueeInfo = (
     logger.error('[Firebase] MosqueeInfo catch:', error);
     callback(mockMosqueeInfo);
     return () => {};
+  }
+};
+
+// Récupère l'URL du PDF "Infos reçu fiscal" uploadé par l'admin (settings/general.recuFiscalInfoUrl)
+export const getRecuFiscalInfoUrl = async (): Promise<string | null> => {
+  if (FORCE_DEMO_MODE) return null;
+  try {
+    const doc = await firestore().collection('settings').doc('general').get();
+    const url = doc.data()?.recuFiscalInfoUrl as string | undefined;
+    return url || null;
+  } catch (error) {
+    logger.error('[Firebase] getRecuFiscalInfoUrl error:', error);
+    return null;
   }
 };
 
@@ -1302,12 +1314,12 @@ export const subscribeToIslamicDates = (
         },
         error => {
           logger.error('[Firebase] IslamicDates error:', error);
-          callback(mockDatesIslamiques as DateIslamique[]);
+          callback([]);
         },
       );
   } catch (error) {
     logger.error('[Firebase] IslamicDates catch:', error);
-    callback(mockDatesIslamiques as DateIslamique[]);
+    callback([]);
     return () => {};
   }
 };
@@ -1435,7 +1447,7 @@ export interface CreateMemberData {
 
 export const createMember = async (
   member: CreateMemberData | Omit<Member, 'id' | 'createdAt' | 'memberId'>,
-): Promise<string> => {
+): Promise<string | null> => {
   if (FORCE_DEMO_MODE) {
     return `mock-member-${Date.now()}`;
   }
@@ -1538,8 +1550,10 @@ export const createMember = async (
     const docRef = await firestore().collection('members').add(docData);
     return docRef.id;
   } catch (error) {
-    logger.error('[Firebase] createMember error:', error);
-    return `error-member-${Date.now()}`;
+    // Échec réel de création d'adhérent : retourner null (et non un faux ID trompeur)
+    // pour que l'appelant puisse détecter et signaler l'échec.
+    logger.error('[Firebase] createMember ÉCHEC création adhérent:', error);
+    return null;
   }
 };
 
@@ -1669,19 +1683,21 @@ export const getMyMembership = async (
       (data.cotisation.dateFin.toDate
         ? data.cotisation.dateFin.toDate()
         : new Date(data.cotisation.dateFin)) > new Date();
+    // Les statuts d'attente explicites priment sur hasValidCotisation
+    // (cohérent avec computeMemberStatus : data.status fait foi).
     const memberStatus =
-      data.status === 'actif' || hasValidCotisation
-        ? 'actif'
+      data.status === 'en_attente_validation'
+        ? 'en_attente_validation'
         : data.status === 'en_attente_paiement'
         ? 'en_attente_paiement'
-        : data.status === 'en_attente_validation'
-        ? 'en_attente_validation'
         : data.status === 'en_attente_signature'
         ? 'en_attente_signature'
         : data.status === 'sympathisant'
         ? 'sympathisant'
         : data.status === 'annule'
         ? 'annule'
+        : data.status === 'actif' || hasValidCotisation
+        ? 'actif'
         : data.status || 'en_attente_signature';
 
     return {
@@ -2058,6 +2074,38 @@ export const subscribeToReglement = (
     callback(null);
     return () => {};
   }
+};
+
+// ==================== SERVICES & ACTIVITÉS ====================
+
+export interface MosqueService {
+  id: string;
+  icon: string;
+  label: string;
+  labelAr: string;
+  available: boolean;
+  order: number;
+}
+
+export const subscribeToServices = (
+  callback: (services: MosqueService[]) => void,
+): (() => void) => {
+  return firestore()
+    .collection('services')
+    .orderBy('order', 'asc')
+    .onSnapshot(
+      snapshot => {
+        const services = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as MosqueService[];
+        callback(services);
+      },
+      error => {
+        logger.error('[Firebase] subscribeToServices error:', error);
+        callback(mockServices.map((s, i) => ({ ...s, id: `mock-${i}`, order: i })));
+      },
+    );
 };
 
 // ==================== SERVICES & ACTIVITÉS (statiques) ====================

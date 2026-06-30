@@ -104,13 +104,16 @@ export default function Dons() {
   const [refundingDon, setRefundingDon] = useState(null)
   const [refundAmount, setRefundAmount] = useState('')
   const [refundDonationModal, setRefundDonationModal] = useState({ open: false, donationId: null, amount: null, totalAmount: 0 })
+  const [deletingDon, setDeletingDon] = useState(false)
+  const [refundingDonConfirm, setRefundingDonConfirm] = useState(false)
 
   // DO1: Calculer le montant actuel de chaque projet à partir des dons réels
   const projetMontants = useMemo(() => {
     const totals = {}
     dons.forEach(d => {
-      if (d.projetId && d.montant) {
-        totals[d.projetId] = (totals[d.projetId] || 0) + (d.montant || 0)
+      const mt = d.montant ?? d.amount ?? 0
+      if (d.projetId && mt) {
+        totals[d.projetId] = (totals[d.projetId] || 0) + mt
       }
     })
     return totals
@@ -319,6 +322,7 @@ export default function Dons() {
   const handleDelete = async () => {
     if (!deleteModal.item) return
 
+    setDeletingDon(true)
     try {
       const collection = deleteModal.type === 'projet' ? 'projects' : 'donations'
       await deleteDocument(collection, deleteModal.item.id)
@@ -327,6 +331,8 @@ export default function Dons() {
     } catch (err) {
       console.error('Error deleting:', err)
       toast.error('Erreur lors de la suppression')
+    } finally {
+      setDeletingDon(false)
     }
   }
 
@@ -344,8 +350,8 @@ export default function Dons() {
   // TODO: La Cloud Function 'refundDonation' doit etre deployee dans functions/index.js
   const handleConfirmRefundDonation = async () => {
     const { donationId, amount } = refundDonationModal
-    setRefundDonationModal({ open: false, donationId: null, amount: null, totalAmount: 0 })
 
+    setRefundingDonConfirm(true)
     try {
       const functions = getFunctions(undefined, 'europe-west1')
       const refundDonationFn = httpsCallable(functions, 'refundDonation')
@@ -356,6 +362,7 @@ export default function Dons() {
       })
 
       toast.success('Remboursement effectué avec succès')
+      setRefundDonationModal({ open: false, donationId: null, amount: null, totalAmount: 0 })
       setRefundingDon(null)
       setRefundAmount('')
 
@@ -366,6 +373,8 @@ export default function Dons() {
         ? 'La fonction de remboursement n\'est pas encore disponible. Veuillez effectuer le remboursement depuis le dashboard Stripe.'
         : err.message || 'Erreur lors du remboursement'
       toast.error(message)
+    } finally {
+      setRefundingDonConfirm(false)
     }
   }
 
@@ -615,7 +624,7 @@ export default function Dons() {
       key: 'montant',
       label: 'Montant',
       render: (row) => (
-        <span className="font-medium text-secondary">{row.montant?.toLocaleString()} €</span>
+        <span className="font-medium text-secondary">{(row.montant ?? row.amount ?? 0).toLocaleString()} €</span>
       )
     },
     {
@@ -729,7 +738,7 @@ export default function Dons() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -738,7 +747,7 @@ export default function Dons() {
               Total des dons{(dateFilter || modeFilter) ? ' (filtré)' : ''}
             </p>
             <p className="text-2xl font-bold text-secondary">
-              {filteredDons.reduce((sum, d) => sum + (d.montant || 0), 0).toLocaleString()} €
+              {filteredDons.reduce((sum, d) => sum + (d.montant ?? d.amount ?? 0), 0).toLocaleString()} €
             </p>
           </div>
         </Card>
@@ -1180,6 +1189,7 @@ export default function Dons() {
         message={`Êtes-vous sûr de vouloir supprimer "${deleteModal.item?.titre || deleteModal.item?.donateur}" ?`}
         confirmText="Supprimer"
         danger
+        loading={deletingDon}
       />
 
       {/* Refund Donation Confirmation */}
@@ -1191,6 +1201,7 @@ export default function Dons() {
         message={refundDonationModal.message || 'Êtes-vous sûr de vouloir rembourser ce don ?'}
         confirmText="Rembourser"
         danger
+        loading={refundingDonConfirm}
       />
     </div>
   )

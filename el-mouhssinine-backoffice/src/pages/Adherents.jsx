@@ -983,19 +983,19 @@ export default function Adherents() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Stats principales */}
       {stats && (
         <>
           {/* Ligne 1 : Stats générales */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-4">
             <Card>
               <div className="text-center">
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-secondary/20 flex items-center justify-center">
                   <Users className="w-5 h-5 text-secondary" />
                 </div>
-                <p className="text-white/50 text-sm">Total membres</p>
-                <p className="text-3xl font-bold text-white">{stats.total}</p>
+                <p className="text-white/50 text-xs sm:text-sm leading-tight">Total membres</p>
+                <p className="text-2xl sm:text-3xl font-bold text-white">{stats.total}</p>
               </div>
             </Card>
             <Card>
@@ -1003,8 +1003,8 @@ export default function Adherents() {
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-pink-500/20 flex items-center justify-center">
                   <Heart className="w-5 h-5 text-pink-400" />
                 </div>
-                <p className="text-white/50 text-sm">Sympathisants</p>
-                <p className="text-3xl font-bold text-pink-400">{stats.sympathisants}</p>
+                <p className="text-white/50 text-xs sm:text-sm leading-tight">Sympathisants</p>
+                <p className="text-2xl sm:text-3xl font-bold text-pink-400">{stats.sympathisants}</p>
               </div>
             </Card>
             <Card>
@@ -1012,8 +1012,8 @@ export default function Adherents() {
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-green-500/20 flex items-center justify-center">
                   <UserCheck className="w-5 h-5 text-green-400" />
                 </div>
-                <p className="text-white/50 text-sm">Actifs</p>
-                <p className="text-3xl font-bold text-green-400">{stats.actifs}</p>
+                <p className="text-white/50 text-xs sm:text-sm leading-tight">Actifs</p>
+                <p className="text-2xl sm:text-3xl font-bold text-green-400">{stats.actifs}</p>
               </div>
             </Card>
             <Card>
@@ -1021,8 +1021,8 @@ export default function Adherents() {
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-violet-500/20 flex items-center justify-center">
                   <ShieldCheck className="w-5 h-5 text-violet-400" />
                 </div>
-                <p className="text-white/50 text-sm">Att. validation</p>
-                <p className="text-3xl font-bold text-violet-400">{stats.attenteValidation}</p>
+                <p className="text-white/50 text-xs sm:text-sm leading-tight">Att. validation</p>
+                <p className="text-2xl sm:text-3xl font-bold text-violet-400">{stats.attenteValidation}</p>
               </div>
             </Card>
             <Card>
@@ -1030,8 +1030,8 @@ export default function Adherents() {
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-amber-500/20 flex items-center justify-center">
                   <Clock className="w-5 h-5 text-amber-400" />
                 </div>
-                <p className="text-white/50 text-sm">Att. signature</p>
-                <p className="text-3xl font-bold text-amber-400">{stats.attenteSignature}</p>
+                <p className="text-white/50 text-xs sm:text-sm leading-tight">Att. signature</p>
+                <p className="text-2xl sm:text-3xl font-bold text-amber-400">{stats.attenteSignature}</p>
               </div>
             </Card>
             <Card>
@@ -1039,8 +1039,8 @@ export default function Adherents() {
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-blue-500/20 flex items-center justify-center">
                   <CreditCard className="w-5 h-5 text-blue-400" />
                 </div>
-                <p className="text-white/50 text-sm">Att. paiement</p>
-                <p className="text-3xl font-bold text-blue-400">{stats.attentePaiement}</p>
+                <p className="text-white/50 text-xs sm:text-sm leading-tight">Att. paiement</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-400">{stats.attentePaiement}</p>
               </div>
             </Card>
             <Card>
@@ -1048,8 +1048,8 @@ export default function Adherents() {
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-red-500/20 flex items-center justify-center">
                   <UserX className="w-5 h-5 text-red-400" />
                 </div>
-                <p className="text-white/50 text-sm">Expirés</p>
-                <p className="text-3xl font-bold text-red-400">{stats.expires}</p>
+                <p className="text-white/50 text-xs sm:text-sm leading-tight">Expirés</p>
+                <p className="text-2xl sm:text-3xl font-bold text-red-400">{stats.expires}</p>
               </div>
             </Card>
             <Card>
@@ -1057,8 +1057,8 @@ export default function Adherents() {
                 <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-purple-500/20 flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-purple-400" />
                 </div>
-                <p className="text-white/50 text-sm">Ce mois</p>
-                <p className="text-3xl font-bold text-purple-400">+{stats.inscriptionsCeMois}</p>
+                <p className="text-white/50 text-xs sm:text-sm leading-tight">Ce mois</p>
+                <p className="text-2xl sm:text-3xl font-bold text-purple-400">+{stats.inscriptionsCeMois}</p>
               </div>
             </Card>
           </div>
@@ -1185,8 +1185,8 @@ export default function Adherents() {
 
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-4 justify-between">
-        <div className="flex flex-1 gap-4">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-wrap flex-1 gap-3 md:gap-4">
+          <div className="relative w-full sm:flex-1 sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
             <input
               type="text"
@@ -1196,7 +1196,7 @@ export default function Adherents() {
               className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-secondary"
             />
           </div>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="flex-1 min-w-[140px] bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
             <option value="all">Tous les statuts</option>
             <option value={CotisationStatut.SYMPATHISANT}>Sympathisant</option>
             <option value={CotisationStatut.ACTIF}>Actif</option>
@@ -1206,20 +1206,20 @@ export default function Adherents() {
             <option value={CotisationStatut.EXPIRE}>Expiré</option>
             <option value="annule">Abonnements annulés</option>
           </select>
-          <select value={payeurFilter} onChange={(e) => setPayeurFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
+          <select value={payeurFilter} onChange={(e) => setPayeurFilter(e.target.value)} className="flex-1 min-w-[140px] bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
             <option value="all">Tous les payeurs</option>
             <option value="lui-meme">Payé par lui-même</option>
             <option value="tiers">Payé par tiers</option>
           </select>
-          <select value={formuleFilter} onChange={(e) => setFormuleFilter(e.target.value)} className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
+          <select value={formuleFilter} onChange={(e) => setFormuleFilter(e.target.value)} className="flex-1 min-w-[140px] bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-secondary">
             <option value="all">Toutes les formules</option>
             <option value="mensuel">Mensuel</option>
             <option value="annuel">Annuel</option>
           </select>
         </div>
-        <div className="flex gap-3">
-          <Button variant="ghost" onClick={exportCSV}><Download className="w-4 h-4 mr-2" />Export</Button>
-          <Button onClick={() => handleOpenModal()}><Plus className="w-4 h-4 mr-2" />Nouveau</Button>
+        <div className="flex gap-3 shrink-0">
+          <Button variant="ghost" onClick={exportCSV} className="flex-1 md:flex-none"><Download className="w-4 h-4 mr-2" />Export</Button>
+          <Button onClick={() => handleOpenModal()} className="flex-1 md:flex-none"><Plus className="w-4 h-4 mr-2" />Nouveau</Button>
         </div>
       </div>
 
@@ -1269,7 +1269,7 @@ export default function Adherents() {
           const isAwaitingValidation = status === CotisationStatut.EN_ATTENTE_VALIDATION
 
           return (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* En-tête membre */}
               <div className="flex items-center gap-4 pb-4 border-b border-white/10">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center">
@@ -1576,7 +1576,7 @@ export default function Adherents() {
                       <div>
                         <p className="text-white font-medium">{isPaid ? 'Payé' : 'Non payé'}</p>
                         {isPaid && m.datePaiement && (
-                          <p className="text-white/50 text-sm">
+                          <p className="text-white/50 text-xs sm:text-sm leading-tight">
                             Le {format(m.datePaiement?.toDate?.() || new Date(m.datePaiement), 'dd/MM/yyyy')}
                           </p>
                         )}
@@ -1655,7 +1655,7 @@ export default function Adherents() {
                     <div>
                       <p className="text-white font-medium">{isSigned ? 'Règlement signé' : 'En attente de signature'}</p>
                       {!isSigned && m.inscritPar && (
-                        <p className="text-white/50 text-sm">Doit passer au bureau</p>
+                        <p className="text-white/50 text-xs sm:text-sm leading-tight">Doit passer au bureau</p>
                       )}
                     </div>
                   </div>
@@ -1693,7 +1693,7 @@ export default function Adherents() {
                             </div>
                             <div>
                               <p className="text-white font-medium">{linked.prenom} {linked.nom}</p>
-                              <p className="text-white/50 text-sm">{linked.telephone || linked.email}</p>
+                              <p className="text-white/50 text-xs sm:text-sm leading-tight">{linked.telephone || linked.email}</p>
                             </div>
                           </div>
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -1814,7 +1814,7 @@ export default function Adherents() {
               </div>
               <div>
                 <p className="text-white font-medium">{messageModal.membre.prenom} {messageModal.membre.nom}</p>
-                <p className="text-white/50 text-sm">{messageModal.membre.email || messageModal.membre.telephone}</p>
+                <p className="text-white/50 text-xs sm:text-sm leading-tight">{messageModal.membre.email || messageModal.membre.telephone}</p>
               </div>
             </div>
 

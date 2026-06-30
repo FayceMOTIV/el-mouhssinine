@@ -151,43 +151,75 @@ jest.mock('@react-native-community/geolocation', () => ({
 // Mock NetInfo - via moduleNameMapper dans jest.config.js
 
 // Mock react-native-track-player
-jest.mock('react-native-track-player', () => ({
-  setupPlayer: jest.fn().mockResolvedValue(undefined),
-  add: jest.fn().mockResolvedValue(undefined),
-  play: jest.fn().mockResolvedValue(undefined),
-  pause: jest.fn().mockResolvedValue(undefined),
-  stop: jest.fn().mockResolvedValue(undefined),
-  reset: jest.fn().mockResolvedValue(undefined),
-  getActiveTrackIndex: jest.fn().mockResolvedValue(null),
-  updateOptions: jest.fn().mockResolvedValue(undefined),
-  Capability: {
-    Play: 'play',
-    Pause: 'pause',
-    Stop: 'stop',
-    SeekTo: 'seekTo',
-  },
-  State: {
-    Playing: 'playing',
-    Paused: 'paused',
-    Stopped: 'stopped',
-    None: 'none',
-  },
-  AppKilledPlaybackBehavior: {
-    ContinuePlayback: 'continue',
-    StopPlaybackAndRemoveNotification: 'stop',
-  },
-}));
+jest.mock('react-native-track-player', () => {
+  const mock = {
+    setupPlayer: jest.fn().mockResolvedValue(undefined),
+    add: jest.fn().mockResolvedValue(undefined),
+    play: jest.fn().mockResolvedValue(undefined),
+    pause: jest.fn().mockResolvedValue(undefined),
+    stop: jest.fn().mockResolvedValue(undefined),
+    reset: jest.fn().mockResolvedValue(undefined),
+    getActiveTrackIndex: jest.fn().mockResolvedValue(null),
+    getPlaybackState: jest.fn().mockResolvedValue({ state: 'none' }),
+    getPosition: jest.fn().mockResolvedValue(0),
+    getDuration: jest.fn().mockResolvedValue(0),
+    setRate: jest.fn().mockResolvedValue(undefined),
+    seekTo: jest.fn().mockResolvedValue(undefined),
+    skipToNext: jest.fn().mockResolvedValue(undefined),
+    skipToPrevious: jest.fn().mockResolvedValue(undefined),
+    updateOptions: jest.fn().mockResolvedValue(undefined),
+    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+    registerPlaybackService: jest.fn(),
+    Capability: {
+      Play: 'play',
+      Pause: 'pause',
+      Stop: 'stop',
+      SeekTo: 'seekTo',
+      SkipToNext: 'skipToNext',
+      SkipToPrevious: 'skipToPrevious',
+    },
+    State: {
+      Playing: 'playing',
+      Paused: 'paused',
+      Stopped: 'stopped',
+      None: 'none',
+      Ended: 'ended',
+      Buffering: 'buffering',
+      Loading: 'loading',
+      Ready: 'ready',
+      Error: 'error',
+    },
+    Event: {
+      PlaybackQueueEnded: 'playback-queue-ended',
+      PlaybackState: 'playback-state',
+      PlaybackError: 'playback-error',
+    },
+    AppKilledPlaybackBehavior: {
+      ContinuePlayback: 'continue',
+      StopPlaybackAndRemoveNotification: 'stop',
+    },
+    IOSCategory: { Playback: 'playback' },
+    IOSCategoryMode: { SpokenAudio: 'spokenAudio' },
+    IOSCategoryOptions: { AllowAirPlay: 'allowAirPlay', AllowBluetooth: 'allowBluetooth' },
+  };
+  mock.default = mock;
+  return mock;
+});
 
 // Mock react-native-tts
-jest.mock('react-native-tts', () => ({
-  setDefaultLanguage: jest.fn().mockResolvedValue(undefined),
-  setDefaultRate: jest.fn().mockResolvedValue(undefined),
-  setDefaultPitch: jest.fn().mockResolvedValue(undefined),
-  speak: jest.fn().mockResolvedValue(undefined),
-  stop: jest.fn().mockResolvedValue(undefined),
-  addEventListener: jest.fn(),
-  removeEventListener: jest.fn(),
-}));
+jest.mock('react-native-tts', () => {
+  const mock = {
+    setDefaultLanguage: jest.fn().mockResolvedValue(undefined),
+    setDefaultRate: jest.fn().mockResolvedValue(undefined),
+    setDefaultPitch: jest.fn().mockResolvedValue(undefined),
+    speak: jest.fn().mockResolvedValue(undefined),
+    stop: jest.fn().mockResolvedValue(undefined),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+  };
+  mock.default = mock;
+  return mock;
+});
 
 // Mock react-native-linear-gradient
 jest.mock('react-native-linear-gradient', () => 'LinearGradient');

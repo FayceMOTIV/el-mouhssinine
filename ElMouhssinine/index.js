@@ -13,13 +13,11 @@ import {
   detectNotificationType,
 } from './src/services/notificationHistory';
 
-if (Platform.OS === 'ios') {
-  try {
-    const TrackPlayer = require('react-native-track-player').default;
-    TrackPlayer.registerPlaybackService(() => require('./service'));
-  } catch (e) {
-    console.warn('[TrackPlayer] init failed (non-fatal):', e);
-  }
+try {
+  const TrackPlayer = require('react-native-track-player').default;
+  TrackPlayer.registerPlaybackService(() => require('./service'));
+} catch (e) {
+  console.warn('[TrackPlayer] init failed (non-fatal):', e);
 }
 
 // Ignore specific warnings

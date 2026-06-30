@@ -105,13 +105,19 @@ export default function Janaza() {
   const handleOpenModal = (janaza = null) => {
     if (janaza) {
       setEditingJanaza(janaza)
-      const date = janaza.date?.toDate?.() || new Date(janaza.date)
+      let formattedDate = ''
+      try {
+        const date = janaza.date?.toDate?.() || new Date(janaza.date)
+        formattedDate = format(date, 'yyyy-MM-dd')
+      } catch {
+        formattedDate = ''
+      }
       setFormData({
         nomDefunt: janaza.nomDefunt || '',
         prenomDefunt: janaza.prenomDefunt || '',
         genre: janaza.genre || JanazaGenre.HOMME,
         age: janaza.age || '',
-        date: format(date, 'yyyy-MM-dd'),
+        date: formattedDate,
         heurePriere: janaza.heurePriere || '',
         salatApres: janaza.salatApres || SalatOptions.DHUHR,
         lieu: janaza.lieu || '',

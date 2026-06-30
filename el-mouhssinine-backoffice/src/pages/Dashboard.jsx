@@ -16,10 +16,13 @@ import {
   MessageCircle,
   UserCheck,
   UserX,
-  Hourglass
+  Hourglass,
+  Smartphone,
+  RefreshCw
 } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { Card, StatCard, Loading, ProgressBar } from '../components/common'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import {
   subscribeToMembres,
   subscribeToDons,
@@ -30,8 +33,11 @@ import {
   PaymentType,
   getPrayerTimes,
   subscribeToUnreadMessagesCount,
-  subscribeToAnnonces
+  subscribeToAnnonces,
+  subscribeToDocument
 } from '../services/firebase'
+import { toast } from 'react-toastify'
+import { refreshPushSubscription } from '../utils/pushNotifications'
 import { CotisationStatut } from '../types'
 import { format, isPast } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -75,13 +81,37 @@ export default function Dashboard() {
   const [prochainEvenement, setProchainEvenement] = useState(null)
   const [prayerTimes, setPrayerTimes] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [storeStats, setStoreStats] = useState(null)
+  const [refreshingStats, setRefreshingStats] = useState(false)
   const [donationsChartData, setDonationsChartData] = useState([])
   const [membresChartData, setMembresChartData] = useState([])
   const [payments, setPayments] = useState([])
   const [paymentStats, setPaymentStats] = useState({
-    cotisations: { today: { total: 0, count: 0 }, month: { total: 0, count: 0 }, year: { total: 0, count: 0 } },
-    dons: { today: { total: 0, count: 0 }, month: { total: 0, count: 0 }, year: { total: 0, count: 0 } }
+    cotisations: { today: { total: 0, count: 0 }, month: { total: 0, count: 0 }, year: { total: 0, count: 0 }, all: { total: 0, count: 0 } },
+    dons: { today: { total: 0, count: 0 }, month: { total: 0, count: 0 }, year: { total: 0, count: 0 }, all: { total: 0, count: 0 } }
   })
+
+  // Re-abonnement push silencieux (iOS révoque les tokens après inactivité)
+  useEffect(() => { refreshPushSubscription() }, [])
+
+  // Stats téléchargements (settings/storeStats, alimenté par la Cloud Function)
+  useEffect(() => {
+    const unsub = subscribeToDocument('settings', 'storeStats', (data) => setStoreStats(data))
+    return () => unsub && unsub()
+  }, [])
+
+  const handleRefreshStats = async () => {
+    setRefreshingStats(true)
+    try {
+      const fn = httpsCallable(getFunctions(undefined, 'europe-west1'), 'refreshStoreStats')
+      await fn()
+      toast.success('Statistiques mises à jour')
+    } catch (e) {
+      toast.error('Impossible de rafraîchir (réessayez dans un instant)')
+    } finally {
+      setRefreshingStats(false)
+    }
+  }
 
   useEffect(() => {
     const unsubscribes = []
@@ -139,6 +169,7 @@ export default function Dashboard() {
           })
         }
         setMembresChartData(chartData)
+        setLoading(false)
       })
     )
 
@@ -160,16 +191,37 @@ export default function Dashboard() {
     // Dons
     unsubscribes.push(
       subscribeToDons((data) => {
-        const total = data.reduce((sum, d) => sum + (d.montant || 0), 0)
         const now = new Date()
-        const thisMonth = data.filter(d => {
-          const date = d.date?.toDate?.() || new Date(d.date)
-          return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
-        })
-        const donsMois = thisMonth.reduce((sum, d) => sum + (d.montant || 0), 0)
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const yearStart = new Date(now.getFullYear(), 0, 1)
+
+        const getDate = (d) => {
+          const raw = d.date || d.createdAt || d.webhookProcessedAt
+          if (!raw) return new Date(0)
+          return raw?.toDate?.() || new Date(raw)
+        }
+        const getAmount = (d) => d.montant || d.amount || 0
+
+        const todayDons = data.filter(d => getDate(d) >= todayStart)
+        const monthDons = data.filter(d => getDate(d) >= monthStart)
+        const yearDons = data.filter(d => getDate(d) >= yearStart)
+
+        const donsMois = monthDons.reduce((sum, d) => sum + getAmount(d), 0)
+        const total = data.reduce((sum, d) => sum + getAmount(d), 0)
 
         setStats(prev => ({ ...prev, donsTotal: total, donsMois }))
         setRecentDons(data.slice(0, 5))
+
+        setPaymentStats(prev => ({
+          ...prev,
+          dons: {
+            today: { total: todayDons.reduce((sum, d) => sum + getAmount(d), 0), count: todayDons.length },
+            month: { total: donsMois, count: monthDons.length },
+            year: { total: yearDons.reduce((sum, d) => sum + getAmount(d), 0), count: yearDons.length },
+            all: { total, count: data.length }
+          }
+        }))
 
         // Generer les donnees du graphique par mois (6 derniers mois)
         const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
@@ -180,15 +232,13 @@ export default function Dashboard() {
           const monthNum = monthDate.getMonth()
           const yearNum = monthDate.getFullYear()
 
-          const monthDons = data.filter(d => {
-            const date = d.date?.toDate?.() || new Date(d.date)
+          const mDons = data.filter(d => {
+            const date = getDate(d)
             return date.getMonth() === monthNum && date.getFullYear() === yearNum
           })
-          const monthTotal = monthDons.reduce((sum, d) => sum + (d.montant || 0), 0)
-
           chartData.push({
             name: monthNames[monthNum],
-            montant: monthTotal
+            montant: mDons.reduce((sum, d) => sum + getAmount(d), 0)
           })
         }
         setDonationsChartData(chartData)
@@ -215,17 +265,15 @@ export default function Dashboard() {
       })
     )
 
-    // Payments (cotisations + dons via app)
+    // Payments (cotisations uniquement — les dons sont dans la collection 'donations')
     unsubscribes.push(
       subscribeToPayments((data) => {
         setPayments(data)
-        // Calculer les stats pour cotisations et dons
         const cotisationStats = getPaymentStats(data, PaymentType.COTISATION)
-        const donStats = getPaymentStats(data, PaymentType.DON)
-        setPaymentStats({
-          cotisations: cotisationStats,
-          dons: donStats
-        })
+        setPaymentStats(prev => ({
+          ...prev,
+          cotisations: cotisationStats
+        }))
       })
     )
 
@@ -237,7 +285,7 @@ export default function Dashboard() {
       // Continuer sans horaires si erreur
     })
 
-    setLoading(false)
+
 
     return () => unsubscribes.forEach(unsub => unsub())
   }, [])
@@ -250,24 +298,74 @@ export default function Dashboard() {
     )
   }
 
+  const iosDl = storeStats?.ios?.available ? (storeStats.ios.last30 ?? 0) : null
+  const androidDl = storeStats?.android?.available ? (storeStats.android.last30 ?? 0) : null
+  const totalDl = (iosDl ?? 0) + (androidDl ?? 0)
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Carte Téléchargements (App Store + Google Play) */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-5 h-5 text-amber-400" />
+            <h3 className="text-white font-semibold">Téléchargements de l'application</h3>
+            <span className="text-xs text-white/30">(30 derniers jours)</span>
+          </div>
+          <button
+            onClick={handleRefreshStats}
+            disabled={refreshingStats}
+            className="text-white/50 hover:text-white transition-colors disabled:opacity-40"
+            title="Rafraîchir"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshingStats ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="text-center p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+            <p className="text-2xl sm:text-3xl font-bold text-amber-400">{totalDl}</p>
+            <p className="text-xs text-white/50 mt-1">Total (iOS + Android)</p>
+          </div>
+          <div className="text-center p-3 rounded-lg bg-white/5">
+            <p className="text-2xl font-bold text-white">{iosDl !== null ? iosDl : '—'}</p>
+            <p className="text-xs text-white/50 mt-1"> App Store (iOS)</p>
+          </div>
+          <div className="text-center p-3 rounded-lg bg-white/5">
+            <p className="text-2xl font-bold text-white">
+              {androidDl !== null ? androidDl : '—'}
+            </p>
+            <p className="text-xs text-white/50 mt-1">
+              Google Play
+              {storeStats?.android && !storeStats.android.available && (
+                <span className="block text-amber-400/70 text-[10px] mt-0.5">en cours d'activation (~24h)</span>
+              )}
+            </p>
+          </div>
+        </div>
+        {storeStats?.updatedAt && (
+          <p className="text-[10px] text-white/30 text-right mt-2">
+            Mis à jour {(() => { try { return format(storeStats.updatedAt?.toDate?.() || new Date(storeStats.updatedAt), 'dd/MM/yyyy HH:mm') } catch { return '' } })()}
+            {' · '}les stores publient avec 1-3 jours de décalage
+          </p>
+        )}
+      </Card>
+
       {/* Stats Grid - Ligne 1 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Membres"
           value={stats?.membres ?? 0}
           icon={Users}
         />
         <StatCard
+          title="Cotisations ce mois"
+          value={`${(paymentStats?.cotisations?.month?.total ?? 0).toLocaleString()} €`}
+          icon={CreditCard}
+        />
+        <StatCard
           title="Dons ce mois"
           value={`${(stats?.donsMois ?? 0).toLocaleString()} €`}
           icon={Coins}
-        />
-        <StatCard
-          title="Total Dons"
-          value={`${(stats?.donsTotal ?? 0).toLocaleString()} €`}
-          icon={TrendingUp}
         />
         <StatCard
           title="Événements à venir"
@@ -327,46 +425,56 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Recettes App (Paiements CB/Apple Pay) */}
+      {/* Recettes détaillées : Cotisations vs Dons */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Cotisations Stats */}
-        <Card title="Cotisations (App)" icon={CreditCard}>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white/5 rounded-lg p-4 text-center">
-              <p className="text-xs text-white/50 mb-1">Aujourd'hui</p>
-              <p className="text-xl font-bold text-green-400">{(paymentStats?.cotisations?.today?.total ?? 0).toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats?.cotisations?.today?.count ?? 0} paiement{(paymentStats?.cotisations?.today?.count ?? 0) > 1 ? 's' : ''}</p>
+        <Card title="Cotisations" icon={CreditCard}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white/5 rounded-lg p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-white/50 mb-1">Aujourd'hui</p>
+              <p className="text-lg sm:text-xl font-bold text-green-400">{(paymentStats?.cotisations?.today?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-[10px] sm:text-xs text-white/40">{paymentStats?.cotisations?.today?.count ?? 0} paiement{(paymentStats?.cotisations?.today?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
-            <div className="bg-white/5 rounded-lg p-4 text-center">
-              <p className="text-xs text-white/50 mb-1">Ce mois</p>
-              <p className="text-xl font-bold text-blue-400">{(paymentStats?.cotisations?.month?.total ?? 0).toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats?.cotisations?.month?.count ?? 0} paiement{(paymentStats?.cotisations?.month?.count ?? 0) > 1 ? 's' : ''}</p>
+            <div className="bg-white/5 rounded-lg p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-white/50 mb-1">Ce mois</p>
+              <p className="text-lg sm:text-xl font-bold text-blue-400">{(paymentStats?.cotisations?.month?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-[10px] sm:text-xs text-white/40">{paymentStats?.cotisations?.month?.count ?? 0} paiement{(paymentStats?.cotisations?.month?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
-            <div className="bg-white/5 rounded-lg p-4 text-center">
-              <p className="text-xs text-white/50 mb-1">Cette année</p>
-              <p className="text-xl font-bold text-secondary">{(paymentStats?.cotisations?.year?.total ?? 0).toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats?.cotisations?.year?.count ?? 0} paiement{(paymentStats?.cotisations?.year?.count ?? 0) > 1 ? 's' : ''}</p>
+            <div className="bg-white/5 rounded-lg p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-white/50 mb-1">Cette année</p>
+              <p className="text-lg sm:text-xl font-bold text-secondary">{(paymentStats?.cotisations?.year?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-[10px] sm:text-xs text-white/40">{paymentStats?.cotisations?.year?.count ?? 0} paiement{(paymentStats?.cotisations?.year?.count ?? 0) > 1 ? 's' : ''}</p>
+            </div>
+            <div className="bg-white/5 rounded-lg p-3 sm:p-4 text-center border border-white/10">
+              <p className="text-[10px] sm:text-xs text-white/50 mb-1">Total</p>
+              <p className="text-lg sm:text-xl font-bold text-white">{(paymentStats?.cotisations?.all?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-[10px] sm:text-xs text-white/40">{paymentStats?.cotisations?.all?.count ?? 0} paiement{(paymentStats?.cotisations?.all?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
           </div>
         </Card>
 
-        {/* Dons App Stats */}
-        <Card title="Dons (App)" icon={Coins}>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white/5 rounded-lg p-4 text-center">
-              <p className="text-xs text-white/50 mb-1">Aujourd'hui</p>
-              <p className="text-xl font-bold text-green-400">{(paymentStats?.dons?.today?.total ?? 0).toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats?.dons?.today?.count ?? 0} don{(paymentStats?.dons?.today?.count ?? 0) > 1 ? 's' : ''}</p>
+        {/* Dons Stats (depuis la collection donations) */}
+        <Card title="Dons" icon={Coins}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white/5 rounded-lg p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-white/50 mb-1">Aujourd'hui</p>
+              <p className="text-lg sm:text-xl font-bold text-green-400">{(paymentStats?.dons?.today?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-[10px] sm:text-xs text-white/40">{paymentStats?.dons?.today?.count ?? 0} don{(paymentStats?.dons?.today?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
-            <div className="bg-white/5 rounded-lg p-4 text-center">
-              <p className="text-xs text-white/50 mb-1">Ce mois</p>
-              <p className="text-xl font-bold text-blue-400">{(paymentStats?.dons?.month?.total ?? 0).toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats?.dons?.month?.count ?? 0} don{(paymentStats?.dons?.month?.count ?? 0) > 1 ? 's' : ''}</p>
+            <div className="bg-white/5 rounded-lg p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-white/50 mb-1">Ce mois</p>
+              <p className="text-lg sm:text-xl font-bold text-blue-400">{(paymentStats?.dons?.month?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-[10px] sm:text-xs text-white/40">{paymentStats?.dons?.month?.count ?? 0} don{(paymentStats?.dons?.month?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
-            <div className="bg-white/5 rounded-lg p-4 text-center">
-              <p className="text-xs text-white/50 mb-1">Cette année</p>
-              <p className="text-xl font-bold text-secondary">{(paymentStats?.dons?.year?.total ?? 0).toLocaleString()} €</p>
-              <p className="text-xs text-white/40">{paymentStats?.dons?.year?.count ?? 0} don{(paymentStats?.dons?.year?.count ?? 0) > 1 ? 's' : ''}</p>
+            <div className="bg-white/5 rounded-lg p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-white/50 mb-1">Cette année</p>
+              <p className="text-lg sm:text-xl font-bold text-secondary">{(paymentStats?.dons?.year?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-[10px] sm:text-xs text-white/40">{paymentStats?.dons?.year?.count ?? 0} don{(paymentStats?.dons?.year?.count ?? 0) > 1 ? 's' : ''}</p>
+            </div>
+            <div className="bg-white/5 rounded-lg p-3 sm:p-4 text-center border border-white/10">
+              <p className="text-[10px] sm:text-xs text-white/50 mb-1">Total</p>
+              <p className="text-lg sm:text-xl font-bold text-white">{(paymentStats?.dons?.all?.total ?? 0).toLocaleString()} €</p>
+              <p className="text-[10px] sm:text-xs text-white/40">{paymentStats?.dons?.all?.count ?? 0} don{(paymentStats?.dons?.all?.count ?? 0) > 1 ? 's' : ''}</p>
             </div>
           </div>
         </Card>
@@ -464,7 +572,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Quick Actions & Info */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Prayer Times */}
           <Card title="Horaires du jour" icon={Clock}>
             {prayerTimes ? (

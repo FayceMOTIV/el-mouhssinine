@@ -71,7 +71,7 @@ if (!FORCE_DEMO_MODE) {
   } catch (err) {
     console.error('[Firebase] Échec initialisation:', err)
     // En production, afficher une erreur fatale au lieu de passer en mode démo silencieusement
-    if (import.meta.env.PROD) {
+    if (import.meta.env.PROD || !FORCE_DEMO_MODE) {
       // Afficher une alerte à l'utilisateur
       alert('⚠️ Impossible de se connecter à Firebase. Vérifiez votre connexion et rechargez la page.')
       throw new Error('Impossible de se connecter à Firebase. Contactez le support.')
@@ -170,7 +170,14 @@ export const logoutUser = async () => {
 }
 
 export const resetPassword = async (email) => {
-  return sendPasswordResetEmail(auth, email)
+  // Envoi via Cloud Function Brevo (domaine authentifie) au lieu de l'email
+  // Firebase par defaut (noreply@firebaseapp.com) qui finit en spam.
+  if (isDemoMode || !functions) {
+    return sendPasswordResetEmail(auth, email)
+  }
+  const fn = httpsCallable(functions, 'requestPasswordReset')
+  const res = await fn({ email })
+  return res.data
 }
 
 export const onAuthChange = (callback) => {
@@ -348,16 +355,26 @@ export const updatePrayerTimes = (data) => setDocument('settings', 'prayerTimes'
 export const getIqamaAndJumuaTimes = () => getDocument('settings', 'prayerTimes')
 
 // Annonces
-export const getAnnonces = () => getCollection('announcements', [orderBy('createdAt', 'desc')])
-export const subscribeToAnnonces = (cb) => subscribeToCollection('announcements', cb, [orderBy('createdAt', 'desc')])
+// NB: pas de orderBy Firestore — il exclut silencieusement les docs sans 'createdAt'
+// (imports/migrations). On récupère TOUT puis on trie côté client (tolère createdAt absent).
+const sortByCreatedDesc = (data) => [...data].sort((a, b) =>
+  (b.createdAt?.toMillis?.() ?? new Date(b.createdAt || 0).getTime()) -
+  (a.createdAt?.toMillis?.() ?? new Date(a.createdAt || 0).getTime()))
+export const getAnnonces = () => getCollection('announcements').then(sortByCreatedDesc)
+export const subscribeToAnnonces = (cb) => subscribeToCollection('announcements', (data) => cb(sortByCreatedDesc(data)))
 
 // Popups
 export const getPopups = () => getCollection('popups', [orderBy('createdAt', 'desc')])
 export const subscribeToPopups = (cb) => subscribeToCollection('popups', cb, [orderBy('createdAt', 'desc')])
 
 // Evenements
-export const getEvenements = () => getCollection('events', [orderBy('date', 'asc')])
-export const subscribeToEvenements = (cb) => subscribeToCollection('events', cb, [orderBy('date', 'asc')])
+// NB: pas de orderBy Firestore — il exclut les docs dont 'date' est absente ou en string
+// (au lieu d'un Timestamp). On récupère TOUT puis on trie côté client (tolère string/Timestamp/absent).
+const sortByDateAsc = (data) => [...data].sort((a, b) =>
+  (a.date?.toDate?.() ?? new Date(a.date || 0)).getTime() -
+  (b.date?.toDate?.() ?? new Date(b.date || 0)).getTime())
+export const getEvenements = () => getCollection('events').then(sortByDateAsc)
+export const subscribeToEvenements = (cb) => subscribeToCollection('events', (data) => cb(sortByDateAsc(data)))
 
 // Janaza
 export const getJanazas = () => getCollection('janaza', [orderBy('date', 'desc')])
@@ -416,7 +433,7 @@ export const getPaymentsByType = async (type) => {
   const q = query(
     collection(db, 'payments'),
     where('type', '==', type),
-    orderBy('date', 'desc')
+    orderBy('createdAt', 'desc')
   )
   const snapshot = await getDocs(q)
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
@@ -471,6 +488,20 @@ export const getPaymentStats = (payments, type = null) => {
 }
 
 // Admins
+// Reçus fiscaux d'un membre (par email) — pour la fiche backoffice
+export const getRecusFiscauxByEmail = async (email) => {
+  if (isDemoMode || !db || !email) return []
+  try {
+    const q = query(collection(db, 'recus_fiscaux'), where('email', '==', String(email).toLowerCase()))
+    const snap = await getDocs(q)
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (Number(b.annee) || 0) - (Number(a.annee) || 0))
+  } catch (e) {
+    return []
+  }
+}
+
 export const getAdmins = () => getCollection('admins', [orderBy('createdAt', 'desc')])
 export const subscribeToAdmins = (cb) => subscribeToCollection('admins', cb, [orderBy('createdAt', 'desc')])
 
@@ -624,6 +655,41 @@ export const uploadImage = async (path, file) => {
   return getDownloadURL(storageRef)
 }
 
+/**
+ * Upload du document d'information général sur les reçus fiscaux (1 seul PDF, commun à tous les utilisateurs).
+ * Chemin Storage fixe : documents/recu-fiscal-info.pdf (écrase l'ancien à chaque upload).
+ * L'URL est sauvegardée dans settings/general.recuFiscalInfoUrl.
+ */
+export const uploadRecuFiscalInfoDoc = async (file) => {
+  // Validation type PDF
+  if (!file || file.type !== 'application/pdf') {
+    throw new Error('Le fichier doit être au format PDF')
+  }
+
+  // Validation taille (< 10MB)
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error('Le fichier dépasse la taille maximale de 10MB')
+  }
+
+  const storagePath = 'documents/recu-fiscal-info.pdf'
+
+  if (isDemoMode) {
+    const url = `https://demo.local/${storagePath}`
+    await updateSettings({ recuFiscalInfoUrl: url, recuFiscalInfoUpdatedAt: new Date() })
+    return url
+  }
+
+  // Upload vers Storage (écrase l'ancien fichier)
+  const storageRef = ref(storage, storagePath)
+  await uploadBytes(storageRef, file)
+  const url = await getDownloadURL(storageRef)
+
+  // Sauvegarde l'URL dans les paramètres généraux (merge)
+  await updateSettings({ recuFiscalInfoUrl: url, recuFiscalInfoUpdatedAt: new Date() })
+
+  return url
+}
+
 // Export Firestore utilities for custom queries
 export { collection, doc, query, where, orderBy, serverTimestamp, arrayUnion, arrayRemove }
 
@@ -705,7 +771,8 @@ export const replyToMessage = async (messageId, replyText, adminName = 'Admin') 
 }
 
 /**
- * Supprimer un message (soft delete - masqué pour admin ET utilisateur)
+ * Supprimer un message (soft delete côté admin uniquement)
+ * Le message reste visible côté utilisateur tant qu'il ne le supprime pas lui-même.
  */
 export const deleteMessage = async (messageId) => {
   if (isDemoMode) {
@@ -713,11 +780,10 @@ export const deleteMessage = async (messageId) => {
     return
   }
   const messageRef = doc(db, 'messages', messageId)
-  // Soft delete: marquer comme supprimé par l'admin + aussi côté utilisateur
+  // Soft delete admin : masque seulement côté backoffice, l'utilisateur garde sa copie
   await updateDoc(messageRef, {
     deletedByAdmin: true,
-    deletedByAdminAt: serverTimestamp(),
-    deletedByUser: true
+    deletedByAdminAt: serverTimestamp()
   })
 }
 

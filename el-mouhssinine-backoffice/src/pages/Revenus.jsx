@@ -441,7 +441,7 @@ export default function Revenus() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -536,7 +536,7 @@ export default function Revenus() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-white/50 text-sm">Total revenus</p>
-                  <p className="text-3xl font-bold text-secondary">{stats.total.toLocaleString()} €</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-secondary">{stats.total.toLocaleString()} €</p>
                   <p className="text-white/40 text-sm">{stats.count} transaction{stats.count > 1 ? 's' : ''}</p>
                 </div>
                 {comparison && (

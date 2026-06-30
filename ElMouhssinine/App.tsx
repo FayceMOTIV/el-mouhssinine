@@ -5,8 +5,9 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import { StatusBar, View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SystemBars } from 'react-native-edge-to-edge';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import notifee, { EventType } from '@notifee/react-native';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -187,11 +188,7 @@ const App: React.FC = () => {
   if (!appReady) {
     return (
       <View style={styles.splashContainer}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="#5c3a1a"
-          translucent
-        />
+        <SystemBars style="light" />
         <Image
           source={require('./src/assets/splash.png')}
           style={styles.splashImage}
@@ -205,10 +202,7 @@ const App: React.FC = () => {
   if (maintenance.enabled) {
     return (
       <View style={styles.maintenanceContainer}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor={colors.background}
-        />
+        <SystemBars style="light" />
         <Text style={styles.maintenanceIcon}>🛠️</Text>
         <Text style={styles.maintenanceTitle}>Maintenance en cours</Text>
         <Text style={styles.maintenanceMessage}>
@@ -231,10 +225,7 @@ const App: React.FC = () => {
       >
         <LanguageProvider>
           <SafeAreaProvider>
-            <StatusBar
-              barStyle="light-content"
-              backgroundColor={colors.background}
-            />
+            <SystemBars style="light" />
             <AppNavigator />
           </SafeAreaProvider>
         </LanguageProvider>

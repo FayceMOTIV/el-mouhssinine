@@ -44,3 +44,7 @@ QUICK_REFERENCE_FIXES.md
 CHANGELOG-BUILD-*.txt
 mega-deploy-*.sh
 monitor-post-deploy.sh
+pc-api-key.json
+ElMouhssinine/pc-api-key.json
+**/pc-api-key.json
+*.iam.gserviceaccount.com.json

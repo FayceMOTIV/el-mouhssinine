@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { toast } from 'react-toastify'
 import {
   FileText, Save, Building2, MapPin, User, Send, Download,
-  Calendar, Euro, Search, RefreshCw, CheckCircle, AlertCircle
+  Calendar, Euro, Search, RefreshCw, CheckCircle, AlertCircle, Upload, FileSpreadsheet
 } from 'lucide-react'
 import { Card, Button, Input, Loading, ConfirmModal } from '../components/common'
-import { db } from '../services/firebase'
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
+import { db, getSettings, getMosqueeInfo, uploadRecuFiscalInfoDoc } from '../services/firebase'
+import { doc, getDoc, setDoc, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 
 export default function RecusFiscaux() {
@@ -15,7 +15,7 @@ export default function RecusFiscaux() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
 
-  const [forceYear, setForceYear] = useState(new Date().getFullYear() - 1)
+  const [forceYear, setForceYear] = useState(Math.max(new Date().getFullYear() - 1, 2026))
   const [forceGenerating, setForceGenerating] = useState(false)
   const [forceGenerateModal, setForceGenerateModal] = useState({ open: false, year: null })
 
@@ -38,7 +38,17 @@ export default function RecusFiscaux() {
 
   // Envoi manuel
   const [emailManuel, setEmailManuel] = useState('')
-  const [anneeManuelle, setAnneeManuelle] = useState(new Date().getFullYear() - 1)
+  const [anneeManuelle, setAnneeManuelle] = useState(Math.max(new Date().getFullYear() - 1, 2026))
+
+  // Feature #10 — Document d'information reçu fiscal (PDF commun à tous)
+  const [recuFiscalInfoUrl, setRecuFiscalInfoUrl] = useState('')
+  const [recuFiscalInfoUpdatedAt, setRecuFiscalInfoUpdatedAt] = useState(null)
+  const [uploadingInfoDoc, setUploadingInfoDoc] = useState(false)
+  const infoDocInputRef = useRef(null)
+
+  // Feature #9 — Récap annuel
+  const [recapYear, setRecapYear] = useState(new Date().getFullYear() - 1)
+  const [generatingRecap, setGeneratingRecap] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -50,6 +60,14 @@ export default function RecusFiscaux() {
       const settingsDoc = await getDoc(doc(db, 'settings', 'recusFiscaux'))
       if (settingsDoc.exists()) {
         setAssociationInfo(prev => ({ ...prev, ...settingsDoc.data() }))
+      }
+
+      // Charger l'URL du document d'information (settings/general)
+      const general = await getSettings()
+      if (general?.recuFiscalInfoUrl) {
+        setRecuFiscalInfoUrl(general.recuFiscalInfoUrl)
+        const updatedAt = general.recuFiscalInfoUpdatedAt
+        setRecuFiscalInfoUpdatedAt(updatedAt?.toDate?.() || (updatedAt ? new Date(updatedAt) : null))
       }
 
       // Charger les reçus envoyés
@@ -85,9 +103,13 @@ export default function RecusFiscaux() {
   }
 
   const handleSaveSettings = async () => {
+    if (!associationInfo.nom?.trim() || !associationInfo.adresse?.trim() || !associationInfo.ville?.trim()) {
+      toast.error('Veuillez remplir tous les champs obligatoires')
+      return
+    }
     setSaving(true)
     try {
-      await setDoc(doc(db, 'settings', 'recusFiscaux'), associationInfo)
+      await setDoc(doc(db, 'settings', 'recusFiscaux'), associationInfo, { merge: true })
       toast.success('Paramètres enregistrés')
     } catch (err) {
       if (import.meta.env.DEV) console.error('Erreur sauvegarde:', err)
@@ -169,6 +191,129 @@ export default function RecusFiscaux() {
     }
   }
 
+  // ===== Feature #10 — Upload du document d'information reçu fiscal =====
+  const handleSelectInfoDoc = () => {
+    if (infoDocInputRef.current) infoDocInputRef.current.click()
+  }
+
+  const handleUploadInfoDoc = async (e) => {
+    const file = e.target.files?.[0]
+    // Reset input pour permettre de re-sélectionner le même fichier
+    if (infoDocInputRef.current) infoDocInputRef.current.value = ''
+    if (!file) return
+
+    setUploadingInfoDoc(true)
+    try {
+      const url = await uploadRecuFiscalInfoDoc(file)
+      setRecuFiscalInfoUrl(url)
+      setRecuFiscalInfoUpdatedAt(new Date())
+      toast.success('Document d\'information téléversé')
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Erreur upload doc info:', err)
+      toast.error(err.message || 'Erreur lors du téléversement')
+    } finally {
+      setUploadingInfoDoc(false)
+    }
+  }
+
+  // ===== Feature #9 — Récap annuel des reçus fiscaux (CSV) =====
+  const formatRecapDate = (value) => {
+    const d = value?.toDate?.() || (value ? new Date(value) : null)
+    if (!d || isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
+
+  const handleGenerateRecap = async () => {
+    setGeneratingRecap(true)
+    try {
+      // Récupérer tous les reçus de l'année (pas de limite, pas de orderBy pour éviter index composite)
+      const snapshot = await getDocs(
+        query(collection(db, 'recus_fiscaux'), where('annee', '==', recapYear))
+      )
+      const recus = snapshot.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => String(a.numeroRecu || '').localeCompare(String(b.numeroRecu || '')))
+
+      if (recus.length === 0) {
+        toast.info(`Aucun reçu pour l'année ${recapYear}`)
+        return
+      }
+
+      // En-tête mosquée : settings/mosqueeInfo si dispo, sinon paramètres association, sinon défaut
+      let mosqueeInfo = null
+      try {
+        mosqueeInfo = await getMosqueeInfo()
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn('mosqueeInfo indisponible:', e)
+      }
+      const nomMosquee = mosqueeInfo?.nom || associationInfo.nom || 'Centre Culturel Islamique El Mouhssinine'
+      const adresseMosquee = [
+        mosqueeInfo?.adresse || associationInfo.adresse,
+        [mosqueeInfo?.codePostal || associationInfo.codePostal, mosqueeInfo?.ville || associationInfo.ville]
+          .filter(Boolean).join(' ')
+      ].filter(Boolean).join(', ')
+      const identifiant = mosqueeInfo?.siret || mosqueeInfo?.rna || mosqueeInfo?.siren || associationInfo.siren || ''
+
+      // Construction CSV (séparateur ; pour Excel FR), encodage UTF-8 BOM
+      const escapeCsv = (val) => {
+        const s = (val ?? '').toString().replace(/"/g, '""')
+        return `"${s}"`
+      }
+
+      const lignes = []
+      // En-tête en lignes de commentaire
+      lignes.push(`# Récapitulatif annuel des reçus fiscaux — Année ${recapYear}`)
+      lignes.push(`# ${nomMosquee}`)
+      if (adresseMosquee) lignes.push(`# ${adresseMosquee}`)
+      if (identifiant) lignes.push(`# SIRET/RNA : ${identifiant}`)
+      lignes.push(`# Document généré le ${new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`)
+      lignes.push('')
+
+      // Colonnes
+      lignes.push(['Nom', 'Adresse', 'Email', 'Montant (€)', 'Date d\'envoi', 'N° reçu'].map(escapeCsv).join(';'))
+
+      let total = 0
+      for (const recu of recus) {
+        const d = recu.donateur || {}
+        const nom = d.companyName || [d.prenom, d.nom].filter(Boolean).join(' ').trim() || '—'
+        const adresse = [d.adresse, [d.codePostal, d.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+        const montant = Number(recu.montantTotal || 0)
+        total += montant
+        lignes.push([
+          nom,
+          adresse,
+          recu.email || '',
+          montant.toFixed(2).replace('.', ','),
+          formatRecapDate(recu.createdAt),
+          recu.numeroRecu || ''
+        ].map(escapeCsv).join(';'))
+      }
+
+      // Ligne total
+      lignes.push('')
+      lignes.push([`TOTAL (${recus.length} reçu${recus.length > 1 ? 's' : ''})`, '', '', total.toFixed(2).replace('.', ','), '', '']
+        .map(escapeCsv).join(';'))
+
+      const csv = '﻿' + lignes.join('\r\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `recap-recus-fiscaux-${recapYear}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      toast.success(`Récap ${recapYear} généré (${recus.length} reçu${recus.length > 1 ? 's' : ''})`)
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Erreur génération récap:', err)
+      toast.error('Erreur lors de la génération du récap')
+    } finally {
+      setGeneratingRecap(false)
+    }
+  }
+
   const tabs = [
     { id: 'parametres', label: 'Paramètres', icon: Building2 },
     { id: 'envoyer', label: 'Envoyer un reçu', icon: Send },
@@ -194,7 +339,7 @@ export default function RecusFiscaux() {
 
       {/* Tabs */}
       <div className="border-b border-white/10">
-        <nav className="flex gap-4">
+        <nav className="flex gap-4 overflow-x-auto whitespace-nowrap">
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -314,6 +459,77 @@ export default function RecusFiscaux() {
         </Card>
       )}
 
+      {/* Feature #10 — Document d'information reçu fiscal (commun à tous les utilisateurs) */}
+      {activeTab === 'parametres' && (
+        <Card>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-lg font-semibold text-white">
+              <FileText className="w-5 h-5 text-secondary" />
+              Document d'information reçu fiscal
+            </div>
+            <p className="text-sm text-white/60">
+              Téléversez un PDF d'information général sur les reçus fiscaux. Ce document, identique pour
+              tous, sera mis à disposition des utilisateurs de l'application.
+            </p>
+
+            {recuFiscalInfoUrl ? (
+              <div className="flex items-center justify-between gap-4 p-4 bg-white/5 border border-white/10 rounded-lg">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 bg-amber-500/20 rounded-lg flex-shrink-0">
+                    <FileText className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <a
+                      href={recuFiscalInfoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-secondary hover:underline truncate block"
+                    >
+                      Voir le document actuel (PDF)
+                    </a>
+                    {recuFiscalInfoUpdatedAt && (
+                      <p className="text-xs text-white/40 mt-0.5">
+                        Mis à jour le {recuFiscalInfoUpdatedAt.toLocaleDateString('fr-FR', {
+                          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                        })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 p-4 bg-white/5 border border-dashed border-white/15 rounded-lg text-white/50">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <p className="text-sm">Aucun document d'information téléversé pour le moment.</p>
+              </div>
+            )}
+
+            <input
+              ref={infoDocInputRef}
+              type="file"
+              accept="application/pdf"
+              onChange={handleUploadInfoDoc}
+              className="hidden"
+            />
+
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={handleSelectInfoDoc}
+                disabled={uploadingInfoDoc}
+                loading={uploadingInfoDoc}
+                icon={Upload}
+                variant="secondary"
+              >
+                {uploadingInfoDoc
+                  ? 'Téléversement...'
+                  : recuFiscalInfoUrl ? 'Remplacer le PDF d\'info' : 'Téléverser le PDF d\'info'}
+              </Button>
+            </div>
+            <p className="text-xs text-white/40">PDF uniquement, taille maximale 10MB.</p>
+          </div>
+        </Card>
+      )}
+
       {activeTab === 'envoyer' && (
         <Card>
           <div className="space-y-6">
@@ -360,12 +576,9 @@ export default function RecusFiscaux() {
                   onChange={e => setAnneeManuelle(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-secondary focus:border-secondary"
                 >
-                  {[...Array(5)].map((_, i) => {
-                    const year = new Date().getFullYear() - 1 - i
-                    return (
-                      <option key={year} value={year} className="bg-bg-dark text-white">{year}</option>
-                    )
-                  })}
+                  {Array.from({ length: Math.max(new Date().getFullYear(), 2026) - 2026 + 1 }, (_, i) => Math.max(new Date().getFullYear(), 2026) - i).map(year => (
+                    <option key={year} value={year} className="bg-bg-dark text-white">{year}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -417,10 +630,9 @@ export default function RecusFiscaux() {
                   onChange={e => setForceYear(Number(e.target.value))}
                   className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-secondary focus:border-secondary"
                 >
-                  {[...Array(5)].map((_, i) => {
-                    const year = new Date().getFullYear() - 1 - i
-                    return <option key={year} value={year} className="bg-bg-dark text-white">{year}</option>
-                  })}
+                  {Array.from({ length: Math.max(new Date().getFullYear(), 2026) - 2026 + 1 }, (_, i) => Math.max(new Date().getFullYear(), 2026) - i).map(year => (
+                    <option key={year} value={year} className="bg-bg-dark text-white">{year}</option>
+                  ))}
                 </select>
               </div>
               <Button
@@ -437,6 +649,43 @@ export default function RecusFiscaux() {
                 variant="primary"
               >
                 {forceGenerating ? 'Génération en cours...' : `Générer tous les reçus ${forceYear}`}
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        {/* Feature #9 — Récap annuel des reçus fiscaux */}
+        <Card>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-lg font-semibold text-white">
+              <FileSpreadsheet className="w-5 h-5 text-amber-400" />
+              Récapitulatif annuel
+            </div>
+            <p className="text-sm text-white/60">
+              Générez un document récapitulant tous les reçus fiscaux envoyés sur une année (à transmettre
+              à l'administration fiscale). En-tête de la mosquée, liste complète et total des montants.
+            </p>
+            <div className="flex items-end gap-4">
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">Année</label>
+                <select
+                  value={recapYear}
+                  onChange={e => setRecapYear(Number(e.target.value))}
+                  className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:ring-2 focus:ring-secondary focus:border-secondary"
+                >
+                  {Array.from({ length: Math.max(new Date().getFullYear(), 2026) - 2026 + 1 }, (_, i) => Math.max(new Date().getFullYear(), 2026) - i).map(year => (
+                    <option key={year} value={year} className="bg-bg-dark text-white">{year}</option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                onClick={handleGenerateRecap}
+                disabled={generatingRecap}
+                loading={generatingRecap}
+                icon={Download}
+                variant="secondary"
+              >
+                {generatingRecap ? 'Génération...' : 'Générer le récap annuel'}
               </Button>
             </div>
           </div>

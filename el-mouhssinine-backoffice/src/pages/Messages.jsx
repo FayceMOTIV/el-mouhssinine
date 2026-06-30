@@ -60,6 +60,7 @@ export default function Messages() {
   const [filterPeriode, setFilterPeriode] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteModal, setDeleteModal] = useState({ open: false, message: null })
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const unsubscribe = subscribeToMessages((data) => {
@@ -149,6 +150,7 @@ export default function Messages() {
 
   const handleDeleteMessage = async () => {
     if (!deleteModal.message) return
+    setDeleting(true)
     try {
       await deleteMessage(deleteModal.message.id)
       toast.success('Message supprimé')
@@ -160,6 +162,8 @@ export default function Messages() {
     } catch (err) {
       console.error('Error deleting message:', err)
       toast.error('Erreur lors de la suppression')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -316,7 +320,7 @@ export default function Messages() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -593,6 +597,7 @@ export default function Messages() {
         message={`Êtes-vous sûr de vouloir supprimer le message de "${deleteModal.message?.userName || 'cet utilisateur'}" ? Cette action est irréversible.`}
         confirmText="Supprimer"
         danger
+        loading={deleting}
       />
     </div>
   )
