@@ -136,16 +136,10 @@ async function fetchAndroidStats() {
   if (!pkg || !process.env.GPLAY_SA_JSON_B64) return { available: false, reason: 'config manquante' };
   try {
     const token = await gplayToken('https://www.googleapis.com/auth/playdeveloperreporting');
-    // Reporting API : nombre d'appareils actifs (proxy d'installs actives)
-    const url = `https://playdeveloperreporting.googleapis.com/v1beta1/apps/${pkg}`;
-    const { status } = await httpGet(url, { Authorization: `Bearer ${token}` });
-    if (status === 403 || status === 404) {
-      return { available: false, reason: 'permission en cours d\'activation (délai ~24h Google)' };
-    }
-    if (status !== 200) return { available: false, reason: `HTTP ${status}` };
-    // L'app est accessible : on récupère le métric set "installs"
-    // (active device installs sur les 28 derniers jours via metricSet errorCountMetricSet n'est pas install ;
-    //  on utilise le set "installs" si dispo, sinon on renvoie available avec note)
+    // Appel direct du metric set "installs" (installs par jour via Play Developer
+    // Reporting API). NB: l'ancienne sonde GET /apps/{pkg} a ete supprimee — cet
+    // endpoint n'existe pas dans l'API et renvoyait toujours 404, ce qui empechait
+    // d'atteindre la vraie requete d'installs meme avec les bons droits.
     return await fetchAndroidInstallsMetric(token, pkg);
   } catch (e) {
     return { available: false, reason: e.message };
@@ -169,6 +163,9 @@ async function fetchAndroidInstallsMetric(token, pkg) {
     });
     req.on('error', reject); req.setTimeout(30000, () => req.destroy(new Error('timeout'))); req.write(reqBody); req.end();
   });
+  if (res.status === 403 || res.status === 404) {
+    return { available: false, reason: 'acces refuse : autoriser le service account dans la Play Console (Utilisateurs et autorisations)' };
+  }
   if (res.status !== 200) return { available: false, reason: `installs HTTP ${res.status}` };
   const data = JSON.parse(res.body);
   let last30 = 0;
