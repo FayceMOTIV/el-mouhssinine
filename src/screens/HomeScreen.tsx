@@ -1572,13 +1572,17 @@ const HomeScreen = () => {
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
               >
                 <TouchableOpacity
-                  onPress={async () => {
-                    await AsyncStorage.setItem(
-                      'messages_last_read_at',
-                      new Date().toISOString(),
-                    );
+                  onPress={() => {
+                    // Naviguer IMMEDIATEMENT (action critique), puis persister le
+                    // marqueur "lu" en arriere-plan. Avant, la navigation etait
+                    // placee apres un await AsyncStorage sans try/catch : en cas
+                    // d'echec du stockage local, le bouton ne naviguait pas.
                     setUnreadMsgCount(0);
                     navigation.navigate('Messages');
+                    AsyncStorage.setItem(
+                      'messages_last_read_at',
+                      new Date().toISOString(),
+                    ).catch(() => {});
                   }}
                   style={styles.bellButton}
                   accessibilityLabel="Messages"
