@@ -68,6 +68,11 @@ export default function Revenus() {
   const [selectedDon, setSelectedDon] = useState(null)
   const [donModalOpen, setDonModalOpen] = useState(false)
 
+  // Onglet abonnements : recherche membre + modal historique paiements
+  const [abonnementSearchQuery, setAbonnementSearchQuery] = useState('')
+  const [selectedMember, setSelectedMember] = useState(null)
+  const [memberModalOpen, setMemberModalOpen] = useState(false)
+
   useEffect(() => {
     const unsubPayments = subscribeToPayments((data) => {
       setPayments(data)
@@ -329,6 +334,65 @@ export default function Revenus() {
       m.status === 'actif'
     )
   }, [membres])
+
+  // Filtre recherche (nom / email) — anticipe des centaines de membres
+  const filteredSubscriptions = useMemo(() => {
+    const q = abonnementSearchQuery.trim().toLowerCase()
+    if (!q) return activeSubscriptions
+    return activeSubscriptions.filter(m => {
+      const name = `${m.prenom || ''} ${m.nom || ''}`.toLowerCase()
+      const email = (m.email || '').toLowerCase()
+      return name.includes(q) || email.includes(q)
+    })
+  }, [activeSubscriptions, abonnementSearchQuery])
+
+  // Historique des paiements du membre sélectionné, groupé année -> mois.
+  // Source : collection payments (une entrée par prélèvement mensuel Stripe),
+  // matchée sur membreId (BO) ou metadata.memberId (app).
+  const memberPaymentHistory = useMemo(() => {
+    if (!selectedMember) return { years: [], total: 0, count: 0 }
+    const uid = selectedMember.id
+    const list = payments
+      .filter(p => (p.membreId || p.metadata?.memberId) === uid)
+      .map(p => {
+        const rawDate = p.date || p.createdAt
+        const date = rawDate?.toDate?.() || new Date(rawDate || Date.now())
+        return {
+          id: p.id,
+          date,
+          montant: p.montant || 0,
+          type: p.type || 'cotisation',
+          modePaiement: p.modePaiement || 'cb',
+          status: p.status || 'succeeded',
+        }
+      })
+      .sort((a, b) => b.date - a.date)
+
+    const total = list.reduce((s, p) => s + p.montant, 0)
+    // Regroupement année -> mois
+    const yearsMap = new Map()
+    list.forEach(p => {
+      const y = p.date.getFullYear()
+      const mo = p.date.getMonth()
+      if (!yearsMap.has(y)) yearsMap.set(y, { year: y, total: 0, count: 0, months: new Map() })
+      const yEntry = yearsMap.get(y)
+      yEntry.total += p.montant
+      yEntry.count += 1
+      if (!yEntry.months.has(mo)) yEntry.months.set(mo, { month: mo, total: 0, payments: [] })
+      const mEntry = yEntry.months.get(mo)
+      mEntry.total += p.montant
+      mEntry.payments.push(p)
+    })
+    const years = [...yearsMap.values()]
+      .sort((a, b) => b.year - a.year)
+      .map(y => ({ ...y, months: [...y.months.values()].sort((a, b) => b.month - a.month) }))
+    return { years, total, count: list.length }
+  }, [selectedMember, payments])
+
+  const openMemberHistory = (m) => {
+    setSelectedMember(m)
+    setMemberModalOpen(true)
+  }
 
   // Export CSV
   const exportCSV = (data, filename, headers, rowMapper) => {
@@ -938,18 +1002,38 @@ export default function Revenus() {
       {activeTab === 'abonnements' && (
         <>
           <Card>
-            <div className="flex justify-between items-center mb-4">
-              <p className="text-white/70">
-                {activeSubscriptions.length} abonnement{activeSubscriptions.length > 1 ? 's' : ''} actif{activeSubscriptions.length > 1 ? 's' : ''}
-              </p>
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex-1 min-w-[220px]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher un membre par nom ou email..."
+                    value={abonnementSearchQuery}
+                    onChange={(e) => setAbonnementSearchQuery(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-secondary"
+                  />
+                </div>
+              </div>
               <Button onClick={exportAbonnementsCSV} size="sm">
                 <Download className="w-4 h-4 mr-2" />
                 Exporter CSV
               </Button>
             </div>
-            {activeSubscriptions.length === 0 ? (
+          </Card>
+          <Card>
+            <div className="flex justify-between items-center mb-4">
+              <p className="text-white/70">
+                {filteredSubscriptions.length} abonnement{filteredSubscriptions.length > 1 ? 's' : ''} actif{filteredSubscriptions.length > 1 ? 's' : ''}
+                {abonnementSearchQuery.trim() && ` sur ${activeSubscriptions.length}`}
+              </p>
+              <p className="text-white/40 text-sm hidden sm:block">
+                Cliquez sur un membre pour voir l'historique de ses paiements
+              </p>
+            </div>
+            {filteredSubscriptions.length === 0 ? (
               <div className="text-center py-12 text-white/40">
-                Aucun abonnement actif
+                {abonnementSearchQuery.trim() ? 'Aucun membre trouvé' : 'Aucun abonnement actif'}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -965,9 +1049,13 @@ export default function Revenus() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeSubscriptions.map(m => (
-                      <tr key={m.id} className="border-b border-white/5 hover:bg-white/5">
-                        <td className="py-3 px-4 text-white">
+                    {filteredSubscriptions.map(m => (
+                      <tr
+                        key={m.id}
+                        onClick={() => openMemberHistory(m)}
+                        className="border-b border-white/5 hover:bg-white/5 cursor-pointer"
+                      >
+                        <td className="py-3 px-4 text-white font-medium">
                           {`${m.prenom || ''} ${m.nom || ''}`.trim()}
                         </td>
                         <td className="py-3 px-4 text-white/60 text-sm">
@@ -1093,6 +1181,113 @@ export default function Revenus() {
             onClick={() => {
               setDonModalOpen(false)
               setSelectedDon(null)
+            }}
+          >
+            Fermer
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Modal historique paiements membre (onglet Abonnements) */}
+      <Modal
+        isOpen={memberModalOpen}
+        onClose={() => {
+          setMemberModalOpen(false)
+          setSelectedMember(null)
+        }}
+        title="Historique des paiements"
+        size="lg"
+      >
+        {selectedMember && (
+          <div className="space-y-5">
+            {/* En-tête membre */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-white/50 text-sm">Membre</p>
+                <p className="text-white font-semibold">
+                  {`${selectedMember.prenom || ''} ${selectedMember.nom || ''}`.trim() || 'Membre'}
+                </p>
+              </div>
+              <div>
+                <p className="text-white/50 text-sm">Email</p>
+                <p className="text-white break-all">{selectedMember.email || '-'}</p>
+              </div>
+              <div>
+                <p className="text-white/50 text-sm">Cotisation mensuelle</p>
+                <p className="text-secondary font-bold">
+                  {(selectedMember.montant || selectedMember.cotisation?.montant || 0).toLocaleString()} €
+                </p>
+              </div>
+              <div>
+                <p className="text-white/50 text-sm">Membre depuis</p>
+                <p className="text-white">
+                  {selectedMember.cotisation?.dateDebut
+                    ? format(selectedMember.cotisation.dateDebut?.toDate?.() || new Date(selectedMember.cotisation.dateDebut), 'dd/MM/yyyy', { locale: fr })
+                    : '-'}
+                </p>
+              </div>
+            </div>
+
+            {/* Totaux */}
+            <div className="flex gap-4">
+              <div className="flex-1 bg-white/5 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-secondary">{memberPaymentHistory.total.toLocaleString()} €</p>
+                <p className="text-white/50 text-sm mt-1">Total versé</p>
+              </div>
+              <div className="flex-1 bg-white/5 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-white">{memberPaymentHistory.count}</p>
+                <p className="text-white/50 text-sm mt-1">Paiement{memberPaymentHistory.count > 1 ? 's' : ''}</p>
+              </div>
+            </div>
+
+            {/* Historique année -> mois */}
+            {memberPaymentHistory.years.length === 0 ? (
+              <div className="text-center py-8 text-white/40">
+                Aucun paiement enregistré pour ce membre
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[45vh] overflow-y-auto pr-1">
+                {memberPaymentHistory.years.map(y => (
+                  <div key={y.year} className="border border-white/10 rounded-lg overflow-hidden">
+                    <div className="flex justify-between items-center bg-white/5 px-4 py-2">
+                      <span className="text-white font-semibold">{y.year}</span>
+                      <span className="text-secondary font-semibold">
+                        {y.total.toLocaleString()} € · {y.count} paiement{y.count > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-white/5">
+                      {y.months.map(mo => (
+                        <div key={mo.month} className="flex justify-between items-center px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-white/30" />
+                            <span className="text-white/80 capitalize">
+                              {format(new Date(y.year, mo.month, 1), 'MMMM', { locale: fr })}
+                            </span>
+                            {mo.payments.length > 1 && (
+                              <span className="text-white/40 text-xs">({mo.payments.length})</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-white/40 text-xs hidden sm:inline">
+                              {mo.payments.map(p => format(p.date, 'dd/MM')).join(', ')}
+                            </span>
+                            <span className="text-secondary font-semibold">{mo.total.toLocaleString()} €</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <div className="flex justify-end gap-3 mt-6">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setMemberModalOpen(false)
+              setSelectedMember(null)
             }}
           >
             Fermer
