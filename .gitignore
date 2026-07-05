@@ -93,3 +93,10 @@ ios/main.jsbundle.map
 android/app/src/main/assets/index.android.bundle
 *.jsbundle.map
 *.hprof
+
+# Tool caches
+.omc/
+.playwright-mcp/
+
+# Build artifacts
+ios/build_log.txt
