@@ -48,3 +48,14 @@ pc-api-key.json
 ElMouhssinine/pc-api-key.json
 **/pc-api-key.json
 *.iam.gserviceaccount.com.json
+
+# Tool caches (Claude/OMC, Playwright MCP)
+.omc/
+**/.omc/
+.playwright-mcp/
+**/.playwright-mcp/
+
+# Build artifacts
+**/build_log.txt
+*.jsbundle.map
+test_cerfa_*.js
