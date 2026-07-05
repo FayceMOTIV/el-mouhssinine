@@ -34,6 +34,7 @@ import {
   Legend
 } from 'recharts'
 import { Card, Button, Loading, Badge, Modal } from '../components/common'
+import MemberPaymentHistoryModal from '../components/MemberPaymentHistoryModal'
 import {
   subscribeToPayments,
   subscribeToDons,
@@ -345,49 +346,6 @@ export default function Revenus() {
       return name.includes(q) || email.includes(q)
     })
   }, [activeSubscriptions, abonnementSearchQuery])
-
-  // Historique des paiements du membre sélectionné, groupé année -> mois.
-  // Source : collection payments (une entrée par prélèvement mensuel Stripe),
-  // matchée sur membreId (BO) ou metadata.memberId (app).
-  const memberPaymentHistory = useMemo(() => {
-    if (!selectedMember) return { years: [], total: 0, count: 0 }
-    const uid = selectedMember.id
-    const list = payments
-      .filter(p => (p.membreId || p.metadata?.memberId) === uid)
-      .map(p => {
-        const rawDate = p.date || p.createdAt
-        const date = rawDate?.toDate?.() || new Date(rawDate || Date.now())
-        return {
-          id: p.id,
-          date,
-          montant: p.montant || 0,
-          type: p.type || 'cotisation',
-          modePaiement: p.modePaiement || 'cb',
-          status: p.status || 'succeeded',
-        }
-      })
-      .sort((a, b) => b.date - a.date)
-
-    const total = list.reduce((s, p) => s + p.montant, 0)
-    // Regroupement année -> mois
-    const yearsMap = new Map()
-    list.forEach(p => {
-      const y = p.date.getFullYear()
-      const mo = p.date.getMonth()
-      if (!yearsMap.has(y)) yearsMap.set(y, { year: y, total: 0, count: 0, months: new Map() })
-      const yEntry = yearsMap.get(y)
-      yEntry.total += p.montant
-      yEntry.count += 1
-      if (!yEntry.months.has(mo)) yEntry.months.set(mo, { month: mo, total: 0, payments: [] })
-      const mEntry = yEntry.months.get(mo)
-      mEntry.total += p.montant
-      mEntry.payments.push(p)
-    })
-    const years = [...yearsMap.values()]
-      .sort((a, b) => b.year - a.year)
-      .map(y => ({ ...y, months: [...y.months.values()].sort((a, b) => b.month - a.month) }))
-    return { years, total, count: list.length }
-  }, [selectedMember, payments])
 
   const openMemberHistory = (m) => {
     setSelectedMember(m)
@@ -1188,112 +1146,16 @@ export default function Revenus() {
         </div>
       </Modal>
 
-      {/* Modal historique paiements membre (onglet Abonnements) */}
-      <Modal
+      {/* Modal historique paiements membre — composant partagé (responsive) */}
+      <MemberPaymentHistoryModal
         isOpen={memberModalOpen}
         onClose={() => {
           setMemberModalOpen(false)
           setSelectedMember(null)
         }}
-        title="Historique des paiements"
-        size="lg"
-      >
-        {selectedMember && (
-          <div className="space-y-5">
-            {/* En-tête membre */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-white/50 text-sm">Membre</p>
-                <p className="text-white font-semibold">
-                  {`${selectedMember.prenom || ''} ${selectedMember.nom || ''}`.trim() || 'Membre'}
-                </p>
-              </div>
-              <div>
-                <p className="text-white/50 text-sm">Email</p>
-                <p className="text-white break-all">{selectedMember.email || '-'}</p>
-              </div>
-              <div>
-                <p className="text-white/50 text-sm">Cotisation mensuelle</p>
-                <p className="text-secondary font-bold">
-                  {(selectedMember.montant || selectedMember.cotisation?.montant || 0).toLocaleString()} €
-                </p>
-              </div>
-              <div>
-                <p className="text-white/50 text-sm">Membre depuis</p>
-                <p className="text-white">
-                  {selectedMember.cotisation?.dateDebut
-                    ? format(selectedMember.cotisation.dateDebut?.toDate?.() || new Date(selectedMember.cotisation.dateDebut), 'dd/MM/yyyy', { locale: fr })
-                    : '-'}
-                </p>
-              </div>
-            </div>
-
-            {/* Totaux */}
-            <div className="flex gap-4">
-              <div className="flex-1 bg-white/5 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-secondary">{memberPaymentHistory.total.toLocaleString()} €</p>
-                <p className="text-white/50 text-sm mt-1">Total versé</p>
-              </div>
-              <div className="flex-1 bg-white/5 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-white">{memberPaymentHistory.count}</p>
-                <p className="text-white/50 text-sm mt-1">Paiement{memberPaymentHistory.count > 1 ? 's' : ''}</p>
-              </div>
-            </div>
-
-            {/* Historique année -> mois */}
-            {memberPaymentHistory.years.length === 0 ? (
-              <div className="text-center py-8 text-white/40">
-                Aucun paiement enregistré pour ce membre
-              </div>
-            ) : (
-              <div className="space-y-4 max-h-[45vh] overflow-y-auto pr-1">
-                {memberPaymentHistory.years.map(y => (
-                  <div key={y.year} className="border border-white/10 rounded-lg overflow-hidden">
-                    <div className="flex justify-between items-center bg-white/5 px-4 py-2">
-                      <span className="text-white font-semibold">{y.year}</span>
-                      <span className="text-secondary font-semibold">
-                        {y.total.toLocaleString()} € · {y.count} paiement{y.count > 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <div className="divide-y divide-white/5">
-                      {y.months.map(mo => (
-                        <div key={mo.month} className="flex justify-between items-center px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-white/30" />
-                            <span className="text-white/80 capitalize">
-                              {format(new Date(y.year, mo.month, 1), 'MMMM', { locale: fr })}
-                            </span>
-                            {mo.payments.length > 1 && (
-                              <span className="text-white/40 text-xs">({mo.payments.length})</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-white/40 text-xs hidden sm:inline">
-                              {mo.payments.map(p => format(p.date, 'dd/MM')).join(', ')}
-                            </span>
-                            <span className="text-secondary font-semibold">{mo.total.toLocaleString()} €</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        <div className="flex justify-end gap-3 mt-6">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setMemberModalOpen(false)
-              setSelectedMember(null)
-            }}
-          >
-            Fermer
-          </Button>
-        </div>
-      </Modal>
+        member={selectedMember}
+        payments={payments}
+      />
     </div>
   )
 }

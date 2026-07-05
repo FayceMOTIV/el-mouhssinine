@@ -30,7 +30,7 @@ export default function Layout() {
     <div className="min-h-screen bg-bg-dark flex">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-0">
+      <div className="flex-1 flex flex-col min-h-screen lg:ml-0 min-w-0">
         <Header
           onMenuClick={() => setSidebarOpen(true)}
           title={title}

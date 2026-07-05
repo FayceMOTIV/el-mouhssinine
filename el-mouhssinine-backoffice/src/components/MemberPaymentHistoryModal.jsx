@@ -55,7 +55,7 @@ export default function MemberPaymentHistoryModal({ isOpen, onClose, member, pay
       {member && (
         <div className="space-y-5">
           {/* En-tête membre */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <p className="text-white/50 text-sm">Membre</p>
               <p className="text-white font-semibold">
