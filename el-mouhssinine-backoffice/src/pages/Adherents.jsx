@@ -15,6 +15,7 @@ import {
   Loading,
   EmptyState
 } from '../components/common'
+import MemberPaymentHistoryModal from '../components/MemberPaymentHistoryModal'
 import {
   subscribeToMembres,
   addDocument,
@@ -124,6 +125,8 @@ export default function Adherents() {
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, membre: null })
   const [cotisationModal, setCotisationModal] = useState({ open: false, membre: null })
+  const [allPayments, setAllPayments] = useState([])
+  const [historyModal, setHistoryModal] = useState({ open: false, membre: null })
   const [memberRecus, setMemberRecus] = useState([])
   const [fiscalAddr, setFiscalAddr] = useState({ adresse: '', codePostal: '', ville: '' })
   const [savingFiscal, setSavingFiscal] = useState(false)
@@ -173,6 +176,7 @@ export default function Adherents() {
 
   useEffect(() => {
     const unsubscribe = subscribeToPayments((payments) => {
+      setAllPayments(payments)
       const stats = getPaymentStats(payments, PaymentType.COTISATION)
       setCotisationStats(stats)
     })
@@ -1306,6 +1310,15 @@ export default function Adherents() {
                 </div>
               </div>
 
+              {/* Bouton : historique des paiements du membre (mois par mois / année par année) */}
+              <button
+                onClick={() => setHistoryModal({ open: true, membre: m })}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg font-medium transition-colors"
+              >
+                <CreditCard className="w-5 h-5 text-secondary" />
+                Voir l'historique des cotisations
+              </button>
+
               {/* ===== ALERTE VALIDATION BUREAU ===== */}
               {isAwaitingValidation && (
                 <div className="p-4 bg-violet-500/10 border border-violet-500/30 rounded-xl">
@@ -1919,6 +1932,15 @@ export default function Adherents() {
         message={`Êtes-vous sûr de vouloir refuser l'adhésion de ${rejectAdhesionModal.membre?.prenom} ${rejectAdhesionModal.membre?.nom} ?\n\nSon paiement de ${rejectAdhesionModal.membre?.cotisation?.montant || 0}€ sera converti en don.`}
         confirmText="Refuser l'adhésion"
         danger
+      />
+
+      {/* Modal historique des paiements (rendue en dernier pour passer au-dessus
+          de la modal cotisation lorsqu'elle est ouverte par-dessus — même z-50) */}
+      <MemberPaymentHistoryModal
+        isOpen={historyModal.open}
+        onClose={() => setHistoryModal({ open: false, membre: null })}
+        member={historyModal.membre}
+        payments={allPayments}
       />
     </div>
   )
