@@ -8343,7 +8343,9 @@ exports.monitorSilentBugs = functions
         // userId vide est NORMAL pour les dons web publics et anonymes -> ne pas alerter
         const reels = donsNoUserSnap.docs.filter((doc) => {
           const dd = doc.data();
-          return dd.source !== "web_don_public" && dd.isAnonymous !== true;
+          // Vraie anomalie = don APP (utilisateur connecte) sans userId.
+          // Les dons web/Stripe/anonymes/tests sans userId sont NORMAUX (metadata vide, etc.).
+          return dd.source === "app_mobile" && dd.isAnonymous !== true;
         });
         if (reels.length > 0) {
           issues.push(`💸 ${reels.length} don(s) app sans userId (90 dernières min)`);
@@ -9296,3 +9298,5 @@ exports.refreshStoreStats = storeStats.refreshStoreStats;
 const pushNotif = require('./pushNotif');
 exports.saveAdminPushSub = pushNotif.saveAdminPushSub;
 exports.testAdminPush = pushNotif.testAdminPush;
+
+
