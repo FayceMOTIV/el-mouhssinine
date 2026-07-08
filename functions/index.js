@@ -2099,7 +2099,7 @@ exports.stripeWebhook = functions
   .runWith({ secrets: ['BREVO_SMTP_PASS'],
     timeoutSeconds: 60,
     memory: '256MB',
-    minInstances: 1,
+    minInstances: 0,
   })
   .region('europe-west1')
   .https.onRequest(async (req, res) => {
@@ -4592,7 +4592,7 @@ exports.validateMembership = functions
             userName: `${prenom} ${nom}`.trim(),
             userEmail: email || '',
             sujet: 'Adhésion validée',
-            message: `Assalamu alaykum ${prenom},\n\nNous avons le plaisir de vous informer que votre adhésion à la ${nomMosquee} a été validée !\n\nVous êtes maintenant membre actif :\n- Carte de membre officielle\n- Droit de vote en Assemblée Générale\n- Reçu fiscal pour votre cotisation\n\nVotre carte de membre est disponible dans l'application.\n\nQu'Allah vous récompense pour votre engagement.\n\nLe Bureau de la ${nomMosquee}`,
+            message: `Assalamu alaykum ${prenom},\n\nNous avons le plaisir de vous informer que votre adhésion à la ${nomMosquee} a été validée !\n\nVous êtes maintenant membre actif :\n- Carte de membre officielle\n- Droit de vote en Assemblée Générale\n\nVotre carte de membre est disponible dans l'application.\n\nQu'Allah vous récompense pour votre engagement.\n\nLe Bureau de la ${nomMosquee}`,
             status: 'resolu',
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -7076,7 +7076,7 @@ exports.checkExpiringCotisations = functions
         // FIX BUG 5 (suite): Utiliser emailType au lieu de diffDays exact pour le choix du template
         if (emailType === 'remind30') {
           subject = template?.subject || 'Votre cotisation expire dans 30 jours - El Mohsinine';
-          const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\nVotre cotisation annuelle auprès de la mosquée **El Mohsinine** expire le **${dateFinStr}**, soit dans environ **30 jours**.\n\nNous vous invitons à renouveler votre adhésion depuis l'application pour continuer à bénéficier de vos avantages de membre actif :\n\n- ✨ Multiplier vos hassanates\n- 🗳️ Droit de vote en Assemblée Générale\n- 🎫 Carte de membre digitale\n- 📄 Reçu fiscal annuel\n\nPour renouveler, ouvrez l'application El Mohsinine et rendez-vous dans l'onglet **Adhérent**.`;
+          const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\nVotre cotisation annuelle auprès de la mosquée **El Mohsinine** expire le **${dateFinStr}**, soit dans environ **30 jours**.\n\nNous vous invitons à renouveler votre adhésion depuis l'application pour continuer à bénéficier de vos avantages de membre actif :\n\n- ✨ Multiplier vos hassanates\n- 🗳️ Droit de vote en Assemblée Générale\n- 🎫 Carte de membre digitale\n\nPour renouveler, ouvrez l'application El Mohsinine et rendez-vous dans l'onglet **Adhérent**.`;
           htmlBody = textToEmailHtml(body, {
             headerTitle: '📋 Rappel de cotisation',
             headerGradient: '#1565c0, #42a5f5',
@@ -7086,7 +7086,7 @@ exports.checkExpiringCotisations = functions
           });
         } else if (emailType === 'remind7') {
           subject = template?.subject || 'Votre cotisation expire dans 7 jours - El Mohsinine';
-          const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\n⚠️ Votre cotisation annuelle expire le **${dateFinStr}**, soit dans **7 jours** seulement.\n\nSans renouvellement, votre statut passera de **membre actif** à **sympathisant** et vous perdrez vos avantages (vote AG, carte membre, reçu fiscal).\n\n**Renouvelez maintenant** depuis l'application El Mohsinine → onglet **Adhérent**.`;
+          const body = template?.body || `Salam alaykoum${prenom ? ' ' + prenom : ''},\n\n⚠️ Votre cotisation annuelle expire le **${dateFinStr}**, soit dans **7 jours** seulement.\n\nSans renouvellement, votre statut passera de **membre actif** à **sympathisant** et vous perdrez vos avantages (vote AG, carte membre).\n\n**Renouvelez maintenant** depuis l'application El Mohsinine → onglet **Adhérent**.`;
           htmlBody = textToEmailHtml(body, {
             headerTitle: '⚠️ Cotisation bientôt expirée',
             headerGradient: '#e65100, #ff9800',
@@ -7253,7 +7253,7 @@ exports.checkExpiringCotisations = functions
         if (!rEmail || rMember.reminder_30d_relance_sent) continue;
 
         try {
-          const relanceBody = `Salam alaykoum${rPrenom ? ' ' + rPrenom : ''},\n\nCela fait 30 jours que votre adhésion a expiré. Vous nous manquez !\n\nRenouvelez votre cotisation pour retrouver tous vos avantages :\n\n- ✨ Multiplier vos hassanates\n- 🗳️ Droit de vote en Assemblée Générale\n- 🎫 Carte de membre digitale\n- 📄 Reçu fiscal annuel\n\nUn an de cotisation = accès complet + reçu fiscal.`;
+          const relanceBody = `Salam alaykoum${rPrenom ? ' ' + rPrenom : ''},\n\nCela fait 30 jours que votre adhésion a expiré. Vous nous manquez !\n\nRenouvelez votre cotisation pour retrouver tous vos avantages :\n\n- ✨ Multiplier vos hassanates\n- 🗳️ Droit de vote en Assemblée Générale\n- 🎫 Carte de membre digitale\n\nUn an de cotisation = accès complet.`;
           await transporter.sendMail({
             from: `"${fromName}" <${fromEmail}>`,
             to: rEmail,
@@ -7268,7 +7268,7 @@ exports.checkExpiringCotisations = functions
           });
           // Push
           await sendPushToMember(rDoc.id, '💚 Rejoignez-nous à nouveau !',
-            'Un an de cotisation = accès complet + reçu fiscal.',
+            'Un an de cotisation = accès complet.',
             { type: 'relance_30d' },
             { category: 'MEMBERSHIP', threadId: 'membership' }
           );
@@ -7372,12 +7372,17 @@ exports.reconcileStripePayments = functions
         for (const inv of invoices.data) {
           if (!inv.payment_intent) continue;
 
-          const [donSnap, paySnap] = await Promise.all([
+          const [donSnap, paySnap, payByInv, procByInv, procByPi] = await Promise.all([
             admin.firestore().collection('donations').where('stripePaymentIntentId', '==', inv.payment_intent).limit(1).get(),
             admin.firestore().collection('payments').where('stripePaymentIntentId', '==', inv.payment_intent).limit(1).get(),
+            admin.firestore().collection('payments').doc(inv.id).get(),
+            admin.firestore().collection('processed_payments').doc(inv.id).get(),
+            admin.firestore().collection('processed_payments').doc(inv.payment_intent).get(),
           ]);
 
-          if (donSnap.empty && paySnap.empty) {
+          // FIX: un paiement d'abonnement peut etre enregistre sous payments/{invoice.id} ou
+          // processed_payments/{invoice.id | payment_intent} -> on verifie TOUT avant d'alerter (stop faux positifs).
+          if (donSnap.empty && paySnap.empty && !payByInv.exists && !procByInv.exists && !procByPi.exists) {
             // Vérifier que ce n'est pas déjà dans les mismatches
             if (!mismatches.find(m => m.paymentIntentId === inv.payment_intent)) {
               mismatches.push({
