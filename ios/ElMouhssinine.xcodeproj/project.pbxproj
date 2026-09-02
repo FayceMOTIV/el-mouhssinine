@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		18B056D5F466D679AA0655BB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		1C2C9A6916C703A5C0510829 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 808FB590B7924F4F1BB2F121 /* Expo.plist */; };
 		3CD364C402BF67F090519B86 /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC36084E4343C861B56A09DA /* WidgetBridge.swift */; };
 		5A55EC8D0C9FD45387291467 /* WidgetBridgeBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 23272E19EC36C97D2040B657 /* WidgetBridgeBridge.m */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
@@ -35,6 +36,7 @@
 		37C630F7CF98C3DBC16B73C9 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		606D37EB814269A9149E8B4A /* ElMouhssinineWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElMouhssinineWidgets.swift; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = ElMouhssinine/AppDelegate.swift; sourceTree = "<group>"; };
+		808FB590B7924F4F1BB2F121 /* Expo.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Expo.plist; path = ElMouhssinine/Supporting/Expo.plist; sourceTree = SOURCE_ROOT; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = ElMouhssinine/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		88C6F454B299812C9958857C /* ElMouhssinineWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ElMouhssinineWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9954165313D8D1FC21A3732C /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
@@ -76,6 +78,7 @@
 				FIREBASE001122334455667799 /* GoogleService-Info.plist */,
 				BC36084E4343C861B56A09DA /* WidgetBridge.swift */,
 				23272E19EC36C97D2040B657 /* WidgetBridgeBridge.m */,
+				E2E9DE107061666A4AFBC721 /* Supporting */,
 			);
 			name = ElMouhssinine;
 			sourceTree = "<group>";
@@ -171,6 +174,14 @@
 			path = Pods;
 			sourceTree = "<group>";
 		};
+		E2E9DE107061666A4AFBC721 /* Supporting */ = {
+			isa = PBXGroup;
+			children = (
+				808FB590B7924F4F1BB2F121 /* Expo.plist */,
+			);
+			name = Supporting;
+			sourceTree = SOURCE_ROOT;
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -242,6 +253,7 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				18B056D5F466D679AA0655BB /* PrivacyInfo.xcprivacy in Resources */,
 				FIREBASE001122334455667788 /* GoogleService-Info.plist in Resources */,
+				1C2C9A6916C703A5C0510829 /* Expo.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
