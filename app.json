@@ -10,7 +10,10 @@
       "enabled": true,
       "checkAutomatically": "ON_ERROR_RECOVERY",
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/2b193d8f-2732-47c8-938a-336945c5fc84"
+      "url": "https://u.expo.dev/2b193d8f-2732-47c8-938a-336945c5fc84",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "ios": {
       "bundleIdentifier": "fr.elmouhssinine.mosquee"
