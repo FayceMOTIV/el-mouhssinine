@@ -28,6 +28,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>fr.elmouhssinine.mosquee</string>
+				<string>elmouhssinine</string>
 			</array>
 		</dict>
 	</array>

@@ -30,6 +30,7 @@
     "owner": "fayce",
     "plugins": [
       "react-native-edge-to-edge"
-    ]
+    ],
+    "scheme": "elmouhssinine"
   }
 }

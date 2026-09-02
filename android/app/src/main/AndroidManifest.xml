@@ -18,6 +18,17 @@
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
+      <!-- Adresse de retour apres une validation 3D Secure faite dans l'appli
+           bancaire. App.tsx:224 annonce urlScheme="elmouhssinine" a Stripe, mais
+           ce schema n'etait declare NULLE PART cote Android : le client validait
+           son paiement dans sa banque et ne revenait jamais dans l'app.
+           Ajoute le 2026-09-02. -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="elmouhssinine"/>
+      </intent-filter>
     </activity>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ERROR_RECOVERY_ONLY"/>
