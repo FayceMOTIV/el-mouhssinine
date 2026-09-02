@@ -1794,7 +1794,7 @@ exports.createPaymentIntent = functions
           const officialPrices = settingsDoc.data();
           const period = metadata.period || 'annuel';
           const officialUnitPrice = period === 'mensuel'
-            ? Math.round((officialPrices.mensuel || 10) * 100)
+            ? Math.round((officialPrices.mensuel || 8.34) * 100)
             : Math.round((officialPrices.annuel || 100) * 100);
 
           // Nombre de membres (famille = plusieurs, individuel = 1)
@@ -1923,7 +1923,11 @@ exports.createSubscription = functions
 
       if (settingsDoc.exists) {
         const officialPrices = settingsDoc.data();
-        const officialMonthlyPrice = Math.round((officialPrices.mensuel || 10) * 100);
+        // Repli aligne sur le prix REEL (8,34 EUR) et sur celui de l'app. Avant,
+        // serveur et app avaient DEUX replis differents (10 vs 10) alors que le
+        // vrai prix est 8,34 : au moindre incident de lecture Firestore d'un
+        // seul cote, les deux montants divergeaient et l'adhesion etait refusee.
+        const officialMonthlyPrice = Math.round((officialPrices.mensuel || 8.34) * 100);
         const membersCount = parseInt(metadata?.membersCount || '1', 10) || 1;
         const expectedAmount = officialMonthlyPrice * membersCount;
         const tolerance = Math.ceil(expectedAmount * 0.01);
