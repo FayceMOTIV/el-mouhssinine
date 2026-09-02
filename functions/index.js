@@ -30,8 +30,12 @@ async function logServerError(message, context, extra = {}) {
 }
 
 // ==================== PARAMÈTRES (migration functions.config → defineString) ====================
-const STRIPE_SECRET_KEY = defineString('STRIPE_SECRET_KEY');
-const STRIPE_WEBHOOK_SECRET = defineString('STRIPE_WEBHOOK_SECRET');
+// SECURITE 2026-09-02 : les cles Stripe ne sont plus des defineString. Un defineString
+// atterrit en VARIABLE D'ENVIRONNEMENT EN CLAIR sur la fonction deployee, lisible par
+// tout compte ayant un simple acces lecture aux Cloud Functions. Elles vivent desormais
+// dans Secret Manager, injectees par le `secrets: [...]` du runWith de chaque fonction.
+const STRIPE_SECRET_KEY_VALUE = () => process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET_VALUE = () => process.env.STRIPE_WEBHOOK_SECRET || '';
 // OpenAI key optionnelle — via .env ou firebase functions:secrets:set
 const OPENAI_API_KEY_ENV = process.env.OPENAI_API_KEY || '';
 const MISTRAL_API_KEY_ENV = process.env.MISTRAL_API_KEY || '';
@@ -44,7 +48,7 @@ const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'Mosquée El Mouhssinine'
 let _stripe;
 const getStripe = () => {
   if (!_stripe) {
-    _stripe = new Stripe(STRIPE_SECRET_KEY.value() || 'sk_test_not_configured', {
+    _stripe = new Stripe(STRIPE_SECRET_KEY_VALUE() || 'sk_test_not_configured', {
       apiVersion: '2023-10-16',
     });
   }
@@ -1717,7 +1721,7 @@ exports.onMessageReply = functions
 // Créer un PaymentIntent pour les dons et cotisations
 
 exports.createPaymentIntent = functions
-  .runWith({
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'],
     timeoutSeconds: 30,
     memory: '256MB',
   })
@@ -1807,7 +1811,8 @@ exports.createPaymentIntent = functions
           }
         }
       } catch (priceCheckErr) {
-        if (priceCheckErr.code === 'functions/invalid-argument') throw priceCheckErr;
+        // idem createSubscription : le code serveur n'a pas le prefixe 'functions/'
+        if (priceCheckErr instanceof functions.https.HttpsError) throw priceCheckErr;
         // Fail-closed : si Firestore est indisponible, on bloque le paiement cotisation
         // Un attaquant ne peut pas exploiter une panne Firestore pour payer 1€
         throw new functions.https.HttpsError(
@@ -1884,7 +1889,7 @@ exports.createPaymentIntent = functions
 // Retourne clientSecret pour Payment Sheet
 
 exports.createSubscription = functions
-  .runWith({
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'],
     timeoutSeconds: 30,
     memory: '256MB',
   })
@@ -1931,7 +1936,12 @@ exports.createSubscription = functions
         }
       }
     } catch (priceCheckErr) {
-      if (priceCheckErr.code === 'functions/invalid-argument') throw priceCheckErr;
+      // Cote SERVEUR, HttpsError.code vaut 'invalid-argument' NU : le prefixe
+      // 'functions/' n'est ajoute que par le SDK client. Le test precedent etait
+      // donc toujours faux et le vrai message (« Montant invalide, attendu X »)
+      // etait remplace par « Verification impossible, reessayez » — un message
+      // qui pousse a recommencer une action structurellement condamnee.
+      if (priceCheckErr instanceof functions.https.HttpsError) throw priceCheckErr;
       // Fail-closed (cohérent avec createPaymentIntent) : ne jamais laisser passer un montant non vérifié
       console.error('createSubscription: vérification prix impossible:', priceCheckErr.message);
       throw new functions.https.HttpsError('failed-precondition', 'Vérification du montant impossible. Veuillez réessayer.');
@@ -1999,9 +2009,17 @@ exports.createSubscription = functions
         if (existingSub) {
           try {
             const oldSub = await stripe.subscriptions.retrieve(existingSub);
-            if (oldSub.status === 'active' || oldSub.status === 'past_due') {
+            // 'incomplete' AJOUTE le 2026-09-02 : un abonnement dont le premier
+            // paiement n'a jamais ete confirme restait vivant ici. Resultat, chaque
+            // nouvelle tentative laissait derriere elle un abonnement fantome que
+            // Stripe expirait 23 h plus tard (15 cas sur 51 abonnements crees).
+            if (
+              oldSub.status === 'active' ||
+              oldSub.status === 'past_due' ||
+              oldSub.status === 'incomplete'
+            ) {
               await stripe.subscriptions.cancel(existingSub);
-              console.log('Ancien abonnement Stripe annulé (orphelin):', existingSub);
+              console.log('Ancien abonnement Stripe annulé (orphelin):', existingSub, oldSub.status);
             }
           } catch (subErr) {
             // Subscription introuvable ou déjà annulée — on continue
@@ -2071,11 +2089,22 @@ exports.createSubscription = functions
       // 4. Stocker les IDs dans le document membre
       // FIX BUG 4: set({merge:true}) au lieu de update() — évite crash si le doc n'existe pas encore
       const memberRef = admin.firestore().collection('members').doc(uid);
+      // Contexte de la tentative, pour que le backoffice dise la VERITE plutot
+      // qu'un « en attente de paiement » indistinct : a cet instant precis
+      // l'utilisateur n'a encore rien paye, il n'a meme pas vu le formulaire
+      // carte. Le webhook fera evoluer paiementTentative.issue :
+      //   en_cours -> paye (succes) | abandonne (Stripe expire l'abonnement).
       await memberRef.set({
         stripeCustomerId: customer.id,
         stripeSubscriptionId: subscription.id,
         cotisationType: 'mensuel',
         status: 'en_attente_paiement',
+        paiementTentative: {
+          moyen: 'carte',
+          issue: 'en_cours',
+          montantAttenduCentimes: amount,
+          debutee: admin.firestore.FieldValue.serverTimestamp(),
+        },
       }, { merge: true });
 
       console.log('IDs Stripe sauvegardés dans Firestore');
@@ -2096,7 +2125,7 @@ exports.createSubscription = functions
 // Avec idempotence et transactions atomiques
 
 exports.stripeWebhook = functions
-  .runWith({ secrets: ['BREVO_SMTP_PASS'],
+  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'BREVO_SMTP_PASS'],
     timeoutSeconds: 60,
     memory: '256MB',
     minInstances: 0,
@@ -2104,7 +2133,7 @@ exports.stripeWebhook = functions
   .region('europe-west1')
   .https.onRequest(async (req, res) => {
     const sig = req.headers['stripe-signature'];
-    const endpointSecret = STRIPE_WEBHOOK_SECRET.value();
+    const endpointSecret = STRIPE_WEBHOOK_SECRET_VALUE();
 
     // SÉCURITÉ: Vérifier que le secret webhook est configuré
     if (!endpointSecret) {
@@ -2985,6 +3014,22 @@ exports.stripeWebhook = functions
             } else if (updatedSubscription.status === 'canceled' || updatedSubscription.status === 'unpaid') {
               updateData.status = 'sympathisant';
               updateData.statut = 'sympathisant';
+            } else if (updatedSubscription.status === 'incomplete_expired') {
+              // AJOUTE le 2026-09-02. Cas jamais traite jusqu'ici : l'utilisateur
+              // a lance une adhesion puis n'a pas confirme le paiement ; Stripe
+              // expire l'abonnement au bout de 23 h. Le membre restait alors
+              // « en attente de paiement » A VIE, avec un bouton « resilier »
+              // pour un abonnement jamais paye. On remet les compteurs a zero
+              // et on ecrit ce qui s'est REELLEMENT passe.
+              updateData.status = 'sympathisant';
+              updateData.statut = 'sympathisant';
+              updateData.stripeSubscriptionId = admin.firestore.FieldValue.delete();
+              updateData.paiementTentative = {
+                moyen: 'carte',
+                issue: 'abandonne',
+                terminee: admin.firestore.FieldValue.serverTimestamp(),
+              };
+              console.log('Abonnement jamais confirmé (incomplete_expired), membre remis en sympathisant:', updatedSubscription.id);
             }
 
             if (Object.keys(updateData).length > 0) {
@@ -5598,7 +5643,7 @@ exports.forceGenerateRecusFiscaux = functions
 
 exports.onDonationConfirmation = functions
   .region('europe-west1')
-  .runWith({ secrets: ['BREVO_SMTP_PASS'] })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'BREVO_SMTP_PASS'] })
   .firestore
   .document('donations/{donationId}')
   .onCreate(async (snap, context) => {
@@ -6116,7 +6161,7 @@ exports.onCotisationConfirmation = functions
 // ========================================================================
 exports.refundPayment = functions
   .region('europe-west1')
-  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 60, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'BREVO_SMTP_PASS'], timeoutSeconds: 60, memory: '256MB' })
   .https.onCall(async (data, context) => {
     // Vérifier admin
     if (!context.auth) {
@@ -6214,7 +6259,17 @@ exports.refundPayment = functions
       if (isPartialRefund) {
         memberUpdate.partialRefund = true;
       } else {
-        memberUpdate.refunded = true;
+        // `refunded` ne vaut true que si de l'argent est REELLEMENT reparti chez
+        // Stripe. Avant, annuler un membre qui n'avait jamais paye ecrivait
+        // « remboursé : oui, 0 € » : le backoffice affichait un avertissement de
+        // remboursement pour une somme qui n'avait jamais ete encaissee, et plus
+        // personne ne pouvait dire six mois apres si le membre avait ete rembourse.
+        memberUpdate.refunded = !!refundResult;
+        if (!refundResult) {
+          memberUpdate.refundReason = reason
+            ? `${reason} (aucun paiement à rembourser)`
+            : 'Annulation admin (aucun paiement à rembourser)';
+        }
         memberUpdate.aPaye = false;
         memberUpdate.datePaiement = null;
         memberUpdate.stripePaymentId = null;
@@ -6252,10 +6307,14 @@ exports.refundPayment = functions
         montant: refundedAmount,
       });
 
-      // Envoyer email de confirmation de remboursement au membre
+      // Envoyer email de confirmation de remboursement au membre.
+      // GARDE-FOU 2026-09-02 : plus jamais d'email quand rien n'a ete rembourse.
+      // Un membre qui n'avait JAMAIS paye a recu « Votre remboursement de 0 € a
+      // bien ete traite » ; il en a logiquement deduit qu'il avait ete debite, et
+      // a ecrit a la mosquee pour reclamer un argent qui n'etait jamais parti.
       try {
         const memberEmail = memberData.email;
-        if (memberEmail) {
+        if (memberEmail && refundedAmount > 0) {
           const fromEmail = BREVO_FROM_EMAIL;
           const fromName = BREVO_FROM_NAME;
           const refundTransporter = nodemailer.createTransport({
@@ -6288,12 +6347,15 @@ exports.refundPayment = functions
         console.warn('⚠️ Email remboursement non envoyé (non bloquant):', emailError.message);
       }
 
-      // Push notification remboursement (multi-device)
-      await sendPushToMember(memberId, '💸 Remboursement en cours',
-        `Votre remboursement de ${refundedAmount}€ a été initié. Comptez 5 à 10 jours ouvrés.`,
-        { type: 'refund_initiated', memberId },
-        { category: 'MEMBERSHIP', threadId: 'membership' }
-      );
+      // Push notification remboursement (multi-device).
+      // Meme garde-fou que l'email : pas de notification « remboursement de 0 € ».
+      if (refundedAmount > 0) {
+        await sendPushToMember(memberId, '💸 Remboursement en cours',
+          `Votre remboursement de ${refundedAmount}€ a été initié. Comptez 5 à 10 jours ouvrés.`,
+          { type: 'refund_initiated', memberId },
+          { category: 'MEMBERSHIP', threadId: 'membership' }
+        );
+      }
 
       // S11: Invalider le reçu fiscal lié si existant
       try {
@@ -6342,7 +6404,7 @@ exports.refundPayment = functions
 // ========================================================================
 exports.updatePaymentMethod = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'], timeoutSeconds: 30, memory: '256MB' })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
@@ -6377,7 +6439,12 @@ exports.updatePaymentMethod = functions
         },
       });
 
-      return { clientSecret: setupIntent.client_secret };
+      // setupIntentId est indispensable a l'app : c'est lui qu'elle renvoie a
+      // finalizeCardUpdate pour attacher la carte a l'abonnement.
+      return {
+        clientSecret: setupIntent.client_secret,
+        setupIntentId: setupIntent.id,
+      };
     } catch (error) {
       console.error('❌ Erreur updatePaymentMethod:', error);
       if (error instanceof functions.https.HttpsError) throw error;
@@ -6386,11 +6453,111 @@ exports.updatePaymentMethod = functions
   });
 
 // ========================================================================
+// FINALIZE CARD UPDATE - Attacher la nouvelle carte a l'abonnement
+// ========================================================================
+// Deuxieme temps de « changer ma carte ». L'app a fait saisir la carte via le
+// SetupIntent ouvert par updatePaymentMethod ; ici on la rend effective :
+//   1. carte par defaut du client ET de l'abonnement (sinon Stripe continue
+//      d'appeler l'ancienne carte au prochain cycle) ;
+//   2. si une cotisation est restee impayee (abonnement past_due), on la regle
+//      tout de suite — sans ca le membre garde une dette et Stripe finit par
+//      suspendre l'abonnement apres ses tentatives automatiques.
+exports.finalizeCardUpdate = functions
+  .region('europe-west1')
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'], timeoutSeconds: 60, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
+    }
+
+    const uid = context.auth.uid;
+    const { setupIntentId } = data || {};
+    if (!setupIntentId || typeof setupIntentId !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'Référence de carte manquante');
+    }
+
+    try {
+      const memberRef = admin.firestore().collection('members').doc(uid);
+      const memberDoc = await memberRef.get();
+      if (!memberDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Profil membre non trouvé');
+      }
+      const memberData = memberDoc.data();
+
+      const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+
+      // SECURITE : ce SetupIntent doit etre celui ouvert pour CE membre.
+      if (setupIntent.metadata?.uid !== uid) {
+        throw new functions.https.HttpsError('permission-denied', 'Cette opération ne vous appartient pas');
+      }
+      if (setupIntent.status !== 'succeeded' || !setupIntent.payment_method) {
+        throw new functions.https.HttpsError('failed-precondition', "La carte n'a pas été enregistrée. Reprenez l'opération.");
+      }
+
+      const paymentMethodId = setupIntent.payment_method;
+      const customerId = memberData.stripeCustomerId;
+      const subscriptionId = memberData.stripeSubscriptionId;
+
+      if (customerId) {
+        await stripe.customers.update(customerId, {
+          invoice_settings: { default_payment_method: paymentMethodId },
+        });
+      }
+      if (subscriptionId) {
+        await stripe.subscriptions.update(subscriptionId, {
+          default_payment_method: paymentMethodId,
+        });
+      }
+
+      // Regler la cotisation restee impayee, s'il y en a une.
+      let invoicePaid = false;
+      let amountPaid = null;
+      if (subscriptionId) {
+        try {
+          const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          if ((sub.status === 'past_due' || sub.status === 'unpaid') && sub.latest_invoice) {
+            const invoice = await stripe.invoices.retrieve(sub.latest_invoice);
+            if (invoice.status === 'open') {
+              const paid = await stripe.invoices.pay(sub.latest_invoice, {
+                payment_method: paymentMethodId,
+              });
+              invoicePaid = paid.status === 'paid';
+              amountPaid = (paid.amount_paid || 0) / 100;
+              console.log('Cotisation impayée réglée après changement de carte:', sub.latest_invoice);
+            }
+          }
+        } catch (payErr) {
+          // La carte est enregistree : c'est deja un progres. On ne fait pas
+          // echouer l'operation entiere parce que la facture resiste — le cycle
+          // de relance Stripe la retentera avec la NOUVELLE carte.
+          console.warn('Règlement de la facture impayée échoué:', payErr.message);
+        }
+      }
+
+      const cardBrand = setupIntent.payment_method_details?.card?.brand || null;
+      await memberRef.set({
+        paymentMethodUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Le bandeau « prélèvement refusé » de l'app se vide des que la carte
+        // est changee : garder l'alerte serait mentir dans l'autre sens.
+        paymentFailedAt: admin.firestore.FieldValue.delete(),
+        paymentFailedCount: 0,
+        ...(cardBrand ? { paymentCardBrand: cardBrand } : {}),
+      }, { merge: true });
+
+      return { invoicePaid, amountPaid };
+    } catch (error) {
+      console.error('❌ Erreur finalizeCardUpdate:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', 'Erreur lors de la mise à jour de la carte');
+    }
+  });
+
+// ========================================================================
 // CHECK PENDING PAYMENT - Vérifier paiement interrompu (3DS)
 // ========================================================================
 exports.checkPendingPayment = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'], timeoutSeconds: 30, memory: '256MB' })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
@@ -6449,7 +6616,7 @@ exports.checkPendingPayment = functions
 // ========================================================================
 exports.syncProfileToStripe = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'], timeoutSeconds: 30, memory: '256MB' })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
@@ -6498,7 +6665,7 @@ exports.syncProfileToStripe = functions
 // ========================================================================
 exports.cancelSubscription = functions
   .region('europe-west1')
-  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 30, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'BREVO_SMTP_PASS'], timeoutSeconds: 30, memory: '256MB' })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Non authentifié');
@@ -6667,7 +6834,7 @@ exports.cancelSubscription = functions
 // ========================================================================
 exports.adminCancelSubscription = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'], timeoutSeconds: 30, memory: '256MB' })
   .https.onCall(async (data, context) => {
     // Vérifier admin
     if (!context.auth) {
@@ -6748,7 +6915,7 @@ exports.adminCancelSubscription = functions
 // ========================================================================
 exports.refundDonation = functions
   .region('europe-west1')
-  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 60, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'BREVO_SMTP_PASS'], timeoutSeconds: 60, memory: '256MB' })
   .https.onCall(async (data, context) => {
     // Vérifier admin
     if (!context.auth) {
@@ -7356,7 +7523,7 @@ exports.checkExpiringCotisations = functions
 
 exports.reconcileStripePayments = functions
   .region('europe-west1')
-  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 120, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'BREVO_SMTP_PASS'], timeoutSeconds: 120, memory: '256MB' })
   .pubsub.schedule('every sunday 03:00')
   .timeZone('Europe/Paris')
   .onRun(async (context) => {
@@ -7542,7 +7709,7 @@ exports.reconcileStripePayments = functions
 // ========================================================================
 exports.deleteMemberByAdmin = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'], timeoutSeconds: 60, memory: '256MB' })
   .https.onCall(async (data, context) => {
     // 1. Vérifier authentification + admin
     if (!context.auth) {
@@ -7849,7 +8016,7 @@ exports.deleteMemberByAdmin = functions
 // ==================== DELETE MY ACCOUNT (SELF-SERVICE RGPD) ====================
 exports.deleteMyAccount = functions
   .region('europe-west1')
-  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 120, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'BREVO_SMTP_PASS'], timeoutSeconds: 120, memory: '256MB' })
   .https.onCall(async (data, context) => {
     // 1. Auth obligatoire
     if (!context.auth) {
@@ -8195,7 +8362,7 @@ exports.exportMyData = functions
 // NOTE: functions.auth.user() ne supporte PAS .region()
 // ════════════════════════════════════════
 exports.onAuthUserDeleted = functions
-  .runWith({ secrets: ['BREVO_SMTP_PASS'], timeoutSeconds: 60, memory: '256MB' })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'BREVO_SMTP_PASS'], timeoutSeconds: 60, memory: '256MB' })
   .auth.user().onDelete(async (user) => {
     const uid = user.uid;
     const email = user.email || '';
@@ -8594,7 +8761,7 @@ const { onNewFatalIssuePublished } = require('firebase-functions/v2/alerts/crash
 exports.alertCrashWhatsApp = onNewFatalIssuePublished(
   {
     region: 'europe-west1',
-    secrets: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO', 'BREVO_SMTP_PASS'],
+    secrets: ['STRIPE_SECRET_KEY', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO', 'BREVO_SMTP_PASS'],
   },
   async (event) => {
     const issue = event.data.payload.issue;
@@ -8645,7 +8812,7 @@ exports.alertCrashWhatsApp = onNewFatalIssuePublished(
 // ============================================================
 exports.createPublicCheckoutSession = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30 })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'], timeoutSeconds: 30 })
   .https.onRequest(async (req, res) => {
     const ALLOWED_ORIGIN = 'https://el-mouhssinine.web.app';
     res.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
@@ -8728,7 +8895,7 @@ exports.createPublicCheckoutSession = functions
 // ============================================================
 exports.backfillWebDonations = functions
   .region('europe-west1')
-  .runWith({ timeoutSeconds: 30 })
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'], timeoutSeconds: 30 })
   .https.onRequest(async (req, res) => {
     // DÉSACTIVÉ — one-shot terminé + token compromis
     return res.status(410).json({ error: 'Endpoint désactivé (one-shot terminé)' });
@@ -9258,7 +9425,7 @@ exports.healthCheck = functions
   .runWith({
     timeoutSeconds: 120,
     memory: '256MB',
-    secrets: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO', 'BREVO_SMTP_PASS'],
+    secrets: ['STRIPE_SECRET_KEY', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO', 'BREVO_SMTP_PASS'],
   })
   .region('europe-west1')
   .pubsub.schedule('0 7 * * *')

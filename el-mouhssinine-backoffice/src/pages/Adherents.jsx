@@ -65,6 +65,38 @@ const getCotisationStatus = (membre) => {
   return isPast(dateFin) ? CotisationStatut.EXPIRE : CotisationStatut.ACTIF
 }
 
+// Helper: raconte ce que le membre a REELLEMENT fait quand il n'a pas paye.
+// Avant, tout le monde tombait dans le meme « Attente paiement » : celui qui a
+// lance un paiement carte et ferme l'ecran, celui qui a note un virement sans
+// jamais l'envoyer, et celui qu'un admin a saisi a la main etaient identiques.
+export const getTentativePaiement = (membre) => {
+  const t = membre.paiementTentative
+  if (t && t.moyen === 'carte') {
+    if (t.issue === 'en_cours') {
+      return {
+        court: 'Paiement carte commencé',
+        detail: "A ouvert le paiement par carte mais ne l'a pas encore terminé. Sans confirmation de sa part, l'abonnement expire au bout de 23 h.",
+        ton: 'attente',
+      }
+    }
+    if (t.issue === 'abandonne') {
+      return {
+        court: 'Paiement carte abandonné',
+        detail: "A commencé un paiement par carte puis s'est arrêté avant de valider. Rien n'a été débité, aucune carte n'a même été présentée à la banque.",
+        ton: 'abandon',
+      }
+    }
+  }
+  if (membre.referenceVirement && !membre.aPaye) {
+    return {
+      court: 'Virement annoncé, non pointé',
+      detail: `A choisi le virement (référence ${membre.referenceVirement}) et reçu l'IBAN. Personne n'a encore confirmé la réception sur le compte bancaire — à vérifier sur le relevé.`,
+      ton: 'virement',
+    }
+  }
+  return null
+}
+
 // Helper: Obtient le nom du payeur
 const getPayeurName = (membre) => {
   if (!membre.inscritPar) return 'Lui-même'
@@ -317,7 +349,12 @@ export default function Adherents() {
 
     // Guard: si déjà actif (validation en cours ou terminée), ne pas re-valider
     if (isPaid && (membre.status === 'actif' || membre.status === 'en_attente_validation')) {
-      const updates = { aPaye: isPaid, modePaiement: paymentMode || membre.modePaiement || 'especes' }
+      // Plus de repli 'especes' : inventer un moyen de paiement fait dire au
+      // backoffice une chose que personne n'a saisie (cas reel : un membre
+      // affiche « especes » alors qu'il n'avait rien paye du tout).
+      const updates = { aPaye: isPaid }
+      const modeChoisi = paymentMode || membre.modePaiement
+      if (modeChoisi) updates.modePaiement = modeChoisi
       await handleCotisationUpdate(updates)
       return
     }
@@ -332,7 +369,10 @@ export default function Adherents() {
       const dateFin = type === 'mensuel' ? addMonths(now, 1) : addYears(now, 1)
 
       updates.datePaiement = now
-      updates.modePaiement = paymentMode || membre.modePaiement || 'especes'
+      // Aucun repli invente : si l'admin n'a pas dit comment le membre a paye,
+      // le champ reste vide et l'ecran affichera « non precise ».
+      const modeSaisi = paymentMode || membre.modePaiement
+      if (modeSaisi) updates.modePaiement = modeSaisi
       updates.cotisation = {
         ...membre.cotisation,
         dateDebut: now,
@@ -731,7 +771,7 @@ export default function Adherents() {
       case CotisationStatut.ACTIF: return 'Actif'
       case CotisationStatut.EN_ATTENTE_VALIDATION: return 'Attente validation'
       case CotisationStatut.EN_ATTENTE_SIGNATURE: return 'Attente signature'
-      case CotisationStatut.EN_ATTENTE_PAIEMENT: return 'Attente paiement'
+      case CotisationStatut.EN_ATTENTE_PAIEMENT: return 'Non payé'
       case CotisationStatut.EXPIRE: return 'Expiré'
       case CotisationStatut.ANNULE: return 'Annulé'
       default: return 'Aucun'
@@ -1445,6 +1485,8 @@ export default function Adherents() {
                       ['Début cotisation', fmt(debut)],
                       ['Montant attendu', m.montantAttendu ? m.montantAttendu + ' €' : (m.cotisation?.montant ? m.cotisation.montant + ' €' : '—')],
                       ['Réf. virement', m.referenceVirement || '—'],
+                      ['Mode de paiement', m.modePaiement || 'non précisé'],
+                      ['Ce qui s\'est passé', (getTentativePaiement(m) || {}).detail || '—'],
                       ['Membres liés', linkedMembers && linkedMembers.length ? linkedMembers.length + ' membre(s)' : 'Aucun'],
                       ['Dernière MAJ', fmt(maj)],
                       ['ID technique', m.uid || m.id || '—'],
@@ -1726,6 +1768,27 @@ export default function Adherents() {
                     })}
                   </div>
                   <p className="text-white/40 text-xs">Ces membres ont été inscrits avec le même paiement</p>
+                </div>
+              )}
+
+              {/* Ce qui s'est reellement passe cote membre. Sans ce bandeau,
+                  « Attente paiement » couvrait aussi bien un abandon en cours
+                  de saisie qu'un virement jamais recu : impossible de savoir
+                  quoi repondre au membre. */}
+              {!isPaid && getTentativePaiement(m) && (
+                <div className={`p-4 rounded-xl border ${
+                  getTentativePaiement(m).ton === 'virement'
+                    ? 'bg-blue-500/10 border-blue-500/30'
+                    : getTentativePaiement(m).ton === 'abandon'
+                      ? 'bg-orange-500/10 border-orange-500/30'
+                      : 'bg-yellow-500/10 border-yellow-500/30'
+                }`}>
+                  <p className="text-white font-semibold text-sm mb-1">
+                    {getTentativePaiement(m).court}
+                  </p>
+                  <p className="text-white/70 text-sm leading-relaxed">
+                    {getTentativePaiement(m).detail}
+                  </p>
                 </div>
               )}
 
