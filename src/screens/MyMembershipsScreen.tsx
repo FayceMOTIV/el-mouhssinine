@@ -32,6 +32,7 @@ import {
   MosqueeInfo,
 } from '../services/firebase';
 import { getStatusBadgeConfig } from '../utils';
+import { updateSubscriptionCard } from '../services/stripe';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MyMembershipsScreen = () => {
@@ -50,6 +51,7 @@ const MyMembershipsScreen = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
   const [dataReceived, setDataReceived] = useState(false);
+  const [isUpdatingCard, setIsUpdatingCard] = useState(false);
 
   // Charger les membres inscrits par l'utilisateur
   const loadInscribedMembers = async (uid: string) => {
@@ -181,6 +183,53 @@ const MyMembershipsScreen = () => {
       return formule === 'mensuel' ? 'شهري' : 'سنوي';
     }
     return formule === 'mensuel' ? 'Mensuel' : 'Annuel';
+  };
+
+  // Changer la carte bancaire d'un abonnement en cours.
+  // Sans ce bouton, un membre dont la carte expire n'a AUCUN moyen de se mettre
+  // à jour depuis l'app : son prélèvement est refusé, son abonnement passe en
+  // impayé, et il finit par écrire à la mosquée (cas réel du 02/09/2026).
+  const handleUpdateCard = async () => {
+    if (isUpdatingCard) return;
+    setIsUpdatingCard(true);
+    try {
+      const result = await updateSubscriptionCard();
+
+      if (result.cancelled) {
+        // Fermeture volontaire : on ne raconte pas d'histoire, on ne fait rien.
+        return;
+      }
+
+      if (!result.success) {
+        Alert.alert(
+          language === 'ar' ? 'خطأ' : 'Modification impossible',
+          result.error ||
+            (language === 'ar'
+              ? 'تعذر تحديث البطاقة. حاول مرة أخرى.'
+              : "La carte n'a pas pu être enregistrée. Réessayez ou contactez la mosquée."),
+        );
+        return;
+      }
+
+      const paidLine = result.invoicePaid
+        ? language === 'ar'
+          ? `\n\nتم تسوية اشتراكك المتأخر (${result.amountPaid ?? ''} €).`
+          : `\n\nVotre cotisation en retard a été réglée${
+              result.amountPaid ? ` (${result.amountPaid} €)` : ''
+            }.`
+        : '';
+
+      Vibration.vibrate(50);
+      Alert.alert(
+        language === 'ar' ? 'تم تحديث البطاقة' : 'Carte mise à jour',
+        (language === 'ar'
+          ? 'ستُستخدم بطاقتك الجديدة في الاقتطاعات الشهرية القادمة.'
+          : 'Votre nouvelle carte sera utilisée pour vos prochains prélèvements mensuels.') +
+          paidLine,
+      );
+    } finally {
+      setIsUpdatingCard(false);
+    }
   };
 
   // Annuler un abonnement - redirige vers la messagerie
@@ -428,6 +477,25 @@ const MyMembershipsScreen = () => {
                   )}
                 </View>
 
+                {/* Prélèvement refusé par la banque : le dire, au lieu de
+                    laisser le membre découvrir le problème tout seul. */}
+                {myMembership.paymentFailedAt && (
+                  <View style={styles.paymentFailedBanner}>
+                    <Text style={styles.paymentFailedTitle}>
+                      {language === 'ar'
+                        ? '⚠️ تم رفض آخر اقتطاع'
+                        : '⚠️ Dernier prélèvement refusé'}
+                    </Text>
+                    <Text style={styles.paymentFailedText}>
+                      {language === 'ar'
+                        ? 'رفض البنك آخر اقتطاع شهري. حدّث بطاقتك أدناه لمتابعة اشتراكك.'
+                        : `Votre banque a refusé le prélèvement du ${myMembership.paymentFailedAt.toLocaleDateString(
+                            'fr-FR',
+                          )} — le plus souvent une carte expirée ou remplacée. Mettez votre carte à jour ci-dessous pour que votre adhésion continue.`}
+                    </Text>
+                  </View>
+                )}
+
                 {/* Si inscrit par quelqu'un d'autre */}
                 {myMembership.inscritPar && (
                   <View style={styles.inscritParBanner}>
@@ -463,6 +531,29 @@ const MyMembershipsScreen = () => {
                       <Text style={styles.actionBtnText}>🔄 Renouveler</Text>
                     </TouchableOpacity>
                   )}
+                  {/* Changer de carte : uniquement si un abonnement mensuel
+                      existe réellement chez Stripe (sinon le serveur refuse). */}
+                  {myMembership.stripeSubscriptionId &&
+                    myMembership.cotisationType === 'mensuel' && (
+                      <TouchableOpacity
+                        style={[
+                          styles.actionBtn,
+                          isUpdatingCard && styles.actionBtnDisabled,
+                        ]}
+                        onPress={handleUpdateCard}
+                        disabled={isUpdatingCard}
+                      >
+                        {isUpdatingCard ? (
+                          <ActivityIndicator size="small" color="#1a1a2e" />
+                        ) : (
+                          <Text style={styles.actionBtnText}>
+                            {language === 'ar'
+                              ? '💳 تحديث بطاقتي البنكية'
+                              : '💳 Mettre à jour ma carte'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
                   {/* Bouton résilier pour tout abonnement actif */}
                   {(myMembership.status === 'actif' ||
                     myMembership.status === 'en_attente_validation' ||
@@ -1181,6 +1272,28 @@ const styles = StyleSheet.create({
     color: '#1a1a2e',
     fontSize: fontSize.sm,
     fontWeight: '600',
+  },
+  actionBtnDisabled: {
+    opacity: 0.6,
+  },
+  paymentFailedBanner: {
+    marginTop: spacing.md,
+    backgroundColor: 'rgba(230,81,0,0.12)',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: '#e65100',
+  },
+  paymentFailedTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: 'bold',
+    color: '#e65100',
+    marginBottom: spacing.xs,
+  },
+  paymentFailedText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
 });
 

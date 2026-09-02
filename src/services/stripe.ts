@@ -51,6 +51,17 @@ export interface SubscriptionResult {
   error?: string;
 }
 
+export interface CardUpdateResult {
+  success: boolean;
+  /** true si une cotisation impayée a été réglée dans la foulée */
+  invoicePaid?: boolean;
+  /** montant réglé en euros, si invoicePaid */
+  amountPaid?: number;
+  /** l'utilisateur a fermé la feuille de paiement : ce n'est pas une erreur */
+  cancelled?: boolean;
+  error?: string;
+}
+
 // Convertir euros en centimes pour Stripe
 const eurosToCents = (euros: number): number => Math.round(euros * 100);
 
@@ -466,5 +477,83 @@ export const makeApplePaySubscription = async (
       `Exception: ${err?.message || 'Erreur inconnue'}`,
     );
     return { success: false, error: err?.message || 'Une erreur est survenue' };
+  }
+};
+
+// ============================================================
+// MISE À JOUR DE LA CARTE D'UN ABONNEMENT EN COURS
+// ============================================================
+// Pourquoi : quand la carte d'un membre expire, sa banque refuse le prélèvement
+// mensuel (code `invalid_account` / `expired_card`) et l'abonnement passe en
+// `past_due`. Jusqu'ici l'app n'offrait AUCUN moyen de changer de carte : la
+// Cloud Function `updatePaymentMethod` existait et était déployée, mais aucun
+// écran ne l'appelait (vérifié : 0 occurrence hors sa propre définition).
+//
+// Déroulé : le serveur ouvre un SetupIntent (= enregistrer une carte sans la
+// débiter), l'utilisateur la saisit dans la feuille Stripe, puis le serveur
+// l'attache à l'abonnement et règle la cotisation restée impayée.
+export const updateSubscriptionCard = async (): Promise<CardUpdateResult> => {
+  try {
+    const prepare = firebase
+      .app()
+      .functions('europe-west1')
+      .httpsCallable('updatePaymentMethod');
+    const prepared = (await prepare({})).data as {
+      clientSecret: string;
+      setupIntentId: string;
+    };
+
+    if (!prepared?.clientSecret) {
+      return { success: false, error: 'Préparation du changement de carte impossible' };
+    }
+
+    const { error: initError } = await initPaymentSheet({
+      setupIntentClientSecret: prepared.clientSecret,
+      merchantDisplayName: 'Mosquée El Mohsinine',
+      style: 'alwaysLight',
+      defaultBillingDetails: {
+        address: {
+          country: 'FR',
+        },
+      },
+    });
+
+    if (initError) {
+      logger.error('[Carte] Erreur init Payment Sheet:', initError);
+      return { success: false, error: initError.message };
+    }
+
+    const { error: presentError } = await presentPaymentSheet();
+
+    if (presentError) {
+      if (presentError.code === 'Canceled') {
+        // Fermeture volontaire : on le dit clairement, on n'invente pas une erreur.
+        return { success: false, cancelled: true, error: 'Modification annulée' };
+      }
+      logger.error('[Carte] Erreur présentation Payment Sheet:', presentError);
+      return { success: false, error: presentError.message };
+    }
+
+    // La carte est enregistrée chez Stripe : le serveur l'attache à l'abonnement
+    // et tente de régler la cotisation impayée.
+    const finalize = firebase
+      .app()
+      .functions('europe-west1')
+      .httpsCallable('finalizeCardUpdate');
+    const result = (await finalize({ setupIntentId: prepared.setupIntentId }))
+      .data as { invoicePaid?: boolean; amountPaid?: number };
+
+    return {
+      success: true,
+      invoicePaid: result?.invoicePaid === true,
+      amountPaid: result?.amountPaid,
+    };
+  } catch (error) {
+    const err = error as Error;
+    logger.error('[Carte] Erreur mise à jour carte:', err);
+    return {
+      success: false,
+      error: err?.message || 'Une erreur est survenue',
+    };
   }
 };

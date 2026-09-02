@@ -1659,6 +1659,12 @@ export interface MyMembership {
   paiementId?: string;
   inscritPar?: { nom: string; prenom: string } | null;
   referenceVirement?: string;
+  /** Présent si un abonnement Stripe existe — pilote le bouton "changer de carte" */
+  stripeSubscriptionId?: string;
+  cotisationType?: string;
+  /** Date du dernier prélèvement refusé par la banque (carte expirée, fonds…) */
+  paymentFailedAt?: Date;
+  paymentFailedCount?: number;
 }
 
 export const getMyMembership = async (
@@ -1776,6 +1782,12 @@ export const subscribeToMyMembership = (
           ? { nom: data.inscritPar.nom, prenom: data.inscritPar.prenom }
           : null,
       referenceVirement: data.referenceVirement || undefined,
+      stripeSubscriptionId: data.stripeSubscriptionId || undefined,
+      cotisationType: data.cotisationType || undefined,
+      paymentFailedAt: data.paymentFailedAt
+        ? toDate(data.paymentFailedAt)
+        : undefined,
+      paymentFailedCount: data.paymentFailedCount || 0,
     };
   };
 

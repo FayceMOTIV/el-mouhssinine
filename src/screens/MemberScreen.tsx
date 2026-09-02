@@ -1208,10 +1208,29 @@ const MemberScreen = () => {
             },
           );
         }
-      } else if (
-        paymentResult.error &&
-        paymentResult.error !== 'Paiement annulé'
-      ) {
+      } else if (paymentResult.error === 'Paiement annulé') {
+        // Avant le 2026-09-02, ce cas ne produisait RIEN : ni message, ni
+        // changement d'écran. L'utilisateur fermait la feuille de paiement et
+        // se retrouvait devant une fiche « en attente de paiement » — il en
+        // concluait que son dossier était en cours de traitement, alors que
+        // rien n'avait été débité et que Stripe effaçait son abonnement 23 h
+        // plus tard, en silence. C'est la cause principale des adhésions
+        // jamais abouties. On le dit maintenant, clairement.
+        await AsyncStorage.removeItem('pendingPaymentIntentId');
+        Alert.alert(
+          language === 'ar' ? 'لم يكتمل الدفع' : 'Paiement non finalisé',
+          language === 'ar'
+            ? 'لم يتم خصم أي مبلغ. لم تكتمل عضويتك بعد — يمكنك المحاولة مرة أخرى متى شئت.'
+            : "Vous n'avez pas été débité et votre adhésion n'est pas enregistrée. Vous pouvez reprendre le paiement quand vous le souhaitez.",
+          [
+            { text: language === 'ar' ? 'لاحقًا' : 'Plus tard', style: 'cancel' },
+            {
+              text: language === 'ar' ? 'إعادة المحاولة' : 'Reprendre',
+              onPress: () => setShowPaymentModal(true),
+            },
+          ],
+        );
+      } else if (paymentResult.error) {
         // S10: Nettoyer si erreur explicite
         await AsyncStorage.removeItem('pendingPaymentIntentId');
         showPaymentError(paymentResult.error);
