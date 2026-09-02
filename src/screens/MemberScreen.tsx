@@ -129,7 +129,11 @@ const MemberScreen = () => {
 
   // Prix et infos
   const [formulePrices, setFormulePrices] = useState<CotisationPrices>({
-    mensuel: 10,
+    // Repli aligne sur le prix REEL de settings/cotisation (8,34 EUR).
+    // Avant, ce repli valait 10 EUR : si le chargement des prix echouait ou
+    // tardait, l'app envoyait 1000 centimes quand le serveur en attendait 834,
+    // et le membre lisait « Verification impossible, veuillez reessayer ».
+    mensuel: 8.34,
     annuel: 100,
   });
   const [mosqueeInfo, setMosqueeInfo] = useState<MosqueeInfo | null>(null);
