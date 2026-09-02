@@ -2125,7 +2125,7 @@ exports.createSubscription = functions
 // Avec idempotence et transactions atomiques
 
 exports.stripeWebhook = functions
-  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'BREVO_SMTP_PASS'],
+  .runWith({ secrets: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'BREVO_SMTP_PASS'],
     timeoutSeconds: 60,
     memory: '256MB',
     minInstances: 0,
@@ -2667,6 +2667,18 @@ exports.stripeWebhook = functions
               datePaiement: admin.firestore.FieldValue.serverTimestamp(),
               montantPaye: amountEuros,
               stripePaymentId: invoice.payment_intent || null,
+              // Le paiement est passe : l'alerte « prelevement refuse » de l'app
+              // n'a plus lieu d'etre. Sans cette ligne elle restait affichee a vie
+              // apres une relance Stripe reussie.
+              paymentFailedAt: admin.firestore.FieldValue.delete(),
+              paymentFailedCount: 0,
+              // La tentative a abouti : le backoffice ne doit plus afficher
+              // « paiement carte commence, pas termine » pour ce membre.
+              paiementTentative: {
+                moyen: 'carte',
+                issue: 'paye',
+                terminee: admin.firestore.FieldValue.serverTimestamp(),
+              },
               cotisation: {
                 type: 'mensuel',
                 montant: amountEuros,
@@ -2891,6 +2903,33 @@ exports.stripeWebhook = functions
           if (!subMembersSnapshot.empty) {
             const subMemberDoc = subMembersSnapshot.docs[0];
             const subMemberData = subMemberDoc.data();
+
+            // GARDE ANTI-COURSE (2026-09-02). createSubscription annule l'ancien
+            // abonnement AVANT d'ecrire le nouvel identifiant : si cet evenement
+            // tombe dans cet intervalle, on retrograderait en « sympathisant » un
+            // membre en train de repayer, et Stripe encaisserait un abonnement
+            // que plus aucune fiche ne reference. On verifie donc qu'il ne reste
+            // pas un abonnement vivant chez ce client avant de toucher a quoi que
+            // ce soit.
+            let hasOtherLiveSub = false;
+            try {
+              const deletedCustomer = typeof deletedSubscription.customer === 'string'
+                ? deletedSubscription.customer
+                : deletedSubscription.customer?.id;
+              if (deletedCustomer) {
+                const otherSubs = await stripe.subscriptions.list({ customer: deletedCustomer, limit: 10 });
+                hasOtherLiveSub = otherSubs.data.some((s) =>
+                  s.id !== deletedSubId &&
+                  ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status));
+              }
+            } catch (raceErr) {
+              console.warn('Verification anti-course impossible:', raceErr.message);
+            }
+            if (hasOtherLiveSub) {
+              console.log('Abonnement supprime mais un autre est vivant chez ce client — aucun changement:', deletedSubId);
+              break;
+            }
+
             await subMemberDoc.ref.update({
               status: 'sympathisant',
               statut: 'sympathisant', // Compatibilité ancien champ
@@ -2903,8 +2942,12 @@ exports.stripeWebhook = functions
             });
             console.log('Membre passé en sympathisant suite à suppression abonnement Stripe');
 
-            // Envoyer email de confirmation d'annulation
-            const cancelEmail = subMemberData.email;
+            // Envoyer email de confirmation d'annulation.
+            // Uniquement a quelqu'un qui a REELLEMENT cotise : un abonnement
+            // jamais confirme (adhesion abandonnee en cours de paiement) ne doit
+            // pas declencher « votre adhesion est annulee » — le membre n'a
+            // jamais rien paye, et le message le pousse a croire le contraire.
+            const cancelEmail = subMemberData.aPaye === true ? subMemberData.email : null;
             const cancelPrenom = subMemberData.prenom || subMemberData.nom || 'Membre';
             if (cancelEmail) {
               try {
@@ -6220,12 +6263,14 @@ exports.refundPayment = functions
 
       // ÉTAPE 2 : Call Stripe HORS transaction (évite double call si retry)
       let refundResult = null;
+      let stripeAlreadyRefunded = false;
       if (stripePaymentId) {
         try {
           const refundParams = {
             payment_intent: stripePaymentId,
             reason: 'requested_by_customer',
           };
+          // (stripeAlreadyRefunded est declare plus haut, avant ce try)
           // FIX D3: Si montant fourni, remboursement partiel
           if (amount && amount > 0) {
             refundParams.amount = Math.round(amount * 100);
@@ -6239,6 +6284,10 @@ exports.refundPayment = functions
           if (stripeError.code !== 'charge_already_refunded') {
             throw new functions.https.HttpsError('internal', 'Erreur lors du remboursement. Vérifiez le tableau de bord Stripe.');
           }
+          // L'argent est DEJA reparti chez Stripe : on doit le retenir, sinon le
+          // verrou anti-double-remboursement se rouvre et la fiche affirme
+          // « aucun paiement a rembourser » sur de l'argent reellement rendu.
+          stripeAlreadyRefunded = true;
         }
       }
 
@@ -6264,8 +6313,8 @@ exports.refundPayment = functions
         // « remboursé : oui, 0 € » : le backoffice affichait un avertissement de
         // remboursement pour une somme qui n'avait jamais ete encaissee, et plus
         // personne ne pouvait dire six mois apres si le membre avait ete rembourse.
-        memberUpdate.refunded = !!refundResult;
-        if (!refundResult) {
+        memberUpdate.refunded = !!refundResult || stripeAlreadyRefunded;
+        if (!refundResult && !stripeAlreadyRefunded) {
           memberUpdate.refundReason = reason
             ? `${reason} (aucun paiement à rembourser)`
             : 'Annulation admin (aucun paiement à rembourser)';
@@ -6512,12 +6561,14 @@ exports.finalizeCardUpdate = functions
       // Regler la cotisation restee impayee, s'il y en a une.
       let invoicePaid = false;
       let amountPaid = null;
+      let hadUnpaidInvoice = false;
       if (subscriptionId) {
         try {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
           if ((sub.status === 'past_due' || sub.status === 'unpaid') && sub.latest_invoice) {
             const invoice = await stripe.invoices.retrieve(sub.latest_invoice);
             if (invoice.status === 'open') {
+              hadUnpaidInvoice = true;
               const paid = await stripe.invoices.pay(sub.latest_invoice, {
                 payment_method: paymentMethodId,
               });
@@ -6534,15 +6585,19 @@ exports.finalizeCardUpdate = functions
         }
       }
 
-      const cardBrand = setupIntent.payment_method_details?.card?.brand || null;
-      await memberRef.set({
+      // L'alerte « prélèvement refusé » ne se vide QUE si la dette est
+      // reellement soldee. Effacer le bandeau alors que la nouvelle carte a ete
+      // refusee elle aussi, ce serait rassurer a tort : le membre ne verrait
+      // plus rien pendant que Stripe suspend son abonnement.
+      const detteSoldee = invoicePaid || !subscriptionId || !hadUnpaidInvoice;
+      const memberUpdate = {
         paymentMethodUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        // Le bandeau « prélèvement refusé » de l'app se vide des que la carte
-        // est changee : garder l'alerte serait mentir dans l'autre sens.
-        paymentFailedAt: admin.firestore.FieldValue.delete(),
-        paymentFailedCount: 0,
-        ...(cardBrand ? { paymentCardBrand: cardBrand } : {}),
-      }, { merge: true });
+      };
+      if (detteSoldee) {
+        memberUpdate.paymentFailedAt = admin.firestore.FieldValue.delete();
+        memberUpdate.paymentFailedCount = 0;
+      }
+      await memberRef.set(memberUpdate, { merge: true });
 
       return { invoicePaid, amountPaid };
     } catch (error) {
@@ -9425,7 +9480,7 @@ exports.healthCheck = functions
   .runWith({
     timeoutSeconds: 120,
     memory: '256MB',
-    secrets: ['STRIPE_SECRET_KEY', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO', 'BREVO_SMTP_PASS'],
+    secrets: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO', 'BREVO_SMTP_PASS'],
   })
   .region('europe-west1')
   .pubsub.schedule('0 7 * * *')
@@ -9450,6 +9505,19 @@ exports.healthCheck = functions
       if (k) { const stripe = require('stripe')(k); await stripe.balance.retrieve(); add('Paiements (Stripe)', true, 'API OK'); }
       else { add('Paiements (Stripe)', false, 'Clé Stripe manquante'); }
     } catch (e) { add('Paiements (Stripe)', false, e.message); }
+
+    // 2 bis. Secret de signature du webhook Stripe.
+    // AJOUTE le 2026-09-02 apres incident : la cle API etait presente (sonde
+    // ci-dessus VERTE) pendant que le secret de signature manquait. Resultat,
+    // le webhook repondait 500 a CHAQUE evenement Stripe — plus aucune adhesion
+    // activee, plus aucun renouvellement enregistre — et le controle de sante
+    // affichait « TOUT OK ». Une sonde qui ne peut pas rougir sur la panne
+    // reelle ne protege rien : on teste maintenant les DEUX secrets.
+    try {
+      const ws = process.env.STRIPE_WEBHOOK_SECRET;
+      add('Webhook Stripe (secret de signature)', !!ws,
+        ws ? 'Configuré' : 'MANQUANT — le webhook rejette tous les événements (500)');
+    } catch (e) { add('Webhook Stripe (secret de signature)', false, e.message); }
 
     // 3. Paramètres reçus fiscaux (sinon CERFA invalides le 2 janvier)
     try {
