@@ -2133,11 +2133,38 @@ exports.stripeWebhook = functions
           const metadata = paymentIntent.metadata || {};
           const amountEuros = paymentIntent.amount / 100;
 
+          // ⚠️ En API 2026-01-28.clover, paymentIntent.invoice est ABSENT de l'objet
+          // event. On re-fetch via le SDK (apiVersion 2023-10-16) pour retrouver le
+          // lien vers l'invoice.
+          let piInvoiceId = paymentIntent.invoice;
+          if (!piInvoiceId) {
+            try {
+              const freshPi = await stripe.paymentIntents.retrieve(paymentIntentId);
+              piInvoiceId = freshPi.invoice;
+            } catch (piErr) {
+              console.warn('payment_intent.succeeded: re-fetch PI échoué:', piErr.message);
+            }
+          }
+          // Un PI issu d'un RENOUVELLEMENT d'abonnement (billing_reason=subscription_cycle)
+          // est déjà traité par invoice.payment_succeeded (prolonge la cotisation). Sans ce
+          // garde, il est pris pour un DON (metadata vide en clover) = don fantôme de cotisation.
+          if (piInvoiceId) {
+            try {
+              const linkedInvoice = await stripe.invoices.retrieve(piInvoiceId);
+              if (linkedInvoice.billing_reason === 'subscription_cycle') {
+                console.log('[Cotisation] PI renouvellement (subscription_cycle) — géré par invoice.payment_succeeded, skip (pas de don)');
+                break;
+              }
+            } catch (invErr) {
+              console.warn('payment_intent.succeeded: re-fetch invoice liée échoué:', invErr.message);
+            }
+          }
+
           // FIX CRITIQUE: Fallback — récupérer metadata depuis la subscription
           // Si le PaymentIntent n'a pas de memberId (cas subscription: metadata sur sub, pas sur PI)
-          if (!metadata.memberId && paymentIntent.invoice) {
+          if (!metadata.memberId && piInvoiceId) {
             try {
-              const inv = await stripe.invoices.retrieve(paymentIntent.invoice);
+              const inv = await stripe.invoices.retrieve(piInvoiceId);
               if (inv.subscription) {
                 const sub = await stripe.subscriptions.retrieve(inv.subscription);
                 if (sub.metadata && sub.metadata.memberId) {
@@ -2190,6 +2217,26 @@ exports.stripeWebhook = functions
               console.error(`⚠️ MONTANT SUSPECT: cotisation de ${declaredCotisation}€ (PI: ${paymentIntentId})`);
               // On flag le paiement mais on continue le traitement (l'argent est déjà encaissé)
               metadata._montantSuspect = true;
+            }
+          }
+
+          // Résoudre userId AVANT la transaction (lookup par email si metadata vide)
+          let resolvedUserId = metadata.userId || metadata.donorUid || metadata.memberId || paymentIntent.metadata?.userId || paymentIntent.metadata?.memberId || '';
+          if (!resolvedUserId) {
+            const donorEmail = (metadata.donorEmail || metadata.email || metadata.donateurEmail || paymentIntent.receipt_email || '').toLowerCase();
+            if (donorEmail) {
+              try {
+                const memberByEmail = await admin.firestore().collection('members').where('email', '==', donorEmail).limit(1).get();
+                if (!memberByEmail.empty) {
+                  resolvedUserId = memberByEmail.docs[0].id;
+                  console.log('[Don] userId résolu par email lookup:', donorEmail, '→', resolvedUserId);
+                }
+              } catch (lookupErr) {
+                console.warn('[Don] Email lookup échoué:', lookupErr.message);
+              }
+            }
+            if (!resolvedUserId) {
+              console.log('[Don] Don ' + paymentIntentId + ' sans userId (donateur web/anonyme, email=' + (donorEmail || 'N/A') + ')');
             }
           }
 
@@ -2286,11 +2333,7 @@ exports.stripeWebhook = functions
                   },
                   donateur: metadata.memberName || metadata.donorName || metadata.donorEmail || 'Anonyme',
                   donateurEmail: (metadata.email || metadata.donorEmail || metadata.donateurEmail || '').toLowerCase() || null,
-                  userId: (() => {
-                    const uid = metadata.memberId || metadata.userId || metadata.donorUid || paymentIntent.metadata?.memberId || paymentIntent.metadata?.userId || '';
-                    if (!uid) console.log('[Don web] Don ' + paymentIntentId + ' sans userId (donateur web/anonyme) — normal');
-                    return uid;
-                  })(),
+                  userId: resolvedUserId,
                   donorType: metadata.donorType || 'particulier',
                   donorInfo: (() => { try { return metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null; } catch (e) { console.warn('donorInfo JSON invalide (cotisation don):', e.message); return null; } })(),
                   projectId: null,
@@ -2298,7 +2341,7 @@ exports.stripeWebhook = functions
                   projetId: null,
                   projetNom: 'Don général',
                   isAnonymous: false,
-                  source: 'webhook_stripe',
+                  source: metadata.source === 'app_mobile' ? 'app_mobile' : 'webhook_stripe',
                   date: admin.firestore.FieldValue.serverTimestamp(),
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                   webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2378,11 +2421,7 @@ exports.stripeWebhook = functions
                   const e = (metadata.donorEmail || metadata.email || metadata.donateurEmail || paymentIntent.receipt_email || '').toLowerCase() || undefined;
                   return e ? { donateurEmail: e } : {};
                 })()),
-                userId: (() => {
-                  const uid = metadata.userId || metadata.donorUid || metadata.memberId || paymentIntent.metadata?.userId || paymentIntent.metadata?.memberId || '';
-                  if (!uid) console.log('[Don web] Don ' + paymentIntentId + ' sans userId (donateur web/anonyme) — normal');
-                  return uid;
-                })(),
+                userId: resolvedUserId,
                 donorType: metadata.donorType || 'particulier',
                 donorInfo: (() => { try { return metadata.donorInfo ? JSON.parse(metadata.donorInfo) : null; } catch (e) { console.warn('donorInfo JSON invalide (donation):', e.message); return null; } })(),
                 projectId: metadata.projectId || null,
@@ -2391,7 +2430,7 @@ exports.stripeWebhook = functions
                 projetNom: metadata.projectName || null,
                 isAnonymous: metadata.isAnonymous === 'true',
                 modePaiement: 'carte',
-                source: 'webhook_stripe',
+                source: metadata.source === 'app_mobile' ? 'app_mobile' : 'webhook_stripe',
                 date: admin.firestore.FieldValue.serverTimestamp(),
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 webhookProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2451,9 +2490,25 @@ exports.stripeWebhook = functions
         break;
 
       case 'invoice.payment_succeeded':
-        // Événement déclenché pour chaque paiement récurrent réussi d'un abonnement
-        const invoice = event.data.object;
-        const subscriptionId = invoice.subscription;
+        // Événement déclenché pour chaque paiement récurrent réussi d'un abonnement.
+        // ⚠️ ROOT CAUSE 2026-07 : l'endpoint webhook est en API 2026-01-28.clover où
+        // invoice.subscription ET invoice.payment_intent n'existent plus au top-level
+        // (déplacés sous invoice.parent.subscription_details). Le code lisait
+        // invoice.subscription → undefined → "Invoice sans subscription, skip" → chaque
+        // renouvellement mensuel était ignoré, dateFin jamais prolongée, membres en drift.
+        // Fix : re-fetch via le SDK (apiVersion 2023-10-16) pour retrouver la forme
+        // historique + fallback sur la nouvelle localisation nested.
+        const invoiceEvent = event.data.object;
+        let invoice = invoiceEvent;
+        try {
+          invoice = await stripe.invoices.retrieve(invoiceEvent.id);
+        } catch (reErr) {
+          console.warn('invoice.payment_succeeded: re-fetch invoice échoué, fallback event object:', reErr.message);
+        }
+        const subscriptionId = invoice.subscription
+          || invoiceEvent.parent?.subscription_details?.subscription
+          || invoiceEvent.lines?.data?.[0]?.parent?.subscription_item_details?.subscription
+          || null;
 
         console.log('Paiement récurrent réussi pour subscription:', subscriptionId);
 
@@ -2533,7 +2588,7 @@ exports.stripeWebhook = functions
             }
 
             t.set(paymentRef, {
-              stripePaymentIntentId: invoice.payment_intent,
+              stripePaymentIntentId: invoice.payment_intent || null,
               stripeSubscriptionId: subscriptionId,
               stripeInvoiceId: invoice.id,
               amount: amountEuros,
@@ -2582,7 +2637,7 @@ exports.stripeWebhook = functions
               aPaye: true,
               datePaiement: admin.firestore.FieldValue.serverTimestamp(),
               montantPaye: amountEuros,
-              stripePaymentId: invoice.payment_intent,
+              stripePaymentId: invoice.payment_intent || null,
               cotisation: {
                 type: 'mensuel',
                 montant: amountEuros,
@@ -2622,7 +2677,12 @@ exports.stripeWebhook = functions
       case 'invoice.payment_failed':
         // Événement déclenché quand un paiement récurrent d'abonnement échoue
         const failedInvoice = event.data.object;
-        const failedSubId = failedInvoice.subscription;
+        // Même correctif que invoice.payment_succeeded : invoice.subscription supprimé
+        // au top-level en API 2026-01-28.clover → résoudre depuis la localisation nested.
+        const failedSubId = failedInvoice.subscription
+          || failedInvoice.parent?.subscription_details?.subscription
+          || failedInvoice.lines?.data?.[0]?.parent?.subscription_item_details?.subscription
+          || null;
         const attemptCount = failedInvoice.attempt_count || 1;
 
         console.log('Paiement récurrent échoué pour subscription:', failedSubId, 'tentative:', attemptCount);
@@ -8341,19 +8401,39 @@ exports.monitorSilentBugs = functions
         .collection('donations')
         .where('userId', '==', '')
         .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(ninetyMinAgo))
-        .limit(5)
+        .limit(10)
         .get();
 
       if (!donsNoUserSnap.empty) {
-        // userId vide est NORMAL pour les dons web publics et anonymes -> ne pas alerter
         const reels = donsNoUserSnap.docs.filter((doc) => {
           const dd = doc.data();
-          // Vraie anomalie = don APP (utilisateur connecte) sans userId.
-          // Les dons web/Stripe/anonymes/tests sans userId sont NORMAUX (metadata vide, etc.).
           return dd.source === "app_mobile" && dd.isAnonymous !== true;
         });
         if (reels.length > 0) {
-          issues.push(`💸 ${reels.length} don(s) app sans userId (90 dernières min)`);
+          const details = reels.slice(0, 3).map((doc) => {
+            const dd = doc.data();
+            const email = dd.donateurEmail || dd.donorInfo?.email || dd.metadata?.donorEmail || '?';
+            const montant = dd.montant || dd.amount || '?';
+            const piId = dd.stripePaymentIntentId || '?';
+            return `   • doc=${doc.id} email=${email} montant=${montant}€ PI=${piId.slice(0, 20)}`;
+          }).join('\n');
+          issues.push(`💸 ${reels.length} don(s) app sans userId (90 dernières min)\n${details}`);
+        }
+
+        // Auto-fix : tenter de résoudre userId par email pour les dons orphelins
+        for (const doc of donsNoUserSnap.docs) {
+          const dd = doc.data();
+          const email = (dd.donateurEmail || dd.donorInfo?.email || dd.metadata?.donorEmail || '').toLowerCase();
+          if (!email) continue;
+          try {
+            const memberSnap = await db.collection('members').where('email', '==', email).limit(1).get();
+            if (!memberSnap.empty) {
+              await doc.ref.update({ userId: memberSnap.docs[0].id });
+              console.log('monitorSilentBugs: auto-fix userId', doc.id, '→', memberSnap.docs[0].id);
+            }
+          } catch (fixErr) {
+            console.warn('monitorSilentBugs: auto-fix userId échoué pour', doc.id, fixErr.message);
+          }
         }
       }
     } catch (err) {
@@ -8362,22 +8442,38 @@ exports.monitorSilentBugs = functions
 
     // 5. Membres actifs dont cotisation.dateFin est expirée (drift Stripe/Firestore)
     try {
-      const now = admin.firestore.Timestamp.now();
+      // Tolerance: on ne flagge PAS la fenetre normale de renouvellement mensuel.
+      // Stripe cree l'invoice de renouvellement en "draft" a la fin de periode puis
+      // la finalise/debite quelques heures a quelques jours apres -> c'est a ce moment
+      // que le webhook prolonge cotisation.dateFin. On ne considere un vrai drift que
+      // si dateFin est passee depuis > 3 jours (couvre aussi le settlement SEPA).
+      const driftThreshold = admin.firestore.Timestamp.fromMillis(
+        Date.now() - 3 * 24 * 60 * 60 * 1000,
+      );
       const expiredActiveSnap = await db
         .collection('members')
         .where('status', '==', 'actif')
-        .where('cotisation.dateFin', '<', now)
+        .where('cotisation.dateFin', '<', driftThreshold)
         .limit(10)
         .get();
 
       if (!expiredActiveSnap.empty) {
-        const names = expiredActiveSnap.docs
-          .slice(0, 3)
-          .map((d) => `${d.data().prenom ?? ''} ${d.data().nom ?? ''}`.trim())
-          .join(', ');
-        issues.push(
-          `🔄 ${expiredActiveSnap.size} membre(s) "actif" avec cotisation expirée (drift): ${names}${expiredActiveSnap.size > 3 ? '...' : ''}`,
-        );
+        // Exclure les membres encore dans leur periode de grace (gracePeriodEnd futur),
+        // legitimement "actif" malgre une dateFin passee.
+        const reels = expiredActiveSnap.docs.filter((d) => {
+          const g = d.data().gracePeriodEnd;
+          const graceMs = g && g.toMillis ? g.toMillis() : 0;
+          return graceMs <= Date.now();
+        });
+        if (reels.length > 0) {
+          const names = reels
+            .slice(0, 3)
+            .map((d) => `${d.data().prenom ?? ''} ${d.data().nom ?? ''}`.trim())
+            .join(', ');
+          issues.push(
+            `🔄 ${reels.length} membre(s) "actif" avec cotisation expirée (drift): ${names}${reels.length > 3 ? '...' : ''}`,
+          );
+        }
       }
     } catch (err) {
       console.error('monitorSilentBugs actif_cotisation_expired:', err.message);
@@ -9304,4 +9400,45 @@ const pushNotif = require('./pushNotif');
 exports.saveAdminPushSub = pushNotif.saveAdminPushSub;
 exports.testAdminPush = pushNotif.testAdminPush;
 
+// ==================== FIX DONS SANS USERID ====================
+// One-shot callable admin : résout userId sur tous les dons orphelins par email lookup
+exports.fixOrphanDonations = functions
+  .region('europe-west1')
+  .runWith({ timeoutSeconds: 120, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Connexion requise');
+    }
+    const adminDoc = await admin.firestore().collection('admins').doc(context.auth.uid).get();
+    if (!adminDoc.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Réservé aux administrateurs');
+    }
 
+    const db = admin.firestore();
+    const snapshot = await db.collection('donations').where('userId', '==', '').get();
+    const results = { total: snapshot.size, fixed: 0, skipped: 0, details: [] };
+
+    for (const doc of snapshot.docs) {
+      const dd = doc.data();
+      const email = (dd.donateurEmail || dd.donorInfo?.email || dd.metadata?.donorEmail || '').toLowerCase();
+      if (!email) {
+        results.skipped++;
+        continue;
+      }
+      try {
+        const memberSnap = await db.collection('members').where('email', '==', email).limit(1).get();
+        if (!memberSnap.empty) {
+          await doc.ref.update({ userId: memberSnap.docs[0].id });
+          results.fixed++;
+          results.details.push({ id: doc.id, email, userId: memberSnap.docs[0].id });
+        } else {
+          results.skipped++;
+        }
+      } catch (e) {
+        results.details.push({ id: doc.id, error: e.message });
+      }
+    }
+
+    console.log('fixOrphanDonations:', JSON.stringify(results));
+    return results;
+  });
