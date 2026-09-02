@@ -503,7 +503,9 @@ export const updateSubscriptionCard = async (): Promise<CardUpdateResult> => {
       setupIntentId: string;
     };
 
-    if (!prepared?.clientSecret) {
+    // Les DEUX sont exigés : sans setupIntentId, l'utilisateur saisirait sa carte
+    // pour rien — la finalisation serveur la refuserait juste après.
+    if (!prepared?.clientSecret || !prepared?.setupIntentId) {
       return { success: false, error: 'Préparation du changement de carte impossible' };
     }
 

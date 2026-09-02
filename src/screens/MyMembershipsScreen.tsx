@@ -533,8 +533,15 @@ const MyMembershipsScreen = () => {
                   )}
                   {/* Changer de carte : uniquement si un abonnement mensuel
                       existe réellement chez Stripe (sinon le serveur refuse). */}
+                  {/* `en_attente_paiement` EXCLU volontairement : le serveur écrit
+                      stripeSubscriptionId + cotisationType AVANT tout paiement.
+                      Sans cette garde, un membre dont l'adhésion n'a jamais abouti
+                      voyait le bouton, ressaisissait sa carte, s'entendait dire
+                      « carte mise à jour » — et n'était jamais débité, parce que
+                      finalizeCardUpdate ne règle une facture qu'en impayé. */}
                   {myMembership.stripeSubscriptionId &&
-                    myMembership.cotisationType === 'mensuel' && (
+                    myMembership.cotisationType === 'mensuel' &&
+                    myMembership.status !== 'en_attente_paiement' && (
                       <TouchableOpacity
                         style={[
                           styles.actionBtn,
