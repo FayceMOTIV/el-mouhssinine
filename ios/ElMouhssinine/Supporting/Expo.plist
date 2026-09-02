@@ -12,5 +12,17 @@
     <string>https://u.expo.dev/2b193d8f-2732-47c8-938a-336945c5fc84</string>
     <key>EXUpdatesRuntimeVersion</key>
     <string>1.2.0</string>
+    <!-- SANS ce bloc, le serveur de mises a jour repond HTTP 400
+         « channel-name: Required » et AUCUNE mise a jour a distance
+         n'atteint l'app. L'erreur est avalee par le catch de
+         src/utils/checkForUpdates.ts : panne totalement silencieuse.
+         EAS Build injecte ce bloc automatiquement ; les builds faites
+         en local avec xcodebuild, elles, ne l'ont pas. Constate le
+         2026-09-02 (verifie par requete reelle avec et sans l'en-tete). -->
+    <key>EXUpdatesRequestHeaders</key>
+    <dict>
+      <key>expo-channel-name</key>
+      <string>production</string>
+    </dict>
   </dict>
 </plist>
