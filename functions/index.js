@@ -2663,19 +2663,12 @@ exports.stripeWebhook = functions
               throw { alreadyProcessed: true }; // Sort de la transaction proprement
             }
 
-            // Ne PAS forcer status: 'actif' — respecter le statut existant
-            // Un renouvellement mensuel ne doit PAS bypasser la validation admin
-            // Seul un membre déjà 'actif' (validé par admin) reste 'actif'
+            // Un renouvellement ne remplace jamais une validation du bureau.
             const renewalUpdate = {
               aPaye: true,
               datePaiement: admin.firestore.FieldValue.serverTimestamp(),
               montantPaye: amountEuros,
               stripePaymentId: invoice.payment_intent || null,
-              // Le paiement est passe : l'alerte « prelevement refuse » de l'app
-              // n'a plus lieu d'etre. Sans cette ligne elle restait affichee a vie
-              // apres une relance Stripe reussie.
-              paymentFailedAt: admin.firestore.FieldValue.delete(),
-              paymentFailedCount: 0,
               // La tentative a abouti : le backoffice ne doit plus afficher
               // « paiement carte commence, pas termine » pour ce membre.
               paiementTentative: {
@@ -2690,11 +2683,25 @@ exports.stripeWebhook = functions
                 dateFin: admin.firestore.Timestamp.fromDate(newEndDate),
               },
             };
-            // Seulement si déjà actif (validé par admin), on maintient actif
-            if (memberDataTx.status === 'actif') {
-              renewalUpdate.status = 'actif';
+            // Un ancien succès livré en retard ne doit pas masquer une dette
+            // plus récente. Seul le règlement de l'échéance courante nettoie
+            // les indicateurs utilisés par l'app ET le monitoring.
+            const latestInvoiceId = typeof subscription.latest_invoice === 'string'
+              ? subscription.latest_invoice : subscription.latest_invoice?.id;
+            const currentInvoicePaid = latestInvoiceId === invoice.id
+              && subscription.status === 'active' && invoice.status === 'paid'
+              && invoice.amount_paid > 0 && invoice.amount_remaining === 0;
+            if (currentInvoicePaid) {
+              renewalUpdate.paymentFailed = false;
+              renewalUpdate.paymentFailedAt = admin.firestore.FieldValue.delete();
+              renewalUpdate.paymentFailedCount = 0;
+              // Restaurer uniquement un membre validé auparavant, expiré pour
+              // impayé. Les attentes, annulations et refus restent inchangés.
+              if (memberDataTx.status === 'expire' && memberDataTx.paymentFailed === true
+                && memberDataTx.validatedAt && memberDataTx.validatedBy) {
+                renewalUpdate.status = 'actif';
+              }
             }
-            // Sinon on ne touche PAS au status (reste en_attente_validation, etc.)
 
             t.update(memberRefTx, renewalUpdate);
 
@@ -2738,6 +2745,14 @@ exports.stripeWebhook = functions
             break;
           }
 
+          // Les webhooks peuvent arriver hors ordre : un ancien refus ne doit
+          // pas réexpirer un membre après le règlement de cette même facture.
+          const currentFailedInvoice = await stripe.invoices.retrieve(failedInvoice.id);
+          if (currentFailedInvoice.status === 'paid') {
+            console.log('Ancien refus ignoré : facture déjà réglée');
+            break;
+          }
+
           const failedSubscription = await stripe.subscriptions.retrieve(failedSubId);
           const failedCustomerId = failedSubscription.customer;
           const failedCustomer = await stripe.customers.retrieve(failedCustomerId);
@@ -2757,20 +2772,28 @@ exports.stripeWebhook = functions
             const failedMemberData = failedMemberDoc.data();
             failedMemberPrenom = failedMemberData.prenom || '';
 
-            const statusUpdate = {
-              paymentFailedAt: admin.firestore.FieldValue.serverTimestamp(),
-              paymentFailedCount: attemptCount,
-            };
-
-            if (attemptCount >= 3 && failedMemberDoc.data()?.status === 'actif') {
-              // Ne passer en 'expire' que si le membre était réellement actif
-              // (évite qu'un membre en attente de validation devienne 'expire' sans avoir été actif)
-              statusUpdate.status = 'expire';
-              statusUpdate.paymentFailed = true;
-              console.log('3 tentatives échouées, membre actif passé en expire pour renouvellement');
+            const failureApplied = await admin.firestore().runTransaction(async (t) => {
+              // Si le succès a été enregistré pendant le re-fetch Stripe,
+              // cette lecture atomique empêche le refus de gagner la course.
+              const paidRef = admin.firestore().collection('processed_payments').doc(failedInvoice.id);
+              const paidDoc = await t.get(paidRef);
+              const freshMember = await t.get(failedMemberDoc.ref);
+              if (paidDoc.exists) return false;
+              const statusUpdate = {
+                paymentFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+                paymentFailedCount: attemptCount,
+              };
+              if (attemptCount >= 3 && freshMember.data()?.status === 'actif') {
+                statusUpdate.status = 'expire';
+                statusUpdate.paymentFailed = true;
+              }
+              t.update(failedMemberDoc.ref, statusUpdate);
+              return true;
+            });
+            if (!failureApplied) {
+              console.log('Ancien refus ignoré : succès déjà enregistré');
+              break;
             }
-
-            await failedMemberDoc.ref.update(statusUpdate);
           }
 
           await admin.firestore().collection('failed_payments').add({
@@ -2886,6 +2909,7 @@ exports.stripeWebhook = functions
 
         } catch (err) {
           console.error('Erreur traitement invoice.payment_failed:', err);
+          return res.status(500).send('Internal Error');
         }
         break;
 
