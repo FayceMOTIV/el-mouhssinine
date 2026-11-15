@@ -54,14 +54,45 @@ Le monitoring programmé de 08:56 UTC a ensuite indiqué
 `monitorSilentBugs: OK — aucune anomalie`.
 
 Trois échéances sont réellement impayées et restent inchangées. Deux
-inscriptions non terminées et un abonnement actif sans lien avec un dossier
-sont à distinguer du défaut corrigé. Les détails personnels et reçus de données
-restent dans le dossier opérationnel privé, hors Git.
+inscriptions non terminées ont aussi été remises en cohérence : toutes leurs
+factures sont annulées (`void`), sans montant payé, et leurs abonnements sont
+`incomplete_expired`. Elles passent en sympathisant avec tentative abandonnée
+et retrait du lien d'abonnement expiré, conformément au webhook existant ;
+écritures atomiques avec préconditions et relectures.
+
+Un abonnement ancien actif à 1 EUR/mois n'est pas explicitement lié à une
+fiche par les identifiants Stripe. La fiche ancienne est retrouvée grâce aux
+métadonnées, mais son statut et son tarif exigent une clarification : aucun
+changement de tarif, rattachement financier ou annulation n'est effectué.
+Les détails personnels et reçus de données restent dans le dossier
+opérationnel privé, hors Git.
 
 Aucun prélèvement, remboursement, mail ou push manuel n'est nécessaire pour
 cette réparation. Les essais du webhook sont locaux ; aucun faux événement de
 paiement n'est injecté en production. Une nouvelle échéance réelle n'a pas été
 provoquée pour tester le changement.
+
+## Livraison vérifiée
+
+Code poussé et relu avant le build Cloud :
+`92a275f884da491ca884b2ce62a157b2a8480087`, branche
+`fix/paid-member-state-20261115`.
+
+Seul `stripeWebhook` a été livré le 15 novembre 2026 à 10:02:27 Europe/Paris :
+version **115**, état **ACTIVE**, runtime **nodejs22**. Build Cloud
+`0b584db8-cda3-4d1e-bfd7-a6e73df5679f`.
+
+La source a été téléchargée à nouveau après livraison : ses cinq fichiers
+applicatifs sont strictement identiques au paquet livré. Aucun fichier `.env`
+ou de secrets n'est inclus. Les variables d'environnement ont été comparées
+par empreintes et les liaisons Secret Manager, service account, mémoire,
+timeout et déclencheur sont identiques avant/après.
+
+Le contrôle final relit 95 dossiers et 53 abonnements : zéro indicateur
+`paymentFailed: true`, zéro nouveau candidat au correctif. Les trois vrais
+impayés restent reconnus par leurs factures ouvertes et leurs compteurs
+d'échecs ; l'indicateur global ne se déclenche historiquement qu'après le
+troisième refus. Le monitoring n'a pas été désactivé.
 
 ## Retour arrière
 
