@@ -91,8 +91,14 @@ des règles ni des secrets.
 
 ## Livraison et retour arrière
 
-Seul le webhook doit être redéployé avec le nouveau module inclus, après
-commit/push et relecture distante. Garder le runtime Node 22, la configuration
+Le commit `3400d34360e33a0b89a6517c479120096ceb63ab`, branche
+`feat/gentle-third-failure-email-20261116`, a été poussé puis relu avant le
+build Cloud `41b24bd7-6966-464d-b61e-e389eb6d1d42`, terminé SUCCESS.
+Seul `stripeWebhook` est livré : version **116**, **ACTIVE**, Node 22, mise à
+jour le 16 novembre 2026 à **11 h 55 min 00 s Europe/Paris**. Le module
+`paymentFailureReminder.js` est inclus dans le paquet.
+
+Garder le runtime Node 22, la configuration
 et les références de secrets inchangés. Une source de la version 115 et les
 empreintes de configuration sont sauvegardées dans le dossier opérationnel
 privé. En cas de retour arrière, préserver les reçus déjà envoyés et éviter
