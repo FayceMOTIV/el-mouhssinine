@@ -8,7 +8,7 @@ const objectId = (value) => typeof value === 'string' ? value : value?.id;
 function buildReminderText(prenom = '') {
   return `Salam alaykoum${prenom ? ' ' + prenom : ''},
 
-Nous vous écrivons simplement pour vous informer que le paiement de votre cotisation mensuelle n'a pas pu aboutir malgré plusieurs tentatives. Cela peut arriver, notamment lorsqu'une carte a été renouvelée.
+Nous vous écrivons simplement pour vous informer que le paiement de votre cotisation mensuelle via l'application El Mouhssinine n'a pas pu aboutir malgré plusieurs tentatives. Cela peut arriver, notamment lorsqu'une carte a été renouvelée.
 
 Si vous souhaitez poursuivre votre adhésion, vous pouvez mettre votre carte à jour directement dans l'application El Mouhssinine :
 

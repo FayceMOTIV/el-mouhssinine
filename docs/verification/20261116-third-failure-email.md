@@ -29,7 +29,7 @@ Objet : **Un petit point sur votre cotisation**
 > Salam alaykoum [prénom],
 >
 > Nous vous écrivons simplement pour vous informer que le paiement de votre
-> cotisation mensuelle n'a pas pu aboutir malgré plusieurs tentatives. Cela
+> cotisation mensuelle via l'application El Mouhssinine n'a pas pu aboutir malgré plusieurs tentatives. Cela
 > peut arriver, notamment lorsqu'une carte a été renouvelée.
 >
 > Si vous souhaitez poursuivre votre adhésion, vous pouvez mettre votre carte
