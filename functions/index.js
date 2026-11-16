@@ -11,6 +11,7 @@ const Stripe = require('stripe');
 const PDFDocument = require('pdfkit');
 const nodemailer = require('nodemailer');
 const https = require('https');
+const { sendThirdFailureReminder } = require('./paymentFailureReminder');
 
 admin.initializeApp();
 
@@ -2807,89 +2808,20 @@ exports.stripeWebhook = functions
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
-          if (failedEmail) {
-            const brevoUser = BREVO_SMTP_USER;
-            const brevoPass = BREVO_SMTP_PASS;
-            const fromEmail = BREVO_FROM_EMAIL;
-            const fromName = BREVO_FROM_NAME;
-
-            if (brevoUser && brevoPass && fromEmail) {
-              const amountDue = ((failedInvoice.amount_due || 0) / 100).toFixed(2);
-
-              const pfTemplate = await loadEmailTemplate('payment_failed', {
-                prenom: failedMemberPrenom,
-                montant: amountDue + ' €',
-                tentative: String(attemptCount),
-                date: new Date().toLocaleDateString('fr-FR'),
-              });
-
-              const pfSubject = pfTemplate?.subject || 'Échec de paiement - El Mohsinine';
-              let pfHtmlBody;
-
-              if (pfTemplate?.body) {
-                const settingsDoc = await admin.firestore().collection('settings').doc('association').get();
-                const assocData = settingsDoc.exists ? settingsDoc.data() : {};
-                pfHtmlBody = textToEmailHtml(pfTemplate.body, {
-                  headerTitle: '⚠️ Échec de paiement',
-                  headerGradient: '#e65100, #ff9800',
-                  footerAssociation: assocData.nom || 'Mosquée El Mohsinine',
-                  footerAdresse: assocData.adresse || '',
-                  footerTelephone: assocData.telephone || '',
-                });
-              } else {
-                const settingsDoc = await admin.firestore().collection('settings').doc('association').get();
-                const assocData = settingsDoc.exists ? settingsDoc.data() : {};
-                pfHtmlBody = `
-                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: linear-gradient(135deg, #e65100, #ff9800); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-                      <h1 style="color: white; margin: 0;">⚠️ Échec de paiement</h1>
-                    </div>
-                    <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-                      <p style="font-size: 16px; color: #444;">Salam alaykoum${failedMemberPrenom ? ' ' + failedMemberPrenom : ''},</p>
-                      <p style="font-size: 16px; color: #444;">Votre paiement de cotisation mensuelle de <strong>${amountDue} €</strong> a été <strong>refusé par votre banque</strong>.</p>
-                      <div style="background: #fff3e0; border-left: 4px solid #e65100; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
-                        <p style="margin: 0; color: #e65100; font-weight: bold;">Tentative ${attemptCount}/3</p>
-                        <p style="margin: 5px 0 0; color: #444;">${attemptCount >= 3
-                          ? 'Toutes les tentatives ont échoué. Votre abonnement a été suspendu et votre statut est repassé en sympathisant.'
-                          : 'Stripe réessaiera automatiquement dans quelques jours. Veuillez vérifier votre carte bancaire.'}</p>
-                      </div>
-                      <p style="font-size: 16px; color: #444;"><strong>Que faire ?</strong></p>
-                      <ul style="color: #444; line-height: 1.8;">
-                        <li>Vérifiez que votre carte bancaire est valide</li>
-                        <li>Assurez-vous que votre compte dispose de fonds suffisants</li>
-                        <li>Si le problème persiste, contactez votre banque</li>
-                        <li>Vous pouvez renouveler votre cotisation depuis l'application</li>
-                      </ul>
-                      <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                      <div style="font-size: 13px; color: #888; text-align: center;">
-                        <p style="margin: 5px 0;"><strong>${assocData.nom || 'Mosquée El Mohsinine'}</strong></p>
-                        ${assocData.adresse ? '<p style="margin: 5px 0;">📍 ' + assocData.adresse + '</p>' : ''}
-                        ${assocData.telephone ? '<p style="margin: 5px 0;">📞 ' + assocData.telephone + '</p>' : ''}
-                      </div>
-                    </div>
-                  </div>`;
-              }
-
-              const pfTransporter = nodemailer.createTransport({
-                host: 'smtp-relay.brevo.com',
-                port: 587,
-                secure: false,
-                auth: { user: brevoUser, pass: brevoPass },
-              });
-
-              // FIX BUG 6: try-catch local — l'échec email ne doit pas crasher le webhook
-              try {
-                await pfTransporter.sendMail({
-                  from: `"${fromName}" <${fromEmail}>`,
-                  to: failedEmail,
-                  subject: pfSubject,
-                  html: pfHtmlBody,
-                });
-                console.log('Email échec de paiement envoyé à:', failedEmail.substring(0, 3) + '***');
-              } catch (emailErr) {
-                console.error('Email non-bloquant (payment_failed):', emailErr.message);
-              }
-            }
+          // Un seul mail doux au seuil de trois refus de cette échéance.
+          // Le helper vérifie de nouveau la dette et réserve l'envoi atomiquement.
+          if (failedEmail && failedMemberDoc && attemptCount >= 3) {
+            await sendThirdFailureReminder({
+              event, invoice: currentFailedInvoice, subscription: failedSubscription,
+              memberDoc: failedMemberDoc, customerEmail: failedEmail,
+              db: admin.firestore(), fieldValue: admin.firestore.FieldValue,
+              stripe, createTransport: nodemailer.createTransport,
+              renderHtml: textToEmailHtml, reportError: logServerError,
+              smtp: {
+                user: BREVO_SMTP_USER, pass: BREVO_SMTP_PASS,
+                fromEmail: BREVO_FROM_EMAIL, fromName: BREVO_FROM_NAME,
+              },
+            });
           }
 
           // Push notification au membre

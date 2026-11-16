@@ -3,12 +3,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { sendThirdFailureReminder } = require('../paymentFailureReminder');
 
 // Execute the production webhook body, with transaction storage and Stripe at
 // the boundary. Never load credentials, Firebase services, or a real transport.
 const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
 const webhookSource = source.slice(source.indexOf('exports.stripeWebhook ='),
     source.indexOf('// ==================== REÇUS FISCAUX'));
+const templateHelpersSource = source.slice(source.indexOf('const escapeHtml ='),
+    source.indexOf('exports.onNewAnnouncement ='));
 
 function harness(member = {}, options = {}) {
   const now = new Date();
@@ -16,9 +19,11 @@ function harness(member = {}, options = {}) {
     prenom: 'Membre', nom: 'Test', status: 'expire', paymentFailed: true,
     paymentFailedCount: 6, paymentFailedAt: now,
     validatedAt: now, validatedBy: 'admin-test',
+    cotisationType: 'mensuel', stripeSubscriptionId: 'sub_test', stripeCustomerId: 'cus_test',
     cotisation: { type: 'mensuel', dateFin: now }, ...member,
   }]]);
   const alerts = [];
+  const emails = [];
   const deletion = Symbol('delete');
   const invoice = { id: 'in_test', subscription: 'sub_test',
     customer: 'cus_test', payment_intent: 'pi_test', amount_paid: 834,
@@ -67,29 +72,35 @@ function harness(member = {}, options = {}) {
   const context = { exports: {}, functions: { runWith: () => chain },
     admin: { firestore }, console: { log() {}, warn() {}, error() {} },
     STRIPE_WEBHOOK_SECRET_VALUE: () => 'synthetic-signature-secret',
-    BREVO_SMTP_USER: '', BREVO_SMTP_PASS: '', BREVO_FROM_EMAIL: '', BREVO_FROM_NAME: '',
+    BREVO_SMTP_USER: options.emailEnabled ? 'fixture' : '',
+    BREVO_SMTP_PASS: options.emailEnabled ? 'synthetic-password' : '',
+    BREVO_FROM_EMAIL: options.emailEnabled ? 'sender@example.test' : '', BREVO_FROM_NAME: '',
+    nodemailer: { createTransport: () => ({ sendMail: async (mail) => {
+      emails.push(mail); return { accepted: ['membre@example.test'], messageId: 'synthetic-message' };
+    } }) },
+    sendThirdFailureReminder,
     stripe: { webhooks: { constructEvent: (event) => event },
       invoices: { retrieve: async () => {
         if (options.invoiceReadFails) throw Error('synthetic Stripe outage');
         return invoice;
       } },
       subscriptions: { retrieve: async () => subscription },
-      customers: { retrieve: async () => ({ email: '' }) },
+      customers: { retrieve: async () => ({ email: options.emailEnabled ? 'membre@example.test' : '' }) },
     },
     sendPushToMember: async () => alerts.push({ type: 'push' }),
     createNotifBO: async () => alerts.push({ type: 'backoffice' }),
     logServerError: async () => {},
   };
-  vm.runInNewContext(webhookSource, context);
+  vm.runInNewContext(templateHelpersSource + '\n' + webhookSource, context);
   async function deliver(type = 'invoice.payment_succeeded') {
     const response = { code: 200, status(code) { this.code = code; return this; },
       send(body) { this.body = body; return this; }, json(body) { this.body = body; return this; } };
     await context.exports.stripeWebhook({ headers: {}, rawBody: {
-      type, data: { object: invoice },
+      type, created: Math.floor(Date.now() / 1000), data: { object: invoice },
     } }, response);
     return response;
   }
-  return { data, alerts, deliver, member: () => data.get('members/member-test') };
+  return { data, alerts, emails, deliver, member: () => data.get('members/member-test') };
 }
 
 test('successful renewal clears the failure flag and restores a previously validated member', async () => {
@@ -203,4 +214,28 @@ test('unverifiable failure event is retried without changing or notifying the me
   assert.equal((await h.deliver('invoice.payment_failed')).code, 500);
   assert.equal(h.member().paymentFailed, false);
   assert.equal(h.alerts.length, 0);
+});
+
+test('production webhook sends no payment email for the first two failures', async () => {
+  for (const attempt_count of [1, 2]) {
+    const h = harness({ status: 'actif', paymentFailed: false }, {
+      emailEnabled: true, invoice: { attempt_count, status: 'open', amount_paid: 0, amount_remaining: 834 },
+      subscription: { status: 'past_due' },
+    });
+    assert.equal((await h.deliver('invoice.payment_failed')).code, 200);
+    assert.equal(h.emails.length, 0);
+  }
+});
+
+test('production webhook uses the gentle reminder once across duplicate refusals', async () => {
+  const h = harness({ status: 'actif', paymentFailed: false }, {
+    emailEnabled: true, invoice: { status: 'open', amount_paid: 0, amount_remaining: 834 },
+    subscription: { status: 'past_due' },
+  });
+  await h.deliver('invoice.payment_failed');
+  await h.deliver('invoice.payment_failed');
+  assert.equal(h.emails.length, 1);
+  assert.match(h.emails[0].text, /Mettre à jour ma carte/);
+  assert.match(h.emails[0].html, /Mes adhésions/);
+  assert.doesNotMatch(h.emails[0].html, /suspendu|sympathisant/);
 });

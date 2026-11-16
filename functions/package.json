@@ -9,6 +9,7 @@
   "scripts": {
     "lint": "eslint .",
     "test:renewal": "node --test __tests__/renewal-webhook.test.cjs",
+    "test:payment-reminder": "node --test __tests__/renewal-webhook.test.cjs __tests__/payment-failure-reminder.test.cjs",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",
